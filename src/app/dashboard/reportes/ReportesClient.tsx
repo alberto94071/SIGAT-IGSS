@@ -2,9 +2,9 @@
 import { useState, useMemo } from "react";
 import { BarChart3, Printer } from "lucide-react";
 
-type Mov = { id: number; mes: string|null; numero_documento: string|null; tipo_documento: string|null; status: string|null; fecha_movimiento: string; nit_beneficiario: string|null; beneficiario: string|null; descripcion: string|null; egresos: string|null; ingresos: string|null; saldo: string|null };
-type Pago = { id: number; siaf_numero: number|null; descripcion: string|null; monto: string|null; estatus: string; cuatrimestre: string|null; numero_cheque: string|null; proveedor: string|null; fecha_pagado: string|null; renglon: number|null };
-type Gasto = { id: number; numero_cheque: string|null; numero_vale: number|null; tipo_documento: string|null; numero_documento: string|null; nombre_beneficiario: string|null; costo: string|null; tipo_servicio: string|null; fecha: string|null; fecha_pago: string|null };
+type Mov = { id: number; mes: string|null; numero_documento: string|null; tipo_documento: string|null; status: string|null; fecha_movimiento: string; nit_beneficiario: string|null; beneficiario: string|null; descripcion: string|null; egresos: number|null; ingresos: number|null; saldo: number|null };
+type Pago = { id: number; siaf_numero: number|null; descripcion: string|null; monto: number|null; estatus: string; cuatrimestre: string|null; numero_cheque: string|null; proveedor: string|null; fecha_pagado: string|null; renglon: number|null };
+type Gasto = { id: number; numero_cheque: string|null; numero_vale: number|null; tipo_documento: string|null; numero_documento: string|null; nombre_beneficiario: string|null; costo: number|null; tipo_servicio: string|null; fecha: string|null; fecha_pago: string|null };
 
 const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const TABS  = ["Libro de banco","Conciliación bancaria","Libro caja chica","Programación"];
@@ -22,15 +22,15 @@ export default function ReportesClient({ banco, pagos, cajaChica }: Props) {
 
   // ── Libro de banco ────────────────────────────────────────────
   const bancoMes = useMemo(() => banco.filter(m => m.mes === mes), [banco, mes]);
-  const totalEgMes = useMemo(() => bancoMes.reduce((a, m) => a + parseFloat(m.egresos ?? "0"), 0), [bancoMes]);
-  const totalIngMes = useMemo(() => bancoMes.reduce((a, m) => a + parseFloat(m.ingresos ?? "0"), 0), [bancoMes]);
-  const saldoFinalMes = bancoMes.length ? parseFloat(bancoMes[bancoMes.length - 1].saldo ?? "0") : 0;
+  const totalEgMes = useMemo(() => bancoMes.reduce((a, m) => a + (m.egresos ?? 0), 0), [bancoMes]);
+  const totalIngMes = useMemo(() => bancoMes.reduce((a, m) => a + (m.ingresos ?? 0), 0), [bancoMes]);
+  const saldoFinalMes = bancoMes.length ? (bancoMes[bancoMes.length - 1].saldo ?? 0) : 0;
 
   // ── Conciliación bancaria ─────────────────────────────────────
   const chequesCircMes = useMemo(() =>
     banco.filter(m => m.mes === mes && m.tipo_documento === "Cheque" && m.status !== "Operado"),
     [banco, mes]);
-  const totalChequesCirc = chequesCircMes.reduce((a, m) => a + parseFloat(m.egresos ?? "0"), 0);
+  const totalChequesCirc = chequesCircMes.reduce((a, m) => a + (m.egresos ?? 0), 0);
 
   // ── Libro caja chica ──────────────────────────────────────────
   const gastosChequeMes = useMemo(() => {
@@ -39,14 +39,14 @@ export default function ReportesClient({ banco, pagos, cajaChica }: Props) {
     );
     return cajaChica.filter(g => g.numero_cheque && chequesMes.has(g.numero_cheque));
   }, [cajaChica, banco, mes]);
-  const totalCaja = gastosChequeMes.reduce((a, g) => a + parseFloat(g.costo ?? "0"), 0);
+  const totalCaja = gastosChequeMes.reduce((a, g) => a + (g.costo ?? 0), 0);
 
   // ── Programación (resumen mensual por estatus) ─────────────────
   const resumenMeses = useMemo(() =>
     MESES.map(m => {
       const movs = banco.filter(bk => bk.mes === m);
-      const egr  = movs.reduce((a, mv) => a + parseFloat(mv.egresos  ?? "0"), 0);
-      const ing  = movs.reduce((a, mv) => a + parseFloat(mv.ingresos ?? "0"), 0);
+      const egr  = movs.reduce((a, mv) => a + (mv.egresos  ?? 0), 0);
+      const ing  = movs.reduce((a, mv) => a + (mv.ingresos ?? 0), 0);
       const pend = pagos.filter(p => p.estatus === "Pendiente").length;
       return { mes: m, egresos: egr, ingresos: ing, pendientes: pend };
     }),
@@ -121,10 +121,10 @@ export default function ReportesClient({ banco, pagos, cajaChica }: Props) {
                     <td className="px-4 py-2.5 text-xs text-gray-600 max-w-[140px] truncate">{m.beneficiario}</td>
                     <td className="px-4 py-2.5 text-xs text-gray-500 max-w-[180px] truncate">{m.descripcion}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-red-700 text-xs">
-                      {parseFloat(m.egresos ?? "0") > 0 ? fmtQ(m.egresos) : ""}
+                      {(m.egresos ?? 0) > 0 ? fmtQ(m.egresos) : ""}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-green-700 text-xs">
-                      {parseFloat(m.ingresos ?? "0") > 0 ? fmtQ(m.ingresos) : ""}
+                      {(m.ingresos ?? 0) > 0 ? fmtQ(m.ingresos) : ""}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums font-bold text-gray-900 text-xs">
                       {fmtQ(m.saldo)}

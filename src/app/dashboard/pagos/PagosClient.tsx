@@ -10,7 +10,7 @@ type Pago = {
   id: number; siaf_numero: number|null; numero_oc: string|null;
   renglon: number|null; codigo_igss: number|null; codigo_ppr: string|null;
   descripcion: string|null; unidad_medida: string|null; subproducto: string|null;
-  cantidad: string|null; monto: string|null;
+  cantidad: number|null; monto: number|null;
   metodo_compra: string|null; nit_proveedor: string|null; proveedor: string|null;
   numero_documento: string|null; numero_serie: string|null; fecha_documento: string|null;
   marca: string|null; modelo: string|null; serie_equipo: string|null;
@@ -22,7 +22,7 @@ type Pago = {
 };
 type ServicioRef = {
   id: number; siaf_numero: number|null; insumo: string|null;
-  cantidad: string|null; subproducto: string|null;
+  cantidad: number|null; subproducto: string|null;
   codigo_igss: number|null; numero_compra: string|null;
 };
 type InsumoRef = {
@@ -101,7 +101,7 @@ export default function PagosClient({ pagos: init, servicios, canEdit }: Props) 
       descripcion: s.insumo ?? "",
       unidad_medida: matched?.unidad_medida ?? "",
       subproducto: s.subproducto ?? "",
-      cantidad:    s.cantidad ?? "",
+      cantidad:    s.cantidad?.toString() ?? "",
       numero_oc:   s.numero_compra ?? "",
     }));
     setServQ(s.insumo ?? "");
@@ -124,8 +124,8 @@ export default function PagosClient({ pagos: init, servicios, canEdit }: Props) 
       descripcion:      p.descripcion ?? "",
       unidad_medida:    p.unidad_medida ?? "",
       subproducto:      p.subproducto ?? "",
-      cantidad:         p.cantidad ?? "",
-      monto:            p.monto ?? "",
+      cantidad:         p.cantidad?.toString() ?? "",
+      monto:            p.monto?.toString() ?? "",
       metodo_compra:    p.metodo_compra ?? "Baja Cuantia",
       nit_proveedor:    p.nit_proveedor ?? "",
       proveedor:        p.proveedor ?? "",
@@ -155,7 +155,7 @@ export default function PagosClient({ pagos: init, servicios, canEdit }: Props) 
     const res = await crearPago(form);
     setLoading(false);
     if (res.error) return setError(res.error);
-    setLista(p => [res.pago!, ...p]);
+    setLista(p => [res.pago!, ...p] as unknown as Pago[]);
     setModal(null);
   }
 
@@ -174,12 +174,12 @@ export default function PagosClient({ pagos: init, servicios, canEdit }: Props) 
     setLista(prev => prev.map(x => x.id === p.id ? { ...x, estatus } : x));
   }
 
-  const fmtQ = (n: string|null) =>
-    n ? `Q ${parseFloat(n).toLocaleString("es-GT", { minimumFractionDigits: 2 })}` : "—";
+  const fmtQ = (n: number|null) =>
+    n != null ? `Q ${n.toLocaleString("es-GT", { minimumFractionDigits: 2 })}` : "—";
 
   const totales = useMemo(() => ({
-    pendiente: filtered.filter(p => p.estatus === "Pendiente").reduce((a, p) => a + parseFloat(p.monto ?? "0"), 0),
-    pagado:    filtered.filter(p => p.estatus === "Pagado").reduce((a, p) => a + parseFloat(p.monto ?? "0"), 0),
+    pendiente: filtered.filter(p => p.estatus === "Pendiente").reduce((a, p) => a + (p.monto ?? 0), 0),
+    pagado:    filtered.filter(p => p.estatus === "Pagado").reduce((a, p) => a + (p.monto ?? 0), 0),
   }), [filtered]);
 
   return (
@@ -292,7 +292,7 @@ export default function PagosClient({ pagos: init, servicios, canEdit }: Props) 
                       {p.subproducto ?? "—"}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-gray-700 whitespace-nowrap">
-                      {p.cantidad ? parseFloat(p.cantidad).toLocaleString("es-GT") : "—"}
+                      {p.cantidad != null ? p.cantidad.toLocaleString("es-GT") : "—"}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900 whitespace-nowrap">
                       {fmtQ(p.monto)}

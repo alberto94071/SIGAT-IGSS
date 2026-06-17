@@ -6,8 +6,8 @@ import {
 } from "lucide-react";
 import { actualizarEfectivo } from "./actions";
 
-type Pendiente = { id: number; numero_fri: string|null; descripcion: string|null; monto: string|null; numero_cheque: string|null; proveedor: string|null };
-type NoFRI     = { id: number; numero_oc: string|null; descripcion: string|null; monto: string|null; numero_cheque: string|null; estatus: string };
+type Pendiente = { id: number; numero_fri: string|null; descripcion: string|null; monto: number|null; numero_cheque: string|null; proveedor: string|null };
+type NoFRI     = { id: number; numero_oc: string|null; descripcion: string|null; monto: number|null; numero_cheque: string|null; estatus: string };
 
 interface Props {
   montoInicial:      number;
@@ -188,7 +188,7 @@ export default function LiquidacionClient({
                   <td className="px-4 py-2.5 text-gray-700 max-w-xs truncate">{p.descripcion}</td>
                   <td className="px-4 py-2.5 text-xs text-gray-500 truncate">{p.proveedor}</td>
                   <td className="px-4 py-2.5 text-right font-medium tabular-nums text-gray-900">
-                    {fmtQ(parseFloat(p.monto ?? "0"))}
+                    {fmtQ(p.monto ?? 0)}
                   </td>
                 </tr>
               ))}
@@ -228,7 +228,7 @@ export default function LiquidacionClient({
                   <td className="px-4 py-2.5 text-gray-700 max-w-xs truncate">{p.descripcion}</td>
                   <td className="px-4 py-2.5 text-xs font-mono text-gray-500">{p.numero_cheque ?? "—"}</td>
                   <td className="px-4 py-2.5 text-right font-medium tabular-nums text-gray-900">
-                    {fmtQ(parseFloat(p.monto ?? "0"))}
+                    {fmtQ(p.monto ?? 0)}
                   </td>
                 </tr>
               ))}

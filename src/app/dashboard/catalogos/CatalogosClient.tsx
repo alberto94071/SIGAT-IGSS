@@ -7,7 +7,7 @@ type Insumo = {
   id: number; codigo_igss: number; codigo_ppr: string | null;
   codigo_minfin: number | null; nombre: string; caracteristicas: string | null;
   presentacion: string | null; unidad_medida: string | null;
-  subproducto: string | null; cantidad_solicitada: string | null; activo: boolean;
+  subproducto: string | null; cantidad_solicitada: number | null; activo: boolean;
 };
 
 interface Props { insumos: Insumo[]; canEdit: boolean; }
@@ -48,7 +48,7 @@ export default function CatalogosClient({ insumos: init, canEdit }: Props) {
       codigo_minfin: i.codigo_minfin ?? 0, nombre: i.nombre,
       caracteristicas: i.caracteristicas ?? "", presentacion: i.presentacion ?? "",
       unidad_medida: i.unidad_medida ?? "", subproducto: i.subproducto ?? "",
-      cantidad_solicitada: i.cantidad_solicitada ?? "0",
+      cantidad_solicitada: i.cantidad_solicitada?.toString() ?? "0",
     });
     setError(""); setModal("editar");
   }
@@ -69,7 +69,7 @@ export default function CatalogosClient({ insumos: init, canEdit }: Props) {
     setLoading(false);
     if (res.error) return setError(res.error);
     setLista(prev => prev.map(i => i.id === selected.id
-      ? { ...i, ...form } : i));
+      ? { ...i, ...form, cantidad_solicitada: form.cantidad_solicitada ? parseFloat(form.cantidad_solicitada) : null } : i));
     setModal(null);
   }
 

@@ -2,7 +2,7 @@
 import { useState, useMemo } from "react";
 import { FileText, Printer, Search, ExternalLink } from "lucide-react";
 
-type PagoDoc = { id: number; siaf_numero: number|null; descripcion: string|null; monto: string|null; estatus: string; numero_cheque: string|null; numero_dab: string|null; proveedor: string|null; cuatrimestre: string|null };
+type PagoDoc = { id: number; siaf_numero: number|null; descripcion: string|null; monto: number|null; estatus: string; numero_cheque: string|null; numero_dab: string|null; proveedor: string|null; cuatrimestre: string|null };
 type ChequeDoc = { numero_documento: string|null; tipo_documento: string|null; beneficiario: string|null; mes: string|null };
 
 interface Props { pagos: PagoDoc[]; cheques: ChequeDoc[] }
@@ -13,8 +13,8 @@ export default function DocumentosClient({ pagos, cheques }: Props) {
   const [tab,   setTab]   = useState(0);
   const [query, setQuery] = useState("");
 
-  const fmtQ = (n: string|null) =>
-    n ? `Q ${parseFloat(n).toLocaleString("es-GT", { minimumFractionDigits: 2 })}` : "—";
+  const fmtQ = (n: number|null) =>
+    n != null ? `Q ${n.toLocaleString("es-GT", { minimumFractionDigits: 2 })}` : "—";
 
   const pagosFiltered = useMemo(() =>
     pagos.filter(p =>

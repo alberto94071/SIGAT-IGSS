@@ -9,8 +9,8 @@ type Servicio = {
   id: number; siaf_numero: number | null; fecha: string;
   cuatrimestre: "PRIMERO"|"SEGUNDO"|"TERCERO"|null;
   renglon: number | null; codigo_igss: number | null;
-  insumo: string | null; cantidad: string | null;
-  subproducto: string | null; precio_registrado: string | null;
+  insumo: string | null; cantidad: number | null;
+  subproducto: string | null; precio_registrado: number | null;
   fecha_compra: string | null; numero_compra: string | null;
   numero_documento: string | null; estado_oc: string | null;
 };
@@ -21,7 +21,7 @@ type InsumoRef = {
 
 const EMPTY = {
   siaf_numero: "", fecha: new Date().toISOString().slice(0,10),
-  cuatrimestre: "PRIMERO" as const, renglon: "266",
+  cuatrimestre: "PRIMERO" as "PRIMERO"|"SEGUNDO"|"TERCERO", renglon: "266",
   codigo_igss: "", insumo: "", cantidad: "", subproducto: "",
   precio_registrado: "", fecha_compra: "", numero_compra: "",
   numero_documento: "", estado_oc: "Recibido",
@@ -94,9 +94,9 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
       renglon:           String(s.renglon ?? "266"),
       codigo_igss:       String(s.codigo_igss ?? ""),
       insumo:            s.insumo ?? "",
-      cantidad:          s.cantidad ?? "",
+      cantidad:          s.cantidad?.toString() ?? "",
       subproducto:       s.subproducto ?? "",
-      precio_registrado: s.precio_registrado ?? "",
+      precio_registrado: s.precio_registrado?.toString() ?? "",
       fecha_compra:      s.fecha_compra ?? "",
       numero_compra:     s.numero_compra ?? "",
       numero_documento:  s.numero_documento ?? "",
@@ -113,7 +113,7 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
     const res = await crearServicio(form);
     setLoading(false);
     if (res.error) return setError(res.error);
-    setLista(p => [res.servicio!, ...p]);
+    setLista(p => [res.servicio!, ...p] as unknown as Servicio[]);
     setModal(null);
   }
 
@@ -124,7 +124,12 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
     setLoading(false);
     if (res.error) return setError(res.error);
     setLista(p => p.map(s => s.id === selected.id
-      ? { ...s, ...form, cantidad: form.cantidad, precio_registrado: form.precio_registrado } : s));
+      ? { ...s, ...form,
+          cuatrimestre: form.cuatrimestre as "PRIMERO"|"SEGUNDO"|"TERCERO"|null,
+          cantidad: form.cantidad ? parseFloat(form.cantidad) : null,
+          precio_registrado: form.precio_registrado ? parseFloat(form.precio_registrado) : null
+        }
+      : s) as unknown as Servicio[]);
     setModal(null);
   }
 
@@ -134,9 +139,9 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
     setLista(p => p.filter(s => s.id !== id));
   }
 
-  const fmt = (n: string|null, qty: string|null) => {
+  const fmt = (n: number|null, qty: number|null) => {
     if (!n || !qty) return "—";
-    return `Q ${(parseFloat(n) * parseFloat(qty)).toLocaleString("es-GT", { minimumFractionDigits: 2 })}`;
+    return `Q ${(n * qty).toLocaleString("es-GT", { minimumFractionDigits: 2 })}`;
   };
 
   return (
@@ -198,13 +203,13 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
                     <p className="font-medium text-gray-900 max-w-[220px] truncate" title={s.insumo ?? ""}>{s.insumo ?? "—"}</p>
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-gray-700 whitespace-nowrap">
-                    {s.cantidad ? parseFloat(s.cantidad).toLocaleString("es-GT") : "—"}
+                    {s.cantidad != null ? s.cantidad.toLocaleString("es-GT") : "—"}
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap max-w-[150px] truncate" title={s.subproducto ?? ""}>
                     {s.subproducto ?? "—"}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-gray-700 whitespace-nowrap">
-                    {s.precio_registrado ? `Q ${parseFloat(s.precio_registrado).toFixed(2)}` : "—"}
+                    {s.precio_registrado != null ? `Q ${s.precio_registrado.toFixed(2)}` : "—"}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900 whitespace-nowrap">
                     {fmt(s.precio_registrado, s.cantidad)}

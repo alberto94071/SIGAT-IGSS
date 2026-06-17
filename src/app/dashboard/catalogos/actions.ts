@@ -24,7 +24,7 @@ export async function crearInsumo(data: any) {
       presentacion:        data.presentacion || null,
       unidad_medida:       data.unidad_medida || null,
       subproducto:         data.subproducto || null,
-      cantidad_solicitada: data.cantidad_solicitada || null,
+      cantidad_solicitada: data.cantidad_solicitada ? parseFloat(data.cantidad_solicitada) : null,
       activo:              true,
     }).returning();
     return { insumo: nuevo };
@@ -48,7 +48,7 @@ export async function editarInsumo(data: any) {
       presentacion:        data.presentacion || null,
       unidad_medida:       data.unidad_medida || null,
       subproducto:         data.subproducto || null,
-      cantidad_solicitada: data.cantidad_solicitada || null,
+      cantidad_solicitada: data.cantidad_solicitada ? parseFloat(data.cantidad_solicitada) : null,
     }).where(eq(catalogoInsumos.id, data.id));
     return { ok: true };
   } catch {

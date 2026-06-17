@@ -9,8 +9,8 @@ type Config = {
   codigo_unidad: string;
   codigo_contable: string;
   municipio: string;
-  monto_fondo_rotativo: string;
-  efectivo_caja: string;
+  monto_fondo_rotativo: number;
+  efectivo_caja: number;
   ejercicio_fiscal: number;
   nombre_responsable: string;
   numero_empleado_resp: string;
