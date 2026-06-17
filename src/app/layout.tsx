@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-const APP_URL = "https://sigat-igss.vercel.app";
+// Vercel inyecta VERCEL_URL automáticamente en cada deployment
+const APP_URL = process.env.NEXT_PUBLIC_SITE_URL
+  || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+
+const OG_IMAGE = `${APP_URL}/og-image.jpg`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
@@ -23,7 +27,7 @@ export const metadata: Metadata = {
     locale: "es_GT",
     images: [
       {
-        url: "/og-image.jpg",
+        url: OG_IMAGE,
         width: 1280,
         height: 672,
         alt: "SIGAT — Sistema Integral de Gestión Administrativa y Financiera · IGSS Tejutla",
@@ -35,7 +39,7 @@ export const metadata: Metadata = {
     title: "SIGAT — Sistema de Gestión Administrativa Tejutla | IGSS",
     description:
       "Plataforma oficial de gestión administrativa del IGSS en Tejutla, San Marcos.",
-    images: ["/og-image.jpg"],
+    images: [OG_IMAGE],
   },
   icons: {
     icon: "/favicon.ico",
