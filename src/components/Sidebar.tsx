@@ -34,7 +34,7 @@ export default function Sidebar({ navItems, user }: Props) {
 
   return (
     <aside className="w-60 bg-gray-900 text-white flex flex-col h-full shrink-0">
-      {/* Logo / Back to SIGA */}
+      {/* Logo / Back to SIGAT */}
       <div className="px-4 py-4 border-b border-gray-800">
         {/* System name */}
         <div className="flex items-center gap-3 mb-3">
@@ -45,7 +45,7 @@ export default function Sidebar({ navItems, user }: Props) {
             </svg>
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-bold leading-tight text-white">SIGA</p>
+            <p className="text-sm font-bold leading-tight text-white">SIGAT</p>
             <p className="text-xs text-gray-400 truncate">IGSS Tejutla</p>
           </div>
         </div>
@@ -55,7 +55,7 @@ export default function Sidebar({ navItems, user }: Props) {
           className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
         >
           <ChevronLeft className="w-3.5 h-3.5 shrink-0" />
-          <span>Módulos SIGA</span>
+          <span>Módulos SIGAT</span>
         </Link>
         <p className="mt-2 px-2 text-[11px] font-semibold text-brand-400 uppercase tracking-wider">
           Fondo Rotativo

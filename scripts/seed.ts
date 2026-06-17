@@ -10,9 +10,7 @@ const db = drizzle(sql, { schema });
 
 async function main() {
   console.log("⚙️  Limpiando tablas existentes...");
-  await db.execute(
-    { sql: `TRUNCATE audit_log, caja_chica, movimientos_banco, pagos, servicios, catalogo_182, catalogo_insumos, usuarios, configuracion, siaf_seq RESTART IDENTITY CASCADE`, params: [] } as never
-  );
+  await sql`TRUNCATE audit_log, caja_chica, movimientos_banco, pagos, servicios, catalogo_182, catalogo_insumos, usuarios, configuracion, siaf_seq RESTART IDENTITY CASCADE`;
 
   console.log("⚙️  Insertando configuración...");
   await db.insert(schema.configuracion).values({
