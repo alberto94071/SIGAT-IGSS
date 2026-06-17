@@ -8,7 +8,8 @@ type Mov = {
   tipo_documento: string|null; status: string|null;
   fecha_movimiento: string; nit_beneficiario: string|null;
   beneficiario: string|null; descripcion: string|null;
-  egresos: string|null; ingresos: string|null; saldo: string|null;
+  egresos: number|null; ingresos: number|null; saldo: number|null;
+  creado_por: number|null; created_at: string|null;
 };
 
 const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
@@ -40,13 +41,13 @@ export default function BancoClient({ movimientos: init, canEdit }: Props) {
 
   // último saldo
   const saldoActual = lista.length > 0
-    ? parseFloat(lista[lista.length - 1].saldo ?? "0")
+    ? (lista[lista.length - 1].saldo ?? 0)
     : 0;
 
   const totalEgresos = useMemo(() =>
-    filtered.reduce((a, m) => a + parseFloat(m.egresos ?? "0"), 0), [filtered]);
+    filtered.reduce((a, m) => a + (m.egresos ?? 0), 0), [filtered]);
   const totalIngresos = useMemo(() =>
-    filtered.reduce((a, m) => a + parseFloat(m.ingresos ?? "0"), 0), [filtered]);
+    filtered.reduce((a, m) => a + (m.ingresos ?? 0), 0), [filtered]);
 
   function set(k: string, v: string) { setForm((p: any) => ({ ...p, [k]: v })); }
 
@@ -65,8 +66,8 @@ export default function BancoClient({ movimientos: init, canEdit }: Props) {
       nit_beneficiario: m.nit_beneficiario ?? "",
       beneficiario:     m.beneficiario ?? "",
       descripcion:      m.descripcion ?? "",
-      egresos:          m.egresos ?? "",
-      ingresos:         m.ingresos ?? "",
+      egresos:          m.egresos?.toString() ?? "",
+      ingresos:         m.ingresos?.toString() ?? "",
     });
     setError(""); setModal("editar");
   }
@@ -108,8 +109,8 @@ export default function BancoClient({ movimientos: init, canEdit }: Props) {
     setModal(null);
   }
 
-  const fmtQ = (n: string|null) =>
-    n ? parseFloat(n).toLocaleString("es-GT", { style:"currency", currency:"GTQ" }) : "—";
+  const fmtQ = (n: number|null) =>
+    n != null ? n.toLocaleString("es-GT", { style:"currency", currency:"GTQ" }) : "—";
 
   const TIPO_COLORS: Record<string, string> = {
     Cheque:    "bg-blue-100 text-blue-700",
@@ -222,12 +223,12 @@ export default function BancoClient({ movimientos: init, canEdit }: Props) {
                     <p className="text-gray-600 text-xs max-w-[200px] truncate">{m.descripcion ?? "—"}</p>
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {parseFloat(m.egresos ?? "0") > 0
+                    {(m.egresos ?? 0) > 0
                       ? <span className="text-red-700 font-medium">{fmtQ(m.egresos)}</span>
                       : <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {parseFloat(m.ingresos ?? "0") > 0
+                    {(m.ingresos ?? 0) > 0
                       ? <span className="text-green-700 font-medium">{fmtQ(m.ingresos)}</span>
                       : <span className="text-gray-300">—</span>}
                   </td>

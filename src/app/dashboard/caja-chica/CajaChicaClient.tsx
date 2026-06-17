@@ -8,7 +8,7 @@ type Gasto = {
   tipo_documento: string|null; numero_documento: string|null;
   numero_serie: string|null; fecha: string|null;
   nombre_beneficiario: string|null; municipio_residencia: string|null;
-  municipio_cita: string|null; costo: string|null;
+  municipio_cita: string|null; costo: number|null;
   tipo_servicio: string|null; fecha_pago: string|null;
 };
 
@@ -48,7 +48,7 @@ export default function CajaChicaClient({ gastos: init, canEdit }: Props) {
     [lista]);
 
   const totalFiltrado = useMemo(() =>
-    filtered.reduce((a, g) => a + parseFloat(g.costo ?? "0"), 0), [filtered]);
+    filtered.reduce((a, g) => a + (g.costo ?? 0), 0), [filtered]);
 
   function set(k: string, v: string) { setForm((p: any) => ({ ...p, [k]: v })); }
 
@@ -65,7 +65,7 @@ export default function CajaChicaClient({ gastos: init, canEdit }: Props) {
       nombre_beneficiario: g.nombre_beneficiario ?? "",
       municipio_residencia:g.municipio_residencia ?? "",
       municipio_cita:      g.municipio_cita ?? "",
-      costo:               g.costo ?? "",
+      costo:               g.costo?.toString() ?? "",
       tipo_servicio:       g.tipo_servicio ?? "",
       fecha_pago:          g.fecha_pago ?? "",
     });
@@ -184,7 +184,7 @@ export default function CajaChicaClient({ gastos: init, canEdit }: Props) {
                     <p className="text-gray-600 text-xs max-w-[200px] truncate">{g.tipo_servicio ?? "—"}</p>
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
-                    {g.costo ? `Q ${parseFloat(g.costo).toLocaleString("es-GT", { minimumFractionDigits: 2 })}` : "—"}
+                    {g.costo != null ? `Q ${g.costo.toLocaleString("es-GT", { minimumFractionDigits: 2 })}` : "—"}
                   </td>
                   {canEdit && (
                     <td className="px-4 py-3">

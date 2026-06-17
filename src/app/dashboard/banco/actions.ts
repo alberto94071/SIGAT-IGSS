@@ -15,7 +15,7 @@ async function getSaldoAnterior(): Promise<number> {
     .from(movimientosBanco)
     .orderBy(sql`${movimientosBanco.id} DESC`)
     .limit(1);
-  return rows.length ? parseFloat(rows[0].saldo ?? "0") : 0;
+  return rows.length ? (rows[0].saldo ?? 0) : 0;
 }
 
 export async function crearMovimiento(data: any) {
@@ -35,9 +35,9 @@ export async function crearMovimiento(data: any) {
       nit_beneficiario: data.nit_beneficiario || null,
       beneficiario:     data.beneficiario || null,
       descripcion:      data.descripcion || null,
-      egresos:          egresos.toFixed(2),
-      ingresos:         ingresos.toFixed(2),
-      saldo:            nuevoSaldo.toFixed(2),
+      egresos:          egresos,
+      ingresos:         ingresos,
+      saldo:            nuevoSaldo,
       creado_por:       userId,
     }).returning();
 
@@ -64,8 +64,8 @@ export async function editarMovimiento(data: any) {
       nit_beneficiario: data.nit_beneficiario || null,
       beneficiario:     data.beneficiario || null,
       descripcion:      data.descripcion || null,
-      egresos:          data.egresos || "0",
-      ingresos:         data.ingresos || "0",
+      egresos:          parseFloat(data.egresos || "0"),
+      ingresos:         parseFloat(data.ingresos || "0"),
       // Nota: el saldo se recalcula en un paso separado
     }).where(eq(movimientosBanco.id, data.id));
 
@@ -87,13 +87,13 @@ async function recalcularSaldos(desdeId: number) {
   const idx = todos.findIndex(m => m.id === desdeId);
   if (idx < 0) return;
 
-  let saldo = idx > 0 ? parseFloat(todos[idx - 1].saldo ?? "0") : 0;
+  let saldo = idx > 0 ? (todos[idx - 1].saldo ?? 0) : 0;
 
   for (let i = idx; i < todos.length; i++) {
     const m = todos[i];
-    saldo = saldo - parseFloat(m.egresos ?? "0") + parseFloat(m.ingresos ?? "0");
+    saldo = saldo - (m.egresos ?? 0) + (m.ingresos ?? 0);
     await db.update(movimientosBanco)
-      .set({ saldo: saldo.toFixed(2) })
+      .set({ saldo })
       .where(eq(movimientosBanco.id, m.id));
   }
 }

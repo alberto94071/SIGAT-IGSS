@@ -24,7 +24,7 @@ export async function crearGasto(data: any) {
       nombre_beneficiario: n(data.nombre_beneficiario),
       municipio_residencia:n(data.municipio_residencia),
       municipio_cita:      n(data.municipio_cita),
-      costo:               n(data.costo),
+      costo:               data.costo ? parseFloat(data.costo) : null,
       tipo_servicio:       n(data.tipo_servicio),
       fecha_pago:          n(data.fecha_pago),
       creado_por:          userId,
@@ -47,7 +47,7 @@ export async function editarGasto(data: any) {
       nombre_beneficiario: n(data.nombre_beneficiario),
       municipio_residencia:n(data.municipio_residencia),
       municipio_cita:      n(data.municipio_cita),
-      costo:               n(data.costo),
+      costo:               data.costo ? parseFloat(data.costo) : null,
       tipo_servicio:       n(data.tipo_servicio),
       fecha_pago:          n(data.fecha_pago),
     }).where(eq(cajaChica.id, data.id));
