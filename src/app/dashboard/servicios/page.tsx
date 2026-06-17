@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { parsePermisos, type Rol } from "@/lib/permisos";
 import { db } from "@/lib/db";
 import { servicios, catalogoInsumos } from "@/lib/schema";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import ServiciosClient from "./ServiciosClient";
 
 export default async function ServiciosPage() {
@@ -21,13 +21,13 @@ export default async function ServiciosPage() {
       unidad_medida:catalogoInsumos.unidad_medida,
     })
     .from(catalogoInsumos)
-    .where(catalogoInsumos.activo),   // solo activos
+    .where(eq(catalogoInsumos.activo, true)),
   ]);
 
   const canEdit = rol !== "consulta";
   return (
     <ServiciosClient
-      servicios={lista}
+      servicios={lista as any}
       catalogo={catalogo}
       canEdit={canEdit}
       userId={Number(session!.user.id)}

@@ -30,7 +30,7 @@ export default async function UsuariosPage() {
 
   return (
     <UsuariosClient
-      usuarios={lista}
+      usuarios={lista as any}
       isSuperAdmin={isSuperAdmin}
       currentUserId={Number(session!.user.id)}
     />

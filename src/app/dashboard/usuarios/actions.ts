@@ -50,7 +50,7 @@ export async function editarUsuario(data: {
     if (!me || me.rol !== "superadmin") return { error: "Sin permiso" };
 
     await db.update(usuarios)
-      .set({ nombre: data.nombre, email: data.email, rol: data.rol, updated_at: new Date() })
+      .set({ nombre: data.nombre, email: data.email, rol: data.rol, updated_at: new Date().toISOString() })
       .where(eq(usuarios.id, data.id));
 
     await db.insert(auditLog).values({
@@ -75,7 +75,7 @@ export async function resetPassword(data: { id: number; password: string }) {
 
     const hash = await bcrypt.hash(data.password, 12);
     await db.update(usuarios)
-      .set({ password_hash: hash, updated_at: new Date() })
+      .set({ password_hash: hash, updated_at: new Date().toISOString() })
       .where(eq(usuarios.id, data.id));
 
     await db.insert(auditLog).values({
@@ -98,7 +98,7 @@ export async function toggleActivo(data: { id: number; activo: boolean }) {
     if (!me || me.rol !== "superadmin") return { error: "Sin permiso" };
 
     await db.update(usuarios)
-      .set({ activo: data.activo, updated_at: new Date() })
+      .set({ activo: data.activo, updated_at: new Date().toISOString() })
       .where(eq(usuarios.id, data.id));
 
     await db.insert(auditLog).values({
@@ -121,7 +121,7 @@ export async function guardarPermisos(data: { id: number; permisos: Permisos }) 
     if (!me || me.rol !== "superadmin") return { error: "Sin permiso" };
 
     await db.update(usuarios)
-      .set({ permisos: JSON.stringify(data.permisos), updated_at: new Date() })
+      .set({ permisos: JSON.stringify(data.permisos), updated_at: new Date().toISOString() })
       .where(eq(usuarios.id, data.id));
 
     await db.insert(auditLog).values({

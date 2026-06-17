@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { parsePermisos, type Rol } from "@/lib/permisos";
 import { db } from "@/lib/db";
 import { pagos, servicios, catalogoInsumos } from "@/lib/schema";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import PagosClient from "./PagosClient";
 
 export default async function PagosPage() {
@@ -26,9 +26,9 @@ export default async function PagosPage() {
       subproducto: catalogoInsumos.subproducto,
       codigo_ppr: catalogoInsumos.codigo_ppr,
       unidad_medida: catalogoInsumos.unidad_medida,
-    }).from(catalogoInsumos).where(catalogoInsumos.activo),
+    }).from(catalogoInsumos).where(eq(catalogoInsumos.activo, true)),
   ]);
 
   const canEdit = rol !== "consulta";
-  return <PagosClient pagos={lista} servicios={serviciosList} catalogo={catalogoList} canEdit={canEdit} />;
+  return <PagosClient pagos={lista as any} servicios={serviciosList} catalogo={catalogoList} canEdit={canEdit} />;
 }

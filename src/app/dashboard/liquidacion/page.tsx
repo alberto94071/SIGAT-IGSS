@@ -13,7 +13,7 @@ export default async function LiquidacionPage() {
   if (!permisos.liquidacion) redirect("/dashboard");
 
   const [config] = await db.select().from(configuracion).limit(1);
-  const montoInicial = parseFloat(config?.monto_fondo_rotativo ?? "15000");
+  const montoInicial = config?.monto_fondo_rotativo ?? 15000;
 
   // Saldo banco (último movimiento)
   const [ultimoBanco] = await db
@@ -21,7 +21,7 @@ export default async function LiquidacionPage() {
     .from(movimientosBanco)
     .orderBy(sql`${movimientosBanco.id} DESC`)
     .limit(1);
-  const saldoBanco = parseFloat(ultimoBanco?.saldo ?? "0");
+  const saldoBanco = ultimoBanco?.saldo ?? 0;
 
   // Fondos en circulación (pagos pendientes)
   const [pendResult] = await db
@@ -31,7 +31,7 @@ export default async function LiquidacionPage() {
   const fondosCirculacion = parseFloat(pendResult?.total ?? "0");
 
   // Efectivo en caja
-  const efectivo = parseFloat(config?.efectivo_caja ?? "0");
+  const efectivo = config?.efectivo_caja ?? 0;
 
   // Lista de pagos pendientes (para la tabla de FRI)
   const pendientes = await db

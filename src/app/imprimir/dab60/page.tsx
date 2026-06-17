@@ -63,7 +63,7 @@ export default async function DAB60PrintPage({
         <div className="border border-gray-800 p-4 text-center mb-6">
           <p className="text-xs text-gray-500 mb-1">Monto total</p>
           <p className="text-2xl font-bold">
-            Q {parseFloat(pago.monto ?? "0").toLocaleString("es-GT", { minimumFractionDigits: 2 })}
+            Q {(pago.monto ?? 0).toLocaleString("es-GT", { minimumFractionDigits: 2 })}
           </p>
         </div>
 

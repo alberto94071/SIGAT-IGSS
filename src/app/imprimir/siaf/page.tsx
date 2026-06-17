@@ -81,15 +81,15 @@ export default async function SIAFPrintPage({
             <td className="border border-gray-400 px-2 py-2">{pago.descripcion}</td>
             <td className="border border-gray-400 px-2 py-2">{pago.unidad_medida}</td>
             <td className="border border-gray-400 px-2 py-2 text-right tabular-nums">
-              {pago.cantidad ? parseFloat(pago.cantidad).toLocaleString("es-GT") : ""}
+              {pago.cantidad ? pago.cantidad.toLocaleString("es-GT") : ""}
             </td>
             <td className="border border-gray-400 px-2 py-2 text-right tabular-nums">
               {pago.monto && pago.cantidad
-                ? `Q ${(parseFloat(pago.monto) / parseFloat(pago.cantidad)).toFixed(4)}`
+                ? `Q ${(pago.monto / pago.cantidad).toFixed(4)}`
                 : ""}
             </td>
             <td className="border border-gray-400 px-2 py-2 text-right tabular-nums font-bold">
-              Q {parseFloat(pago.monto ?? "0").toLocaleString("es-GT", { minimumFractionDigits: 2 })}
+              Q {(pago.monto ?? 0).toLocaleString("es-GT", { minimumFractionDigits: 2 })}
             </td>
           </tr>
           {/* filas vacías */}
@@ -103,7 +103,7 @@ export default async function SIAFPrintPage({
           <tr className="bg-gray-50 font-bold">
             <td colSpan={5} className="border border-gray-400 px-2 py-2 text-right uppercase">Total</td>
             <td className="border border-gray-400 px-2 py-2 text-right tabular-nums">
-              Q {parseFloat(pago.monto ?? "0").toLocaleString("es-GT", { minimumFractionDigits: 2 })}
+              Q {(pago.monto ?? 0).toLocaleString("es-GT", { minimumFractionDigits: 2 })}
             </td>
           </tr>
         </tbody>

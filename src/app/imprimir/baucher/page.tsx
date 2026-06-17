@@ -20,7 +20,7 @@ export default async function BaucherPrintPage({
   const pagosCheque = await db.select().from(pagos)
     .where(eq(pagos.numero_cheque, cheque));
 
-  const total = pagosCheque.reduce((a, p) => a + parseFloat(p.monto ?? "0"), 0);
+  const total = pagosCheque.reduce((a, p) => a + (p.monto ?? 0), 0);
 
   const hoy = new Date().toLocaleDateString("es-GT", {
     day: "2-digit", month: "long", year: "numeric",
@@ -70,7 +70,7 @@ export default async function BaucherPrintPage({
                   <td className="border border-gray-300 px-2 py-1">{p.descripcion}</td>
                   <td className="border border-gray-300 px-2 py-1 font-mono">{p.numero_documento}</td>
                   <td className="border border-gray-300 px-2 py-1 text-right tabular-nums">
-                    Q {parseFloat(p.monto ?? "0").toLocaleString("es-GT", { minimumFractionDigits: 2 })}
+                    Q {(p.monto ?? 0).toLocaleString("es-GT", { minimumFractionDigits: 2 })}
                   </td>
                 </tr>
               ))}

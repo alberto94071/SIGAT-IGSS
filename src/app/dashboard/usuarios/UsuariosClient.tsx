@@ -81,7 +81,7 @@ export default function UsuariosClient({ usuarios: init, isSuperAdmin, currentUs
     const res = await crearUsuario({ nombre, email, password: pass, rol: rolForm });
     setLoading(false);
     if (res.error) return setError(res.error);
-    setLista(prev => [...prev, res.usuario!]);
+    setLista(prev => [...prev, res.usuario!] as unknown as Usuario[]);
     closeModal();
   }
 

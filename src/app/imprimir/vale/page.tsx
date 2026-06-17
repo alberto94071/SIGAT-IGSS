@@ -16,7 +16,7 @@ export default async function ValePrintPage({
   const gastos = await db.select().from(cajaChica)
     .where(eq(cajaChica.numero_cheque, cheque));
 
-  const totalGastos = gastos.reduce((a, g) => a + parseFloat(g.costo ?? "0"), 0);
+  const totalGastos = gastos.reduce((a, g) => a + (g.costo ?? 0), 0);
 
   // Datos del cheque en banco
   const [movBanco] = await db.select()
@@ -90,7 +90,7 @@ export default async function ValePrintPage({
                   <td className="border border-gray-300 px-2 py-1.5">{g.nombre_beneficiario}</td>
                   <td className="border border-gray-300 px-2 py-1.5 text-gray-600 max-w-[180px]">{g.tipo_servicio}</td>
                   <td className="border border-gray-300 px-2 py-1.5 text-right tabular-nums font-medium">
-                    Q {parseFloat(g.costo ?? "0").toLocaleString("es-GT", { minimumFractionDigits: 2 })}
+                    Q {(g.costo ?? 0).toLocaleString("es-GT", { minimumFractionDigits: 2 })}
                   </td>
                 </tr>
               ))}
@@ -107,13 +107,13 @@ export default async function ValePrintPage({
           <div className="flex justify-end">
             <div className="border border-gray-400 p-3 text-right min-w-[220px]">
               <p className="text-gray-500">Monto del vale</p>
-              <p className="font-bold">Q {parseFloat(movBanco?.egresos ?? "0").toLocaleString("es-GT", { minimumFractionDigits: 2 })}</p>
+              <p className="font-bold">Q {(movBanco?.egresos ?? 0).toLocaleString("es-GT", { minimumFractionDigits: 2 })}</p>
               <p className="text-gray-500 mt-1">Total gastado</p>
               <p className="font-bold">Q {totalGastos.toLocaleString("es-GT", { minimumFractionDigits: 2 })}</p>
               <div className="border-t border-gray-400 mt-2 pt-2">
                 <p className="text-gray-500">Saldo a devolver</p>
-                <p className={`text-lg font-bold ${(parseFloat(movBanco?.egresos ?? "0") - totalGastos) >= 0 ? "text-green-700" : "text-red-700"}`}>
-                  Q {(parseFloat(movBanco?.egresos ?? "0") - totalGastos).toLocaleString("es-GT", { minimumFractionDigits: 2 })}
+                <p className={`text-lg font-bold ${((movBanco?.egresos ?? 0) - totalGastos) >= 0 ? "text-green-700" : "text-red-700"}`}>
+                  Q {((movBanco?.egresos ?? 0) - totalGastos).toLocaleString("es-GT", { minimumFractionDigits: 2 })}
                 </p>
               </div>
             </div>

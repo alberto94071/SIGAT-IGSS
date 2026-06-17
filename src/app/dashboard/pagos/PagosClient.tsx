@@ -51,7 +51,7 @@ interface Props {
   catalogo: InsumoRef[]; canEdit: boolean;
 }
 
-export default function PagosClient({ pagos: init, servicios, canEdit }: Props) {
+export default function PagosClient({ pagos: init, servicios, catalogo, canEdit }: Props) {
   const [lista,      setLista]      = useState(init);
   const [query,      setQuery]      = useState("");
   const [filtroEst,  setFiltroEst]  = useState<string>("todos");
