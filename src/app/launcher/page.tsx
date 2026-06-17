@@ -1,0 +1,167 @@
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import {
+  RotateCcw, MapPin, Bus, ArrowRight, Construction,
+  ShieldCheck
+} from "lucide-react";
+import LogoutButton from "./LogoutButton";
+
+const MODULES = [
+  {
+    id: "fondo-rotativo",
+    title: "Fondo Rotativo",
+    description: "Gestión del fondo rotativo interno: servicios, pagos, banco, caja chica y liquidaciones.",
+    href: "/dashboard",
+    icon: RotateCcw,
+    color: "bg-green-500",
+    ring: "ring-green-200",
+    textColor: "text-green-600",
+    bgLight: "bg-green-50",
+    available: true,
+  },
+  {
+    id: "viaticos",
+    title: "Pago de Viáticos",
+    description: "Registro, autorización y control del pago de viáticos al personal de la unidad.",
+    href: "/viaticos",
+    icon: MapPin,
+    color: "bg-blue-500",
+    ring: "ring-blue-200",
+    textColor: "text-blue-600",
+    bgLight: "bg-blue-50",
+    available: false,
+  },
+  {
+    id: "pasajes",
+    title: "Pago de Pasajes",
+    description: "Control y registro de pagos por concepto de pasajes y gastos de transportación.",
+    href: "/pasajes",
+    icon: Bus,
+    color: "bg-purple-500",
+    ring: "ring-purple-200",
+    textColor: "text-purple-600",
+    bgLight: "bg-purple-50",
+    available: false,
+  },
+];
+
+export default async function LauncherPage() {
+  const session = await auth();
+  if (!session) redirect("/login");
+
+  const userName = session.user.name ?? session.user.email ?? "Usuario";
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex flex-col">
+
+      {/* ── Header ─────────────────────────────────────────────────── */}
+      <header className="bg-gradient-to-r from-green-800 to-green-600 shadow-lg">
+        <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-11 h-11 bg-white/15 rounded-xl flex items-center justify-center ring-2 ring-white/30">
+              <ShieldCheck className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-white tracking-tight leading-none">SIGA</h1>
+              <p className="text-green-200 text-xs mt-0.5">
+                Sistema de Gestión Administrativa · IGSS Tejutla
+              </p>
+            </div>
+          </div>
+          <LogoutButton userName={userName} />
+        </div>
+      </header>
+
+      {/* ── Subheader ───────────────────────────────────────────────── */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-6xl mx-auto px-6 py-4">
+          <p className="text-sm text-gray-500">
+            Selecciona el módulo al que deseas acceder
+          </p>
+        </div>
+      </div>
+
+      {/* ── Module grid ─────────────────────────────────────────────── */}
+      <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {MODULES.map((mod) => {
+            const Icon = mod.icon;
+            return (
+              <div
+                key={mod.id}
+                className={`
+                  bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden
+                  flex flex-col transition-all duration-200
+                  ${mod.available
+                    ? "hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+                    : "opacity-80"
+                  }
+                `}
+              >
+                {/* Card top bar color */}
+                <div className={`h-1.5 w-full ${mod.color}`} />
+
+                {/* Card body */}
+                <div className="p-6 flex flex-col flex-1">
+                  {/* Icon */}
+                  <div className={`w-14 h-14 ${mod.bgLight} ${mod.ring} ring-4 rounded-xl flex items-center justify-center mb-4`}>
+                    <Icon className={`w-7 h-7 ${mod.textColor}`} />
+                  </div>
+
+                  {/* Title + badge */}
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <h2 className="text-lg font-semibold text-gray-900 leading-tight">
+                      {mod.title}
+                    </h2>
+                    {!mod.available && (
+                      <span className="shrink-0 flex items-center gap-1 text-[10px] font-medium bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full mt-0.5">
+                        <Construction className="w-3 h-3" />
+                        Próximamente
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-sm text-gray-500 leading-relaxed flex-1">
+                    {mod.description}
+                  </p>
+
+                  {/* Action */}
+                  <div className="mt-5">
+                    {mod.available ? (
+                      <Link
+                        href={mod.href}
+                        className={`
+                          inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium
+                          ${mod.color} text-white hover:opacity-90 transition-opacity w-full justify-center
+                        `}
+                      >
+                        Ingresar
+                        <ArrowRight className="w-4 h-4" />
+                      </Link>
+                    ) : (
+                      <Link
+                        href={mod.href}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors w-full justify-center"
+                      >
+                        Ver detalle
+                        <ArrowRight className="w-4 h-4" />
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </main>
+
+      {/* ── Footer ─────────────────────────────────────────────────── */}
+      <footer className="bg-white border-t border-gray-200 py-4">
+        <p className="text-center text-xs text-gray-400">
+          SIGA · Sistema de Gestión Administrativa · IGSS Tejutla &nbsp;·&nbsp; v1.0
+        </p>
+      </footer>
+    </div>
+  );
+}

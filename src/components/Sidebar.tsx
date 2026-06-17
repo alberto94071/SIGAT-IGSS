@@ -4,7 +4,8 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   LayoutDashboard, Package, CreditCard, Landmark, Wallet,
-  FileCheck, BookOpen, BarChart3, FileText, Users, Settings, LogOut
+  FileCheck, BookOpen, BarChart3, FileText, Users, Settings, LogOut,
+  ChevronLeft
 } from "lucide-react";
 import { type Rol, ROL_LABELS } from "@/lib/permisos";
 import clsx from "clsx";
@@ -33,9 +34,10 @@ export default function Sidebar({ navItems, user }: Props) {
 
   return (
     <aside className="w-60 bg-gray-900 text-white flex flex-col h-full shrink-0">
-      {/* Logo */}
-      <div className="px-4 py-5 border-b border-gray-800">
-        <div className="flex items-center gap-3">
+      {/* Logo / Back to SIGA */}
+      <div className="px-4 py-4 border-b border-gray-800">
+        {/* System name */}
+        <div className="flex items-center gap-3 mb-3">
           <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center shrink-0">
             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -43,10 +45,21 @@ export default function Sidebar({ navItems, user }: Props) {
             </svg>
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold leading-tight truncate">Fondo Rotativo</p>
+            <p className="text-sm font-bold leading-tight text-white">SIGA</p>
             <p className="text-xs text-gray-400 truncate">IGSS Tejutla</p>
           </div>
         </div>
+        {/* Back to launcher + current module label */}
+        <Link
+          href="/launcher"
+          className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+        >
+          <ChevronLeft className="w-3.5 h-3.5 shrink-0" />
+          <span>Módulos SIGA</span>
+        </Link>
+        <p className="mt-2 px-2 text-[11px] font-semibold text-brand-400 uppercase tracking-wider">
+          Fondo Rotativo
+        </p>
       </div>
 
       {/* Nav */}

@@ -12,7 +12,7 @@ export default auth((req) => {
   // Rutas públicas
   if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
     if (isLoggedIn && pathname === "/login") {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
+      return NextResponse.redirect(new URL("/launcher", req.url));
     }
     return NextResponse.next();
   }
