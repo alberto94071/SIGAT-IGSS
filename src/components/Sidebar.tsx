@@ -58,7 +58,7 @@ export default function Sidebar({ navItems, user }: Props) {
           <span>Módulos SIGAT</span>
         </Link>
         <p className="mt-2 px-2 text-[11px] font-semibold text-brand-400 uppercase tracking-wider">
-          Fondo Rotativo
+          Compras
         </p>
       </div>
 

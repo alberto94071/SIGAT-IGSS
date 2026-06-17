@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-// Vercel inyecta VERCEL_URL automáticamente en cada deployment
+// VERCEL_PROJECT_PRODUCTION_URL = dominio canónico de producción (sigat-igss.vercel.app)
 const APP_URL = process.env.NEXT_PUBLIC_SITE_URL
-  || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000");
 
 const OG_IMAGE = `${APP_URL}/og-image.jpg`;
 

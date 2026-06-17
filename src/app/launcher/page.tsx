@@ -3,22 +3,34 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
   RotateCcw, MapPin, Bus, ArrowRight, Construction,
-  ShieldCheck
+  ShieldCheck, ShoppingCart
 } from "lucide-react";
 import LogoutButton from "./LogoutButton";
 
 const MODULES = [
   {
-    id: "fondo-rotativo",
-    title: "Fondo Rotativo",
-    description: "Gestión del fondo rotativo interno: servicios, pagos, banco, caja chica y liquidaciones.",
+    id: "compras",
+    title: "Compras",
+    description: "Gestión de compras: servicios, pagos a proveedores, banco, caja chica y liquidaciones.",
     href: "/dashboard",
-    icon: RotateCcw,
+    icon: ShoppingCart,
     color: "bg-green-500",
     ring: "ring-green-200",
     textColor: "text-green-600",
     bgLight: "bg-green-50",
     available: true,
+  },
+  {
+    id: "fondo-rotativo",
+    title: "Fondo Rotativo",
+    description: "Control y rendición del fondo rotativo interno: constitución, reintegros y conciliación bancaria.",
+    href: "/fondo-rotativo",
+    icon: RotateCcw,
+    color: "bg-orange-500",
+    ring: "ring-orange-200",
+    textColor: "text-orange-600",
+    bgLight: "bg-orange-50",
+    available: false,
   },
   {
     id: "viaticos",
