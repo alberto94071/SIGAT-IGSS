@@ -118,10 +118,10 @@ export default async function DashboardPage() {
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Acciones rápidas</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { href: "/dashboard/pagos/nuevo",      label: "Nuevo pago",         color: "bg-brand-50 text-brand-700 hover:bg-brand-100"  },
-            { href: "/dashboard/banco/nuevo",      label: "Registrar movimiento",color: "bg-blue-50 text-blue-700 hover:bg-blue-100"    },
-            { href: "/dashboard/liquidacion",      label: "Liquidar vale",       color: "bg-yellow-50 text-yellow-700 hover:bg-yellow-100"},
-            { href: "/dashboard/documentos/siaf",  label: "Generar SIAF",        color: "bg-purple-50 text-purple-700 hover:bg-purple-100"},
+            { href: "/dashboard/pagos",      label: "Nuevo pago",          color: "bg-brand-50 text-brand-700 hover:bg-brand-100"   },
+            { href: "/dashboard/banco",      label: "Registrar movimiento", color: "bg-blue-50 text-blue-700 hover:bg-blue-100"     },
+            { href: "/dashboard/liquidacion",label: "Liquidar vale",        color: "bg-yellow-50 text-yellow-700 hover:bg-yellow-100"},
+            { href: "/dashboard/documentos", label: "Generar SIAF",         color: "bg-purple-50 text-purple-700 hover:bg-purple-100"},
           ].map(a => (
             <a key={a.href} href={a.href}
               className={`flex items-center justify-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${a.color}`}>
