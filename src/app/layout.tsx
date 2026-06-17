@@ -21,21 +21,21 @@ export const metadata: Metadata = {
     description:
       "Plataforma oficial de gestión administrativa del IGSS en Tejutla, San Marcos. Fondo Rotativo Interno, control de pagos, servicios y reportes.",
     locale: "es_GT",
-    // images: [
-    //   {
-    //     url: "/og-image.png",   // ← pega aquí la URL de tu imagen cuando la tengas
-    //     width: 1200,
-    //     height: 630,
-    //     alt: "SIGAT — IGSS Tejutla",
-    //   },
-    // ],
+    images: [
+      {
+        url: "/og-image.jpg",
+        width: 1280,
+        height: 672,
+        alt: "SIGAT — Sistema Integral de Gestión Administrativa y Financiera · IGSS Tejutla",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "SIGAT — Sistema de Gestión Administrativa Tejutla | IGSS",
     description:
       "Plataforma oficial de gestión administrativa del IGSS en Tejutla, San Marcos.",
-    // images: ["/og-image.png"],  // ← misma imagen cuando la tengas
+    images: ["/og-image.jpg"],
   },
   icons: {
     icon: "/favicon.ico",
