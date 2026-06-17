@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-// VERCEL_PROJECT_PRODUCTION_URL = dominio canónico de producción (sigat-igss.vercel.app)
-const APP_URL = process.env.NEXT_PUBLIC_SITE_URL
-  || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000");
+// OG image con URL absoluta — env vars no disponibles en build time, la imagen requiere URL fija
+const PROD_URL = "https://sigat-igss.vercel.app";
+const OG_IMAGE = `${PROD_URL}/og-image.jpg`;
 
-const OG_IMAGE = `${APP_URL}/og-image.jpg`;
+const APP_URL = process.env.NEXT_PUBLIC_SITE_URL || PROD_URL;
+
+const OG_DESCRIPTION =
+  "Plataforma del IGSS en Tejutla, San Marcos. Gestión de compras, pagos, fondo rotativo, viáticos y reportes administrativos.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
@@ -13,32 +16,29 @@ export const metadata: Metadata = {
     default: "SIGAT — Sistema de Gestión Administrativa Tejutla | IGSS",
     template: "%s | SIGAT · IGSS Tejutla",
   },
-  description:
-    "Sistema interno de gestión administrativa del Instituto Guatemalteco de Seguridad Social — Consultorio Tejutla, San Marcos. Fondo Rotativo, Viáticos y más.",
+  description: OG_DESCRIPTION,
   keywords: ["IGSS", "SIGAT", "Tejutla", "San Marcos", "Fondo Rotativo", "Guatemala", "gestión administrativa"],
   authors: [{ name: "IGSS — U.I.A.A.D.D.M. Tejutla" }],
   openGraph: {
     type: "website",
-    url: APP_URL,
+    url: PROD_URL,
     siteName: "SIGAT · IGSS Tejutla",
     title: "SIGAT — Sistema de Gestión Administrativa Tejutla",
-    description:
-      "Plataforma oficial de gestión administrativa del IGSS en Tejutla, San Marcos. Fondo Rotativo Interno, control de pagos, servicios y reportes.",
+    description: OG_DESCRIPTION,
     locale: "es_GT",
     images: [
       {
         url: OG_IMAGE,
         width: 1280,
         height: 672,
-        alt: "SIGAT — Sistema Integral de Gestión Administrativa y Financiera · IGSS Tejutla",
+        alt: "SIGAT — Sistema Integral de Gestión Administrativa · IGSS Tejutla",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
     title: "SIGAT — Sistema de Gestión Administrativa Tejutla | IGSS",
-    description:
-      "Plataforma oficial de gestión administrativa del IGSS en Tejutla, San Marcos.",
+    description: OG_DESCRIPTION,
     images: [OG_IMAGE],
   },
   icons: {
