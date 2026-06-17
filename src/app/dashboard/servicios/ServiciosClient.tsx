@@ -253,8 +253,8 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
 
       {/* Modal */}
       {modal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
               <h2 className="font-semibold text-gray-900">
                 {modal === "crear" ? "Nuevo ingreso de servicio" : "Editar ingreso"}
@@ -273,7 +273,7 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
               </div>
 
               {/* Fila 1 */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Fecha *</label>
                   <input className="input" type="date" value={form.fecha}
@@ -317,7 +317,7 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
               </div>
 
               {/* Fila 3 */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="label">Renglón</label>
                   <input className="input" type="number" value={form.renglon}
@@ -346,7 +346,7 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
               )}
 
               {/* Fila 4 */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Fecha de compra</label>
                   <input className="input" type="date" value={form.fecha_compra}
@@ -360,7 +360,7 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
               </div>
 
               {/* Fila 5 */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">N° Documento</label>
                   <input className="input" value={form.numero_documento}

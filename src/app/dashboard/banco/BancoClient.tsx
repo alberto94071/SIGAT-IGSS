@@ -137,7 +137,7 @@ export default function BancoClient({ movimientos: init, canEdit }: Props) {
       </div>
 
       {/* Métricas */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card p-4 flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 font-medium">Saldo actual</p>
@@ -273,8 +273,8 @@ export default function BancoClient({ movimientos: init, canEdit }: Props) {
 
       {/* Modal */}
       {modal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
               <h2 className="font-semibold text-gray-900">
                 {modal === "crear" ? "Nuevo movimiento bancario" : "Editar movimiento"}
@@ -285,7 +285,7 @@ export default function BancoClient({ movimientos: init, canEdit }: Props) {
             </div>
 
             <div className="px-5 py-4 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Mes</label>
                   <select className="input" value={form.mes} onChange={e => set("mes", e.target.value)}>
@@ -299,7 +299,7 @@ export default function BancoClient({ movimientos: init, canEdit }: Props) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Tipo de documento</label>
                   <select className="input" value={form.tipo_documento}
@@ -343,7 +343,7 @@ export default function BancoClient({ movimientos: init, canEdit }: Props) {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">NIT Beneficiario</label>
                   <input className="input" value={form.nit_beneficiario}
@@ -362,7 +362,7 @@ export default function BancoClient({ movimientos: init, canEdit }: Props) {
                   onChange={e => set("descripcion", e.target.value)} />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Egresos (Q)</label>
                   <input className="input" type="number" step="0.01" value={form.egresos}

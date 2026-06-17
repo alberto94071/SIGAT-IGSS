@@ -27,16 +27,16 @@ const ICONS: Record<string, React.ReactNode> = {
 interface Props {
   navItems: readonly { href: string; label: string; icon: string }[];
   user: { name: string; rol: Rol; email: string };
+  onClose?: () => void;
 }
 
-export default function Sidebar({ navItems, user }: Props) {
+export default function Sidebar({ navItems, user, onClose }: Props) {
   const pathname = usePathname();
 
   return (
-    <aside className="w-60 bg-gray-900 text-white flex flex-col h-full shrink-0">
+    <aside className="w-60 bg-gray-900 text-white flex flex-col h-full">
       {/* Logo / Back to SIGAT */}
       <div className="px-4 py-4 border-b border-gray-800">
-        {/* System name */}
         <div className="flex items-center gap-3 mb-3">
           <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center shrink-0">
             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -49,9 +49,9 @@ export default function Sidebar({ navItems, user }: Props) {
             <p className="text-xs text-gray-400 truncate">IGSS Tejutla</p>
           </div>
         </div>
-        {/* Back to launcher + current module label */}
         <Link
           href="/launcher"
+          onClick={onClose}
           className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
         >
           <ChevronLeft className="w-3.5 h-3.5 shrink-0" />
@@ -71,6 +71,7 @@ export default function Sidebar({ navItems, user }: Props) {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onClose}
               className={clsx(
                 "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
                 isActive

@@ -130,14 +130,13 @@ export default function CajaChicaClient({ gastos: init, canEdit }: Props) {
       </div>
 
       {/* Filtros */}
-      <div className="flex gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input className="input pl-9" placeholder="Buscar beneficiario, servicio…"
             value={query} onChange={e => setQuery(e.target.value)} />
         </div>
-        {/* Filtro por cheque */}
-        <select className="input w-auto"
+        <select className="input w-full sm:w-auto"
           value={grupoCheque ?? ""}
           onChange={e => setGrupoCheque(e.target.value || null)}>
           <option value="">Todos los cheques</option>
@@ -212,8 +211,8 @@ export default function CajaChicaClient({ gastos: init, canEdit }: Props) {
 
       {/* Modal */}
       {modal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
               <h2 className="font-semibold text-gray-900">
                 {modal === "crear" ? "Nuevo gasto de caja chica" : "Editar gasto"}
@@ -224,7 +223,7 @@ export default function CajaChicaClient({ gastos: init, canEdit }: Props) {
             </div>
 
             <div className="px-5 py-4 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">N° Cheque</label>
                   <input className="input" value={form.numero_cheque}
@@ -236,7 +235,7 @@ export default function CajaChicaClient({ gastos: init, canEdit }: Props) {
                     onChange={e => set("numero_vale", e.target.value)} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Tipo de documento</label>
                   <select className="input" value={form.tipo_documento}
@@ -252,7 +251,7 @@ export default function CajaChicaClient({ gastos: init, canEdit }: Props) {
                     onChange={e => set("fecha", e.target.value)} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">N° Documento</label>
                   <input className="input" value={form.numero_documento}
@@ -269,7 +268,7 @@ export default function CajaChicaClient({ gastos: init, canEdit }: Props) {
                 <input className="input" value={form.nombre_beneficiario}
                   onChange={e => set("nombre_beneficiario", e.target.value)} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Municipio residencia</label>
                   <input className="input" value={form.municipio_residencia}
@@ -287,7 +286,7 @@ export default function CajaChicaClient({ gastos: init, canEdit }: Props) {
                   onChange={e => set("tipo_servicio", e.target.value)}
                   placeholder="Descripción del servicio o gasto…" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Costo (Q) *</label>
                   <input className="input" type="number" step="0.01" value={form.costo}

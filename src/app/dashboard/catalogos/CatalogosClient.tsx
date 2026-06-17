@@ -171,8 +171,8 @@ export default function CatalogosClient({ insumos: init, canEdit }: Props) {
 
       {/* Modal crear/editar */}
       {modal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white">
               <h2 className="font-semibold text-gray-900">
                 {modal === "crear" ? "Nuevo insumo" : "Editar insumo"}
@@ -182,7 +182,7 @@ export default function CatalogosClient({ insumos: init, canEdit }: Props) {
               </button>
             </div>
             <div className="px-5 py-4 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Código IGSS</label>
                   <input className="input" type="number"
@@ -204,7 +204,7 @@ export default function CatalogosClient({ insumos: init, canEdit }: Props) {
                 <textarea className="input" rows={2} value={form.caracteristicas}
                   onChange={e => setForm(p => ({ ...p, caracteristicas: e.target.value }))} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Código PpR</label>
                   <input className="input" value={form.codigo_ppr}
@@ -216,7 +216,7 @@ export default function CatalogosClient({ insumos: init, canEdit }: Props) {
                     onChange={e => setForm(p => ({ ...p, subproducto: e.target.value }))} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Presentación</label>
                   <input className="input" value={form.presentacion}
