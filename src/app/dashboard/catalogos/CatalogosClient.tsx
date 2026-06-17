@@ -7,25 +7,27 @@ type Insumo = {
   id: number; codigo_igss: number; codigo_ppr: string | null;
   codigo_minfin: number | null; nombre: string; caracteristicas: string | null;
   presentacion: string | null; unidad_medida: string | null;
-  subproducto: string | null; cantidad_solicitada: number | null; activo: boolean;
+  subproducto: string | null; cantidad_solicitada: number | null;
+  precio_unitario: number | null; activo: boolean;
 };
 
 interface Props { insumos: Insumo[]; canEdit: boolean; }
 
 const EMPTY = {
   codigo_igss: 0, codigo_ppr: "", codigo_minfin: 0, nombre: "",
-  caracteristicas: "", presentacion: "", unidad_medida: "", subproducto: "", cantidad_solicitada: "0",
+  caracteristicas: "", presentacion: "", unidad_medida: "", subproducto: "",
+  cantidad_solicitada: "0", precio_unitario: "",
 };
 
 export default function CatalogosClient({ insumos: init, canEdit }: Props) {
-  const [lista,    setLista]    = useState(init);
-  const [query,    setQuery]    = useState("");
+  const [lista,       setLista]       = useState(init);
+  const [query,       setQuery]       = useState("");
   const [soloActivos, setSoloActivos] = useState(false);
-  const [modal,    setModal]    = useState<"crear" | "editar" | null>(null);
-  const [selected, setSelected] = useState<Insumo | null>(null);
-  const [form,     setForm]     = useState(EMPTY);
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState("");
+  const [modal,       setModal]       = useState<"crear" | "editar" | null>(null);
+  const [selected,    setSelected]    = useState<Insumo | null>(null);
+  const [form,        setForm]        = useState(EMPTY);
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState("");
 
   const filtered = useMemo(() =>
     lista.filter(i => {
@@ -38,17 +40,21 @@ export default function CatalogosClient({ insumos: init, canEdit }: Props) {
   );
 
   function openCrear() {
-    setForm(EMPTY); setError("");
-    setModal("crear");
+    setForm(EMPTY); setError(""); setModal("crear");
   }
   function openEditar(i: Insumo) {
     setSelected(i);
     setForm({
-      codigo_igss: i.codigo_igss, codigo_ppr: i.codigo_ppr ?? "",
-      codigo_minfin: i.codigo_minfin ?? 0, nombre: i.nombre,
-      caracteristicas: i.caracteristicas ?? "", presentacion: i.presentacion ?? "",
-      unidad_medida: i.unidad_medida ?? "", subproducto: i.subproducto ?? "",
+      codigo_igss:         i.codigo_igss,
+      codigo_ppr:          i.codigo_ppr ?? "",
+      codigo_minfin:       i.codigo_minfin ?? 0,
+      nombre:              i.nombre,
+      caracteristicas:     i.caracteristicas ?? "",
+      presentacion:        i.presentacion ?? "",
+      unidad_medida:       i.unidad_medida ?? "",
+      subproducto:         i.subproducto ?? "",
       cantidad_solicitada: i.cantidad_solicitada?.toString() ?? "0",
+      precio_unitario:     i.precio_unitario?.toString() ?? "",
     });
     setError(""); setModal("editar");
   }
@@ -69,7 +75,11 @@ export default function CatalogosClient({ insumos: init, canEdit }: Props) {
     setLoading(false);
     if (res.error) return setError(res.error);
     setLista(prev => prev.map(i => i.id === selected.id
-      ? { ...i, ...form, cantidad_solicitada: form.cantidad_solicitada ? parseFloat(form.cantidad_solicitada) : null } : i));
+      ? {
+          ...i, ...form,
+          cantidad_solicitada: form.cantidad_solicitada ? parseFloat(form.cantidad_solicitada) : null,
+          precio_unitario:     form.precio_unitario ? parseFloat(form.precio_unitario) : null,
+        } : i));
     setModal(null);
   }
 
@@ -116,26 +126,30 @@ export default function CatalogosClient({ insumos: init, canEdit }: Props) {
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
-                <th className="px-4 py-3 text-left">Cód. IGSS</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">Cód. IGSS</th>
                 <th className="px-4 py-3 text-left">Nombre</th>
-                <th className="px-4 py-3 text-left">Subproducto</th>
-                <th className="px-4 py-3 text-left">Unidad</th>
-                <th className="px-4 py-3 text-center">Estado</th>
-                {canEdit && <th className="px-4 py-3 text-right">Acciones</th>}
+                <th className="px-4 py-3 text-left whitespace-nowrap">Subproducto</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">Unidad</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Precio Unit.</th>
+                <th className="px-4 py-3 text-center whitespace-nowrap">Estado</th>
+                {canEdit && <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.map(i => (
                 <tr key={i.id} className={`hover:bg-gray-50 transition-colors ${!i.activo ? "opacity-50" : ""}`}>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{i.codigo_igss}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-600 whitespace-nowrap">{i.codigo_igss}</td>
                   <td className="px-4 py-3">
                     <p className="font-medium text-gray-900 max-w-xs truncate">{i.nombre}</p>
                     {i.caracteristicas && (
                       <p className="text-xs text-gray-400 truncate max-w-xs">{i.caracteristicas}</p>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{i.subproducto ?? "—"}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{i.unidad_medida ?? "—"}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{i.subproducto ?? "—"}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{i.unidad_medida ?? "—"}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-sm font-medium text-gray-700 whitespace-nowrap">
+                    {i.precio_unitario != null ? `Q ${i.precio_unitario.toFixed(4)}` : "—"}
+                  </td>
                   <td className="px-4 py-3 text-center">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${i.activo ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${i.activo ? "bg-green-500" : "bg-gray-400"}`} />
@@ -150,7 +164,7 @@ export default function CatalogosClient({ insumos: init, canEdit }: Props) {
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button onClick={() => handleToggle(i)}
-                          title={i.activo ? "Deshabilitar temporalmente" : "Habilitar"}
+                          title={i.activo ? "Deshabilitar" : "Habilitar"}
                           className={`p-1.5 rounded-lg transition-colors ${i.activo
                             ? "text-gray-400 hover:text-red-600 hover:bg-red-50"
                             : "text-gray-400 hover:text-green-600 hover:bg-green-50"}`}>
@@ -228,10 +242,19 @@ export default function CatalogosClient({ insumos: init, canEdit }: Props) {
                     onChange={e => setForm(p => ({ ...p, unidad_medida: e.target.value }))} />
                 </div>
               </div>
-              <div>
-                <label className="label">Cantidad solicitada anual</label>
-                <input className="input" type="number" value={form.cantidad_solicitada}
-                  onChange={e => setForm(p => ({ ...p, cantidad_solicitada: e.target.value }))} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Cantidad solicitada anual</label>
+                  <input className="input" type="number" value={form.cantidad_solicitada}
+                    onChange={e => setForm(p => ({ ...p, cantidad_solicitada: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="label">Precio unitario (Q)</label>
+                  <input className="input" type="number" step="0.0001"
+                    value={form.precio_unitario}
+                    onChange={e => setForm(p => ({ ...p, precio_unitario: e.target.value }))}
+                    placeholder="0.0000" />
+                </div>
               </div>
             </div>
             {error && (

@@ -3,20 +3,26 @@ import { db } from "@/lib/db";
 import { servicios, auditLog } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { nextSiafNumber } from "@/lib/siaf";
+import { nextCorrelativo } from "@/lib/siaf";
 
 async function me() {
   const s = await auth();
   return s ? Number(s.user.id) : null;
 }
 
+export async function getNextCorrelativo(tipo: string): Promise<number> {
+  return nextCorrelativo(tipo);
+}
+
 export async function crearServicio(data: any) {
   try {
     const uid = await me();
-    // SIAF siempre automático — secuencia PostgreSQL atómica, sin colisiones
-    const siafNum = await nextSiafNumber();
+    const tipo = data.tipo_documento || "SIAF";
+    const corrNum = await nextCorrelativo(tipo);
+
     const [nuevo] = await db.insert(servicios).values({
-      siaf_numero:       siafNum,
+      tipo_documento:    tipo,
+      siaf_numero:       corrNum,
       fecha:             data.fecha,
       cuatrimestre:      data.cuatrimestre || null,
       renglon:           data.renglon ? Number(data.renglon) : null,
@@ -31,20 +37,20 @@ export async function crearServicio(data: any) {
       estado_oc:         data.estado_oc || null,
       creado_por:        uid,
     }).returning();
+
     if (uid) await db.insert(auditLog).values({
       usuario_id: uid, accion: "crear_servicio",
       tabla: "servicios", registro_id: nuevo.id,
-      detalle: `SIAF #${siafNum} — ${data.insumo}`,
+      detalle: `${tipo}-${String(corrNum).padStart(3,"0")} — ${data.insumo}`,
     });
     return { servicio: nuevo };
-  } catch (e) {
+  } catch {
     return { error: "Error al crear el servicio" };
   }
 }
 
 export async function editarServicio(data: any) {
   try {
-    // SIAF no se edita — es inmutable una vez asignado
     await db.update(servicios).set({
       fecha:             data.fecha,
       cuatrimestre:      data.cuatrimestre || null,

@@ -15,10 +15,11 @@ export default async function ServiciosPage() {
   const [lista, catalogo] = await Promise.all([
     db.select().from(servicios).orderBy(desc(servicios.id)).limit(500),
     db.select({
-      codigo_igss:  catalogoInsumos.codigo_igss,
-      nombre:       catalogoInsumos.nombre,
-      subproducto:  catalogoInsumos.subproducto,
-      unidad_medida:catalogoInsumos.unidad_medida,
+      codigo_igss:     catalogoInsumos.codigo_igss,
+      nombre:          catalogoInsumos.nombre,
+      subproducto:     catalogoInsumos.subproducto,
+      unidad_medida:   catalogoInsumos.unidad_medida,
+      precio_unitario: catalogoInsumos.precio_unitario,
     })
     .from(catalogoInsumos)
     .where(eq(catalogoInsumos.activo, true)),
@@ -28,7 +29,7 @@ export default async function ServiciosPage() {
   return (
     <ServiciosClient
       servicios={lista as any}
-      catalogo={catalogo}
+      catalogo={catalogo as any}
       canEdit={canEdit}
       userId={Number(session!.user.id)}
     />

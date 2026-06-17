@@ -48,6 +48,7 @@ export const catalogoInsumos = pgTable("catalogo_insumos", {
   unidad_medida:           text("unidad_medida"),
   subproducto:             text("subproducto"),
   cantidad_solicitada:     doublePrecision("cantidad_solicitada"),
+  precio_unitario:         doublePrecision("precio_unitario"),
   activo:                  boolean("activo").notNull().default(true),
   created_at:              text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
@@ -67,6 +68,7 @@ export const catalogo182 = pgTable("catalogo_182", {
 // ─── Servicios / Ingresos (hoja Serv) ─────────────────────────────────────────
 export const servicios = pgTable("servicios", {
   id:                serial("id").primaryKey(),
+  tipo_documento:    text("tipo_documento").notNull().default("SIAF"),
   siaf_numero:       integer("siaf_numero"),
   fecha:             text("fecha").notNull(),
   cuatrimestre:      text("cuatrimestre"),

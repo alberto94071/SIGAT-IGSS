@@ -39,7 +39,7 @@ function StatCard({ icon, label, value, sub, color }: {
           <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
           {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
         </div>
-        <div className={`p-2.5 rounded-xl ${color}`}>
+        <div className={`p-2.5 rounded-xl shrink-0 ${color}`}>
           {icon}
         </div>
       </div>
