@@ -173,6 +173,14 @@ export const auditLog = pgTable("audit_log", {
   created_at:  text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
+// ─── Catálogo de subproductos (controlado por superadmin) ────────────────────
+export const catalogoSubproductos = pgTable("catalogo_subproductos", {
+  id:         serial("id").primaryKey(),
+  nombre:     text("nombre").notNull().unique(),
+  activo:     boolean("activo").notNull().default(true),
+  created_at: text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
 // ─── Secuencia SIAF ───────────────────────────────────────────────────────────
 export const siafSeq = pgTable("siaf_seq", {
   id:    integer("id").primaryKey().default(1),

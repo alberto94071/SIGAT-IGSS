@@ -2,8 +2,8 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { parsePermisos, type Rol } from "@/lib/permisos";
 import { db } from "@/lib/db";
-import { servicios, catalogoInsumos } from "@/lib/schema";
-import { desc, eq } from "drizzle-orm";
+import { servicios, catalogoInsumos, catalogoSubproductos } from "@/lib/schema";
+import { desc, eq, asc } from "drizzle-orm";
 import ServiciosClient from "./ServiciosClient";
 
 export default async function ServiciosPage() {
@@ -12,7 +12,7 @@ export default async function ServiciosPage() {
   const permisos = parsePermisos(session!.user.permisos, rol);
   if (!permisos.servicios) redirect("/dashboard");
 
-  const [lista, catalogo] = await Promise.all([
+  const [lista, catalogo, subprodLista] = await Promise.all([
     db.select().from(servicios).orderBy(desc(servicios.id)).limit(500),
     db.select({
       codigo_igss:     catalogoInsumos.codigo_igss,
@@ -23,6 +23,10 @@ export default async function ServiciosPage() {
     })
     .from(catalogoInsumos)
     .where(eq(catalogoInsumos.activo, true)),
+    db.select({ nombre: catalogoSubproductos.nombre })
+      .from(catalogoSubproductos)
+      .where(eq(catalogoSubproductos.activo, true))
+      .orderBy(asc(catalogoSubproductos.nombre)),
   ]);
 
   const canEdit = rol !== "consulta";
@@ -30,6 +34,7 @@ export default async function ServiciosPage() {
     <ServiciosClient
       servicios={lista as any}
       catalogo={catalogo as any}
+      subproductos={subprodLista.map(s => s.nombre)}
       canEdit={canEdit}
       userId={Number(session!.user.id)}
     />

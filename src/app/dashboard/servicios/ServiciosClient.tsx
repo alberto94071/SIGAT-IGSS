@@ -23,17 +23,20 @@ type InsumoRef = {
 const TIPOS = ["SIAF", "Vale", "Formulario", "Boleta", "Póliza"] as const;
 type TipoDoc = typeof TIPOS[number];
 
-const TIPO_PREFIJO: Record<string, string> = {
-  "SIAF": "SIAF", "Vale": "VALE", "Formulario": "FORM",
-  "Boleta": "BOL", "Póliza": "POL",
+const TIPO_COLOR: Record<string, string> = {
+  "SIAF":       "bg-blue-100 text-blue-700",
+  "Vale":       "bg-yellow-100 text-yellow-700",
+  "Formulario": "bg-green-100 text-green-700",
+  "Boleta":     "bg-purple-100 text-purple-700",
+  "Póliza":     "bg-red-100 text-red-700",
 };
 
-const TIPO_COLOR: Record<string, string> = {
-  "SIAF": "bg-blue-100 text-blue-700",
-  "Vale": "bg-yellow-100 text-yellow-700",
-  "Formulario": "bg-green-100 text-green-700",
-  "Boleta": "bg-purple-100 text-purple-700",
-  "Póliza": "bg-red-100 text-red-700",
+const TIPO_BTN: Record<string, string> = {
+  "SIAF":       "border-blue-300 bg-blue-50 text-blue-700",
+  "Vale":       "border-yellow-300 bg-yellow-50 text-yellow-700",
+  "Formulario": "border-green-300 bg-green-50 text-green-700",
+  "Boleta":     "border-purple-300 bg-purple-50 text-purple-700",
+  "Póliza":     "border-red-300 bg-red-50 text-red-700",
 };
 
 // Renglones comunes IGSS
@@ -49,6 +52,12 @@ const RENGLONES = [
   { r: 281, d: "Papel y cartones" },
   { r: 295, d: "Útiles menores de oficina" },
 ];
+
+function corrLabel(num: number | null, fecha: string) {
+  if (num == null) return "—";
+  const year = fecha.substring(0, 4);
+  return `${num}/${year}`;
+}
 
 const EMPTY = {
   tipo_documento: "SIAF" as TipoDoc,
@@ -67,12 +76,14 @@ const EMPTY = {
 
 interface Props {
   servicios: Servicio[]; catalogo: InsumoRef[];
+  subproductos: string[];
   canEdit: boolean; userId: number;
 }
 
-export default function ServiciosClient({ servicios: init, catalogo, canEdit }: Props) {
+export default function ServiciosClient({ servicios: init, catalogo, subproductos, canEdit }: Props) {
   const [lista,        setLista]        = useState(init);
   const [query,        setQuery]        = useState("");
+  const [tipoFiltro,   setTipoFiltro]   = useState<string>("Todos");
   const [modal,        setModal]        = useState<"crear" | "editar" | null>(null);
   const [selected,     setSelected]     = useState<Servicio | null>(null);
   const [form,         setForm]         = useState(EMPTY);
@@ -82,18 +93,12 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
   const [corrLoading,  setCorrLoading]  = useState(false);
 
   // Autocomplete states
-  const [insumoQ,      setInsumoQ]      = useState("");
+  const [insumoQ,        setInsumoQ]        = useState("");
   const [showInsumoDrop, setShowInsumoDrop] = useState(false);
-  const [renglonQ,     setRenglonQ]     = useState("266");
-  const [showRenglonDrop, setShowRenglonDrop] = useState(false);
-  const [subprodQ,     setSubprodQ]     = useState("");
-  const [showSubprodDrop, setShowSubprodDrop] = useState(false);
+  const [renglonQ,       setRenglonQ]       = useState("266");
+  const [showRenglonDrop,setShowRenglonDrop]= useState(false);
 
-  // Listas derivadas del catálogo
-  const subproductos = useMemo(() =>
-    [...new Set(catalogo.map(c => c.subproducto).filter(Boolean))].sort() as string[],
-    [catalogo]
-  );
+  const currentYear = new Date().getFullYear();
 
   // Autocomplete insumos
   const insumoSugg = useMemo(() =>
@@ -115,24 +120,27 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
     [renglonQ]
   );
 
-  // Autocomplete subproductos
-  const subprodSugg = useMemo(() =>
-    !subprodQ ? subproductos.slice(0, 8) :
-    subproductos.filter(s => s.toLowerCase().includes(subprodQ.toLowerCase())).slice(0, 8),
-    [subprodQ, subproductos]
+  // Tipos que existen en la lista
+  const tiposEnUso = useMemo(() =>
+    ["Todos", ...TIPOS.filter(t => lista.some(s => s.tipo_documento === t))],
+    [lista]
   );
 
   // Tabla filtrada
   const filtered = useMemo(() =>
-    lista.filter(s =>
-      !query ||
-      String(s.siaf_numero ?? "").includes(query) ||
-      (s.insumo ?? "").toLowerCase().includes(query.toLowerCase()) ||
-      (s.subproducto ?? "").toLowerCase().includes(query.toLowerCase()) ||
-      (s.numero_compra ?? "").includes(query) ||
-      (s.tipo_documento ?? "").toLowerCase().includes(query.toLowerCase()) ||
-      String(s.renglon ?? "").includes(query)
-    ), [lista, query]);
+    lista.filter(s => {
+      const matchTipo  = tipoFiltro === "Todos" || s.tipo_documento === tipoFiltro;
+      const matchQuery = !query ||
+        String(s.siaf_numero ?? "").includes(query) ||
+        (s.insumo ?? "").toLowerCase().includes(query.toLowerCase()) ||
+        (s.subproducto ?? "").toLowerCase().includes(query.toLowerCase()) ||
+        (s.numero_compra ?? "").includes(query) ||
+        (s.tipo_documento ?? "").toLowerCase().includes(query.toLowerCase()) ||
+        String(s.renglon ?? "").includes(query);
+      return matchTipo && matchQuery;
+    }),
+    [lista, query, tipoFiltro]
+  );
 
   // Fetch correlativo cuando cambia tipo (solo en modal crear)
   useEffect(() => {
@@ -155,13 +163,12 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
       precio_registrado: ins.precio_unitario != null ? String(ins.precio_unitario) : p.precio_registrado,
     }));
     setInsumoQ(ins.nombre);
-    setSubprodQ(ins.subproducto ?? "");
     setShowInsumoDrop(false);
   }
 
   function openCrear() {
     setForm(EMPTY);
-    setInsumoQ(""); setRenglonQ("266"); setSubprodQ("");
+    setInsumoQ(""); setRenglonQ("266");
     setError(""); setModal("crear");
   }
 
@@ -183,7 +190,6 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
     });
     setInsumoQ(s.insumo ?? "");
     setRenglonQ(String(s.renglon ?? "266"));
-    setSubprodQ(s.subproducto ?? "");
     setError(""); setModal("editar");
   }
 
@@ -217,7 +223,9 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
     setLista(p => p.filter(s => s.id !== id));
   }
 
-  const corrLabel = `${TIPO_PREFIJO[form.tipo_documento] ?? form.tipo_documento}-${String(nextCorr).padStart(3, "0")}`;
+  const previewCorr = corrLoading
+    ? "Calculando…"
+    : `${nextCorr}/${currentYear}`;
 
   const totalCalc = form.cantidad && form.precio_registrado
     ? parseFloat(form.cantidad) * parseFloat(form.precio_registrado)
@@ -240,11 +248,35 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
         )}
       </div>
 
-      {/* Búsqueda */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input className="input pl-9" placeholder="Buscar SIAF, insumo, tipo…"
-          value={query} onChange={e => setQuery(e.target.value)} />
+      {/* Buscador + filtros de tipo */}
+      <div className="space-y-2">
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input className="input pl-9" placeholder="Buscar correlativo, insumo, OC…"
+            value={query} onChange={e => setQuery(e.target.value)} />
+        </div>
+        {/* Botones de filtro por tipo */}
+        <div className="flex flex-wrap gap-2">
+          {tiposEnUso.map(t => {
+            const active = tipoFiltro === t;
+            const baseBtn = t === "Todos"
+              ? "border-gray-300 bg-white text-gray-600"
+              : TIPO_BTN[t] ?? "border-gray-200 bg-gray-50 text-gray-600";
+            return (
+              <button key={t} onClick={() => setTipoFiltro(t)}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all
+                  ${active ? (t === "Todos" ? "bg-gray-800 text-white border-gray-800" : baseBtn + " ring-2 ring-offset-1 ring-current") : baseBtn}
+                `}>
+                {t}
+                {t !== "Todos" && (
+                  <span className="ml-1 opacity-60">
+                    {lista.filter(s => s.tipo_documento === t).length}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Tabla */}
@@ -253,7 +285,8 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
-                <th className="px-4 py-3 text-left whitespace-nowrap">Tipo / Corr.</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">Tipo</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">Correlativo</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Fecha</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Cuatrimestre</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Renglón</th>
@@ -275,11 +308,11 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
                   <tr key={s.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${TIPO_COLOR[s.tipo_documento] ?? "bg-gray-100 text-gray-700"}`}>
-                        {TIPO_PREFIJO[s.tipo_documento] ?? s.tipo_documento}
+                        {s.tipo_documento}
                       </span>
-                      <p className="font-mono text-xs text-gray-600 mt-0.5">
-                        {String(s.siaf_numero ?? "—").padStart(3, "0")}
-                      </p>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-800 whitespace-nowrap">
+                      {corrLabel(s.siaf_numero, s.fecha)}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{s.fecha}</td>
                     <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{s.cuatrimestre ?? "—"}</td>
@@ -300,9 +333,9 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
                     <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{s.numero_compra ?? "—"}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                        s.estado_oc === "Recibido" ? "bg-green-100 text-green-700" :
+                        s.estado_oc === "Recibido"  ? "bg-green-100 text-green-700" :
                         s.estado_oc === "Pendiente" ? "bg-yellow-100 text-yellow-700" :
-                        s.estado_oc === "Anulado" ? "bg-red-100 text-red-700" :
+                        s.estado_oc === "Anulado"   ? "bg-red-100 text-red-700" :
                         "bg-gray-100 text-gray-700"
                       }`}>{s.estado_oc ?? "—"}</span>
                     </td>
@@ -339,7 +372,9 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
               <h2 className="font-semibold text-gray-900">
-                {modal === "crear" ? "Nuevo ingreso de servicio" : `Editar — ${TIPO_PREFIJO[form.tipo_documento]}-${String(selected?.siaf_numero ?? "").padStart(3, "0")}`}
+                {modal === "crear"
+                  ? "Nuevo ingreso de servicio"
+                  : `Editar — ${corrLabel(selected?.siaf_numero ?? null, selected?.fecha ?? form.fecha)}`}
               </h2>
               <button onClick={() => setModal(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
                 <X className="w-4 h-4" />
@@ -362,9 +397,10 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
                   <label className="label">Correlativo</label>
                   <div className="input bg-gray-50 font-mono text-gray-700 flex items-center gap-2">
                     {modal === "crear"
-                      ? corrLoading ? <span className="text-gray-400">Calculando…</span>
-                        : <><CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />{corrLabel}</>
-                      : `${TIPO_PREFIJO[form.tipo_documento] ?? form.tipo_documento}-${String(selected?.siaf_numero ?? "").padStart(3, "0")}`
+                      ? corrLoading
+                        ? <span className="text-gray-400">Calculando…</span>
+                        : <><CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />{previewCorr}</>
+                      : corrLabel(selected?.siaf_numero ?? null, selected?.fecha ?? form.fecha)
                     }
                   </div>
                 </div>
@@ -457,8 +493,7 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
                 <div>
                   <label className="label">Cantidad</label>
                   <input className="input" type="number" step="0.01" value={form.cantidad}
-                    onChange={e => set("cantidad", e.target.value)}
-                    placeholder="0" />
+                    onChange={e => set("cantidad", e.target.value)} placeholder="0" />
                 </div>
                 <div>
                   <label className="label">Precio unitario (Q)</label>
@@ -478,30 +513,20 @@ export default function ServiciosClient({ servicios: init, catalogo, canEdit }: 
                 </div>
               )}
 
-              {/* ⑥ Subproducto — autocomplete */}
-              <div className="relative">
+              {/* ⑥ Subproducto — solo del catálogo (controlado por superadmin) */}
+              <div>
                 <label className="label">Subproducto</label>
-                <div className="relative">
-                  <input className="input pr-8" value={subprodQ}
-                    onChange={e => {
-                      setSubprodQ(e.target.value);
-                      set("subproducto", e.target.value);
-                      setShowSubprodDrop(true);
-                    }}
-                    onFocus={() => setShowSubprodDrop(true)}
-                    onBlur={() => setTimeout(() => setShowSubprodDrop(false), 150)}
-                    placeholder="Selecciona o escribe el subproducto…" />
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                </div>
-                {showSubprodDrop && subprodSugg.length > 0 && (
-                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-                    {subprodSugg.map(s => (
-                      <button key={s} type="button"
-                        onMouseDown={() => { setSubprodQ(s); set("subproducto", s); setShowSubprodDrop(false); }}
-                        className="w-full text-left px-4 py-2.5 hover:bg-brand-50 text-sm text-gray-700 border-b border-gray-50 last:border-0">
-                        {s}
-                      </button>
+                {subproductos.length > 0 ? (
+                  <select className="input" value={form.subproducto}
+                    onChange={e => set("subproducto", e.target.value)}>
+                    <option value="">— Selecciona un subproducto —</option>
+                    {subproductos.map(s => (
+                      <option key={s} value={s}>{s}</option>
                     ))}
+                  </select>
+                ) : (
+                  <div className="input bg-gray-50 text-gray-400 text-sm">
+                    No hay subproductos configurados. El superadmin debe agregarlos en Catálogos.
                   </div>
                 )}
               </div>
