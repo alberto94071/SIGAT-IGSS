@@ -196,6 +196,32 @@ export const catalogoSubproductos = pgTable("catalogo_subproductos", {
   created_at: text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
+// ─── Compras: solicitudes A-01 SIAF ──────────────────────────────────────────
+export const siafCompras = pgTable("siaf_compras", {
+  id:            serial("id").primaryKey(),
+  numero:        integer("numero").notNull(),
+  anio:          integer("anio").notNull(),
+  fecha:         text("fecha").notNull(),
+  estado:        text("estado").notNull().default("Borrador"),
+  observaciones: text("observaciones"),
+  creado_por:    integer("creado_por").references(() => usuarios.id),
+  created_at:    text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+export const siafComprasItems = pgTable("siaf_compras_items", {
+  id:                  serial("id").primaryKey(),
+  solicitud_id:        integer("solicitud_id").notNull().references(() => siafCompras.id, { onDelete: "cascade" }),
+  catalogo_id:         integer("catalogo_id").references(() => catalogoCompras.id),
+  codigo_igss:         integer("codigo_igss"),
+  codigo_ppr:          text("codigo_ppr"),
+  nombre:              text("nombre").notNull(),
+  subproducto:         text("subproducto").notNull(),
+  unidad_medida:       text("unidad_medida"),
+  cantidad_antes:      doublePrecision("cantidad_antes"),
+  cantidad_solicitada: doublePrecision("cantidad_solicitada").notNull(),
+  created_at:          text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
 // ─── Secuencia SIAF ───────────────────────────────────────────────────────────
 export const siafSeq = pgTable("siaf_seq", {
   id:    integer("id").primaryKey().default(1),
