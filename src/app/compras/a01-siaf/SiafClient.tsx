@@ -1,9 +1,10 @@
 "use client";
 import { Fragment, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   FileText, Plus, ChevronDown, ChevronRight, Search, X,
   Trash2, History, ClipboardList, AlertTriangle, CheckCircle2,
-  Loader2, Package,
+  Loader2, Package, Printer,
 } from "lucide-react";
 import {
   crearSolicitud, eliminarSolicitud, actualizarEstado, getNextSiafNumeroCompras,
@@ -38,15 +39,24 @@ const ESTADO_STYLE: Record<string, string> = {
   "Rechazado": "bg-red-100 text-red-700",
 };
 
-interface Props { solicitudes: Solicitud[]; catalogo: CatEntry[]; canEdit: boolean; }
+type Firmante = { id: number; nombre: string; cargo: string };
 
-export default function SiafClient({ solicitudes: initSol, catalogo, canEdit }: Props) {
+interface Props { solicitudes: Solicitud[]; catalogo: CatEntry[]; canEdit: boolean; firmantes?: Firmante[]; }
+
+export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, firmantes = [] }: Props) {
+  const router = useRouter();
   const [solicitudes,  setSolicitudes]  = useState(initSol);
   const [viewMode,     setViewMode]     = useState<"solicitudes" | "historial">("solicitudes");
   const [query,        setQuery]        = useState("");
   const [expandedId,   setExpandedId]   = useState<string | null>(null);
 
-  // Modal
+  // Modal imprimir
+  const [printModal,   setPrintModal]   = useState(false);
+  const [printSolId,   setPrintSolId]   = useState<number | null>(null);
+  const [selFirmante1, setSelFirmante1] = useState<Firmante | null>(null);
+  const [selFirmante2, setSelFirmante2] = useState<Firmante | null>(null);
+
+  // Modal crear
   const [modal,        setModal]        = useState(false);
   const [saving,       setSaving]       = useState(false);
   const [modalError,   setModalError]   = useState("");
@@ -186,6 +196,17 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit }: 
     setModal(false);
   }
 
+  function openPrint(id: number) {
+    setPrintSolId(id); setSelFirmante1(null); setSelFirmante2(null); setPrintModal(true);
+  }
+
+  function goToPrint() {
+    if (!printSolId) return;
+    const params = [selFirmante1?.id, selFirmante2?.id].filter(Boolean).join(",");
+    router.push(`/compras/a01-siaf/${printSolId}/imprimir?firmantes=${params}`);
+    setPrintModal(false);
+  }
+
   async function handleEliminar(id: number) {
     if (!confirm("¿Eliminar esta solicitud y todos sus ítems?")) return;
     await eliminarSolicitud(id);
@@ -287,10 +308,17 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit }: 
                         </td>
                         {canEdit && (
                           <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
-                            <button onClick={() => handleEliminar(s.id)}
-                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center justify-end gap-1">
+                              <button onClick={() => openPrint(s.id)}
+                                className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                                title="Imprimir A-01 SIAF">
+                                <Printer className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => handleEliminar(s.id)}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         )}
                       </tr>
@@ -454,6 +482,55 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit }: 
                 {query.trim() ? "No se encontró ese insumo" : "No hay historial aún"}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Seleccionar firmantes para imprimir ── */}
+      {printModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="font-semibold text-gray-900">Imprimir A-01 SIAF</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Selecciona los firmantes del documento</p>
+              </div>
+              <button onClick={() => setPrintModal(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              {[
+                { label: "Firmante 1 (izquierda)", val: selFirmante1, set: setSelFirmante1 },
+                { label: "Firmante 2 (derecha)",   val: selFirmante2, set: setSelFirmante2 },
+              ].map(({ label, val, set }) => (
+                <div key={label}>
+                  <label className="label">{label}</label>
+                  <select className="input"
+                    value={val?.id ?? ""}
+                    onChange={e => {
+                      const f = firmantes.find(f => f.id === Number(e.target.value)) ?? null;
+                      set(f);
+                    }}>
+                    <option value="">— Sin firmante —</option>
+                    {firmantes.map(f => (
+                      <option key={f.id} value={f.id}>{f.nombre} — {f.cargo}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+              {firmantes.length === 0 && (
+                <p className="text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                  No hay firmantes configurados. El superadmin debe agregarlos en Configuración → Firmantes.
+                </p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button onClick={() => setPrintModal(false)} className="btn-secondary">Cancelar</button>
+              <button onClick={goToPrint} className="btn-primary">
+                <Printer className="w-4 h-4" /> Abrir para imprimir
+              </button>
+            </div>
           </div>
         </div>
       )}

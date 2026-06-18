@@ -18,6 +18,11 @@ export const configuracion = pgTable("configuracion", {
   nombre_solicitante:   text("nombre_solicitante").notNull().default(""),
   numero_empleado_sol:  text("numero_empleado_sol").notNull().default("34531"),
   resolucion_fondo:     text("resolucion_fondo").notNull().default("Resolución 01 SGF/2025 de fecha 02/01/2025"),
+  // Datos para Forma A-01 SIAF
+  nombre_unidad_ejecutora: text("nombre_unidad_ejecutora").notNull().default("UNIDAD EJECUTORA 407 CONSULTORIO DEL INSTITUTO EN SAN MARCOS"),
+  centro_costo_nombre:     text("centro_costo_nombre").notNull().default("CENTRO DE COSTO: 121009 UNIDAD INTEGRAL DE ADSCRIPCIÓN, ACREDITACIÓN DE DERECHOS Y DESPACHO DE MEDICAMENTOS EN EL MUNICIPIO DE TEJUTLA, SAN MARCOS"),
+  direccion_unidad:        text("direccion_unidad").notNull().default("2ª. AVENIDA 4-54 ZONA 2 TEJUTLA, SAN MARCOS"),
+  justificacion_siaf:      text("justificacion_siaf").notNull().default("SERVICIOS NECESARIOS E INDISPENSABLES PARA BRINDAR ATENCIÓN A LOS PACIENTES DEL IGSS U.I.A.A.D.D.M. EN EL MUNICIPIO DE TEJUTLA."),
   updated_at:           text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
@@ -220,6 +225,15 @@ export const siafComprasItems = pgTable("siaf_compras_items", {
   cantidad_antes:      doublePrecision("cantidad_antes"),
   cantidad_solicitada: doublePrecision("cantidad_solicitada").notNull(),
   created_at:          text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Firmantes para Forma A-01 SIAF ──────────────────────────────────────────
+export const catalogoFirmantes = pgTable("catalogo_firmantes", {
+  id:         serial("id").primaryKey(),
+  nombre:     text("nombre").notNull(),
+  cargo:      text("cargo").notNull(),
+  activo:     boolean("activo").notNull().default(true),
+  created_at: text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 // ─── Secuencia SIAF ───────────────────────────────────────────────────────────
