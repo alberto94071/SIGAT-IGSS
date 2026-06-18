@@ -113,16 +113,8 @@ export default function ImprimirClient({
             {/* Logo */}
             <div style={{ borderRight: "1px solid #aaa", padding: "6px 10px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: "110px" }}>
               {/* Si hay logo en /logo-igss.png úsalo, sino muestra placeholder */}
-              <img src="/logo-igss.png" alt="IGSS"
-                style={{ width: "38px", height: "38px", objectFit: "contain" }}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                  (e.target as HTMLImageElement).nextElementSibling?.removeAttribute("style");
-                }} />
-              {/* Fallback text logo */}
-              <span style={{ display: "none", fontSize: "6pt", textAlign: "center", color: "#1a3a6b", fontWeight: "bold", lineHeight: "1.2" }}>
-                Instituto<br />Guatemalteco de<br />Seguridad Social
-              </span>
+              <img src="/logo_siaf01.svg" alt="IGSS"
+                style={{ width: "42px", height: "42px", objectFit: "contain" }} />
               <p style={{ fontSize: "5pt", textAlign: "center", color: "#1a3a6b", marginTop: "2px", lineHeight: "1.2" }}>
                 Instituto Guatemalteco de<br />Seguridad Social
               </p>
