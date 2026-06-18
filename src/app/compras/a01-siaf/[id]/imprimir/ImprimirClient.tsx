@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Printer, ChevronDown, X, ArrowLeft } from "lucide-react";
 
@@ -25,29 +25,24 @@ export default function ImprimirClient({
   const router = useRouter();
   const [firmantes, setFirmantes] = useState<Firmante[]>(initFirmantes);
   const [showSelector, setShowSelector] = useState(initFirmantes.length === 0);
-  const [slot, setSlot] = useState<0 | 1>(0); // qué slot estamos llenando
+  const [slot, setSlot] = useState<0 | 1>(0);
 
-  // Selector de firmante para un slot
   function pickFirmante(idx: 0 | 1, firmante: Firmante) {
-    setFirmantes(p => {
-      const next = [...p];
-      next[idx] = firmante;
-      return next;
-    });
-  }
-
-  function handlePrint() {
-    window.print();
+    setFirmantes(p => { const next = [...p]; next[idx] = firmante; return next; });
   }
 
   const corrLabel = `${solicitud.numero}/${solicitud.anio}`;
-  const fechaLabel = solicitud.fecha;
 
-  // Agrupar ítems por subproducto para la fila de totales
+  // Totales por subproducto
   const subproductoMap = new Map<string, number>();
   items.forEach(i => {
     subproductoMap.set(i.subproducto, (subproductoMap.get(i.subproducto) ?? 0) + i.cantidad_solicitada);
   });
+  const totalGeneral = items.reduce((s, i) => s + i.cantidad_solicitada, 0);
+
+  // Filas vacías para completar espacio mínimo
+  const MIN_ROWS = 8;
+  const emptyRows = Math.max(0, MIN_ROWS - items.length);
 
   return (
     <>
@@ -60,30 +55,27 @@ export default function ImprimirClient({
         <span className="text-gray-300">|</span>
         <span className="text-sm font-semibold text-gray-700">Forma A-01 SIAF — {corrLabel}</span>
 
-        {/* Selector firmantes */}
         <div className="flex items-center gap-3 ml-auto">
           {[0, 1].map(idx => (
-            <div key={idx} className="relative">
-              <button
-                onClick={() => { setSlot(idx as 0 | 1); setShowSelector(true); }}
-                className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 transition-colors max-w-[200px]">
-                <span className="truncate text-left">
-                  {firmantes[idx]
-                    ? <><strong>{firmantes[idx].nombre}</strong><br />{firmantes[idx].cargo}</>
-                    : <span className="text-gray-400">Firmante {idx + 1}…</span>}
-                </span>
-                <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" />
-              </button>
-            </div>
+            <button key={idx}
+              onClick={() => { setSlot(idx as 0 | 1); setShowSelector(true); }}
+              className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 transition-colors max-w-[220px]">
+              <span className="truncate text-left">
+                {firmantes[idx]
+                  ? <span><strong>{firmantes[idx].nombre}</strong> — {firmantes[idx].cargo}</span>
+                  : <span className="text-gray-400">Firmante {idx + 1}…</span>}
+              </span>
+              <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" />
+            </button>
           ))}
-          <button onClick={handlePrint}
+          <button onClick={() => window.print()}
             className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 transition-colors">
             <Printer className="w-4 h-4" /> Imprimir
           </button>
         </div>
       </div>
 
-      {/* Dropdown selector de firmante */}
+      {/* Selector de firmante */}
       {showSelector && (
         <div className="print:hidden fixed inset-0 bg-black/30 z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
@@ -94,7 +86,7 @@ export default function ImprimirClient({
             <div className="py-2 max-h-64 overflow-y-auto">
               {todosFirmantes.map(f => (
                 <button key={f.id}
-                  onClick={() => { pickFirmante(slot, f); setShowSelector(false); }}
+                  onMouseDown={() => { pickFirmante(slot, f); setShowSelector(false); }}
                   className="w-full text-left px-4 py-2.5 hover:bg-brand-50 transition-colors">
                   <p className="text-sm font-medium text-gray-900">{f.nombre}</p>
                   <p className="text-xs text-gray-500">{f.cargo}</p>
@@ -110,167 +102,204 @@ export default function ImprimirClient({
         </div>
       )}
 
-      {/* ── Formulario imprimible ── */}
-      <div className="print:mt-0 mt-20 min-h-screen bg-gray-100 print:bg-white flex justify-center py-8 print:py-0">
-        <div className="
-          bg-white w-[210mm] min-h-[297mm]
-          print:w-full print:min-h-0 print:shadow-none
-          shadow-xl px-8 py-6 print:px-6 print:py-4
-          font-sans text-[11px] text-gray-900
-          flex flex-col gap-3
-        ">
+      {/* ── FORMULARIO IMPRIMIBLE ── */}
+      <div className="print:mt-0 mt-20 min-h-screen bg-gray-200 print:bg-white flex justify-center py-10 print:py-0">
+        <div style={{ width: "210mm", minHeight: "297mm", fontFamily: "Arial, sans-serif", fontSize: "10pt" }}
+          className="bg-white shadow-2xl print:shadow-none px-7 py-5 print:px-5 print:py-4 flex flex-col gap-2.5">
 
-          {/* ── RECUADRO 1: Logo + Título ── */}
-          <div className="border-2 border-gray-800 rounded-xl flex items-stretch min-h-[70px]">
-            {/* Logo izq */}
-            <div className="flex items-center justify-center px-4 border-r-2 border-gray-800 min-w-[80px]">
-              {/* SVG del escudo IGSS simplificado */}
-              <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
-                <rect x="1" y="1" width="52" height="52" rx="6" fill="white" stroke="#1a3a6b" strokeWidth="2"/>
-                <text x="27" y="20" textAnchor="middle" fontSize="6" fontWeight="bold" fill="#1a3a6b">Instituto</text>
-                <text x="27" y="28" textAnchor="middle" fontSize="5.5" fontWeight="bold" fill="#1a3a6b">Guatemalteco de</text>
-                <text x="27" y="36" textAnchor="middle" fontSize="6.5" fontWeight="bold" fill="#1a3a6b">Seguridad</text>
-                <text x="27" y="44" textAnchor="middle" fontSize="6.5" fontWeight="bold" fill="#1a3a6b">Social</text>
-                <rect x="4" y="4" width="46" height="46" rx="4" fill="none" stroke="#1a3a6b" strokeWidth="1"/>
-              </svg>
-            </div>
-            {/* Título */}
-            <div className="flex flex-col justify-center items-center flex-1 px-4 text-center">
-              <p className="font-bold text-[13px] tracking-wide">FORMA A-01 SIAF</p>
-              <p className="font-bold text-[12px] tracking-wide mt-0.5">SOLICITUD DE COMPRA DE BIENES Y/O SERVICIOS</p>
-            </div>
-          </div>
+          {/* ══ RECUADRO 1: Header ══ */}
+          <div style={{ border: "1.5px solid #333", borderRadius: "8px", display: "flex", alignItems: "stretch", minHeight: "64px" }}>
 
-          {/* ── RECUADRO 2: Datos de registro ── */}
-          <div className="border-2 border-gray-800 rounded-xl p-3 space-y-1.5">
-            <div className="flex gap-8">
-              <p><span className="font-semibold">Fecha de Registro</span>&nbsp;&nbsp;{fechaLabel}</p>
-              <p><span className="font-semibold">Correlativo No.</span>&nbsp;&nbsp;
-                <span className="font-bold text-[12px]">{corrLabel}</span>
+            {/* Logo */}
+            <div style={{ borderRight: "1px solid #aaa", padding: "6px 10px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: "110px" }}>
+              {/* Si hay logo en /logo-igss.png úsalo, sino muestra placeholder */}
+              <img src="/logo-igss.png" alt="IGSS"
+                style={{ width: "38px", height: "38px", objectFit: "contain" }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                  (e.target as HTMLImageElement).nextElementSibling?.removeAttribute("style");
+                }} />
+              {/* Fallback text logo */}
+              <span style={{ display: "none", fontSize: "6pt", textAlign: "center", color: "#1a3a6b", fontWeight: "bold", lineHeight: "1.2" }}>
+                Instituto<br />Guatemalteco de<br />Seguridad Social
+              </span>
+              <p style={{ fontSize: "5pt", textAlign: "center", color: "#1a3a6b", marginTop: "2px", lineHeight: "1.2" }}>
+                Instituto Guatemalteco de<br />Seguridad Social
               </p>
             </div>
-            <p className="font-bold text-[10.5px]">DATOS DE LA UNIDAD EJECUTORA, CENTRO COSTO, DEPENDENCIA O SERVICIO</p>
-            <div className="flex gap-2">
-              <p className="font-semibold whitespace-nowrap">Nombre:</p>
-              <div>
-                <p>{config.nombre_unidad_ejecutora}</p>
-                <p className="mt-0.5">{config.centro_costo_nombre}</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <p className="font-semibold whitespace-nowrap">Dirección:</p>
-              <p>{config.direccion_unidad}</p>
+
+            {/* Títulos */}
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", paddingLeft: "16px" }}>
+              <p style={{ fontWeight: "bold", fontSize: "13pt", textAlign: "right", paddingRight: "12px", marginBottom: "2px" }}>
+                FORMA A-01 SIAF
+              </p>
+              <p style={{ fontWeight: "bold", fontSize: "12pt", textAlign: "center" }}>
+                SOLICITUD DE COMPRA DE BIENES Y/O SERVICIOS
+              </p>
             </div>
           </div>
 
-          {/* ── RECUADRO 3: Tabla de insumos ── */}
-          <div className="border-2 border-gray-800 rounded-xl overflow-hidden flex-1">
-            <table className="w-full text-[10.5px]" style={{ borderCollapse: "collapse" }}>
+          {/* ══ RECUADRO 2: Datos de registro ══ */}
+          <div style={{ border: "1.5px solid #333", borderRadius: "8px", padding: "8px 12px" }}>
+            {/* Fecha + Correlativo */}
+            <div style={{ display: "flex", gap: "60px", marginBottom: "6px" }}>
+              <p style={{ margin: 0 }}>
+                <span style={{ fontWeight: "bold" }}>Fecha de Registro</span>
+                &nbsp;&nbsp;&nbsp;&nbsp;{solicitud.fecha}
+              </p>
+              <p style={{ margin: 0 }}>
+                <span style={{ fontWeight: "bold" }}>Correlativo No.</span>
+                &nbsp;&nbsp;&nbsp;&nbsp;
+                <strong style={{ fontSize: "11pt" }}>{corrLabel}</strong>
+              </p>
+            </div>
+
+            {/* Datos unidad */}
+            <p style={{ fontWeight: "bold", fontSize: "9pt", margin: "0 0 4px 0" }}>
+              DATOS DE LA UNIDAD EJECUTORA, CENTRO COSTO, DEPENDENCIA o SERVICIO
+            </p>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "3px" }}>
+              <span style={{ fontWeight: "bold", whiteSpace: "nowrap" }}>Nombre:</span>
+              <div style={{ fontSize: "9.5pt" }}>
+                <p style={{ margin: 0 }}>{config.nombre_unidad_ejecutora}</p>
+                <p style={{ margin: "1px 0 0 0" }}>{config.centro_costo_nombre}</p>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <span style={{ fontWeight: "bold", whiteSpace: "nowrap" }}>Dirección:</span>
+              <span style={{ fontSize: "9.5pt" }}>{config.direccion_unidad}</span>
+            </div>
+          </div>
+
+          {/* ══ RECUADRO 3: Tabla de insumos ══ */}
+          <div style={{ border: "1.5px solid #333", borderRadius: "8px", overflow: "hidden", flex: 1 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "9pt" }}>
+              <colgroup>
+                <col style={{ width: "60px" }} />
+                <col style={{ width: "auto" }} />
+                <col style={{ width: "90px" }} />
+                <col style={{ width: "60px" }} />
+              </colgroup>
               <thead>
-                <tr style={{ borderBottom: "2px solid #1f2937" }}>
-                  <th className="px-3 py-2 text-center font-bold border-r-2 border-gray-800 w-[80px]">Código</th>
-                  <th className="px-3 py-2 text-left font-bold border-r border-gray-300">Descripción</th>
-                  {/* col subproducto sin título ni borde visible */}
-                  <th className="px-3 py-2 text-center font-bold border-l border-gray-300 w-[90px]">Cantidad</th>
+                <tr style={{ borderBottom: "1.5px solid #333" }}>
+                  <th style={{ padding: "4px 8px", textAlign: "center", borderRight: "1px solid #999", fontWeight: "bold" }}>
+                    Código
+                  </th>
+                  <th style={{ padding: "4px 8px", textAlign: "center", fontWeight: "bold" }} colSpan={2}>
+                    Descripción
+                  </th>
+                  <th style={{ padding: "4px 8px", textAlign: "center", borderLeft: "1px solid #999", fontWeight: "bold" }}>
+                    Cantidad
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item, idx) => (
-                  <tr key={item.id} style={{ borderBottom: "1px solid #d1d5db" }}>
-                    <td className="px-3 py-1.5 text-center border-r-2 border-gray-800 font-mono">
-                      {item.codigo_igss ?? "—"}
+                {items.map((item) => (
+                  <tr key={item.id} style={{ borderBottom: "0.5px solid #ddd" }}>
+                    <td style={{ padding: "3px 8px", textAlign: "center", borderRight: "1px solid #999", verticalAlign: "top", fontFamily: "monospace" }}>
+                      {item.codigo_igss ?? ""}
                     </td>
-                    <td className="px-3 py-1.5">
-                      <span className="font-medium uppercase">{item.nombre}</span>
+                    <td style={{ padding: "3px 8px", verticalAlign: "top", fontWeight: "500", textTransform: "uppercase" }}>
+                      {item.nombre}
                     </td>
-                    <td className="px-3 py-1.5 text-[9px] text-gray-500 border-l border-gray-300 text-center whitespace-nowrap">
+                    {/* Col subproducto — sin borde superior (por eso colSpan en el header), visible en body */}
+                    <td style={{ padding: "3px 8px", verticalAlign: "top", fontSize: "8pt", color: "#555", textAlign: "right", whiteSpace: "nowrap" }}>
                       {item.codigo_ppr ?? item.subproducto}
                     </td>
-                    <td className="hidden">
-                      {/* La columna de cantidad se muestra abajo en el bloque de subproducto/total */}
+                    <td style={{ padding: "3px 8px", textAlign: "center", borderLeft: "1px solid #999", verticalAlign: "top" }}>
+                      {item.cantidad_solicitada.toLocaleString("es-GT")}
                     </td>
                   </tr>
                 ))}
-                {/* Espacio en blanco para que el formulario tenga cuerpo */}
-                {items.length < 6 && Array.from({ length: 6 - items.length }).map((_, i) => (
-                  <tr key={`empty-${i}`} style={{ borderBottom: "1px solid #d1d5db", height: "28px" }}>
-                    <td className="border-r-2 border-gray-800"></td>
+                {/* Filas vacías */}
+                {Array.from({ length: emptyRows }).map((_, i) => (
+                  <tr key={`e${i}`} style={{ borderBottom: "0.5px solid #ddd", height: "22px" }}>
+                    <td style={{ borderRight: "1px solid #999" }}></td>
                     <td></td>
-                    <td className="border-l border-gray-300"></td>
+                    <td></td>
+                    <td style={{ borderLeft: "1px solid #999" }}></td>
                   </tr>
                 ))}
               </tbody>
             </table>
 
-            {/* Pie de tabla: subproducto + cantidades */}
-            <div style={{ borderTop: "2px solid #1f2937" }}>
-              {/* Nota pie */}
-              <div className="px-3 py-1.5 border-b border-gray-300 text-[9px] text-gray-600">
-                Los productos de los listados institucionales, se encuentran homologados con el catálogo general de insumos del SIGES, Presupuesto por Resultados (PpR)
-              </div>
-              {/* Encabezado subproducto / cantidad */}
-              <div className="flex" style={{ borderBottom: "1px solid #d1d5db" }}>
-                <div className="flex-1 px-3 py-1.5 font-bold text-center border-r-2 border-gray-800 text-[10px]">
+            {/* Nota al pie de tabla */}
+            <div style={{ borderTop: "0.5px solid #bbb", padding: "4px 8px 2px 8px", fontSize: "7.5pt", color: "#444" }}>
+              Los productos de los listados institucionales, se encuentran homologados con el catálogo general de insumos del SIGES, Presupuesto por Resultados (PpR)
+            </div>
+
+            {/* Resumen por subproducto */}
+            <div style={{ borderTop: "1.5px solid #333" }}>
+              {/* Encabezado */}
+              <div style={{ display: "flex", borderBottom: "0.5px solid #bbb" }}>
+                <div style={{ flex: 1, padding: "4px 8px", fontWeight: "bold", textAlign: "center", fontSize: "9pt", borderRight: "1.5px solid #333" }}>
                   Código de Subproducto
                 </div>
-                <div className="px-3 py-1.5 font-bold text-center w-[90px] text-[10px]">
+                <div style={{ width: "60px", padding: "4px 8px", fontWeight: "bold", textAlign: "center", fontSize: "9pt" }}>
                   Cantidad por Subproducto
                 </div>
               </div>
               {/* Filas por subproducto */}
               {Array.from(subproductoMap.entries()).map(([sub, qty], i) => (
-                <div key={i} className="flex" style={{ borderBottom: "1px solid #d1d5db" }}>
-                  <div className="flex-1 px-3 py-1.5 border-r-2 border-gray-800 font-mono text-[10px]">{sub}</div>
-                  <div className="px-3 py-1.5 text-center w-[90px] font-semibold text-[10px]">
+                <div key={i} style={{ display: "flex", borderBottom: "0.5px solid #bbb" }}>
+                  <div style={{ flex: 1, padding: "3px 8px", fontFamily: "monospace", fontSize: "9pt", borderRight: "1.5px solid #333" }}>
+                    {sub}
+                  </div>
+                  <div style={{ width: "60px", padding: "3px 8px", textAlign: "center", fontWeight: "600", fontSize: "9pt" }}>
                     {qty.toLocaleString("es-GT")}
                   </div>
                 </div>
               ))}
               {/* Total */}
-              <div className="flex">
-                <div className="flex-1 px-3 py-1.5 font-bold text-right border-r-2 border-gray-800 text-[10px]">Total</div>
-                <div className="px-3 py-1.5 text-center w-[90px] font-bold text-[11px]">
-                  {items.reduce((s, i) => s + i.cantidad_solicitada, 0).toLocaleString("es-GT")}
+              <div style={{ display: "flex" }}>
+                <div style={{ flex: 1, padding: "3px 8px", fontWeight: "bold", textAlign: "right", fontSize: "9pt", borderRight: "1.5px solid #333" }}>
+                  Total
+                </div>
+                <div style={{ width: "60px", padding: "3px 8px", textAlign: "center", fontWeight: "bold", fontSize: "10pt" }}>
+                  {totalGeneral.toLocaleString("es-GT")}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ── RECUADROS 4 y 5: Firmas ── */}
-          <div className="flex gap-3">
+          {/* ══ RECUADROS 4 y 5: Firmas ══ */}
+          <div style={{ display: "flex", gap: "12px" }}>
             {[0, 1].map(idx => (
-              <div key={idx} className="flex-1 border-2 border-gray-800 rounded-xl px-4 pt-10 pb-3 text-center min-h-[90px] flex flex-col justify-end">
-                <div style={{ borderTop: "1px solid #374151" }} className="pt-1.5">
-                  <p className="font-bold text-[10.5px] uppercase">
-                    {firmantes[idx]?.nombre ?? <span className="text-gray-400 print:text-gray-300">─ Firmante {idx + 1} ─</span>}
+              <div key={idx} style={{
+                flex: 1, border: "1.5px solid #333", borderRadius: "8px",
+                padding: "40px 16px 10px 16px", textAlign: "center",
+              }}>
+                <div style={{ borderTop: "1px solid #333", paddingTop: "6px" }}>
+                  <p style={{ margin: 0, fontWeight: "bold", fontSize: "9.5pt", textTransform: "uppercase" }}>
+                    {firmantes[idx]?.nombre ?? ""}
                   </p>
-                  <p className="text-[9.5px] text-gray-600 mt-0.5">
-                    {firmantes[idx]?.cargo ?? ""}
+                  <p style={{ margin: "2px 0 0 0", fontSize: "9pt" }}>
+                    {firmantes[idx]?.cargo ?? <span style={{ color: "#ccc" }}>Firmante {idx + 1}</span>}
                   </p>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* ── RECUADRO 6: Justificación ── */}
-          <div className="border-2 border-gray-800 rounded-xl px-4 py-3">
-            <span className="font-bold text-[10.5px]">JUSTIFICACIÓN: </span>
-            <span className="text-[10.5px] uppercase">{config.justificacion_siaf}</span>
+          {/* ══ RECUADRO 6: Justificación ══ */}
+          <div style={{ border: "1.5px solid #333", borderRadius: "8px", padding: "6px 12px", fontSize: "9pt" }}>
+            <span style={{ fontWeight: "bold" }}>JUSTIFICACIÓN: </span>
+            <span style={{ textTransform: "uppercase" }}>{config.justificacion_siaf}</span>
           </div>
 
           {/* Pie de página */}
-          <div className="flex justify-between text-[9px] text-gray-500 pt-1">
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "8pt", color: "#666", paddingTop: "2px" }}>
             <span>ID: {solicitud.id}</span>
             <span>Fecha de impresión: {new Date().toLocaleDateString("es-GT")}</span>
             <span>Hoja 1 de 1</span>
           </div>
+
         </div>
       </div>
 
-      {/* Estilos de impresión */}
       <style>{`
         @media print {
-          @page { size: A4; margin: 10mm; }
+          @page { size: A4 portrait; margin: 8mm; }
           body { background: white !important; }
           .print\\:hidden { display: none !important; }
         }
