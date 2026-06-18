@@ -10,11 +10,12 @@ interface Props {
   userName: string;
   rolLabel: string;
   rolColor: string;
+  moduleLabel?: string;
   children: React.ReactNode;
 }
 
 export default function DashboardShell({
-  navItems, user, userName, rolLabel, rolColor, children,
+  navItems, user, userName, rolLabel, rolColor, moduleLabel, children,
 }: Props) {
   const [open, setOpen] = useState(false);
 
@@ -34,7 +35,7 @@ export default function DashboardShell({
           md:relative md:translate-x-0 md:z-auto md:shrink-0
           ${open ? "translate-x-0" : "-translate-x-full"}`}
       >
-        <Sidebar navItems={navItems} user={user} onClose={() => setOpen(false)} />
+        <Sidebar navItems={navItems} user={user} moduleLabel={moduleLabel} onClose={() => setOpen(false)} />
       </div>
 
       {/* Área principal */}

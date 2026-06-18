@@ -27,10 +27,11 @@ const ICONS: Record<string, React.ReactNode> = {
 interface Props {
   navItems: readonly { href: string; label: string; icon: string }[];
   user: { name: string; rol: Rol; email: string };
+  moduleLabel?: string;
   onClose?: () => void;
 }
 
-export default function Sidebar({ navItems, user, onClose }: Props) {
+export default function Sidebar({ navItems, user, moduleLabel = "Módulo", onClose }: Props) {
   const pathname = usePathname();
 
   return (
@@ -58,7 +59,7 @@ export default function Sidebar({ navItems, user, onClose }: Props) {
           <span>Módulos SIGAT</span>
         </Link>
         <p className="mt-2 px-2 text-[11px] font-semibold text-brand-400 uppercase tracking-wider">
-          Compras
+          {moduleLabel}
         </p>
       </div>
 

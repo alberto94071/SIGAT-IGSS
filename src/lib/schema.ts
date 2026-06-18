@@ -173,6 +173,21 @@ export const auditLog = pgTable("audit_log", {
   created_at:  text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
+// ─── Compras: catálogo de insumos autorizados de la unidad ───────────────────
+export const catalogoCompras = pgTable("catalogo_compras", {
+  id:              serial("id").primaryKey(),
+  codigo_igss:     integer("codigo_igss"),
+  codigo_ppr:      text("codigo_ppr"),
+  nombre:          text("nombre").notNull(),
+  caracteristicas: text("caracteristicas"),
+  presentacion:    text("presentacion"),
+  unidad_medida:   text("unidad_medida"),
+  subproducto:     text("subproducto").notNull(),
+  cantidad:        doublePrecision("cantidad"),
+  activo:          boolean("activo").notNull().default(true),
+  created_at:      text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
 // ─── Catálogo de subproductos (controlado por superadmin) ────────────────────
 export const catalogoSubproductos = pgTable("catalogo_subproductos", {
   id:         serial("id").primaryKey(),
