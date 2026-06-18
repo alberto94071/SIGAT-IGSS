@@ -33,11 +33,15 @@ export default async function ImprimirPage({ params, searchParams }: Props) {
     ? await db.select().from(catalogoFirmantes).where(inArray(catalogoFirmantes.id, ids))
     : [];
 
+  const sol = solicitud[0] as any;
+  // Justificación: usa la propia de la solicitud, si no tiene usa la del config
+  const justificacion = sol.observaciones || config[0]?.justificacion_siaf || "";
+
   return (
     <ImprimirClient
-      solicitud={solicitud[0] as any}
+      solicitud={sol}
       items={items as any}
-      config={config[0] as any}
+      config={{ ...(config[0] as any), justificacion_siaf: justificacion }}
       todosFirmantes={todosFirmantes as any}
       firmantesSeleccionados={firmantesSeleccionados as any}
     />

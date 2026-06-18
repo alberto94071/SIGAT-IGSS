@@ -60,10 +60,11 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
   const [modal,        setModal]        = useState(false);
   const [saving,       setSaving]       = useState(false);
   const [modalError,   setModalError]   = useState("");
-  const [newFecha,     setNewFecha]     = useState(new Date().toISOString().slice(0, 10));
-  const [nextNumero,   setNextNumero]   = useState<number | null>(null);
-  const [corrLoading,  setCorrLoading]  = useState(false);
-  const [modalItems,   setModalItems]   = useState<ModalItem[]>([]);
+  const [newFecha,         setNewFecha]         = useState(new Date().toISOString().slice(0, 10));
+  const [newJustificacion, setNewJustificacion] = useState("");
+  const [nextNumero,       setNextNumero]       = useState<number | null>(null);
+  const [corrLoading,      setCorrLoading]      = useState(false);
+  const [modalItems,       setModalItems]       = useState<ModalItem[]>([]);
 
   // Item builder
   const [itemSearch,   setItemSearch]   = useState("");
@@ -156,6 +157,7 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
   async function openModal() {
     setModal(true); setModalItems([]); setModalError("");
     setNewFecha(new Date().toISOString().slice(0, 10));
+    setNewJustificacion("");
     setItemSearch(""); setSelCodigo(null); setSelCatEntry(null); setItemCantidad("");
     setCorrLoading(true);
     const n = await getNextSiafNumeroCompras();
@@ -184,6 +186,7 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
     setSaving(true);
     const res = await crearSolicitud({
       fecha: newFecha,
+      observaciones: newJustificacion.trim() || null,
       items: modalItems.map(i => ({
         catalogo_id: i.catalogo_id, codigo_igss: i.codigo_igss,
         codigo_ppr: i.codigo_ppr, nombre: i.nombre, subproducto: i.subproducto,
@@ -562,6 +565,17 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                 <label className="label">Fecha de la solicitud</label>
                 <input className="input" type="date" value={newFecha}
                   onChange={e => setNewFecha(e.target.value)} />
+              </div>
+
+              {/* Justificación */}
+              <div>
+                <label className="label">Justificación</label>
+                <textarea
+                  className="input min-h-[56px] resize-none text-sm uppercase"
+                  placeholder="SERVICIOS NECESARIOS E INDISPENSABLES PARA BRINDAR ATENCIÓN A LOS PACIENTES…"
+                  value={newJustificacion}
+                  onChange={e => setNewJustificacion(e.target.value.toUpperCase())}
+                />
               </div>
 
               {/* Item builder */}

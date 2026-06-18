@@ -14,6 +14,7 @@ export async function getNextSiafNumeroCompras(): Promise<number> {
 
 export async function crearSolicitud(data: {
   fecha: string;
+  observaciones?: string | null;
   items: {
     catalogo_id: number;
     codigo_igss: number | null;
@@ -31,8 +32,8 @@ export async function crearSolicitud(data: {
     const numero = await getNextSiafNumeroCompras();
 
     const [solicitud] = await db.insert(siafCompras).values({
-      numero, anio: year, fecha: data.fecha,
-      estado: "Borrador", creado_por: uid,
+      numero, anio: year, fecha: data.fecha, estado: "Borrador",
+      observaciones: data.observaciones ?? null, creado_por: uid,
     }).returning();
 
     // Calcula cantidad_antes server-side (snapshot al momento de guardar)
