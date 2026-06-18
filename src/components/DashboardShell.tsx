@@ -24,14 +24,14 @@ export default function DashboardShell({
       {/* Overlay móvil */}
       {open && (
         <div
-          className="fixed inset-0 bg-black/50 z-20 md:hidden"
+          className="print:hidden fixed inset-0 bg-black/50 z-20 md:hidden"
           onClick={() => setOpen(false)}
         />
       )}
 
-      {/* Sidebar — overlay en móvil, fija en desktop */}
+      {/* Sidebar — oculto al imprimir */}
       <div
-        className={`fixed inset-y-0 left-0 z-30 w-60 transform transition-transform duration-200 ease-in-out
+        className={`print:hidden fixed inset-y-0 left-0 z-30 w-60 transform transition-transform duration-200 ease-in-out
           md:relative md:translate-x-0 md:z-auto md:shrink-0
           ${open ? "translate-x-0" : "-translate-x-full"}`}
       >
@@ -40,13 +40,15 @@ export default function DashboardShell({
 
       {/* Área principal */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <TopBar
-          userName={userName}
-          rolLabel={rolLabel}
-          rolColor={rolColor}
-          onMenuOpen={() => setOpen(true)}
-        />
-        <main className="flex-1 overflow-y-auto p-3 sm:p-6 bg-gray-50">
+        <div className="print:hidden">
+          <TopBar
+            userName={userName}
+            rolLabel={rolLabel}
+            rolColor={rolColor}
+            onMenuOpen={() => setOpen(true)}
+          />
+        </div>
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6 bg-gray-50 print:p-0 print:overflow-visible print:bg-white">
           {children}
         </main>
       </div>
