@@ -36,7 +36,7 @@ export default function Sidebar({ navItems, user, moduleLabel = "Módulo", onClo
 
   return (
     <aside className="w-60 bg-gray-900 text-white flex flex-col h-full">
-      {/* Logo / Back to SIGAT */}
+      {/* Logo / Back to CIP */}
       <div className="px-4 py-4 border-b border-gray-800">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center shrink-0">
@@ -46,8 +46,8 @@ export default function Sidebar({ navItems, user, moduleLabel = "Módulo", onClo
             </svg>
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-bold leading-tight text-white">SIGAT</p>
-            <p className="text-xs text-gray-400 truncate">IGSS Tejutla</p>
+            <p className="text-sm font-bold leading-tight text-white">CIP</p>
+            <p className="text-xs text-gray-400 truncate">Instituto Guatemalteco de Seguridad Social</p>
           </div>
         </div>
         <Link
@@ -56,7 +56,7 @@ export default function Sidebar({ navItems, user, moduleLabel = "Módulo", onClo
           className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
         >
           <ChevronLeft className="w-3.5 h-3.5 shrink-0" />
-          <span>Módulos SIGAT</span>
+          <span>Módulos CIP</span>
         </Link>
         <p className="mt-2 px-2 text-[11px] font-semibold text-brand-400 uppercase tracking-wider">
           {moduleLabel}

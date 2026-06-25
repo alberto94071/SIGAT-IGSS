@@ -75,9 +75,9 @@ export default async function LauncherPage() {
               <ShieldCheck className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white tracking-tight leading-none">SIGAT</h1>
+              <h1 className="text-2xl font-bold text-white tracking-tight leading-none">CIP</h1>
               <p className="text-green-200 text-xs mt-0.5">
-                Sistema de Gestión Administrativa · IGSS Tejutla
+                Control Interno Presupuestario · Instituto Guatemalteco de Seguridad Social
               </p>
             </div>
           </div>
@@ -171,7 +171,7 @@ export default async function LauncherPage() {
       {/* ── Footer ─────────────────────────────────────────────────── */}
       <footer className="bg-white border-t border-gray-200 py-4">
         <p className="text-center text-xs text-gray-400">
-          SIGAT · Sistema de Gestión Administrativa · IGSS Tejutla &nbsp;·&nbsp; v1.0
+          CIP · Control Interno Presupuestario · Instituto Guatemalteco de Seguridad Social &nbsp;·&nbsp; v1.0
         </p>
       </footer>
     </div>
