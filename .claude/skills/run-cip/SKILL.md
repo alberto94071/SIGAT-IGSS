@@ -47,13 +47,15 @@ Screenshots land in `.claude/skills/run-cip/screenshots/`:
 - `03-launcher.png` — module selector
 - `04-compras.png` — compras module
 
-**Variables requeridas (no tienen default — ponlas en tu shell):**
-```bash
-export CIP_EMAIL=tu_usuario@igss.gob.gt
-export CIP_PASSWORD=tu_contraseña
+El driver lee credenciales de `.env.local` (gitignoreado). Agrega estas líneas si aún no las tienes:
+```
+CIP_EMAIL="tu_usuario@igss.gob.gt"
+CIP_PASSWORD="tu_contraseña"
+```
 
-CIP_URL=http://localhost:3000 \
-  node .claude/skills/run-cip/driver.mjs --screenshot
+Luego simplemente:
+```bash
+node .claude/skills/run-cip/driver.mjs --screenshot
 ```
 
 **3. Stop the dev server:**

@@ -10,18 +10,31 @@
  */
 
 import { chromium } from "playwright";
-import { writeFileSync, mkdirSync } from "fs";
+import { mkdirSync, readFileSync } from "fs";
 import { join } from "path";
 
-const BASE_URL = process.env.CIP_URL || "http://localhost:3000";
+// Lee .env.local como fallback para credenciales del driver
+function readEnvLocal() {
+  try {
+    return Object.fromEntries(
+      readFileSync(".env.local", "utf8")
+        .split("\n")
+        .filter(l => l.includes("=") && !l.startsWith("#"))
+        .map(l => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, "")]; })
+    );
+  } catch { return {}; }
+}
+const envLocal = readEnvLocal();
+
+const BASE_URL = process.env.CIP_URL || envLocal.CIP_URL || "http://localhost:3000";
 const SCREENSHOT = process.argv.includes("--screenshot");
 const SS_DIR = ".claude/skills/run-cip/screenshots";
 const CREDS = {
-  email: process.env.CIP_EMAIL,
-  password: process.env.CIP_PASSWORD,
+  email:    process.env.CIP_EMAIL    || envLocal.CIP_EMAIL,
+  password: process.env.CIP_PASSWORD || envLocal.CIP_PASSWORD,
 };
 if (!CREDS.email || !CREDS.password) {
-  console.error("Set CIP_EMAIL and CIP_PASSWORD env vars before running.");
+  console.error("Agrega CIP_EMAIL y CIP_PASSWORD a tu .env.local (o como variables de entorno).");
   process.exit(1);
 }
 
