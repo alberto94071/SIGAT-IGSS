@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/lib/db";
-import { catalogoCompras, catalogo182 } from "@/lib/schema";
+import { catalogoCompras, baseDatosCentral } from "@/lib/schema";
 import { eq, or, ilike, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 
@@ -10,25 +10,26 @@ async function checkAuth() {
   return s;
 }
 
-// Busca en el catálogo general 182 (referencia IGSS)
+// Busca en la Base de Datos Central
 export async function buscarCatalogoGeneral(q: string) {
   if (!q || q.trim().length < 2) return [];
   try {
     const results = await db
       .select({
-        codigo_igss:     catalogo182.codigo_igss,
-        codigo_ppr:      catalogo182.codigo_ppr,
-        nombre:          catalogo182.insumo,
-        caracteristicas: catalogo182.caracteristicas,
-        presentacion:    catalogo182.presentacion,
-        unidad_medida:   catalogo182.unidad_medida,
+        codigo_igss:     baseDatosCentral.codigo_igss,
+        codigo_ppr:      sql<string | null>`${baseDatosCentral.codigo_ppr}::text`,
+        nombre:          baseDatosCentral.nombre,
+        caracteristicas: baseDatosCentral.caracteristicas,
+        presentacion:    baseDatosCentral.presentacion,
+        unidad_medida:   sql<null>`null`,
       })
-      .from(catalogo182)
+      .from(baseDatosCentral)
       .where(
         or(
-          ilike(catalogo182.insumo, `%${q}%`),
-          ilike(catalogo182.codigo_ppr, `%${q}%`),
-          sql`${catalogo182.codigo_igss}::text ILIKE ${'%' + q + '%'}`,
+          ilike(baseDatosCentral.nombre, `%${q}%`),
+          ilike(baseDatosCentral.caracteristicas, `%${q}%`),
+          sql`${baseDatosCentral.codigo_ppr}::text ILIKE ${'%' + q + '%'}`,
+          sql`${baseDatosCentral.codigo_igss}::text ILIKE ${'%' + q + '%'}`,
         )
       )
       .limit(10);
