@@ -117,8 +117,7 @@ export default function ImprimirClient({
       )}
 
       {/* ══════════════ HOJA A4 ══════════════ */}
-      <div id.-
-       ="print-wrapper">
+      <div id="print-wrapper">
       <div id="a4-sheet">
 
         {/* ── RECUADRO 1: Logo + Título (sin línea divisora) ── */}
