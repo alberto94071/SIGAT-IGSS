@@ -3,8 +3,8 @@ import { Fragment, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   FileText, Plus, ChevronDown, ChevronRight, Search, X,
-  Trash2, History, ClipboardList, AlertTriangle, CheckCircle2,
-  Loader2, Package, Printer,
+  Trash2, History, ClipboardList, CheckCircle2,
+  Loader2, Package, Printer, XCircle,
 } from "lucide-react";
 import {
   crearSolicitud, eliminarSolicitud, actualizarEstado, getNextSiafNumeroCompras,
@@ -67,11 +67,10 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
   const [modalItems,       setModalItems]       = useState<ModalItem[]>([]);
 
   // Item builder
-  const [itemSearch,   setItemSearch]   = useState("");
-  const [showItemDrop, setShowItemDrop] = useState(false);
-  const [selCodigo,    setSelCodigo]    = useState<number | null>(null);
-  const [selCatEntry,  setSelCatEntry]  = useState<CatEntry | null>(null);
-  const [itemCantidad, setItemCantidad] = useState("");
+  const [itemSearch,        setItemSearch]        = useState("");
+  const [showItemDrop,      setShowItemDrop]      = useState(false);
+  const [selCodigo,         setSelCodigo]         = useState<number | null>(null);
+  const [subprodSelections, setSubprodSelections] = useState<Map<number, string>>(new Map());
 
   // ─── Computed ──────────────────────────────────────────────────────────────
 
@@ -139,26 +138,13 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
     [selCodigo, catalogo]
   );
 
-  // Disponible para el entry seleccionado (descontando solicitudes previas + modal actual)
-  const disponibleActual = useMemo(() => {
-    if (!selCatEntry) return null;
-    const autorizado = selCatEntry.cantidad ?? 0;
-    const enDB = solicitudes.flatMap(s => s.items)
-      .filter(i => i.codigo_igss === selCatEntry.codigo_igss && i.subproducto === selCatEntry.subproducto)
-      .reduce((sum, i) => sum + i.cantidad_solicitada, 0);
-    const enModal = modalItems
-      .filter(i => i.codigo_igss === selCatEntry.codigo_igss && i.subproducto === selCatEntry.subproducto)
-      .reduce((sum, i) => sum + i.cantidad_solicitada, 0);
-    return autorizado - enDB - enModal;
-  }, [selCatEntry, solicitudes, modalItems]);
-
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
   async function openModal() {
     setModal(true); setModalItems([]); setModalError("");
     setNewFecha(new Date().toISOString().slice(0, 10));
     setNewJustificacion("");
-    setItemSearch(""); setSelCodigo(null); setSelCatEntry(null); setItemCantidad("");
+    setItemSearch(""); setSelCodigo(null); setSubprodSelections(new Map());
     setCorrLoading(true);
     const n = await getNextSiafNumeroCompras();
     setNextNumero(n); setCorrLoading(false);
@@ -169,19 +155,28 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
   }
 
   function agregarItemModal() {
-    if (!selCatEntry || !itemCantidad) return;
-    const qty = parseFloat(itemCantidad);
-    if (isNaN(qty) || qty <= 0) return;
-    setModalItems(p => [...p, {
-      key: Date.now(), catalogo_id: selCatEntry.id,
-      codigo_igss: selCatEntry.codigo_igss, codigo_ppr: selCatEntry.codigo_ppr,
-      nombre: selCatEntry.nombre, subproducto: selCatEntry.subproducto,
-      unidad_medida: selCatEntry.unidad_medida, cantidad_solicitada: qty,
-    }]);
-    setItemSearch(""); setSelCodigo(null); setSelCatEntry(null); setItemCantidad("");
+    const newItems: ModalItem[] = [];
+    subprodSelections.forEach((cantStr, catId) => {
+      const qty = parseFloat(cantStr);
+      if (isNaN(qty) || qty <= 0) return;
+      const entry = catalogo.find(c => c.id === catId);
+      if (!entry) return;
+      newItems.push({
+        key: Date.now() + catId, catalogo_id: entry.id,
+        codigo_igss: entry.codigo_igss, codigo_ppr: entry.codigo_ppr,
+        nombre: entry.nombre, subproducto: entry.subproducto,
+        unidad_medida: entry.unidad_medida, cantidad_solicitada: qty,
+      });
+    });
+    if (newItems.length === 0) return;
+    setModalItems(p => [...p, ...newItems]);
+    setItemSearch(""); setSelCodigo(null); setSubprodSelections(new Map());
   }
 
   async function handleGuardar() {
+    if (!newJustificacion.trim()) {
+      return setModalError("La justificación es un campo obligatorio para generar la solicitud.");
+    }
     if (modalItems.length === 0) return setModalError("Agrega al menos un insumo a la solicitud");
     setSaving(true);
     const res = await crearSolicitud({
@@ -284,6 +279,7 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                 {filteredSolicitudes.map(s => {
                   const rowId = String(s.id);
                   const expanded = expandedId === rowId;
+                  const finalizado = s.estado === "Aprobado" || s.estado === "Rechazado";
                   return (
                     <Fragment key={s.id}>
                       <tr className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
@@ -301,26 +297,45 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                           </span>
                         </td>
                         <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                          <select value={s.estado}
-                            onChange={e => handleEstado(s.id, e.target.value)}
-                            className={`text-xs font-medium px-2 py-0.5 rounded-full border-0 outline-none cursor-pointer ${ESTADO_STYLE[s.estado] ?? "bg-gray-100 text-gray-600"}`}>
-                            {["Borrador", "Enviado", "Aprobado", "Rechazado"].map(e => (
-                              <option key={e}>{e}</option>
-                            ))}
-                          </select>
+                          {s.estado === "Aprobado" ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-700">
+                              <CheckCircle2 className="w-3 h-3" /> Aprobado
+                            </span>
+                          ) : s.estado === "Rechazado" ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-red-100 text-red-700">
+                              <XCircle className="w-3 h-3" /> Rechazado
+                            </span>
+                          ) : (
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={() => handleEstado(s.id, "Rechazado")}
+                                className="text-xs font-medium px-2.5 py-1 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors">
+                                Rechazar
+                              </button>
+                              <button
+                                onClick={() => handleEstado(s.id, "Aprobado")}
+                                className="text-xs font-medium px-2.5 py-1 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition-colors">
+                                Aprobar
+                              </button>
+                            </div>
+                          )}
                         </td>
                         {canEdit && (
                           <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
-                              <button onClick={() => openPrint(s.id)}
-                                className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
-                                title="Imprimir A-01 SIAF">
-                                <Printer className="w-3.5 h-3.5" />
-                              </button>
-                              <button onClick={() => handleEliminar(s.id)}
-                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {s.estado === "Aprobado" && (
+                                <button onClick={() => openPrint(s.id)}
+                                  className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                                  title="Imprimir A-01 SIAF">
+                                  <Printer className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              {!finalizado && (
+                                <button onClick={() => handleEliminar(s.id)}
+                                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         )}
@@ -569,7 +584,9 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
 
               {/* Justificación */}
               <div>
-                <label className="label">Justificación</label>
+                <label className="label">
+                  Justificación <span className="text-red-500 font-semibold">*</span>
+                </label>
                 <textarea
                   className="input min-h-[56px] resize-none text-sm uppercase"
                   placeholder="SERVICIOS NECESARIOS E INDISPENSABLES PARA BRINDAR ATENCIÓN A LOS PACIENTES…"
@@ -589,7 +606,12 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                   <label className="label">Insumo (nombre o código IGSS)</label>
                   <div className="relative">
                     <input className="input pr-8" value={itemSearch}
-                      onChange={e => { setItemSearch(e.target.value); setSelCodigo(null); setSelCatEntry(null); setShowItemDrop(true); }}
+                      onChange={e => {
+                        setItemSearch(e.target.value);
+                        setSelCodigo(null);
+                        setSubprodSelections(new Map());
+                        setShowItemDrop(true);
+                      }}
                       onFocus={() => itemSearch.length >= 1 && setShowItemDrop(true)}
                       onBlur={() => setTimeout(() => setShowItemDrop(false), 180)}
                       placeholder="Escribe nombre o código IGSS…" />
@@ -599,7 +621,12 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                     <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
                       {insumoSugg.map((c, i) => (
                         <button key={i} type="button"
-                          onMouseDown={() => { setSelCodigo(c.codigo_igss); setItemSearch(c.nombre); setSelCatEntry(null); setShowItemDrop(false); }}
+                          onMouseDown={() => {
+                            setSelCodigo(c.codigo_igss);
+                            setItemSearch(c.nombre);
+                            setSubprodSelections(new Map());
+                            setShowItemDrop(false);
+                          }}
                           className="w-full text-left px-4 py-2.5 hover:bg-brand-50 border-b border-gray-50 last:border-0">
                           <p className="text-sm font-medium text-gray-900">{c.nombre}</p>
                           <p className="text-xs text-gray-400">IGSS: {c.codigo_igss ?? "—"} · PPR: {c.codigo_ppr ?? "—"}</p>
@@ -614,51 +641,72 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                   )}
                 </div>
 
-                {/* Subproducto (aparece tras seleccionar insumo) */}
-                {selCodigo != null && (
-                  <div>
-                    <label className="label">Subproducto</label>
-                    <select className="input"
-                      value={selCatEntry?.id ?? ""}
-                      onChange={e => { setSelCatEntry(subprodEntries.find(c => c.id === Number(e.target.value)) ?? null); setItemCantidad(""); }}>
-                      <option value="">— Selecciona subproducto —</option>
-                      {subprodEntries.map(c => (
-                        <option key={c.id} value={c.id}>
-                          {c.subproducto} · Autorizado: {c.cantidad?.toLocaleString("es-GT") ?? "?"}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Disponible + Cantidad (aparece tras seleccionar subproducto) */}
-                {selCatEntry && (
-                  <>
-                    <div className={`flex items-start gap-2 px-3 py-2.5 rounded-lg text-sm ${
-                      disponibleActual != null && disponibleActual <= 0 ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-800"
-                    }`}>
-                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                      <span>
-                        Dispone de{" "}
-                        <strong>{disponibleActual?.toLocaleString("es-GT") ?? "—"}</strong>{" "}
-                        {selCatEntry.unidad_medida ?? "unidades"} para <strong>{selCatEntry.subproducto}</strong>
-                      </span>
+                {/* Subproductos — selección múltiple con cantidades individuales */}
+                {selCodigo != null && subprodEntries.length > 0 && (
+                  <div className="space-y-2">
+                    <label className="label">Subproductos — marca los que necesitas y asigna cantidad a cada uno</label>
+                    <div className="border border-gray-200 rounded-xl overflow-hidden">
+                      {subprodEntries.map(c => {
+                        const selQty    = subprodSelections.get(c.id) ?? "";
+                        const isChecked = subprodSelections.has(c.id);
+                        const autorizado = c.cantidad ?? 0;
+                        const enDB = solicitudes.flatMap(s => s.items)
+                          .filter(i => i.codigo_igss === c.codigo_igss && i.subproducto === c.subproducto)
+                          .reduce((sum, i) => sum + i.cantidad_solicitada, 0);
+                        const enModal = modalItems
+                          .filter(i => i.codigo_igss === c.codigo_igss && i.subproducto === c.subproducto)
+                          .reduce((sum, i) => sum + i.cantidad_solicitada, 0);
+                        const disponible = autorizado - enDB - enModal;
+                        return (
+                          <div key={c.id}
+                            className={`flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0 transition-colors ${isChecked ? "bg-brand-50/60" : "bg-white"}`}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={ev => {
+                                const next = new Map(subprodSelections);
+                                if (ev.target.checked) next.set(c.id, "");
+                                else next.delete(c.id);
+                                setSubprodSelections(next);
+                              }}
+                              className="w-4 h-4 accent-brand-600 shrink-0 cursor-pointer"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 font-mono">{c.subproducto}</p>
+                              <p className={`text-xs ${disponible <= 0 ? "text-red-600" : "text-green-700"}`}>
+                                Disponible: <strong>{disponible.toLocaleString("es-GT")}</strong> {c.unidad_medida ?? "u."}
+                              </p>
+                            </div>
+                            {isChecked && (
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                className="input w-28 text-right"
+                                placeholder="Cantidad"
+                                value={selQty}
+                                onChange={ev => {
+                                  const next = new Map(subprodSelections);
+                                  next.set(c.id, ev.target.value);
+                                  setSubprodSelections(next);
+                                }}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                    <div className="flex gap-3 items-end">
-                      <div className="flex-1">
-                        <label className="label">Cantidad a solicitar</label>
-                        <input className="input" type="number" step="0.01" min="1"
-                          value={itemCantidad} onChange={e => setItemCantidad(e.target.value)}
-                          onKeyDown={e => e.key === "Enter" && agregarItemModal()}
-                          placeholder="0" />
-                      </div>
-                      <button onClick={agregarItemModal}
-                        disabled={!itemCantidad || parseFloat(itemCantidad) <= 0}
-                        className="btn-primary h-10 px-4 mb-0">
-                        <Plus className="w-4 h-4" /> Agregar
+                    {subprodSelections.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={agregarItemModal}
+                        disabled={[...subprodSelections.values()].every(v => !v || parseFloat(v) <= 0)}
+                        className="btn-primary w-full justify-center">
+                        <Plus className="w-4 h-4" />
+                        Agregar {subprodSelections.size} subproducto{subprodSelections.size > 1 ? "s" : ""}
                       </button>
-                    </div>
-                  </>
+                    )}
+                  </div>
                 )}
               </div>
 

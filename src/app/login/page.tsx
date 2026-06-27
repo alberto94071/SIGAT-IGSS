@@ -21,7 +21,7 @@ export default function LoginPage() {
     if (res?.error) {
       setError("Credenciales incorrectas. Verifique su correo y contraseña.");
     } else {
-      router.push("/dashboard");
+      router.push("/launcher");
     }
   }
 
