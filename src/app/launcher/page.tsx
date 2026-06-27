@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
   RotateCcw, MapPin, Bus, ArrowRight, Construction,
-  ShieldCheck, ShoppingCart
+  ShieldCheck, ShoppingCart, Database
 } from "lucide-react";
 import LogoutButton from "./LogoutButton";
 
@@ -30,6 +30,18 @@ const MODULES = [
     ring: "ring-orange-200",
     textColor: "text-orange-600",
     bgLight: "bg-orange-50",
+    available: true,
+  },
+  {
+    id: "base-datos",
+    title: "Base de datos central",
+    description: "Catálogo SIGES con proyecciones presupuestarias 2027-2031. Consulta, filtra y administra todos los registros de insumos y servicios.",
+    href: "/base-datos",
+    icon: Database,
+    color: "bg-blue-600",
+    ring: "ring-blue-200",
+    textColor: "text-blue-600",
+    bgLight: "bg-blue-50",
     available: true,
   },
   {

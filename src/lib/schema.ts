@@ -241,3 +241,30 @@ export const siafSeq = pgTable("siaf_seq", {
   id:    integer("id").primaryKey().default(1),
   valor: integer("valor").notNull().default(12),
 });
+
+// ─── Base de Datos Central (catálogo SIGES con proyecciones 2027-2031) ────────
+export const baseDatosCentral = pgTable("base_datos_central", {
+  id:                 serial("id").primaryKey(),
+  codigo_siges:       text("codigo_siges"),
+  codigo_formulacion: integer("codigo_formulacion"),
+  subproducto:        text("subproducto"),
+  codigo_ppr:         integer("codigo_ppr"),
+  nombre:             text("nombre").notNull(),
+  caracteristicas:    text("caracteristicas"),
+  presentacion:       text("presentacion"),
+  renglon:            integer("renglon"),
+  precio_unitario:    doublePrecision("precio_unitario"),
+  cantidad_2027:      doublePrecision("cantidad_2027"),
+  monto_2027:         doublePrecision("monto_2027"),
+  cantidad_2028:      doublePrecision("cantidad_2028"),
+  monto_2028:         doublePrecision("monto_2028"),
+  cantidad_2029:      doublePrecision("cantidad_2029"),
+  monto_2029:         doublePrecision("monto_2029"),
+  cantidad_2030:      doublePrecision("cantidad_2030"),
+  monto_2030:         doublePrecision("monto_2030"),
+  cantidad_2031:      doublePrecision("cantidad_2031"),
+  monto_2031:         doublePrecision("monto_2031"),
+  activo:             boolean("activo").notNull().default(true),
+  created_at:         text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+  updated_at:         text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
