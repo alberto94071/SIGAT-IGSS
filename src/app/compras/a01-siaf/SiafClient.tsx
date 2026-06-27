@@ -4,10 +4,11 @@ import { useRouter } from "next/navigation";
 import {
   FileText, Plus, ChevronDown, ChevronRight, Search, X,
   Trash2, History, ClipboardList, CheckCircle2,
-  Loader2, Package, Printer, XCircle,
+  Loader2, Package, Printer, XCircle, Layers, AlertTriangle,
 } from "lucide-react";
 import {
-  crearSolicitud, eliminarSolicitud, actualizarEstado, getNextSiafNumeroCompras,
+  crearSolicitud, eliminarSolicitud, actualizarEstado,
+  getNextSiafNumeroCompras, consolidarSiaf,
 } from "./actions";
 
 type SolicitudItem = {
@@ -33,10 +34,11 @@ type ModalItem = {
 };
 
 const ESTADO_STYLE: Record<string, string> = {
-  "Borrador":  "bg-gray-100 text-gray-600",
-  "Enviado":   "bg-blue-100 text-blue-700",
-  "Aprobado":  "bg-green-100 text-green-700",
-  "Rechazado": "bg-red-100 text-red-700",
+  "Borrador":    "bg-gray-100 text-gray-600",
+  "Enviado":     "bg-blue-100 text-blue-700",
+  "Aprobado":    "bg-green-100 text-green-700",
+  "Rechazado":   "bg-red-100 text-red-700",
+  "Consolidado": "bg-purple-100 text-purple-700",
 };
 
 type Firmante = { id: number; nombre: string; cargo: string };
@@ -49,6 +51,12 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
   const [viewMode,     setViewMode]     = useState<"solicitudes" | "historial">("solicitudes");
   const [query,        setQuery]        = useState("");
   const [expandedId,   setExpandedId]   = useState<string | null>(null);
+
+  // Selección para consolidar
+  const [seleccionados,  setSeleccionados]  = useState<Set<number>>(new Set());
+  const [consolModal,    setConsolModal]    = useState(false);
+  const [consolLoading,  setConsolLoading]  = useState(false);
+  const [consolError,    setConsolError]    = useState("");
 
   // Modal imprimir
   const [printModal,   setPrintModal]   = useState(false);
@@ -117,7 +125,6 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
     });
   }, [solicitudes, catalogo, query]);
 
-  // Autocomplete: insumos únicos del catálogo
   const insumoSugg = useMemo(() => {
     if (!itemSearch || itemSearch.length < 1) return [];
     const q = itemSearch.toLowerCase();
@@ -132,10 +139,15 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
     return res.slice(0, 8);
   }, [itemSearch, catalogo]);
 
-  // Subproductos del insumo seleccionado
   const subprodEntries = useMemo(() =>
     selCodigo == null ? [] : catalogo.filter(c => c.codigo_igss === selCodigo),
     [selCodigo, catalogo]
+  );
+
+  // SIAFs seleccionados que son Aprobados (para el modal de confirmación)
+  const seleccionadosList = useMemo(() =>
+    solicitudes.filter(s => seleccionados.has(s.id)),
+    [solicitudes, seleccionados]
   );
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
@@ -152,6 +164,14 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
 
   function toggleExpand(id: string) {
     setExpandedId(p => p === id ? null : id);
+  }
+
+  function toggleSeleccion(id: number) {
+    setSeleccionados(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   }
 
   function agregarItemModal() {
@@ -216,6 +236,20 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
     setSolicitudes(p => p.map(s => s.id === id ? { ...s, estado } : s));
   }
 
+  async function handleConsolidar() {
+    if (seleccionados.size === 0) return;
+    setConsolLoading(true);
+    setConsolError("");
+    const res = await consolidarSiaf([...seleccionados]);
+    setConsolLoading(false);
+    if (res.error) { setConsolError(res.error); return; }
+    setSolicitudes(p => p.map(s =>
+      seleccionados.has(s.id) ? { ...s, estado: "Consolidado" } : s
+    ));
+    setSeleccionados(new Set());
+    setConsolModal(false);
+  }
+
   const currentYear = new Date().getFullYear();
   const nextCorrLabel = corrLoading ? "calculando…"
     : nextNumero != null ? `${nextNumero}/${currentYear}` : "—";
@@ -233,11 +267,21 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
             {solicitudes.length} solicitud(es) · {solicitudes.reduce((n, s) => n + s.items.length, 0)} líneas de insumo
           </p>
         </div>
-        {canEdit && (
-          <button onClick={openModal} className="btn-primary">
-            <Plus className="w-4 h-4" /> Generar A-01 SIAF
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {seleccionados.size > 0 && (
+            <button
+              onClick={() => { setConsolError(""); setConsolModal(true); }}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition-colors shadow-sm">
+              <Layers className="w-4 h-4" />
+              Consolidar ({seleccionados.size})
+            </button>
+          )}
+          {canEdit && (
+            <button onClick={openModal} className="btn-primary">
+              <Plus className="w-4 h-4" /> Generar A-01 SIAF
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Controls */}
@@ -272,6 +316,7 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                   <th className="px-4 py-3 text-left whitespace-nowrap">Fecha</th>
                   <th className="px-4 py-3 text-center whitespace-nowrap">Ítems</th>
                   <th className="px-4 py-3 text-left whitespace-nowrap">Estado</th>
+                  <th className="px-4 py-3 text-center whitespace-nowrap w-12">Sel.</th>
                   {canEdit && <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>}
                 </tr>
               </thead>
@@ -279,10 +324,17 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                 {filteredSolicitudes.map(s => {
                   const rowId = String(s.id);
                   const expanded = expandedId === rowId;
-                  const finalizado = s.estado === "Aprobado" || s.estado === "Rechazado";
+                  const finalizado = s.estado === "Aprobado" || s.estado === "Rechazado" || s.estado === "Consolidado";
+                  const isSelected = seleccionados.has(s.id);
+                  const canSelect = s.estado === "Aprobado";
                   return (
                     <Fragment key={s.id}>
-                      <tr className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                      <tr
+                        className={`border-b border-gray-100 cursor-pointer transition-colors
+                          ${isSelected
+                            ? "bg-purple-50 hover:bg-purple-100"
+                            : "hover:bg-gray-50"
+                          }`}
                         onClick={() => toggleExpand(rowId)}>
                         <td className="px-4 py-3 text-gray-400">
                           {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -297,7 +349,11 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                           </span>
                         </td>
                         <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                          {s.estado === "Aprobado" ? (
+                          {s.estado === "Consolidado" ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-purple-100 text-purple-700">
+                              <Layers className="w-3 h-3" /> Consolidado
+                            </span>
+                          ) : s.estado === "Aprobado" ? (
                             <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-700">
                               <CheckCircle2 className="w-3 h-3" /> Aprobado
                             </span>
@@ -320,10 +376,21 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                             </div>
                           )}
                         </td>
+                        {/* Columna Selección — solo Aprobado muestra checkbox */}
+                        <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                          {canSelect && (
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSeleccion(s.id)}
+                              className="w-4 h-4 accent-purple-600 cursor-pointer"
+                            />
+                          )}
+                        </td>
                         {canEdit && (
                           <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
-                              {s.estado === "Aprobado" && (
+                              {(s.estado === "Aprobado" || s.estado === "Consolidado") && (
                                 <button onClick={() => openPrint(s.id)}
                                   className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
                                   title="Imprimir A-01 SIAF">
@@ -342,7 +409,7 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                       </tr>
                       {expanded && (
                         <tr className="bg-brand-50/40">
-                          <td colSpan={canEdit ? 6 : 5} className="px-6 py-4">
+                          <td colSpan={canEdit ? 7 : 6} className="px-6 py-4">
                             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                               Insumos en la solicitud {s.numero}/{s.anio}
                             </p>
@@ -504,6 +571,58 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
         </div>
       )}
 
+      {/* ── Modal: Confirmar consolidación ── */}
+      {consolModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-purple-600" /> Consolidar solicitudes
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">Se creará una nueva consolidación</p>
+              </div>
+              <button onClick={() => setConsolModal(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-sm text-gray-600">
+                Vas a consolidar <strong>{seleccionados.size}</strong> solicitud(es) A-01 SIAF:
+              </p>
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                {seleccionadosList.map(s => (
+                  <div key={s.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-100 last:border-0">
+                    <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                    <span className="font-mono font-bold text-gray-900 text-sm">{s.numero}/{s.anio}</span>
+                    <span className="text-xs text-gray-400">{s.fecha}</span>
+                    <span className="ml-auto text-xs text-gray-400">{s.items.length} ítem(s)</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-800">
+                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                Esta acción cambiará el estado de las solicitudes a <strong>Consolidado</strong> y no se podrá deshacer.
+              </div>
+              {consolError && (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {consolError}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button onClick={() => setConsolModal(false)} className="btn-secondary">Cancelar</button>
+              <button onClick={handleConsolidar} disabled={consolLoading}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 transition-colors">
+                {consolLoading
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Consolidando…</>
+                  : <><Layers className="w-4 h-4" /> Confirmar consolidación</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Modal: Seleccionar firmantes para imprimir ── */}
       {printModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -601,7 +720,6 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                   Agregar insumo a la solicitud
                 </p>
 
-                {/* Buscar insumo */}
                 <div className="relative">
                   <label className="label">Insumo (nombre o código IGSS)</label>
                   <div className="relative">
@@ -641,7 +759,6 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                   )}
                 </div>
 
-                {/* Subproductos — selección múltiple con cantidades individuales */}
                 {selCodigo != null && subprodEntries.length > 0 && (
                   <div className="space-y-2">
                     <label className="label">Subproductos — marca los que necesitas y asigna cantidad a cada uno</label>
@@ -710,7 +827,6 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                 )}
               </div>
 
-              {/* Lista de ítems agregados */}
               {modalItems.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider flex items-center gap-2">

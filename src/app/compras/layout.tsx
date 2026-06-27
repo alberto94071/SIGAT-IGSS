@@ -4,8 +4,10 @@ import { ROL_LABELS, ROL_COLORS, type Rol } from "@/lib/permisos";
 import DashboardShell from "@/components/DashboardShell";
 
 const COMPRAS_NAV = [
-  { href: "/compras/catalogo",  label: "Catálogo",  icon: "BookOpen"  },
-  { href: "/compras/a01-siaf",  label: "A-01 SIAF", icon: "FileText"  },
+  { href: "/compras/catalogo",     label: "Catálogo",     icon: "BookOpen"     },
+  { href: "/compras/a01-siaf",     label: "A-01 SIAF",    icon: "FileText"     },
+  { href: "/compras/adjudicacion", label: "Adjudicación", icon: "Gavel"        },
+  { href: "/compras/ordenes",      label: "Órdenes",      icon: "ShoppingCart" },
 ] as const;
 
 export default async function ComprasLayout({ children }: { children: React.ReactNode }) {

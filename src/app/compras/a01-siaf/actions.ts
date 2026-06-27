@@ -1,7 +1,7 @@
 "use server";
 import { db } from "@/lib/db";
-import { siafCompras, siafComprasItems, catalogoCompras } from "@/lib/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { siafCompras, siafComprasItems, catalogoCompras, consolidaciones } from "@/lib/schema";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 
 export async function getNextSiafNumeroCompras(): Promise<number> {
@@ -109,4 +109,55 @@ export async function eliminarSolicitud(id: number) {
   } catch {
     return { error: "Error al eliminar" };
   }
+}
+
+export async function consolidarSiaf(ids: number[]) {
+  try {
+    const session = await auth();
+    const uid = session ? Number(session.user.id) : null;
+    const year = new Date().getFullYear();
+
+    const rows = await db.select({ id: siafCompras.id, estado: siafCompras.estado })
+      .from(siafCompras).where(inArray(siafCompras.id, ids));
+
+    if (rows.length === 0) return { error: "No se encontraron las solicitudes" };
+    if (rows.some(r => r.estado !== "Aprobado"))
+      return { error: "Solo se pueden consolidar solicitudes con estado Aprobado" };
+
+    const res = await db.execute(
+      sql`SELECT COALESCE(MAX(numero), 0) + 1 AS next FROM consolidaciones WHERE anio = ${year}`
+    );
+    const numero = Number((res.rows[0] as any).next) || 1;
+    const fecha = new Date().toISOString().slice(0, 10);
+
+    const [consolidacion] = await db.insert(consolidaciones)
+      .values({ numero, anio: year, fecha, creado_por: uid })
+      .returning();
+
+    await db.update(siafCompras)
+      .set({ estado: "Consolidado", consolidacion_id: consolidacion.id })
+      .where(inArray(siafCompras.id, ids));
+
+    return { consolidacion };
+  } catch {
+    return { error: "Error al consolidar las solicitudes" };
+  }
+}
+
+export async function getConsolidaciones() {
+  const cons = await db.select().from(consolidaciones)
+    .orderBy(sql`anio DESC, numero DESC`);
+  const siaf = await db.select({
+    id:               siafCompras.id,
+    numero:           siafCompras.numero,
+    anio:             siafCompras.anio,
+    fecha:            siafCompras.fecha,
+    consolidacion_id: siafCompras.consolidacion_id,
+  }).from(siafCompras)
+    .where(sql`consolidacion_id IS NOT NULL`);
+
+  return cons.map(c => ({
+    ...c,
+    siaf: siaf.filter(s => s.consolidacion_id === c.id),
+  }));
 }

@@ -201,16 +201,27 @@ export const catalogoSubproductos = pgTable("catalogo_subproductos", {
   created_at: text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
+// ─── Consolidaciones de solicitudes A-01 SIAF ────────────────────────────────
+export const consolidaciones = pgTable("consolidaciones", {
+  id:         serial("id").primaryKey(),
+  numero:     integer("numero").notNull(),
+  anio:       integer("anio").notNull(),
+  fecha:      text("fecha").notNull(),
+  creado_por: integer("creado_por"),
+  created_at: text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
 // ─── Compras: solicitudes A-01 SIAF ──────────────────────────────────────────
 export const siafCompras = pgTable("siaf_compras", {
-  id:            serial("id").primaryKey(),
-  numero:        integer("numero").notNull(),
-  anio:          integer("anio").notNull(),
-  fecha:         text("fecha").notNull(),
-  estado:        text("estado").notNull().default("Borrador"),
-  observaciones: text("observaciones"),
-  creado_por:    integer("creado_por").references(() => usuarios.id),
-  created_at:    text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+  id:               serial("id").primaryKey(),
+  numero:           integer("numero").notNull(),
+  anio:             integer("anio").notNull(),
+  fecha:            text("fecha").notNull(),
+  estado:           text("estado").notNull().default("Borrador"),
+  observaciones:    text("observaciones"),
+  consolidacion_id: integer("consolidacion_id"),
+  creado_por:       integer("creado_por").references(() => usuarios.id),
+  created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 export const siafComprasItems = pgTable("siaf_compras_items", {

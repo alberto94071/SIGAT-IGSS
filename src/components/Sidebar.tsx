@@ -5,7 +5,7 @@ import { signOut } from "next-auth/react";
 import {
   LayoutDashboard, Package, CreditCard, Landmark, Wallet,
   FileCheck, BookOpen, BarChart3, FileText, Users, Settings, LogOut,
-  ChevronLeft
+  ChevronLeft, Gavel, ShoppingCart,
 } from "lucide-react";
 import { type Rol, ROL_LABELS } from "@/lib/permisos";
 import clsx from "clsx";
@@ -22,6 +22,8 @@ const ICONS: Record<string, React.ReactNode> = {
   FileText:        <FileText        className="w-4 h-4" />,
   Users:           <Users           className="w-4 h-4" />,
   Settings:        <Settings        className="w-4 h-4" />,
+  Gavel:           <Gavel           className="w-4 h-4" />,
+  ShoppingCart:    <ShoppingCart    className="w-4 h-4" />,
 };
 
 interface Props {
