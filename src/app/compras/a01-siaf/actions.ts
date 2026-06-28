@@ -144,20 +144,3 @@ export async function consolidarSiaf(ids: number[]) {
   }
 }
 
-export async function getConsolidaciones() {
-  const cons = await db.select().from(consolidaciones)
-    .orderBy(sql`anio DESC, numero DESC`);
-  const siaf = await db.select({
-    id:               siafCompras.id,
-    numero:           siafCompras.numero,
-    anio:             siafCompras.anio,
-    fecha:            siafCompras.fecha,
-    consolidacion_id: siafCompras.consolidacion_id,
-  }).from(siafCompras)
-    .where(sql`consolidacion_id IS NOT NULL`);
-
-  return cons.map(c => ({
-    ...c,
-    siaf: siaf.filter(s => s.consolidacion_id === c.id),
-  }));
-}

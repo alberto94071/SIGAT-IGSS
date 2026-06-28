@@ -1,7 +1,7 @@
-import { getConsolidaciones } from "../a01-siaf/actions";
+import { getConsolidacionesConDetalles } from "./actions";
 import AdjudicacionClient from "./AdjudicacionClient";
 
 export default async function AdjudicacionPage() {
-  const consolidaciones = await getConsolidaciones();
+  const consolidaciones = await getConsolidacionesConDetalles();
   return <AdjudicacionClient consolidaciones={consolidaciones} />;
 }

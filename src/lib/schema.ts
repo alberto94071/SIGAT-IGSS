@@ -203,12 +203,47 @@ export const catalogoSubproductos = pgTable("catalogo_subproductos", {
 
 // ─── Consolidaciones de solicitudes A-01 SIAF ────────────────────────────────
 export const consolidaciones = pgTable("consolidaciones", {
-  id:         serial("id").primaryKey(),
-  numero:     integer("numero").notNull(),
-  anio:       integer("anio").notNull(),
-  fecha:      text("fecha").notNull(),
-  creado_por: integer("creado_por"),
-  created_at: text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+  id:               serial("id").primaryKey(),
+  numero:           integer("numero").notNull(),
+  anio:             integer("anio").notNull(),
+  fecha:            text("fecha").notNull(),
+  tipo_compra:      text("tipo_compra"),
+  estado:           text("estado").notNull().default("Pendiente adjudicación"),
+  // Compra Directa Fase 1
+  nog:              text("nog"),
+  fecha_evento:     text("fecha_evento"),
+  // Todos los tipos (referencia = cotización / contrato / tipo-servicio)
+  referencia:       text("referencia"),
+  costo_unitario:   doublePrecision("costo_unitario"),
+  exento_iva:       boolean("exento_iva").notNull().default(false),
+  total:            doublePrecision("total"),
+  proveedor_id:     integer("proveedor_id"),
+  proveedor_nit:    text("proveedor_nit"),
+  proveedor_nombre: text("proveedor_nombre"),
+  creado_por:       integer("creado_por"),
+  created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Órdenes de Compra ────────────────────────────────────────────────────────
+export const ordenesCompra = pgTable("ordenes_compra", {
+  id:               serial("id").primaryKey(),
+  numero:           integer("numero").notNull(),
+  anio:             integer("anio").notNull(),
+  fecha:            text("fecha").notNull(),
+  consolidacion_id: integer("consolidacion_id").notNull(),
+  tipo_compra:      text("tipo_compra").notNull(),
+  nog:              text("nog"),
+  referencia:       text("referencia"),
+  proveedor_id:     integer("proveedor_id"),
+  proveedor_nit:    text("proveedor_nit"),
+  proveedor_nombre: text("proveedor_nombre"),
+  costo_unitario:   doublePrecision("costo_unitario"),
+  total_cantidad:   doublePrecision("total_cantidad"),
+  exento_iva:       boolean("exento_iva").notNull().default(false),
+  total:            doublePrecision("total"),
+  estado:           text("estado").notNull().default("Activa"),
+  creado_por:       integer("creado_por"),
+  created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 // ─── Compras: solicitudes A-01 SIAF ──────────────────────────────────────────

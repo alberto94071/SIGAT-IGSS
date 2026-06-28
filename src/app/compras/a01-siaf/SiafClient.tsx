@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import {
   FileText, Plus, ChevronDown, ChevronRight, Search, X,
   Trash2, History, ClipboardList, CheckCircle2,
-  Loader2, Package, Printer, XCircle, Layers, AlertTriangle,
+  Loader2, Package, Printer, XCircle, Layers, AlertTriangle, ShoppingCart,
 } from "lucide-react";
 import {
   crearSolicitud, eliminarSolicitud, actualizarEstado,
@@ -34,11 +34,12 @@ type ModalItem = {
 };
 
 const ESTADO_STYLE: Record<string, string> = {
-  "Borrador":    "bg-gray-100 text-gray-600",
-  "Enviado":     "bg-blue-100 text-blue-700",
-  "Aprobado":    "bg-green-100 text-green-700",
-  "Rechazado":   "bg-red-100 text-red-700",
-  "Consolidado": "bg-purple-100 text-purple-700",
+  "Borrador":       "bg-gray-100 text-gray-600",
+  "Enviado":        "bg-blue-100 text-blue-700",
+  "Aprobado":       "bg-green-100 text-green-700",
+  "Rechazado":      "bg-red-100 text-red-700",
+  "Consolidado":    "bg-purple-100 text-purple-700",
+  "Orden de Compra": "bg-indigo-100 text-indigo-700",
 };
 
 type Firmante = { id: number; nombre: string; cargo: string };
@@ -324,7 +325,7 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                 {filteredSolicitudes.map(s => {
                   const rowId = String(s.id);
                   const expanded = expandedId === rowId;
-                  const finalizado = s.estado === "Aprobado" || s.estado === "Rechazado" || s.estado === "Consolidado";
+                  const finalizado = s.estado === "Aprobado" || s.estado === "Rechazado" || s.estado === "Consolidado" || s.estado === "Orden de Compra";
                   const isSelected = seleccionados.has(s.id);
                   const canSelect = s.estado === "Aprobado";
                   return (
@@ -352,6 +353,10 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                           {s.estado === "Consolidado" ? (
                             <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-purple-100 text-purple-700">
                               <Layers className="w-3 h-3" /> Consolidado
+                            </span>
+                          ) : s.estado === "Orden de Compra" ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-indigo-100 text-indigo-700">
+                              <ShoppingCart className="w-3 h-3" /> Orden de Compra
                             </span>
                           ) : s.estado === "Aprobado" ? (
                             <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-700">
