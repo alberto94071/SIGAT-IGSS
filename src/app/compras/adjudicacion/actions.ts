@@ -72,6 +72,12 @@ export async function adjudicarFase1(id: number, nog: string, fechaEvento: strin
       nog,
       fecha_evento: fechaEvento,
     }).where(eq(consolidaciones.id, id));
+
+    // Cambiar estado de todos los SIAFs de esta consolidación a "Adjudicado"
+    await db.update(siafCompras)
+      .set({ estado: "Adjudicado" })
+      .where(eq(siafCompras.consolidacion_id, id));
+
     return { ok: true };
   } catch {
     return { error: "Error al registrar la adjudicación" };

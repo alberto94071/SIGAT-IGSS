@@ -5,9 +5,10 @@ import {
   FileText, Plus, ChevronDown, ChevronRight, Search, X,
   Trash2, History, ClipboardList, CheckCircle2,
   Loader2, Package, Printer, XCircle, Layers, AlertTriangle, ShoppingCart,
+  Pencil, Gavel,
 } from "lucide-react";
 import {
-  crearSolicitud, eliminarSolicitud, actualizarEstado,
+  crearSolicitud, editarSolicitud, eliminarSolicitud, actualizarEstado,
   getNextSiafNumeroCompras, consolidarSiaf,
 } from "./actions";
 
@@ -19,6 +20,7 @@ type SolicitudItem = {
 };
 type Solicitud = {
   id: number; numero: number; anio: number; fecha: string; estado: string;
+  observaciones: string | null;
   items: SolicitudItem[];
 };
 type CatEntry = {
@@ -34,11 +36,12 @@ type ModalItem = {
 };
 
 const ESTADO_STYLE: Record<string, string> = {
-  "Borrador":       "bg-gray-100 text-gray-600",
-  "Enviado":        "bg-blue-100 text-blue-700",
-  "Aprobado":       "bg-green-100 text-green-700",
-  "Rechazado":      "bg-red-100 text-red-700",
-  "Consolidado":    "bg-purple-100 text-purple-700",
+  "Borrador":        "bg-gray-100 text-gray-600",
+  "Enviado":         "bg-blue-100 text-blue-700",
+  "Aprobado":        "bg-green-100 text-green-700",
+  "Rechazado":       "bg-red-100 text-red-700",
+  "Consolidado":     "bg-purple-100 text-purple-700",
+  "Adjudicado":      "bg-blue-100 text-blue-700",
   "Orden de Compra": "bg-indigo-100 text-indigo-700",
 };
 
@@ -65,7 +68,7 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
   const [selFirmante1, setSelFirmante1] = useState<Firmante | null>(null);
   const [selFirmante2, setSelFirmante2] = useState<Firmante | null>(null);
 
-  // Modal crear
+  // Modal crear / editar
   const [modal,        setModal]        = useState(false);
   const [saving,       setSaving]       = useState(false);
   const [modalError,   setModalError]   = useState("");
@@ -74,6 +77,10 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
   const [nextNumero,       setNextNumero]       = useState<number | null>(null);
   const [corrLoading,      setCorrLoading]      = useState(false);
   const [modalItems,       setModalItems]       = useState<ModalItem[]>([]);
+  // Modo edición
+  const [editMode,      setEditMode]      = useState(false);
+  const [editingSolId,  setEditingSolId]  = useState<number | null>(null);
+  const [editCorrLabel, setEditCorrLabel] = useState("");
 
   // Item builder
   const [itemSearch,        setItemSearch]        = useState("");
@@ -154,6 +161,7 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
   async function openModal() {
+    setEditMode(false); setEditingSolId(null); setEditCorrLabel("");
     setModal(true); setModalItems([]); setModalError("");
     setNewFecha(new Date().toISOString().slice(0, 10));
     setNewJustificacion("");
@@ -161,6 +169,30 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
     setCorrLoading(true);
     const n = await getNextSiafNumeroCompras();
     setNextNumero(n); setCorrLoading(false);
+  }
+
+  function openEdit(sol: Solicitud) {
+    setEditMode(true);
+    setEditingSolId(sol.id);
+    setEditCorrLabel(`${sol.numero}/${sol.anio}`);
+    setModal(true);
+    setModalError("");
+    setNewFecha(sol.fecha);
+    setNewJustificacion(sol.observaciones ?? "");
+    setItemSearch(""); setSelCodigo(null); setSubprodSelections(new Map());
+    const prefilled: ModalItem[] = sol.items
+      .filter(i => i.catalogo_id != null)
+      .map(i => ({
+        key:                i.id,
+        catalogo_id:        i.catalogo_id!,
+        codigo_igss:        i.codigo_igss,
+        codigo_ppr:         i.codigo_ppr,
+        nombre:             i.nombre,
+        subproducto:        i.subproducto,
+        unidad_medida:      i.unidad_medida,
+        cantidad_solicitada: i.cantidad_solicitada,
+      }));
+    setModalItems(prefilled);
   }
 
   function toggleExpand(id: string) {
@@ -200,19 +232,34 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
     }
     if (modalItems.length === 0) return setModalError("Agrega al menos un insumo a la solicitud");
     setSaving(true);
-    const res = await crearSolicitud({
-      fecha: newFecha,
-      observaciones: newJustificacion.trim() || null,
-      items: modalItems.map(i => ({
-        catalogo_id: i.catalogo_id, codigo_igss: i.codigo_igss,
-        codigo_ppr: i.codigo_ppr, nombre: i.nombre, subproducto: i.subproducto,
-        unidad_medida: i.unidad_medida, cantidad_solicitada: i.cantidad_solicitada,
-      })),
-    });
-    setSaving(false);
-    if (res.error) return setModalError(res.error);
-    setSolicitudes(p => [res.solicitud!, ...p] as unknown as Solicitud[]);
-    setModal(false);
+
+    const itemData = modalItems.map(i => ({
+      catalogo_id: i.catalogo_id, codigo_igss: i.codigo_igss,
+      codigo_ppr: i.codigo_ppr, nombre: i.nombre, subproducto: i.subproducto,
+      unidad_medida: i.unidad_medida, cantidad_solicitada: i.cantidad_solicitada,
+    }));
+
+    if (editMode && editingSolId != null) {
+      const res = await editarSolicitud(editingSolId, {
+        fecha: newFecha,
+        observaciones: newJustificacion.trim() || null,
+        items: itemData,
+      });
+      setSaving(false);
+      if (res.error) return setModalError(res.error);
+      setSolicitudes(p => p.map(s =>
+        s.id === editingSolId
+          ? { ...s, fecha: newFecha, observaciones: newJustificacion.trim() || null, items: res.solicitud!.items as unknown as SolicitudItem[] }
+          : s
+      ));
+      setModal(false);
+    } else {
+      const res = await crearSolicitud({ fecha: newFecha, observaciones: newJustificacion.trim() || null, items: itemData });
+      setSaving(false);
+      if (res.error) return setModalError(res.error);
+      setSolicitudes(p => [res.solicitud!, ...p] as unknown as Solicitud[]);
+      setModal(false);
+    }
   }
 
   function openPrint(id: number) {
@@ -252,7 +299,9 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
   }
 
   const currentYear = new Date().getFullYear();
-  const nextCorrLabel = corrLoading ? "calculando…"
+  const nextCorrLabel = editMode && editCorrLabel
+    ? editCorrLabel
+    : corrLoading ? "calculando…"
     : nextNumero != null ? `${nextNumero}/${currentYear}` : "—";
 
   // ─── JSX ───────────────────────────────────────────────────────────────────
@@ -325,7 +374,7 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                 {filteredSolicitudes.map(s => {
                   const rowId = String(s.id);
                   const expanded = expandedId === rowId;
-                  const finalizado = s.estado === "Aprobado" || s.estado === "Rechazado" || s.estado === "Consolidado" || s.estado === "Orden de Compra";
+                  const finalizado = s.estado === "Aprobado" || s.estado === "Rechazado" || s.estado === "Consolidado" || s.estado === "Adjudicado" || s.estado === "Orden de Compra";
                   const isSelected = seleccionados.has(s.id);
                   const canSelect = s.estado === "Aprobado";
                   return (
@@ -353,6 +402,10 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                           {s.estado === "Consolidado" ? (
                             <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-purple-100 text-purple-700">
                               <Layers className="w-3 h-3" /> Consolidado
+                            </span>
+                          ) : s.estado === "Adjudicado" ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-blue-100 text-blue-700">
+                              <Gavel className="w-3 h-3" /> Adjudicado
                             </span>
                           ) : s.estado === "Orden de Compra" ? (
                             <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-indigo-100 text-indigo-700">
@@ -403,10 +456,18 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                                 </button>
                               )}
                               {!finalizado && (
-                                <button onClick={() => handleEliminar(s.id)}
-                                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                <>
+                                  <button onClick={() => openEdit(s)}
+                                    className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                                    title="Editar solicitud">
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button onClick={() => handleEliminar(s.id)}
+                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Eliminar solicitud">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
                               )}
                             </div>
                           </td>
@@ -684,10 +745,12 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
 
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
               <div>
-                <h2 className="font-semibold text-gray-900">Generar solicitud A-01 SIAF</h2>
+                <h2 className="font-semibold text-gray-900">
+                  {editMode ? "Editar solicitud A-01 SIAF" : "Generar solicitud A-01 SIAF"}
+                </h2>
                 <p className="text-xs text-gray-500 mt-0.5">
                   Correlativo:{" "}
-                  {corrLoading
+                  {!editMode && corrLoading
                     ? <span className="text-gray-400 animate-pulse">calculando…</span>
                     : <strong className="text-brand-700">{nextCorrLabel}</strong>}
                 </p>
@@ -872,7 +935,9 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                 className="btn-primary">
                 {saving
                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando…</>
-                  : <><CheckCircle2 className="w-4 h-4" /> Guardar solicitud</>}
+                  : editMode
+                    ? <><CheckCircle2 className="w-4 h-4" /> Guardar cambios</>
+                    : <><CheckCircle2 className="w-4 h-4" /> Guardar solicitud</>}
               </button>
             </div>
           </div>
