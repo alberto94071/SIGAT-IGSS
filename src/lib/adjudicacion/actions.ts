@@ -4,7 +4,7 @@ import {
   consolidaciones, consolidacionPrecios, siafCompras, siafComprasItems,
   ordenesCompra, proveedores,
 } from "@/lib/schema";
-import { eq, sql, inArray, ilike, or, and, isNotNull } from "drizzle-orm";
+import { eq, sql, inArray, ilike, or, and, isNotNull, ne } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import type { Consolidacion, InsumoPrecio, TipoCompra } from "./types";
 import { LIMITE_POR_TIPO, REFERENCIA_LABEL } from "./types";
@@ -122,7 +122,9 @@ export async function adjudicar(id: number, data: {
     }
 
     const [existente] = await db.select({ id: consolidaciones.id })
-      .from(consolidaciones).where(eq(consolidaciones.numero_adjudicacion, numAdj)).limit(1);
+      .from(consolidaciones).where(
+        and(eq(consolidaciones.numero_adjudicacion, numAdj), ne(consolidaciones.id, id))
+      ).limit(1);
     if (existente) return { error: `Ya existe una consolidación con el Número de Adjudicación ${numAdj}` };
 
     await db.update(consolidaciones).set({
@@ -169,6 +171,9 @@ export async function completarAdjudicacion(id: number, data: {
   regularizado: boolean | null;
 }) {
   try {
+    const session = await auth();
+    if (!session) return { error: "No autorizado" };
+
     const [con] = await db.select({ tipo_compra: consolidaciones.tipo_compra, estado: consolidaciones.estado })
       .from(consolidaciones).where(eq(consolidaciones.id, id)).limit(1);
     if (!con) return { error: "No se encontró la consolidación" };
@@ -309,6 +314,9 @@ export async function getPendientesPorDestino(destino: "fondo_rotativo" | "presu
 export async function generarOrdenDesdeDestino(id: number) {
   try {
     const session = await auth();
+    if (!session) return { error: "No autorizado" };
+    if (session.user.rol === "consulta") return { error: "No tienes permiso para generar órdenes de compra" };
+
     const uid = session ? Number(session.user.id) : null;
     const year = new Date().getFullYear();
     const fecha = new Date().toISOString().slice(0, 10);
