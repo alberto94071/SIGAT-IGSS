@@ -61,6 +61,7 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
   const [consolModal,    setConsolModal]    = useState(false);
   const [consolLoading,  setConsolLoading]  = useState(false);
   const [consolError,    setConsolError]    = useState("");
+  const [preOrden,       setPreOrden]       = useState("");
 
   // Modal imprimir
   const [printModal,   setPrintModal]   = useState(false);
@@ -286,9 +287,13 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
 
   async function handleConsolidar() {
     if (seleccionados.size === 0) return;
+    if (!/^\d+$/.test(preOrden.trim())) {
+      setConsolError("Ingresa un Número de Pre Orden válido (solo dígitos)");
+      return;
+    }
     setConsolLoading(true);
     setConsolError("");
-    const res = await consolidarSiaf([...seleccionados]);
+    const res = await consolidarSiaf([...seleccionados], preOrden.trim());
     setConsolLoading(false);
     if (res.error) { setConsolError(res.error); return; }
     setSolicitudes(p => p.map(s =>
@@ -296,6 +301,7 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
     ));
     setSeleccionados(new Set());
     setConsolModal(false);
+    setPreOrden("");
   }
 
   const currentYear = new Date().getFullYear();
@@ -320,7 +326,7 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
         <div className="flex items-center gap-2">
           {seleccionados.size > 0 && (
             <button
-              onClick={() => { setConsolError(""); setConsolModal(true); }}
+              onClick={() => { setConsolError(""); setPreOrden(""); setConsolModal(true); }}
               className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition-colors shadow-sm">
               <Layers className="w-4 h-4" />
               Consolidar ({seleccionados.size})
@@ -666,9 +672,20 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                   </div>
                 ))}
               </div>
+              <div>
+                <label className="label">Número de Pre Orden <span className="text-red-500 font-semibold">*</span></label>
+                <input
+                  className="input font-mono"
+                  inputMode="numeric"
+                  value={preOrden}
+                  onChange={e => setPreOrden(e.target.value.replace(/\D/g, ""))}
+                  placeholder="Ej: 1023"
+                  autoFocus
+                />
+              </div>
               <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-800">
                 <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                Esta acción cambiará el estado de las solicitudes a <strong>Consolidado</strong> y no se podrá deshacer.
+                Al confirmar, estas solicitudes pasarán a estado <strong>Consolidado</strong> de forma permanente. Esta acción no se puede deshacer.
               </div>
               {consolError && (
                 <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -678,7 +695,7 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
             </div>
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
               <button onClick={() => setConsolModal(false)} className="btn-secondary">Cancelar</button>
-              <button onClick={handleConsolidar} disabled={consolLoading}
+              <button onClick={handleConsolidar} disabled={consolLoading || !/^\d+$/.test(preOrden.trim())}
                 className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 transition-colors">
                 {consolLoading
                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Consolidando…</>

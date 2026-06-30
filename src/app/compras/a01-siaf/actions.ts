@@ -189,8 +189,13 @@ export async function editarSolicitud(id: number, data: {
   }
 }
 
-export async function consolidarSiaf(ids: number[]) {
+export async function consolidarSiaf(ids: number[], preOrden: string) {
   try {
+    const pre = preOrden.trim();
+    if (!/^\d+$/.test(pre)) {
+      return { error: "El Número de Pre Orden solo puede contener dígitos" };
+    }
+
     const session = await auth();
     const uid = session ? Number(session.user.id) : null;
     const year = new Date().getFullYear();
@@ -202,6 +207,10 @@ export async function consolidarSiaf(ids: number[]) {
     if (rows.some(r => r.estado !== "Aprobado"))
       return { error: "Solo se pueden consolidar solicitudes con estado Aprobado" };
 
+    const [existente] = await db.select({ id: consolidaciones.id })
+      .from(consolidaciones).where(eq(consolidaciones.pre_orden, pre)).limit(1);
+    if (existente) return { error: `Ya existe una consolidación con el Pre Orden ${pre}` };
+
     const res = await db.execute(
       sql`SELECT COALESCE(MAX(numero), 0) + 1 AS next FROM consolidaciones WHERE anio = ${year}`
     );
@@ -209,7 +218,7 @@ export async function consolidarSiaf(ids: number[]) {
     const fecha = new Date().toISOString().slice(0, 10);
 
     const [consolidacion] = await db.insert(consolidaciones)
-      .values({ numero, anio: year, fecha, creado_por: uid })
+      .values({ numero, anio: year, fecha, pre_orden: pre, creado_por: uid })
       .returning();
 
     await db.update(siafCompras)
