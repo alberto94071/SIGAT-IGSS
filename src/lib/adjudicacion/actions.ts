@@ -7,6 +7,7 @@ import {
 import { eq, sql, inArray, ilike, or, and, isNotNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import type { Consolidacion, InsumoPrecio, TipoCompra } from "./types";
+import { LIMITE_POR_TIPO, REFERENCIA_LABEL } from "./types";
 
 // ─── Lectura ──────────────────────────────────────────────────────────────────
 
@@ -156,5 +157,91 @@ export async function anularConsolidacion(id: number) {
     return { ok: true };
   } catch {
     return { error: "Error al anular la consolidación" };
+  }
+}
+
+// ─── Completar Adjudicación (Compras) ────────────────────────────────────────
+
+export async function completarAdjudicacion(id: number, data: {
+  referencia:   string | null;
+  exento_iva:   boolean;
+  precios:      { codigo_igss: number | null; subproducto: string; precio_unitario: number }[];
+  regularizado: boolean | null;
+}) {
+  try {
+    const [con] = await db.select({ tipo_compra: consolidaciones.tipo_compra, estado: consolidaciones.estado })
+      .from(consolidaciones).where(eq(consolidaciones.id, id)).limit(1);
+    if (!con) return { error: "No se encontró la consolidación" };
+    if (con.estado !== "Adjudicado") return { error: "Solo se puede completar una consolidación en estado Adjudicado" };
+    const tipo = con.tipo_compra as TipoCompra | null;
+    if (!tipo) return { error: "La consolidación no tiene un tipo de compra asignado" };
+
+    const esDirecta = tipo === "Compra Directa";
+
+    if (!esDirecta && !data.referencia?.trim()) {
+      return { error: `El campo "${REFERENCIA_LABEL[tipo]}" es obligatorio` };
+    }
+    if (!esDirecta && data.regularizado === null) {
+      return { error: "Selecciona si es Regularizado o Normal" };
+    }
+    if (data.precios.length === 0 || data.precios.some(p => !(p.precio_unitario > 0))) {
+      return { error: "Ingresa un precio válido para cada insumo" };
+    }
+
+    // Cantidad real por insumo, calculada server-side (no se confía en el cliente)
+    const siafIds = (await db.select({ id: siafCompras.id })
+      .from(siafCompras).where(eq(siafCompras.consolidacion_id, id))).map(s => s.id);
+    const items = siafIds.length > 0
+      ? await db.select({
+          codigo_igss:         siafComprasItems.codigo_igss,
+          subproducto:         siafComprasItems.subproducto,
+          cantidad_solicitada: siafComprasItems.cantidad_solicitada,
+        }).from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds))
+      : [];
+    const cantidadPorInsumo = new Map<string, number>();
+    for (const it of items) {
+      const key = `${it.codigo_igss}::${it.subproducto}`;
+      cantidadPorInsumo.set(key, (cantidadPorInsumo.get(key) ?? 0) + it.cantidad_solicitada);
+    }
+
+    let bruto = 0;
+    for (const p of data.precios) {
+      const cantidad = cantidadPorInsumo.get(`${p.codigo_igss}::${p.subproducto}`) ?? 0;
+      bruto += cantidad * p.precio_unitario;
+    }
+    const total = data.exento_iva ? bruto : bruto * 0.88;
+    const limite = LIMITE_POR_TIPO[tipo];
+    if (total > limite) {
+      return {
+        error: `El total Q${total.toFixed(2)} supera el límite de Q${limite.toLocaleString("es-GT")} para ${tipo}`,
+        limitExceeded: true as const,
+      };
+    }
+
+    const destino = esDirecta ? "presupuesto" : (data.regularizado ? "fondo_rotativo" : "presupuesto");
+    const estado  = destino === "fondo_rotativo" ? "Enviado a Fondo Rotativo" : "Enviado a Presupuesto";
+
+    await db.delete(consolidacionPrecios).where(eq(consolidacionPrecios.consolidacion_id, id));
+    await db.insert(consolidacionPrecios).values(
+      data.precios.map(p => ({
+        consolidacion_id: id,
+        codigo_igss:       p.codigo_igss,
+        subproducto:       p.subproducto,
+        precio_unitario:   p.precio_unitario,
+      }))
+    );
+
+    await db.update(consolidaciones).set({
+      referencia:   esDirecta ? null : data.referencia!.trim(),
+      exento_iva:   data.exento_iva,
+      total,
+      destino,
+      regularizado: esDirecta ? null : data.regularizado,
+      estado,
+    }).where(eq(consolidaciones.id, id));
+
+    return { ok: true as const };
+  } catch {
+    return { error: "Error al completar la adjudicación" };
   }
 }
