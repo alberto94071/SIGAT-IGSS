@@ -1,7 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 
-const DB = "postgresql://neondb_owner:npg_gaDnJLs0lK4T@ep-winter-boat-atha96e8-pooler.c-9.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
-const sql = neon(DB);
+const sql = neon(process.env.DATABASE_URL);
 
 await sql`ALTER TABLE consolidaciones ADD COLUMN IF NOT EXISTS pre_orden TEXT`;
 await sql`ALTER TABLE consolidaciones ADD COLUMN IF NOT EXISTS numero_adjudicacion TEXT`;
