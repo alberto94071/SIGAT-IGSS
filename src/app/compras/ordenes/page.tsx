@@ -1,4 +1,4 @@
-import { getOrdenes } from "../adjudicacion/actions";
+import { getOrdenes } from "@/lib/adjudicacion/actions";
 import OrdenesClient from "./OrdenesClient";
 
 export default async function OrdenesPage() {

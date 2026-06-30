@@ -1,10 +1,14 @@
-import EnDesarrollo from "@/components/EnDesarrollo";
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { type Rol } from "@/lib/permisos";
+import { getConsolidacionesConDetalles } from "@/lib/adjudicacion/actions";
+import AdjudicacionClient from "@/components/adjudicacion/AdjudicacionClient";
 
-export default function JuntaAdjudicacionPage() {
-  return (
-    <EnDesarrollo
-      title="Adjudicación"
-      description="Próximamente podrás consultar las adjudicaciones resueltas por la Junta Adjudicadora."
-    />
-  );
+export default async function JuntaAdjudicacionPage() {
+  const session = await auth();
+  if (!session) redirect("/login");
+  const consolidaciones = await getConsolidacionesConDetalles();
+  const rol = session.user.rol as Rol;
+  const canEdit = rol !== "consulta";
+  return <AdjudicacionClient consolidaciones={consolidaciones} rol="junta" canEdit={canEdit} />;
 }
