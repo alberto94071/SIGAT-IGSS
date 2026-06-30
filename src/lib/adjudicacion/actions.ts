@@ -6,7 +6,7 @@ import {
 } from "@/lib/schema";
 import { eq, sql, inArray, ilike, or, and, isNotNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import type { Consolidacion, InsumoPrecio } from "./types";
+import type { Consolidacion, InsumoPrecio, TipoCompra } from "./types";
 
 // ─── Lectura ──────────────────────────────────────────────────────────────────
 
@@ -94,4 +94,67 @@ export async function buscarProveedoresAuto(q: string) {
       )
     )
   ).limit(8);
+}
+
+// ─── Adjudicación (Junta Adjudicadora) ───────────────────────────────────────
+
+export async function adjudicar(id: number, data: {
+  tipo_compra:      TipoCompra;
+  proveedor_id:     number | null;
+  proveedor_nit:    string;
+  proveedor_nombre: string;
+  numero_adjudicacion: string;
+  nog?:          string;
+  fecha_evento?: string;
+}) {
+  try {
+    const numAdj = data.numero_adjudicacion.trim();
+    if (!/^\d+$/.test(numAdj)) {
+      return { error: "El Número de Adjudicación solo puede contener dígitos" };
+    }
+    if (!data.proveedor_nombre.trim()) {
+      return { error: "Selecciona un proveedor" };
+    }
+    if (data.tipo_compra === "Compra Directa") {
+      if (!data.nog?.trim()) return { error: "El NOG es obligatorio para Compra Directa" };
+      if (!data.fecha_evento) return { error: "La fecha de finalización del evento es obligatoria" };
+    }
+
+    const [existente] = await db.select({ id: consolidaciones.id })
+      .from(consolidaciones).where(eq(consolidaciones.numero_adjudicacion, numAdj)).limit(1);
+    if (existente) return { error: `Ya existe una consolidación con el Número de Adjudicación ${numAdj}` };
+
+    await db.update(consolidaciones).set({
+      tipo_compra:         data.tipo_compra,
+      estado:               "Adjudicado",
+      proveedor_id:         data.proveedor_id,
+      proveedor_nit:        data.proveedor_nit,
+      proveedor_nombre:     data.proveedor_nombre,
+      numero_adjudicacion:  numAdj,
+      nog:                  data.tipo_compra === "Compra Directa" ? data.nog!.trim() : null,
+      fecha_evento:         data.tipo_compra === "Compra Directa" ? data.fecha_evento! : null,
+    }).where(eq(consolidaciones.id, id));
+
+    await db.update(siafCompras)
+      .set({ estado: "Adjudicado" })
+      .where(eq(siafCompras.consolidacion_id, id));
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al registrar la adjudicación" };
+  }
+}
+
+// ─── Anular Consolidación ─────────────────────────────────────────────────────
+
+export async function anularConsolidacion(id: number) {
+  try {
+    await db.update(siafCompras)
+      .set({ estado: "Borrador", consolidacion_id: null })
+      .where(eq(siafCompras.consolidacion_id, id));
+    await db.delete(consolidaciones).where(eq(consolidaciones.id, id));
+    return { ok: true };
+  } catch {
+    return { error: "Error al anular la consolidación" };
+  }
 }
