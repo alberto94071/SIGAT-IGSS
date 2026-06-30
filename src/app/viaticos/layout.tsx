@@ -3,15 +3,12 @@ import { redirect } from "next/navigation";
 import { ROL_LABELS, ROL_COLORS, type Rol } from "@/lib/permisos";
 import DashboardShell from "@/components/DashboardShell";
 
-const COMPRAS_NAV = [
-  { href: "/compras/catalogo",     label: "Catálogo",     icon: "BookOpen"     },
-  { href: "/compras/a01-siaf",     label: "A-01 SIAF",    icon: "FileText"     },
-  { href: "/compras/adjudicacion", label: "Adjudicación", icon: "Gavel"        },
-  { href: "/compras/ordenes",      label: "Órdenes",      icon: "ShoppingCart" },
-  { href: "/compras/archivo",      label: "Archivo",      icon: "Archive"      },
+const VIATICOS_NAV = [
+  { href: "/viaticos/entrega-formulario", label: "Entrega de Formulario", icon: "FileText" },
+  { href: "/viaticos/registro-comision",  label: "Registro de Comisión", icon: "MapPin"    },
 ] as const;
 
-export default async function ComprasLayout({ children }: { children: React.ReactNode }) {
+export default async function ViaticosLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   if (!session) redirect("/login");
 
@@ -19,12 +16,12 @@ export default async function ComprasLayout({ children }: { children: React.Reac
 
   return (
     <DashboardShell
-      navItems={COMPRAS_NAV}
+      navItems={VIATICOS_NAV}
       user={{ name: session.user.name ?? "", rol, email: session.user.email ?? "" }}
       userName={session.user.name ?? ""}
       rolLabel={ROL_LABELS[rol]}
       rolColor={ROL_COLORS[rol]}
-      moduleLabel="Compras"
+      moduleLabel="Pago de Viáticos"
     >
       {children}
     </DashboardShell>
