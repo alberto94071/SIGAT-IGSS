@@ -72,8 +72,6 @@ export default function OrdenesClient({ ordenes: init }: { ordenes: Orden[] }) {
                 <th className="px-4 py-3 text-left whitespace-nowrap">Fecha</th>
                 <th className="px-4 py-3 text-left">Proveedor</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Referencia / NOG</th>
-                <th className="px-4 py-3 text-right whitespace-nowrap">Costo unit.</th>
-                <th className="px-4 py-3 text-right whitespace-nowrap">Cantidad</th>
                 <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
                 <th className="px-4 py-3 text-center whitespace-nowrap">IVA</th>
                 <th className="px-4 py-3 text-center whitespace-nowrap">Estado</th>
@@ -97,12 +95,6 @@ export default function OrdenesClient({ ordenes: init }: { ordenes: Orden[] }) {
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
                     {o.nog ? <span className="font-mono">NOG: {o.nog}</span> : (o.referencia ?? "—")}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-gray-700 whitespace-nowrap">
-                    {o.costo_unitario != null ? Q(o.costo_unitario) : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-700 whitespace-nowrap">
-                    {o.total_cantidad != null ? o.total_cantidad.toLocaleString("es-GT") : "—"}
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
                     {o.total != null ? Q(o.total) : "—"}
