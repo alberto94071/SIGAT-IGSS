@@ -220,8 +220,21 @@ export const consolidaciones = pgTable("consolidaciones", {
   proveedor_id:     integer("proveedor_id"),
   proveedor_nit:    text("proveedor_nit"),
   proveedor_nombre: text("proveedor_nombre"),
+  pre_orden:           text("pre_orden"),
+  numero_adjudicacion: text("numero_adjudicacion"),
+  destino:             text("destino"),
+  regularizado:        boolean("regularizado"),
   creado_por:       integer("creado_por"),
   created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Precio por insumo de cada consolidación adjudicada ──────────────────────
+export const consolidacionPrecios = pgTable("consolidacion_precios", {
+  id:               serial("id").primaryKey(),
+  consolidacion_id: integer("consolidacion_id").notNull().references(() => consolidaciones.id, { onDelete: "cascade" }),
+  codigo_igss:      integer("codigo_igss"),
+  subproducto:      text("subproducto").notNull(),
+  precio_unitario:  doublePrecision("precio_unitario").notNull(),
 });
 
 // ─── Órdenes de Compra ────────────────────────────────────────────────────────
