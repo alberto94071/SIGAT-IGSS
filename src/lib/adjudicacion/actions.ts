@@ -245,3 +245,120 @@ export async function completarAdjudicacion(id: number, data: {
     return { error: "Error al completar la adjudicación" };
   }
 }
+
+// ─── Pantallas destino (SIAF-04 / Presupuesto General) ───────────────────────
+
+export async function getPendientesPorDestino(destino: "fondo_rotativo" | "presupuesto"): Promise<Consolidacion[]> {
+  const estadoBuscar = destino === "fondo_rotativo" ? "Enviado a Fondo Rotativo" : "Enviado a Presupuesto";
+
+  const cons = await db.select().from(consolidaciones)
+    .where(and(eq(consolidaciones.destino, destino), eq(consolidaciones.estado, estadoBuscar)))
+    .orderBy(sql`created_at DESC`);
+
+  if (cons.length === 0) return [];
+
+  const siaf = await db.select({
+    id: siafCompras.id, numero: siafCompras.numero, anio: siafCompras.anio,
+    fecha: siafCompras.fecha, estado: siafCompras.estado,
+    consolidacion_id: siafCompras.consolidacion_id,
+  }).from(siafCompras).where(inArray(siafCompras.consolidacion_id, cons.map(c => c.id)));
+
+  const siafIds = siaf.map(s => s.id);
+  const items = siafIds.length > 0
+    ? await db.select({
+        solicitud_id: siafComprasItems.solicitud_id,
+        codigo_igss:  siafComprasItems.codigo_igss,
+        subproducto:  siafComprasItems.subproducto,
+        nombre:       siafComprasItems.nombre,
+        unidad_medida: siafComprasItems.unidad_medida,
+        cantidad_solicitada: siafComprasItems.cantidad_solicitada,
+      }).from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds))
+    : [];
+
+  const precios = await db.select().from(consolidacionPrecios)
+    .where(inArray(consolidacionPrecios.consolidacion_id, cons.map(c => c.id)));
+
+  return cons.map(c => {
+    const cSiaf = siaf.filter(s => s.consolidacion_id === c.id);
+    const cSiafIds = new Set(cSiaf.map(s => s.id));
+    const cItems = items.filter(i => cSiafIds.has(i.solicitud_id));
+    const total_cantidad = cItems.reduce((sum, i) => sum + i.cantidad_solicitada, 0);
+
+    const grupos = new Map<string, InsumoPrecio>();
+    for (const item of cItems) {
+      const key = `${item.codigo_igss}::${item.subproducto}`;
+      const ex = grupos.get(key);
+      if (ex) { ex.cantidad += item.cantidad_solicitada; }
+      else {
+        grupos.set(key, {
+          codigo_igss: item.codigo_igss, subproducto: item.subproducto,
+          nombre: item.nombre, unidad_medida: item.unidad_medida,
+          cantidad: item.cantidad_solicitada, precio_unitario: null,
+        });
+      }
+    }
+    for (const p of precios.filter(p => p.consolidacion_id === c.id)) {
+      const g = grupos.get(`${p.codigo_igss}::${p.subproducto}`);
+      if (g) g.precio_unitario = p.precio_unitario;
+    }
+
+    return { ...c, siaf: cSiaf, total_cantidad, precios: Array.from(grupos.values()) };
+  });
+}
+
+export async function generarOrdenDesdeDestino(id: number) {
+  try {
+    const session = await auth();
+    const uid = session ? Number(session.user.id) : null;
+    const year = new Date().getFullYear();
+    const fecha = new Date().toISOString().slice(0, 10);
+
+    const [con] = await db.select().from(consolidaciones).where(eq(consolidaciones.id, id)).limit(1);
+    if (!con) return { error: "No se encontró la consolidación" };
+    const estadoOk = con.estado === "Enviado a Fondo Rotativo" || con.estado === "Enviado a Presupuesto";
+    if (!estadoOk) return { error: "La consolidación no está lista para generar la orden" };
+
+    const res = await db.execute(
+      sql`SELECT COALESCE(MAX(numero), 0) + 1 AS next FROM ordenes_compra WHERE anio = ${year}`
+    );
+    const numero = Number((res.rows[0] as any).next) || 1;
+
+    const siafConsolIds = (await db.select({ id: siafCompras.id })
+      .from(siafCompras).where(eq(siafCompras.consolidacion_id, id))).map(s => s.id);
+    let total_cantidad = 0;
+    if (siafConsolIds.length > 0) {
+      const its = await db.select({ c: siafComprasItems.cantidad_solicitada })
+        .from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafConsolIds));
+      total_cantidad = its.reduce((s, i) => s + i.c, 0);
+    }
+
+    await db.insert(ordenesCompra).values({
+      numero, anio: year, fecha,
+      consolidacion_id: id,
+      tipo_compra:      con.tipo_compra!,
+      nog:              con.nog ?? null,
+      referencia:       con.referencia ?? null,
+      proveedor_id:     con.proveedor_id ?? null,
+      proveedor_nit:    con.proveedor_nit ?? null,
+      proveedor_nombre: con.proveedor_nombre ?? null,
+      costo_unitario:   null,
+      total_cantidad,
+      exento_iva:       con.exento_iva,
+      total:            con.total ?? null,
+      estado:           "Activa",
+      creado_por:       uid,
+    });
+
+    await db.update(consolidaciones)
+      .set({ estado: "Orden de Compra Generada" })
+      .where(eq(consolidaciones.id, id));
+
+    await db.update(siafCompras)
+      .set({ estado: "Orden de Compra" })
+      .where(eq(siafCompras.consolidacion_id, id));
+
+    return { ok: true as const };
+  } catch {
+    return { error: "Error al generar la orden de compra" };
+  }
+}
