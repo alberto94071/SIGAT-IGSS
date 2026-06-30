@@ -79,7 +79,7 @@ const MODULES = [
     ring: "ring-indigo-200",
     textColor: "text-indigo-600",
     bgLight: "bg-indigo-50",
-    available: false,
+    available: true,
   },
   {
     id: "caja-chica",
@@ -127,7 +127,7 @@ const MODULES = [
     ring: "ring-red-200",
     textColor: "text-red-600",
     bgLight: "bg-red-50",
-    available: false,
+    available: true,
   },
   {
     id: "contrato-cotizaciones",
