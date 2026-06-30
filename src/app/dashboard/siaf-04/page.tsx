@@ -1,10 +1,7 @@
-import EnDesarrollo from "@/components/EnDesarrollo";
+import { getPendientesPorDestino } from "@/lib/adjudicacion/actions";
+import BandejaDestino from "@/components/adjudicacion/BandejaDestino";
 
-export default function Siaf04Page() {
-  return (
-    <EnDesarrollo
-      title="SIAF-04"
-      description="Próximamente podrás emitir y consultar formularios SIAF-04 del Fondo Rotativo."
-    />
-  );
+export default async function Siaf04Page() {
+  const consolidaciones = await getPendientesPorDestino("fondo_rotativo");
+  return <BandejaDestino consolidaciones={consolidaciones} titulo="Fondo Rotativo — SIAF-04" />;
 }

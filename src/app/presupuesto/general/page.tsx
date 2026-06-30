@@ -1,10 +1,7 @@
-import EnDesarrollo from "@/components/EnDesarrollo";
+import { getPendientesPorDestino } from "@/lib/adjudicacion/actions";
+import BandejaDestino from "@/components/adjudicacion/BandejaDestino";
 
-export default function PresupuestoGeneralPage() {
-  return (
-    <EnDesarrollo
-      title="General"
-      description="Próximamente podrás consultar el presupuesto general asignado a la unidad."
-    />
-  );
+export default async function PresupuestoGeneralPage() {
+  const consolidaciones = await getPendientesPorDestino("presupuesto");
+  return <BandejaDestino consolidaciones={consolidaciones} titulo="Presupuesto — General" />;
 }
