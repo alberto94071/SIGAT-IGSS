@@ -5,6 +5,7 @@ import { crearInsumoCompras, editarInsumoCompras, toggleInsumoCompras, buscarCat
 
 type Insumo = {
   id: number; codigo_igss: number | null; codigo_ppr: string | null;
+  codigo_rango: string | null;
   nombre: string; caracteristicas: string | null; presentacion: string | null;
   unidad_medida: string | null; subproducto: string; cantidad: number | null;
   activo: boolean;
@@ -44,6 +45,7 @@ export default function CatalogoComprasClient({ insumos: init, canEdit }: Props)
       const ok = !query ||
         i.nombre.toLowerCase().includes(query.toLowerCase()) ||
         (i.codigo_ppr ?? "").includes(query) ||
+        (i.codigo_rango ?? "").includes(query) ||
         String(i.codigo_igss ?? "").includes(query) ||
         i.subproducto.includes(query);
       return ok && (!soloActivos || i.activo);
@@ -168,6 +170,7 @@ export default function CatalogoComprasClient({ insumos: init, canEdit }: Props)
             <thead>
               <tr className="table-header">
                 <th className="px-4 py-3 text-left whitespace-nowrap">Cód. IGSS</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">Cód. Rango</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Código PPR</th>
                 <th className="px-4 py-3 text-left">Nombre / Características</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Presentación</th>
@@ -182,6 +185,7 @@ export default function CatalogoComprasClient({ insumos: init, canEdit }: Props)
               {filtered.map(i => (
                 <tr key={i.id} className={`hover:bg-gray-50 transition-colors ${!i.activo ? "opacity-50" : ""}`}>
                   <td className="px-4 py-3 font-mono text-xs text-gray-600 whitespace-nowrap">{i.codigo_igss ?? "—"}</td>
+                  <td className="px-4 py-3 font-mono text-xs font-semibold text-blue-700 whitespace-nowrap">{i.codigo_rango ?? "—"}</td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-600 whitespace-nowrap">{i.codigo_ppr ?? "—"}</td>
                   <td className="px-4 py-3">
                     <p className="font-medium text-gray-900">{i.nombre}</p>
