@@ -315,6 +315,26 @@ export const baseDatosCentral = pgTable("base_datos_central", {
   updated_at:      text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
+// ─── Presupuesto por renglón ──────────────────────────────────────────────────
+export const presupuestoRenglones = pgTable("presupuesto_renglones", {
+  id:                    serial("id").primaryKey(),
+  ejercicio_fiscal:      integer("ejercicio_fiscal").notNull().default(2026),
+  pg_spg_py_act_ob:      text("pg_spg_py_act_ob"),
+  subproducto:           text("subproducto"),
+  renglon:               integer("renglon").notNull(),
+  nombre:                text("nombre").notNull(),
+  vigente:               doublePrecision("vigente").default(0),
+  modificado:            doublePrecision("modificado").default(0),
+  presupuesto:           doublePrecision("presupuesto").default(0),
+  pre_compromiso:        doublePrecision("pre_compromiso").default(0),
+  compromiso:            doublePrecision("compromiso").default(0),
+  devengado:             doublePrecision("devengado").default(0),
+  saldo_presupuestario:  doublePrecision("saldo_presupuestario").default(0),
+  saldo_disponible:      doublePrecision("saldo_disponible").default(0),
+  created_at:            text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+  updated_at:            text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
 // ─── Proveedores ──────────────────────────────────────────────────────────────
 export const proveedores = pgTable("proveedores", {
   id:          serial("id").primaryKey(),
