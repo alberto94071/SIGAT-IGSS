@@ -1,17 +1,25 @@
 "use server";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { baseDatosCentral, catalogoCompras, presupuestoRenglones } from "@/lib/schema";
 import { sql } from "drizzle-orm";
 import pacData from "../../../../../scripts/pac-data.json";
 
+// Token de un solo uso para importación automatizada (se eliminará tras la carga)
+const IMPORT_TOKEN = process.env.PAC_IMPORT_TOKEN;
+
 // POST /api/admin/import-pac
-// Solo superadmin. Ejecutar una vez para cargar el PAC 2026 y presupuesto.
-export async function POST() {
-  const session = await auth();
-  if (!session || (session.user as any).rol !== "superadmin") {
-    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+// Solo superadmin (sesión) o token temporal PAC_IMPORT_TOKEN.
+export async function POST(req: NextRequest) {
+  const tokenHeader = req.headers.get("x-import-token");
+  const tokenOk = IMPORT_TOKEN && tokenHeader === IMPORT_TOKEN;
+
+  if (!tokenOk) {
+    const session = await auth();
+    if (!session || (session.user as any).rol !== "superadmin") {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    }
   }
 
   const results: Record<string, number> = {};
