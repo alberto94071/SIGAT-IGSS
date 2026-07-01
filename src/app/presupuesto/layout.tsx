@@ -4,10 +4,11 @@ import { ROL_LABELS, ROL_COLORS, type Rol } from "@/lib/permisos";
 import DashboardShell from "@/components/DashboardShell";
 
 const PRESUPUESTO_NAV = [
-  { href: "/presupuesto/general",                label: "General",                            icon: "Calculator" },
-  { href: "/presupuesto/compromiso-devengado",   label: "Compromiso y Devengado",             icon: "FileCheck"  },
-  { href: "/presupuesto/programacion",           label: "Programación y Reprogramación",       icon: "BarChart3"  },
-  { href: "/presupuesto/modificaciones",         label: "Modificaciones",                      icon: "FileSignature" },
+  { href: "/presupuesto/general",                label: "General",                            icon: "Calculator"    },
+  { href: "/presupuesto/compromiso-devengado",   label: "Compromiso y Devengado",             icon: "FileCheck"     },
+  { href: "/presupuesto/programacion",           label: "Programación y Reprogramación",      icon: "BarChart3"     },
+  { href: "/presupuesto/modificaciones",         label: "Modificaciones",                     icon: "FileSignature" },
+  { href: "/presupuesto/catalogo-pac",           label: "Catálogo PAC",                       icon: "BookOpen"      },
 ] as const;
 
 export default async function PresupuestoLayout({ children }: { children: React.ReactNode }) {
