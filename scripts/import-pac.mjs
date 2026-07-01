@@ -28,6 +28,7 @@ const catalogoCompras = pgTable("catalogo_compras", {
   id:              serial("id").primaryKey(),
   codigo_igss:     integer("codigo_igss"),
   codigo_ppr:      text("codigo_ppr"),
+  codigo_rango:    text("codigo_rango"),
   nombre:          text("nombre").notNull(),
   caracteristicas: text("caracteristicas"),
   presentacion:    text("presentacion"),
@@ -72,7 +73,13 @@ async function main() {
   await neonSql`SELECT 1`;
   console.log("Conexión OK\n");
 
-  // ── 1. Crear tabla si no existe ──────────────────────────────────────────
+  // ── 1. Agregar columna codigo_rango si no existe ──────────────────────────
+  console.log("Verificando columnas codigo_rango...");
+  await db.execute(drizzleSql`ALTER TABLE base_datos_central ADD COLUMN IF NOT EXISTS codigo_rango TEXT`);
+  await db.execute(drizzleSql`ALTER TABLE catalogo_compras   ADD COLUMN IF NOT EXISTS codigo_rango TEXT`);
+  console.log("Columnas OK\n");
+
+  // ── 2. Crear tabla presupuesto_renglones si no existe ─────────────────────
   console.log("Verificando tabla presupuesto_renglones...");
   await db.execute(drizzleSql`
     CREATE TABLE IF NOT EXISTS presupuesto_renglones (
@@ -96,7 +103,7 @@ async function main() {
   `);
   console.log("Tabla OK\n");
 
-  // ── 2. Presupuesto renglones ──────────────────────────────────────────────
+  // ── 3. Presupuesto renglones ──────────────────────────────────────────────
   console.log("Importando presupuesto_renglones...");
   await db.execute(drizzleSql`TRUNCATE presupuesto_renglones RESTART IDENTITY`);
   await batch(pacData.presupuesto, 50, async (chunk) => {
@@ -115,7 +122,7 @@ async function main() {
   });
   console.log(`  ✓ ${pacData.presupuesto.length} renglones insertados\n`);
 
-  // ── 3. Base de datos central ──────────────────────────────────────────────
+  // ── 4. Base de datos central ──────────────────────────────────────────────
   console.log("Importando base_datos_central...");
   const existing = await db.execute(drizzleSql`SELECT codigo_ppr FROM base_datos_central WHERE codigo_ppr IS NOT NULL`);
   const existingPpr = new Set(existing.rows.map((r) => r.codigo_ppr));
@@ -127,6 +134,7 @@ async function main() {
     await db.insert(baseDatosCentral).values(
       chunk.map((r) => ({
         codigo_ppr:      r.ppr,
+        codigo_rango:    r.rango || null,
         nombre:          r.nombre,
         caracteristicas: r.caract || null,
         presentacion:    r.present || null,
@@ -138,7 +146,7 @@ async function main() {
   });
   console.log(`  ✓ ${bdcCount} insumos insertados en base_datos_central\n`);
 
-  // ── 4. Catálogo de compras ────────────────────────────────────────────────
+  // ── 5. Catálogo de compras ────────────────────────────────────────────────
   console.log("Importando catalogo_compras...");
   await db.execute(drizzleSql`DELETE FROM catalogo_compras WHERE codigo_igss IS NULL AND codigo_ppr IS NOT NULL`);
   let ccCount = 0;
@@ -146,6 +154,7 @@ async function main() {
     await db.insert(catalogoCompras).values(
       chunk.map((r) => ({
         codigo_ppr:      String(r.ppr),
+        codigo_rango:    r.rango || null,
         nombre:          r.nombre,
         caracteristicas: r.caract || null,
         presentacion:    r.present || null,

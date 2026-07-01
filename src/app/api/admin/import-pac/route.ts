@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
     await db.insert(baseDatosCentral).values(
       chunk.map((r) => ({
         codigo_ppr:      r.ppr,
+        codigo_rango:    (r as any).rango || null,
         nombre:          r.nombre,
         caracteristicas: r.caract || null,
         presentacion:    r.present || null,
@@ -76,6 +77,7 @@ export async function POST(req: NextRequest) {
     const chunk = pacData.cc.slice(i, i + BATCH);
     const rows = chunk.map((r) => ({
       codigo_ppr:      String(r.ppr),
+      codigo_rango:    (r as any).rango || null,
       nombre:          r.nombre,
       caracteristicas: r.caract || null,
       presentacion:    r.present || null,
