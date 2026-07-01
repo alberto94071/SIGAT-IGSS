@@ -30,6 +30,7 @@ export async function buscarCatalogoGeneral(q: string) {
           ilike(baseDatosCentral.caracteristicas, `%${q}%`),
           sql`${baseDatosCentral.codigo_ppr}::text ILIKE ${'%' + q + '%'}`,
           sql`${baseDatosCentral.codigo_igss}::text ILIKE ${'%' + q + '%'}`,
+          ilike(baseDatosCentral.codigo_rango, `%${q}%`),
         )
       )
       .limit(10);
