@@ -79,6 +79,7 @@ export const NAV_ITEMS = [
   { href: "/dashboard/caja-chica",   label: "Caja Chica",     icon: "Wallet",          permiso: "caja_chica"  },
   { href: "/dashboard/liquidacion",  label: "Liquidación",    icon: "FileCheck",       permiso: "liquidacion" },
   { href: "/dashboard/catalogos",    label: "Catálogos",      icon: "BookOpen",        permiso: "catalogos"   },
+  { href: "/dashboard/presupuesto",   label: "Presupuesto",    icon: "TrendingUp",      permiso: "reportes"    },
   { href: "/dashboard/reportes",     label: "Reportes",       icon: "BarChart3",       permiso: "reportes"    },
   { href: "/dashboard/documentos",   label: "Documentos",     icon: "FileText",        permiso: "documentos"  },
   { href: "/dashboard/usuarios",     label: "Usuarios",       icon: "Users",           permiso: "usuarios"    },

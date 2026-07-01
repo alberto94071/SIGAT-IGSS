@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Package, CreditCard, Landmark, Wallet,
   FileCheck, BookOpen, BarChart3, FileText, Users, Settings, LogOut,
   ChevronLeft, Gavel, ShoppingCart, MapPin, Receipt, Calculator,
-  Archive, Library, FileSignature, Hash, LayoutGrid,
+  Archive, Library, FileSignature, Hash, LayoutGrid, TrendingUp,
 } from "lucide-react";
 import { type Rol, ROL_LABELS } from "@/lib/permisos";
 import clsx from "clsx";
@@ -33,6 +33,7 @@ const ICONS: Record<string, React.ReactNode> = {
   FileSignature:   <FileSignature   className="w-4 h-4" />,
   Hash:            <Hash            className="w-4 h-4" />,
   LayoutGrid:      <LayoutGrid      className="w-4 h-4" />,
+  TrendingUp:      <TrendingUp      className="w-4 h-4" />,
 };
 
 interface Props {
