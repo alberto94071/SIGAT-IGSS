@@ -22,12 +22,14 @@ export interface Permisos {
   mod_viaticos:              boolean;
   mod_contrato_cotizaciones: boolean;
   mod_base_datos:            boolean;
+  // Administración (usuarios y accesos) — solo el superadmin lo trae por defecto
+  mod_administracion:        boolean;
 }
 
 export type Modulo =
   | "mod_compras" | "mod_presupuesto" | "mod_junta_adjudicadora" | "mod_almacen"
   | "mod_caja_chica" | "mod_libros" | "mod_viaticos"
-  | "mod_contrato_cotizaciones" | "mod_base_datos";
+  | "mod_contrato_cotizaciones" | "mod_base_datos" | "mod_administracion";
 
 const MODULOS_DEFAULT = {
   mod_compras: true, mod_presupuesto: true, mod_junta_adjudicadora: true,
@@ -41,25 +43,25 @@ export const PERMISOS_DEFAULT: Record<Rol, Permisos> = {
     servicios: true, pagos: true, banco: true, caja_chica: true,
     liquidacion: true, catalogos: true, reportes: true,
     documentos: true, usuarios: true, configuracion: true,
-    ...MODULOS_DEFAULT,
+    ...MODULOS_DEFAULT, mod_administracion: true,
   },
   admin: {
     servicios: true, pagos: true, banco: true, caja_chica: true,
     liquidacion: true, catalogos: true, reportes: true,
     documentos: true, usuarios: false, configuracion: false,
-    ...MODULOS_DEFAULT,
+    ...MODULOS_DEFAULT, mod_administracion: false,
   },
   operador: {
     servicios: true, pagos: true, banco: true, caja_chica: true,
     liquidacion: false, catalogos: false, reportes: true,
     documentos: true, usuarios: false, configuracion: false,
-    ...MODULOS_DEFAULT,
+    ...MODULOS_DEFAULT, mod_administracion: false,
   },
   consulta: {
     servicios: false, pagos: false, banco: false, caja_chica: false,
     liquidacion: false, catalogos: false, reportes: true,
     documentos: false, usuarios: false, configuracion: false,
-    ...MODULOS_DEFAULT,
+    ...MODULOS_DEFAULT, mod_administracion: false,
   },
 };
 
@@ -108,6 +110,5 @@ export const NAV_ITEMS = [
   { href: "/dashboard/presupuesto",   label: "Presupuesto",    icon: "TrendingUp",      permiso: "reportes"    },
   { href: "/dashboard/reportes",     label: "Reportes",       icon: "BarChart3",       permiso: "reportes"    },
   { href: "/dashboard/documentos",   label: "Documentos",     icon: "FileText",        permiso: "documentos"  },
-  { href: "/dashboard/usuarios",     label: "Usuarios",       icon: "Users",           permiso: "usuarios"    },
   { href: "/dashboard/configuracion",label: "Configuración",  icon: "Settings",        permiso: "configuracion"},
 ] as const;

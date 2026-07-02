@@ -28,7 +28,6 @@ const MODULOS: { key: keyof Permisos; label: string }[] = [
   { key: "catalogos",     label: "Catálogos"      },
   { key: "reportes",      label: "Reportes"       },
   { key: "documentos",    label: "Documentos"     },
-  { key: "usuarios",      label: "Usuarios"       },
   { key: "configuracion", label: "Configuración"  },
 ];
 
@@ -42,6 +41,7 @@ const MODULOS_LAUNCHER: { key: keyof Permisos; label: string }[] = [
   { key: "mod_viaticos",              label: "Pago de Viáticos"       },
   { key: "mod_contrato_cotizaciones", label: "Contrato y Cotizaciones"},
   { key: "mod_base_datos",            label: "Base de Datos Central"  },
+  { key: "mod_administracion",        label: "Administración"         },
 ];
 
 interface Props {

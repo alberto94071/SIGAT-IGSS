@@ -4,7 +4,7 @@ import Link from "next/link";
 import {
   RotateCcw, MapPin, Bus, ArrowRight, Construction,
   ShieldCheck, ShoppingCart, Database, Calculator, Wallet,
-  Archive, Library, Gavel, FileSignature
+  Archive, Library, Gavel, FileSignature, UserCog
 } from "lucide-react";
 import { type Modulo, type Rol } from "@/lib/permisos";
 import { getPermisosFrescos } from "@/lib/modulo-access";
@@ -153,6 +153,19 @@ const MODULES = [
     bgLight: "bg-cyan-50",
     available: true,
     permiso: "mod_contrato_cotizaciones" as Modulo | null,
+  },
+  {
+    id: "administracion",
+    title: "Administración",
+    description: "Creación de usuarios y control de acceso a cada módulo del sistema.",
+    href: "/administracion",
+    icon: UserCog,
+    color: "bg-rose-500",
+    ring: "ring-rose-200",
+    textColor: "text-rose-600",
+    bgLight: "bg-rose-50",
+    available: true,
+    permiso: "mod_administracion" as Modulo | null,
   },
 ];
 

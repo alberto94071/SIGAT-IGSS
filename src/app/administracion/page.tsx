@@ -1,17 +1,10 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { usuarios } from "@/lib/schema";
-import { type Rol } from "@/lib/permisos";
-import { getPermisosFrescos } from "@/lib/modulo-access";
-import { redirect } from "next/navigation";
+import { requireModuloAccess } from "@/lib/modulo-access";
 import UsuariosClient from "./UsuariosClient";
 
-export default async function UsuariosPage() {
-  const session = await auth();
-  const rol     = session!.user.rol as Rol;
-  const permisos = await getPermisosFrescos(Number(session!.user.id), rol);
-
-  if (!permisos.usuarios) redirect("/dashboard");
+export default async function AdministracionPage() {
+  const { session, rol } = await requireModuloAccess("mod_administracion");
 
   const lista = await db
     .select({
@@ -33,7 +26,7 @@ export default async function UsuariosPage() {
     <UsuariosClient
       usuarios={lista as any}
       isSuperAdmin={isSuperAdmin}
-      currentUserId={Number(session!.user.id)}
+      currentUserId={Number(session.user.id)}
     />
   );
 }
