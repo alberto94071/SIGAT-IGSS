@@ -20,21 +20,24 @@ export interface Permisos {
   mod_caja_chica:            boolean;
   mod_libros:                boolean;
   mod_viaticos:              boolean;
+  mod_pasajes:               boolean;
   mod_contrato_cotizaciones: boolean;
   mod_base_datos:            boolean;
+  mod_fondo_rotativo:        boolean;
   // Administración (usuarios y accesos) — solo el superadmin lo trae por defecto
   mod_administracion:        boolean;
 }
 
 export type Modulo =
   | "mod_compras" | "mod_presupuesto" | "mod_junta_adjudicadora" | "mod_almacen"
-  | "mod_caja_chica" | "mod_libros" | "mod_viaticos"
-  | "mod_contrato_cotizaciones" | "mod_base_datos" | "mod_administracion";
+  | "mod_caja_chica" | "mod_libros" | "mod_viaticos" | "mod_pasajes"
+  | "mod_contrato_cotizaciones" | "mod_base_datos" | "mod_fondo_rotativo" | "mod_administracion";
 
 const MODULOS_DEFAULT = {
   mod_compras: true, mod_presupuesto: true, mod_junta_adjudicadora: true,
   mod_almacen: true, mod_caja_chica: true, mod_libros: true,
-  mod_viaticos: true, mod_contrato_cotizaciones: true, mod_base_datos: true,
+  mod_viaticos: true, mod_pasajes: true, mod_contrato_cotizaciones: true,
+  mod_base_datos: true, mod_fondo_rotativo: true,
 };
 
 // Permisos por defecto según el rol

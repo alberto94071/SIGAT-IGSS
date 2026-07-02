@@ -1,16 +1,10 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import { NAV_ITEMS, ROL_LABELS, ROL_COLORS, type Rol } from "@/lib/permisos";
-import { getPermisosFrescos } from "@/lib/modulo-access";
+import { NAV_ITEMS, ROL_LABELS, ROL_COLORS } from "@/lib/permisos";
+import { requireModuloAccess } from "@/lib/modulo-access";
 import DashboardShell from "@/components/DashboardShell";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
-  if (!session) redirect("/login");
-
-  const rol = session.user.rol as Rol;
-  // Se leen frescos de la base (no del JWT) para que un cambio del superadmin aplique al instante.
-  const permisos = await getPermisosFrescos(Number(session.user.id), rol);
+  // Fondo Rotativo es un módulo más — su acceso también se controla por permiso, no es especial.
+  const { session, rol, permisos } = await requireModuloAccess("mod_fondo_rotativo");
 
   const navItems = NAV_ITEMS.filter(item =>
     item.permiso === null || permisos[item.permiso as keyof typeof permisos]

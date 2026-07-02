@@ -35,7 +35,7 @@ const MODULES = [
     textColor: "text-orange-600",
     bgLight: "bg-orange-50",
     available: true,
-    permiso: null,
+    permiso: "mod_fondo_rotativo" as Modulo | null,
   },
   {
     id: "base-datos",
@@ -74,7 +74,7 @@ const MODULES = [
     textColor: "text-purple-600",
     bgLight: "bg-purple-50",
     available: false,
-    permiso: null,
+    permiso: "mod_pasajes" as Modulo | null,
   },
   {
     id: "presupuesto",

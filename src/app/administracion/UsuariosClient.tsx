@@ -32,6 +32,7 @@ const MODULOS: { key: keyof Permisos; label: string }[] = [
 ];
 
 const MODULOS_LAUNCHER: { key: keyof Permisos; label: string }[] = [
+  { key: "mod_fondo_rotativo",        label: "Fondo Rotativo"         },
   { key: "mod_compras",               label: "Compras"                },
   { key: "mod_presupuesto",           label: "Presupuesto"            },
   { key: "mod_junta_adjudicadora",    label: "Junta Adjudicadora"     },
@@ -39,6 +40,7 @@ const MODULOS_LAUNCHER: { key: keyof Permisos; label: string }[] = [
   { key: "mod_caja_chica",            label: "Caja Chica (launcher)"  },
   { key: "mod_libros",                label: "Libros"                 },
   { key: "mod_viaticos",              label: "Pago de Viáticos"       },
+  { key: "mod_pasajes",               label: "Pago de Pasajes"        },
   { key: "mod_contrato_cotizaciones", label: "Contrato y Cotizaciones"},
   { key: "mod_base_datos",            label: "Base de Datos Central"  },
   { key: "mod_administracion",        label: "Administración"         },

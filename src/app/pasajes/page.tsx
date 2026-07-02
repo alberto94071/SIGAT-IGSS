@@ -1,11 +1,9 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Bus, ArrowLeft, Construction } from "lucide-react";
+import { requireModuloAccess } from "@/lib/modulo-access";
 
 export default async function PasajesPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
+  await requireModuloAccess("mod_pasajes");
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-6">
