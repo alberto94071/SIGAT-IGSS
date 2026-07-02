@@ -192,15 +192,16 @@ export default function ImprimirClient({
           overflow: "hidden",
           display: "flex", flexDirection: "column",
         }}>
-          {/* Encabezado con divisores verticales entre columnas */}
+          {/* Encabezado con divisores verticales entre columnas — las celdas ocupan
+              toda la altura del encabezado para que la línea sea continua con la del cuerpo */}
           <div style={{
             display: "flex", borderBottom: B, height: HEADER_H,
-            alignItems: "center", flexShrink: 0,
+            flexShrink: 0,
             fontWeight: "bold", fontSize: "9pt", fontFamily: FONT, color: C,
           }}>
-            <div style={{ width: W_COD, textAlign: "center", flexShrink: 0, borderRight: B }}>Código</div>
-            <div style={{ flex: 1, textAlign: "center" }}>Descripción</div>
-            <div style={{ width: W_CANT, textAlign: "center", flexShrink: 0, borderLeft: B }}>Cantidad</div>
+            <div style={{ width: W_COD, flexShrink: 0, borderRight: B, display: "flex", alignItems: "center", justifyContent: "center" }}>Código</div>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>Descripción</div>
+            <div style={{ width: W_CANT, flexShrink: 0, borderLeft: B, display: "flex", alignItems: "center", justifyContent: "center" }}>Cantidad</div>
           </div>
 
           {/* Cuerpo con líneas verticales absolutas */}
