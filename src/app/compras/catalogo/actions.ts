@@ -40,19 +40,56 @@ export async function buscarCatalogoGeneral(q: string) {
   }
 }
 
-export async function crearInsumoCompras(data: any) {
+type InsumoComprasInput = {
+  nombre: string;
+  subproducto: string;
+  cantidad: number;
+  unidad_medida?: string | null;
+  codigo_igss?: string | null;
+  codigo_ppr?: string | null;
+  renglon?: number | null;
+  ug?: number | null;
+  cc?: number | null;
+  estructura_programatica?: string | null;
+  codigo_nombre_ppr?: number | null;
+  nombre_ppr?: string | null;
+  codigo_presentacion_ppr?: number | null;
+  precio_estimado?: number | null;
+};
+
+function toValues(data: InsumoComprasInput) {
+  const precio = data.precio_estimado ?? null;
+  return {
+    nombre:                  data.nombre,
+    subproducto:             data.subproducto,
+    cantidad:                data.cantidad,
+    unidad_medida:           data.unidad_medida || null,
+    codigo_igss:             data.codigo_igss || null,
+    codigo_ppr:              data.codigo_ppr || null,
+    renglon:                 data.renglon ?? null,
+    ug:                      data.ug ?? null,
+    cc:                      data.cc ?? null,
+    estructura_programatica: data.estructura_programatica || null,
+    codigo_nombre_ppr:       data.codigo_nombre_ppr ?? null,
+    nombre_ppr:              data.nombre_ppr || null,
+    codigo_presentacion_ppr: data.codigo_presentacion_ppr ?? null,
+    precio_estimado:         precio,
+    monto:                   precio != null ? precio * data.cantidad : null,
+  };
+}
+
+export async function crearInsumoCompras(data: InsumoComprasInput): Promise<
+  { insumo: typeof catalogoCompras.$inferSelect } | { error: string }
+> {
   try {
     await checkAuth();
+    if (!data.nombre.trim()) return { error: "El nombre es obligatorio" };
+    if (!data.subproducto.trim()) return { error: "El subproducto es obligatorio" };
+    if (!(data.cantidad > 0)) return { error: "Ingresa una cantidad válida" };
+
     const [row] = await db.insert(catalogoCompras).values({
-      codigo_igss:     data.codigo_igss || null,
-      codigo_ppr:      data.codigo_ppr || null,
-      nombre:          data.nombre,
-      caracteristicas: data.caracteristicas || null,
-      presentacion:    data.presentacion || null,
-      unidad_medida:   data.unidad_medida || null,
-      subproducto:     data.subproducto,
-      cantidad:        data.cantidad ? parseFloat(data.cantidad) : null,
-      activo:          true,
+      ...toValues(data),
+      activo: true,
     }).returning();
     return { insumo: row };
   } catch {
@@ -60,26 +97,21 @@ export async function crearInsumoCompras(data: any) {
   }
 }
 
-export async function editarInsumoCompras(data: any) {
+export async function editarInsumoCompras(id: number, data: InsumoComprasInput): Promise<{ ok: true } | { error: string }> {
   try {
     await checkAuth();
-    await db.update(catalogoCompras).set({
-      codigo_igss:     data.codigo_igss || null,
-      codigo_ppr:      data.codigo_ppr || null,
-      nombre:          data.nombre,
-      caracteristicas: data.caracteristicas || null,
-      presentacion:    data.presentacion || null,
-      unidad_medida:   data.unidad_medida || null,
-      subproducto:     data.subproducto,
-      cantidad:        data.cantidad ? parseFloat(data.cantidad) : null,
-    }).where(eq(catalogoCompras.id, data.id));
+    if (!data.nombre.trim()) return { error: "El nombre es obligatorio" };
+    if (!data.subproducto.trim()) return { error: "El subproducto es obligatorio" };
+    if (!(data.cantidad > 0)) return { error: "Ingresa una cantidad válida" };
+
+    await db.update(catalogoCompras).set(toValues(data)).where(eq(catalogoCompras.id, id));
     return { ok: true };
   } catch {
     return { error: "Error al editar" };
   }
 }
 
-export async function toggleInsumoCompras(id: number, activo: boolean) {
+export async function toggleInsumoCompras(id: number, activo: boolean): Promise<{ ok: true } | { error: string }> {
   try {
     await checkAuth();
     await db.update(catalogoCompras).set({ activo }).where(eq(catalogoCompras.id, id));
