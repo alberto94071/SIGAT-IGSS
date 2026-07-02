@@ -1,5 +1,5 @@
 import {
-  pgTable, serial, integer, text, doublePrecision, boolean
+  pgTable, serial, integer, text, doublePrecision, boolean, type AnyPgColumn
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -237,6 +237,14 @@ export const consolidaciones = pgTable("consolidaciones", {
   regularizado:        boolean("regularizado"),
   creado_por:       integer("creado_por"),
   created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+  // ── Rediseño Compras-inicia-adjudicación ──
+  motivo_rechazo:       text("motivo_rechazo"),
+  rechazado_por:        integer("rechazado_por").references(() => usuarios.id),
+  rechazado_en:         text("rechazado_en"),
+  enviado_a_junta_por:  integer("enviado_a_junta_por").references(() => usuarios.id),
+  enviado_a_junta_en:   text("enviado_a_junta_en"),
+  oferente_ganador_id:  integer("oferente_ganador_id").references((): AnyPgColumn => oferentes.id),
+  numero_cheque:        text("numero_cheque"),
 });
 
 // ─── Precio por insumo de cada consolidación adjudicada ──────────────────────
@@ -246,6 +254,48 @@ export const consolidacionPrecios = pgTable("consolidacion_precios", {
   codigo_igss:      text("codigo_igss"),
   subproducto:      text("subproducto").notNull(),
   precio_unitario:  doublePrecision("precio_unitario").notNull(),
+});
+
+// ─── Cotizaciones de servicio recibidas con antelación ───────────────────────
+export const cotizacionesServicio = pgTable("cotizaciones_servicio", {
+  id:                        serial("id").primaryKey(),
+  fecha:                     text("fecha").notNull(),
+  proveedor_id:              integer("proveedor_id"),
+  proveedor_nit:             text("proveedor_nit"),
+  proveedor_nombre:          text("proveedor_nombre").notNull(),
+  servicio:                  text("servicio").notNull(),
+  costo:                     doublePrecision("costo").notNull(),
+  exento_iva:                boolean("exento_iva").notNull().default(false),
+  usado_en_consolidacion_id: integer("usado_en_consolidacion_id"),
+  usado:                     boolean("usado").notNull().default(false),
+  creado_por:                integer("creado_por").references(() => usuarios.id),
+  created_at:                text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Oferentes (comparación de proveedores por consolidación, hasta 10) ──────
+export const oferentes = pgTable("oferentes", {
+  id:                     serial("id").primaryKey(),
+  consolidacion_id:       integer("consolidacion_id").notNull()
+                            .references(() => consolidaciones.id, { onDelete: "cascade" }),
+  proveedor_id:           integer("proveedor_id"),
+  cotizacion_servicio_id: integer("cotizacion_servicio_id").references(() => cotizacionesServicio.id),
+  nit:                    text("nit").notNull(),
+  nombre:                 text("nombre").notNull(),
+  costo:                  doublePrecision("costo").notNull(),
+  exento_iva:             boolean("exento_iva").notNull().default(false),
+  orden:                  integer("orden").notNull().default(0),
+  creado_por:             integer("creado_por").references(() => usuarios.id),
+  created_at:             text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Acta de Negociación — plantilla fija por año ────────────────────────────
+export const actasNegociacion = pgTable("actas_negociacion", {
+  id:              serial("id").primaryKey(),
+  anio:            integer("anio").notNull().unique(),
+  contenido:       text("contenido"),
+  archivo_url:     text("archivo_url"),
+  actualizado_por: integer("actualizado_por").references(() => usuarios.id),
+  updated_at:      text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 // ─── Órdenes de Compra ────────────────────────────────────────────────────────

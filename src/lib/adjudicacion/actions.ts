@@ -2,12 +2,12 @@
 import { db } from "@/lib/db";
 import {
   consolidaciones, consolidacionPrecios, siafCompras, siafComprasItems,
-  ordenesCompra, proveedores,
+  ordenesCompra, proveedores, oferentes, cotizacionesServicio, usuarios,
 } from "@/lib/schema";
-import { eq, sql, inArray, ilike, or, and, isNotNull, ne } from "drizzle-orm";
+import { eq, sql, inArray, ilike, or, and, isNotNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import type { Consolidacion, InsumoPrecio, TipoCompra } from "./types";
-import { LIMITE_POR_TIPO, REFERENCIA_LABEL } from "./types";
+import type { Consolidacion, InsumoPrecio, Oferente, TipoCompra } from "./types";
+import { LIMITE_POR_TIPO } from "./types";
 
 // ─── Lectura ──────────────────────────────────────────────────────────────────
 
@@ -43,6 +43,20 @@ export async function getConsolidacionesConDetalles(): Promise<Consolidacion[]> 
         .where(inArray(consolidacionPrecios.consolidacion_id, cons.map(c => c.id)))
     : [];
 
+  const ofertas = cons.length > 0
+    ? await db.select().from(oferentes)
+        .where(inArray(oferentes.consolidacion_id, cons.map(c => c.id)))
+        .orderBy(oferentes.orden, oferentes.id)
+    : [];
+
+  const rechazadoPorIds = [...new Set(cons.map(c => c.rechazado_por).filter((v): v is number => v != null))];
+  const usuariosMap = new Map<number, string>();
+  if (rechazadoPorIds.length > 0) {
+    const us = await db.select({ id: usuarios.id, nombre: usuarios.nombre })
+      .from(usuarios).where(inArray(usuarios.id, rechazadoPorIds));
+    for (const u of us) usuariosMap.set(u.id, u.nombre);
+  }
+
   return cons.map(c => {
     const cSiaf = siaf.filter(s => s.consolidacion_id === c.id);
     const cSiafIds = new Set(cSiaf.map(s => s.id));
@@ -71,7 +85,14 @@ export async function getConsolidacionesConDetalles(): Promise<Consolidacion[]> 
       if (grupo) grupo.precio_unitario = p.precio_unitario;
     }
 
-    return { ...c, siaf: cSiaf, total_cantidad, precios: Array.from(grupos.values()) };
+    const cOferentes: Oferente[] = ofertas.filter(o => o.consolidacion_id === c.id);
+
+    return {
+      ...c,
+      rechazado_por_nombre: c.rechazado_por != null ? usuariosMap.get(c.rechazado_por) ?? null : null,
+      siaf: cSiaf, total_cantidad, precios: Array.from(grupos.values()),
+      oferentes: cOferentes,
+    };
   });
 }
 
@@ -80,6 +101,8 @@ export async function getOrdenes() {
 }
 
 export async function buscarProveedoresAuto(q: string) {
+  const session = await auth();
+  if (!session) return [];
   if (!q || q.trim().length < 2) return [];
   return db.select({
     id:       proveedores.id,
@@ -97,64 +120,21 @@ export async function buscarProveedoresAuto(q: string) {
   ).limit(8);
 }
 
-// ─── Adjudicación (Junta Adjudicadora) ───────────────────────────────────────
-
-export async function adjudicar(id: number, data: {
-  tipo_compra:      TipoCompra;
-  proveedor_id:     number | null;
-  proveedor_nit:    string;
-  proveedor_nombre: string;
-  numero_adjudicacion: string;
-  nog?:          string;
-  fecha_evento?: string;
-}) {
-  try {
-    const numAdj = data.numero_adjudicacion.trim();
-    if (!/^\d+$/.test(numAdj)) {
-      return { error: "El Número de Adjudicación solo puede contener dígitos" };
-    }
-    if (!data.proveedor_nombre.trim()) {
-      return { error: "Selecciona un proveedor" };
-    }
-    if (data.tipo_compra === "Compra Directa") {
-      if (!data.nog?.trim()) return { error: "El NOG es obligatorio para Compra Directa" };
-      if (!data.fecha_evento) return { error: "La fecha de finalización del evento es obligatoria" };
-    }
-
-    const [existente] = await db.select({ id: consolidaciones.id })
-      .from(consolidaciones).where(
-        and(eq(consolidaciones.numero_adjudicacion, numAdj), ne(consolidaciones.id, id))
-      ).limit(1);
-    if (existente) return { error: `Ya existe una consolidación con el Número de Adjudicación ${numAdj}` };
-
-    await db.update(consolidaciones).set({
-      tipo_compra:         data.tipo_compra,
-      estado:               "Adjudicado",
-      proveedor_id:         data.proveedor_id,
-      proveedor_nit:        data.proveedor_nit,
-      proveedor_nombre:     data.proveedor_nombre,
-      numero_adjudicacion:  numAdj,
-      nog:                  data.tipo_compra === "Compra Directa" ? data.nog!.trim() : null,
-      fecha_evento:         data.tipo_compra === "Compra Directa" ? data.fecha_evento! : null,
-    }).where(eq(consolidaciones.id, id));
-
-    await db.update(siafCompras)
-      .set({ estado: "Adjudicado" })
-      .where(eq(siafCompras.consolidacion_id, id));
-
-    return { ok: true };
-  } catch {
-    return { error: "Error al registrar la adjudicación" };
-  }
-}
-
 // ─── Anular Consolidación ─────────────────────────────────────────────────────
 
-export async function anularConsolidacion(id: number) {
+export async function anularConsolidacion(id: number): Promise<{ ok: true } | { error: string }> {
   try {
+    const session = await auth();
+    if (!session) return { error: "No autorizado" };
+    if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
+
     await db.update(siafCompras)
       .set({ estado: "Borrador", consolidacion_id: null })
       .where(eq(siafCompras.consolidacion_id, id));
+    // Libera cualquier cotización de servicio que se hubiera reservado para esta consolidación
+    await db.update(cotizacionesServicio)
+      .set({ usado: false, usado_en_consolidacion_id: null })
+      .where(eq(cotizacionesServicio.usado_en_consolidacion_id, id));
     await db.delete(consolidaciones).where(eq(consolidaciones.id, id));
     return { ok: true };
   } catch {
@@ -163,58 +143,27 @@ export async function anularConsolidacion(id: number) {
 }
 
 // ─── Completar Adjudicación (Compras) ────────────────────────────────────────
+// El total ya no se calcula por precio-por-insumo: queda determinado por el costo
+// del oferente que la Junta eligió como ganador (oferente_ganador_id).
 
-export async function completarAdjudicacion(id: number, data: {
-  referencia:   string | null;
-  exento_iva:   boolean;
-  precios:      { codigo_igss: string | null; subproducto: string; precio_unitario: number }[];
-  regularizado: boolean | null;
-}) {
+export async function completarAdjudicacion(id: number): Promise<{ ok: true } | { error: string; limitExceeded?: true }> {
   try {
     const session = await auth();
     if (!session) return { error: "No autorizado" };
+    if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
 
-    const [con] = await db.select({ tipo_compra: consolidaciones.tipo_compra, estado: consolidaciones.estado })
-      .from(consolidaciones).where(eq(consolidaciones.id, id)).limit(1);
+    const [con] = await db.select().from(consolidaciones).where(eq(consolidaciones.id, id)).limit(1);
     if (!con) return { error: "No se encontró la consolidación" };
     if (con.estado !== "Adjudicado") return { error: "Solo se puede completar una consolidación en estado Adjudicado" };
     const tipo = con.tipo_compra as TipoCompra | null;
     if (!tipo) return { error: "La consolidación no tiene un tipo de compra asignado" };
+    if (!con.oferente_ganador_id) return { error: "La consolidación no tiene un oferente ganador registrado" };
 
-    const esDirecta = tipo === "Compra Directa";
+    const [ganador] = await db.select().from(oferentes)
+      .where(eq(oferentes.id, con.oferente_ganador_id)).limit(1);
+    if (!ganador) return { error: "No se encontró el oferente ganador" };
 
-    if (!esDirecta && !data.referencia?.trim()) {
-      return { error: `El campo "${REFERENCIA_LABEL[tipo]}" es obligatorio` };
-    }
-    if (!esDirecta && data.regularizado === null) {
-      return { error: "Selecciona si es Regularizado o Normal" };
-    }
-    if (data.precios.length === 0 || data.precios.some(p => !(p.precio_unitario > 0))) {
-      return { error: "Ingresa un precio válido para cada insumo" };
-    }
-
-    // Cantidad real por insumo, calculada server-side (no se confía en el cliente)
-    const siafIds = (await db.select({ id: siafCompras.id })
-      .from(siafCompras).where(eq(siafCompras.consolidacion_id, id))).map(s => s.id);
-    const items = siafIds.length > 0
-      ? await db.select({
-          codigo_igss:         siafComprasItems.codigo_igss,
-          subproducto:         siafComprasItems.subproducto,
-          cantidad_solicitada: siafComprasItems.cantidad_solicitada,
-        }).from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds))
-      : [];
-    const cantidadPorInsumo = new Map<string, number>();
-    for (const it of items) {
-      const key = `${it.codigo_igss}::${it.subproducto}`;
-      cantidadPorInsumo.set(key, (cantidadPorInsumo.get(key) ?? 0) + it.cantidad_solicitada);
-    }
-
-    let bruto = 0;
-    for (const p of data.precios) {
-      const cantidad = cantidadPorInsumo.get(`${p.codigo_igss}::${p.subproducto}`) ?? 0;
-      bruto += cantidad * p.precio_unitario;
-    }
-    const total = data.exento_iva ? bruto : bruto * 0.88;
+    const total = ganador.exento_iva ? ganador.costo : ganador.costo * 0.88;
     const limite = LIMITE_POR_TIPO[tipo];
     if (total > limite) {
       return {
@@ -223,26 +172,11 @@ export async function completarAdjudicacion(id: number, data: {
       };
     }
 
-    const destino = esDirecta ? "presupuesto" : (data.regularizado ? "fondo_rotativo" : "presupuesto");
-    const estado  = destino === "fondo_rotativo" ? "Enviado a Fondo Rotativo" : "Enviado a Presupuesto";
-
-    await db.delete(consolidacionPrecios).where(eq(consolidacionPrecios.consolidacion_id, id));
-    await db.insert(consolidacionPrecios).values(
-      data.precios.map(p => ({
-        consolidacion_id: id,
-        codigo_igss:       p.codigo_igss,
-        subproducto:       p.subproducto,
-        precio_unitario:   p.precio_unitario,
-      }))
-    );
-
     await db.update(consolidaciones).set({
-      referencia:   esDirecta ? null : data.referencia!.trim(),
-      exento_iva:   data.exento_iva,
+      exento_iva: ganador.exento_iva,
       total,
-      destino,
-      regularizado: esDirecta ? null : data.regularizado,
-      estado,
+      destino:    "presupuesto",
+      estado:     "Enviado a Presupuesto",
     }).where(eq(consolidaciones.id, id));
 
     return { ok: true as const };
@@ -307,7 +241,11 @@ export async function getPendientesPorDestino(destino: "fondo_rotativo" | "presu
       if (g) g.precio_unitario = p.precio_unitario;
     }
 
-    return { ...c, siaf: cSiaf, total_cantidad, precios: Array.from(grupos.values()) };
+    return {
+      ...c, rechazado_por_nombre: null,
+      siaf: cSiaf, total_cantidad, precios: Array.from(grupos.values()),
+      oferentes: [] as Oferente[],
+    };
   });
 }
 

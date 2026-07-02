@@ -32,6 +32,18 @@ const MODULOS: { key: keyof Permisos; label: string }[] = [
   { key: "configuracion", label: "Configuración"  },
 ];
 
+const MODULOS_LAUNCHER: { key: keyof Permisos; label: string }[] = [
+  { key: "mod_compras",               label: "Compras"                },
+  { key: "mod_presupuesto",           label: "Presupuesto"            },
+  { key: "mod_junta_adjudicadora",    label: "Junta Adjudicadora"     },
+  { key: "mod_almacen",               label: "Almacén"                },
+  { key: "mod_caja_chica",            label: "Caja Chica (launcher)"  },
+  { key: "mod_libros",                label: "Libros"                 },
+  { key: "mod_viaticos",              label: "Pago de Viáticos"       },
+  { key: "mod_contrato_cotizaciones", label: "Contrato y Cotizaciones"},
+  { key: "mod_base_datos",            label: "Base de Datos Central"  },
+];
+
 interface Props {
   usuarios:      Usuario[];
   isSuperAdmin:  boolean;
@@ -342,25 +354,56 @@ export default function UsuariosClient({ usuarios: init, isSuperAdmin, currentUs
               <p className="text-xs text-gray-400">Aplicar defaults del rol</p>
             </div>
 
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <div className="table-header px-4 py-2 grid grid-cols-2 text-xs">
-                <span>Módulo</span>
-                <span className="text-center">Acceso</span>
-              </div>
-              {MODULOS.map(m => (
-                <div key={m.key}
-                  className="grid grid-cols-2 px-4 py-2.5 border-t border-gray-100 hover:bg-gray-50 items-center">
-                  <span className="text-sm text-gray-700">{m.label}</span>
-                  <div className="flex justify-center">
-                    <button
-                      onClick={() => setPermEdit(prev => ({ ...prev, [m.key]: !prev[m.key] }))}
-                      className={`w-10 h-5 rounded-full transition-colors relative ${permEdit[m.key] ? "bg-brand-500" : "bg-gray-200"}`}
-                    >
-                      <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${permEdit[m.key] ? "translate-x-5" : "translate-x-0.5"}`} />
-                    </button>
-                  </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                Módulos del sistema (launcher)
+              </p>
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="table-header px-4 py-2 grid grid-cols-2 text-xs">
+                  <span>Módulo</span>
+                  <span className="text-center">Acceso</span>
                 </div>
-              ))}
+                {MODULOS_LAUNCHER.map(m => (
+                  <div key={m.key}
+                    className="grid grid-cols-2 px-4 py-2.5 border-t border-gray-100 hover:bg-gray-50 items-center">
+                    <span className="text-sm text-gray-700">{m.label}</span>
+                    <div className="flex justify-center">
+                      <button
+                        onClick={() => setPermEdit(prev => ({ ...prev, [m.key]: !prev[m.key] }))}
+                        className={`w-10 h-5 rounded-full transition-colors relative ${permEdit[m.key] ? "bg-brand-500" : "bg-gray-200"}`}
+                      >
+                        <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${permEdit[m.key] ? "translate-x-5" : "translate-x-0.5"}`} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                Fondo Rotativo (submenús internos)
+              </p>
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="table-header px-4 py-2 grid grid-cols-2 text-xs">
+                  <span>Módulo</span>
+                  <span className="text-center">Acceso</span>
+                </div>
+                {MODULOS.map(m => (
+                  <div key={m.key}
+                    className="grid grid-cols-2 px-4 py-2.5 border-t border-gray-100 hover:bg-gray-50 items-center">
+                    <span className="text-sm text-gray-700">{m.label}</span>
+                    <div className="flex justify-center">
+                      <button
+                        onClick={() => setPermEdit(prev => ({ ...prev, [m.key]: !prev[m.key] }))}
+                        className={`w-10 h-5 rounded-full transition-colors relative ${permEdit[m.key] ? "bg-brand-500" : "bg-gray-200"}`}
+                      >
+                        <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${permEdit[m.key] ? "translate-x-5" : "translate-x-0.5"}`} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </ModalBase>
@@ -378,20 +421,20 @@ function ModalBase({ title, children, onClose, onConfirm, loading, confirmLabel,
 }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-      <div className={`bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full ${wide ? "sm:max-w-lg" : "sm:max-w-md"}`}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div className={`bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-h-[90vh] flex flex-col ${wide ? "sm:max-w-lg" : "sm:max-w-md"}`}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
           <h2 className="font-semibold text-gray-900">{title}</h2>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className="px-5 py-4 overflow-y-auto">{children}</div>
         {error && (
           <div className="mx-5 mb-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
             {error}
           </div>
         )}
-        <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100 shrink-0">
           <button onClick={onClose} className="btn-secondary">Cancelar</button>
           <button
             onClick={onConfirm}

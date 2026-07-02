@@ -11,6 +11,22 @@ export type InsumoPrecio = {
   precio_unitario: number | null;
 };
 
+export type Oferente = {
+  id: number; consolidacion_id: number; proveedor_id: number | null;
+  cotizacion_servicio_id: number | null;
+  nit: string; nombre: string; costo: number; exento_iva: boolean; orden: number;
+};
+
+export type CotizacionServicio = {
+  id: number; fecha: string; proveedor_id: number | null;
+  proveedor_nit: string | null; proveedor_nombre: string;
+  servicio: string; costo: number; exento_iva: boolean; usado: boolean;
+};
+
+export type ActaNegociacion = {
+  anio: number; contenido: string | null; archivo_url: string | null;
+};
+
 export type Consolidacion = {
   id: number; numero: number; anio: number; fecha: string;
   pre_orden: string | null;
@@ -29,9 +45,18 @@ export type Consolidacion = {
   proveedor_nombre: string | null;
   creado_por: number | null;
   created_at: string | null;
+  motivo_rechazo: string | null;
+  rechazado_por: number | null;
+  rechazado_por_nombre: string | null;
+  rechazado_en: string | null;
+  enviado_a_junta_por: number | null;
+  enviado_a_junta_en: string | null;
+  oferente_ganador_id: number | null;
+  numero_cheque: string | null;
   siaf: SiafResumen[];
   total_cantidad: number;
   precios: InsumoPrecio[];
+  oferentes: Oferente[];
 };
 
 export type Proveedor = { id: number; nit: string | null; nombre: string; telefono: string | null };
@@ -51,3 +76,6 @@ export const REFERENCIA_LABEL: Record<string, string> = {
   "Contrato Abierto":   "No. de Contrato",
   "Casos de Excepción": "Tipo de Servicio",
 };
+
+// Máximo de oferentes por consolidación (Compra Directa / Baja Cuantía con insumos)
+export const MAX_OFERENTES = 10;

@@ -1,14 +1,15 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { usuarios } from "@/lib/schema";
-import { parsePermisos, ROL_LABELS, ROL_COLORS, type Rol } from "@/lib/permisos";
+import { type Rol } from "@/lib/permisos";
+import { getPermisosFrescos } from "@/lib/modulo-access";
 import { redirect } from "next/navigation";
 import UsuariosClient from "./UsuariosClient";
 
 export default async function UsuariosPage() {
   const session = await auth();
   const rol     = session!.user.rol as Rol;
-  const permisos = parsePermisos(session!.user.permisos, rol);
+  const permisos = await getPermisosFrescos(Number(session!.user.id), rol);
 
   if (!permisos.usuarios) redirect("/dashboard");
 

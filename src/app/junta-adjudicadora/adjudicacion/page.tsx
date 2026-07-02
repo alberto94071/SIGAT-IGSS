@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { type Rol } from "@/lib/permisos";
 import { getConsolidacionesConDetalles } from "@/lib/adjudicacion/actions";
-import AdjudicacionClient from "@/components/adjudicacion/AdjudicacionClient";
+import JuntaAdjudicacionClient from "@/components/adjudicacion/JuntaAdjudicacionClient";
 
 export default async function JuntaAdjudicacionPage() {
   const session = await auth();
@@ -10,5 +10,5 @@ export default async function JuntaAdjudicacionPage() {
   const consolidaciones = await getConsolidacionesConDetalles();
   const rol = session.user.rol as Rol;
   const canEdit = rol !== "consulta";
-  return <AdjudicacionClient consolidaciones={consolidaciones} rol="junta" canEdit={canEdit} />;
+  return <JuntaAdjudicacionClient consolidaciones={consolidaciones} canEdit={canEdit} />;
 }

@@ -1,12 +1,10 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import { Database } from "lucide-react";
 import Link from "next/link";
 import NavBaseDatos from "./NavBaseDatos";
+import { requireModuloAccess } from "@/lib/modulo-access";
 
 export default async function BaseDatosLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
-  if (!session) redirect("/login");
+  await requireModuloAccess("mod_base_datos");
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">

@@ -1,6 +1,5 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import { ROL_LABELS, ROL_COLORS, type Rol } from "@/lib/permisos";
+import { ROL_LABELS, ROL_COLORS } from "@/lib/permisos";
+import { requireModuloAccess } from "@/lib/modulo-access";
 import DashboardShell from "@/components/DashboardShell";
 
 const PRESUPUESTO_NAV = [
@@ -12,10 +11,7 @@ const PRESUPUESTO_NAV = [
 ] as const;
 
 export default async function PresupuestoLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
-  if (!session) redirect("/login");
-
-  const rol = session.user.rol as Rol;
+  const { session, rol } = await requireModuloAccess("mod_presupuesto");
 
   return (
     <DashboardShell

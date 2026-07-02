@@ -91,29 +91,42 @@ export default function BandejaDestino({ consolidaciones: init, titulo }: Props)
                       <tr className="bg-green-50/30">
                         <td colSpan={7} className="px-6 py-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* Detalle insumos y precios */}
+                            {/* Detalle insumos y precios (o proveedor ganador, si viene de la comparación de oferentes) */}
                             <div>
-                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Insumos y precios</p>
-                              <div className="rounded-xl border border-gray-200 overflow-hidden">
-                                <table className="w-full text-xs">
-                                  <thead><tr className="bg-gray-100">
-                                    <th className="px-3 py-1.5 text-left font-semibold text-gray-600">Insumo</th>
-                                    <th className="px-3 py-1.5 text-right font-semibold text-gray-600">Cant.</th>
-                                    <th className="px-3 py-1.5 text-right font-semibold text-gray-600">Precio</th>
-                                    <th className="px-3 py-1.5 text-right font-semibold text-gray-600">Subtotal</th>
-                                  </tr></thead>
-                                  <tbody className="divide-y divide-gray-100 bg-white">
-                                    {c.precios.map((p, i) => (
-                                      <tr key={i}>
-                                        <td className="px-3 py-2 font-medium text-gray-900">{p.nombre}<span className="block text-gray-400 font-mono text-[10px]">{p.subproducto}</span></td>
-                                        <td className="px-3 py-2 text-right tabular-nums text-gray-600">{p.cantidad.toLocaleString("es-GT")}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums">{p.precio_unitario != null ? Q(p.precio_unitario) : "—"}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-gray-900">{p.precio_unitario != null ? Q(p.cantidad * p.precio_unitario) : "—"}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
+                              {c.precios.length > 0 ? (
+                                <>
+                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Insumos y precios</p>
+                                  <div className="rounded-xl border border-gray-200 overflow-hidden">
+                                    <table className="w-full text-xs">
+                                      <thead><tr className="bg-gray-100">
+                                        <th className="px-3 py-1.5 text-left font-semibold text-gray-600">Insumo</th>
+                                        <th className="px-3 py-1.5 text-right font-semibold text-gray-600">Cant.</th>
+                                        <th className="px-3 py-1.5 text-right font-semibold text-gray-600">Precio</th>
+                                        <th className="px-3 py-1.5 text-right font-semibold text-gray-600">Subtotal</th>
+                                      </tr></thead>
+                                      <tbody className="divide-y divide-gray-100 bg-white">
+                                        {c.precios.map((p, i) => (
+                                          <tr key={i}>
+                                            <td className="px-3 py-2 font-medium text-gray-900">{p.nombre}<span className="block text-gray-400 font-mono text-[10px]">{p.subproducto}</span></td>
+                                            <td className="px-3 py-2 text-right tabular-nums text-gray-600">{p.cantidad.toLocaleString("es-GT")}</td>
+                                            <td className="px-3 py-2 text-right tabular-nums">{p.precio_unitario != null ? Q(p.precio_unitario) : "—"}</td>
+                                            <td className="px-3 py-2 text-right tabular-nums font-semibold text-gray-900">{p.precio_unitario != null ? Q(p.cantidad * p.precio_unitario) : "—"}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Proveedor ganador</p>
+                                  <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+                                    <p className="text-sm font-medium text-gray-900">{c.proveedor_nombre ?? "—"}</p>
+                                    {c.proveedor_nit && <p className="text-xs text-gray-400">NIT: {c.proveedor_nit}</p>}
+                                    <p className="text-sm font-bold text-green-700 mt-1">{c.total != null ? Q(c.total) : "—"}</p>
+                                  </div>
+                                </>
+                              )}
                             </div>
                             {/* Datos adicionales */}
                             <div className="space-y-1 text-xs text-gray-600">

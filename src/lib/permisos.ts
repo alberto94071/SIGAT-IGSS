@@ -1,6 +1,7 @@
 export type Rol = "superadmin" | "admin" | "operador" | "consulta";
 
 export interface Permisos {
+  // ── Fondo Rotativo interno ──
   servicios:    boolean;
   pagos:        boolean;
   banco:        boolean;
@@ -11,7 +12,28 @@ export interface Permisos {
   documentos:   boolean;
   usuarios:     boolean;
   configuracion:boolean;
+  // ── Módulos del launcher ──
+  mod_compras:               boolean;
+  mod_presupuesto:           boolean;
+  mod_junta_adjudicadora:    boolean;
+  mod_almacen:               boolean;
+  mod_caja_chica:            boolean;
+  mod_libros:                boolean;
+  mod_viaticos:              boolean;
+  mod_contrato_cotizaciones: boolean;
+  mod_base_datos:            boolean;
 }
+
+export type Modulo =
+  | "mod_compras" | "mod_presupuesto" | "mod_junta_adjudicadora" | "mod_almacen"
+  | "mod_caja_chica" | "mod_libros" | "mod_viaticos"
+  | "mod_contrato_cotizaciones" | "mod_base_datos";
+
+const MODULOS_DEFAULT = {
+  mod_compras: true, mod_presupuesto: true, mod_junta_adjudicadora: true,
+  mod_almacen: true, mod_caja_chica: true, mod_libros: true,
+  mod_viaticos: true, mod_contrato_cotizaciones: true, mod_base_datos: true,
+};
 
 // Permisos por defecto según el rol
 export const PERMISOS_DEFAULT: Record<Rol, Permisos> = {
@@ -19,21 +41,25 @@ export const PERMISOS_DEFAULT: Record<Rol, Permisos> = {
     servicios: true, pagos: true, banco: true, caja_chica: true,
     liquidacion: true, catalogos: true, reportes: true,
     documentos: true, usuarios: true, configuracion: true,
+    ...MODULOS_DEFAULT,
   },
   admin: {
     servicios: true, pagos: true, banco: true, caja_chica: true,
     liquidacion: true, catalogos: true, reportes: true,
     documentos: true, usuarios: false, configuracion: false,
+    ...MODULOS_DEFAULT,
   },
   operador: {
     servicios: true, pagos: true, banco: true, caja_chica: true,
     liquidacion: false, catalogos: false, reportes: true,
     documentos: true, usuarios: false, configuracion: false,
+    ...MODULOS_DEFAULT,
   },
   consulta: {
     servicios: false, pagos: false, banco: false, caja_chica: false,
     liquidacion: false, catalogos: false, reportes: true,
     documentos: false, usuarios: false, configuracion: false,
+    ...MODULOS_DEFAULT,
   },
 };
 

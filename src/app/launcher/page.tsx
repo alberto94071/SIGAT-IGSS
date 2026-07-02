@@ -6,6 +6,8 @@ import {
   ShieldCheck, ShoppingCart, Database, Calculator, Wallet,
   Archive, Library, Gavel, FileSignature
 } from "lucide-react";
+import { type Modulo, type Rol } from "@/lib/permisos";
+import { getPermisosFrescos } from "@/lib/modulo-access";
 import LogoutButton from "./LogoutButton";
 
 const MODULES = [
@@ -20,6 +22,7 @@ const MODULES = [
     textColor: "text-green-600",
     bgLight: "bg-green-50",
     available: true,
+    permiso: "mod_compras" as Modulo | null,
   },
   {
     id: "fondo-rotativo",
@@ -32,6 +35,7 @@ const MODULES = [
     textColor: "text-orange-600",
     bgLight: "bg-orange-50",
     available: true,
+    permiso: null,
   },
   {
     id: "base-datos",
@@ -44,6 +48,7 @@ const MODULES = [
     textColor: "text-blue-600",
     bgLight: "bg-blue-50",
     available: true,
+    permiso: "mod_base_datos" as Modulo | null,
   },
   {
     id: "viaticos",
@@ -56,6 +61,7 @@ const MODULES = [
     textColor: "text-blue-600",
     bgLight: "bg-blue-50",
     available: false,
+    permiso: "mod_viaticos" as Modulo | null,
   },
   {
     id: "pasajes",
@@ -68,6 +74,7 @@ const MODULES = [
     textColor: "text-purple-600",
     bgLight: "bg-purple-50",
     available: false,
+    permiso: null,
   },
   {
     id: "presupuesto",
@@ -80,6 +87,7 @@ const MODULES = [
     textColor: "text-indigo-600",
     bgLight: "bg-indigo-50",
     available: true,
+    permiso: "mod_presupuesto" as Modulo | null,
   },
   {
     id: "caja-chica",
@@ -92,6 +100,7 @@ const MODULES = [
     textColor: "text-amber-600",
     bgLight: "bg-amber-50",
     available: false,
+    permiso: "mod_caja_chica" as Modulo | null,
   },
   {
     id: "almacen",
@@ -104,6 +113,7 @@ const MODULES = [
     textColor: "text-teal-600",
     bgLight: "bg-teal-50",
     available: false,
+    permiso: "mod_almacen" as Modulo | null,
   },
   {
     id: "libros",
@@ -116,6 +126,7 @@ const MODULES = [
     textColor: "text-slate-600",
     bgLight: "bg-slate-50",
     available: false,
+    permiso: "mod_libros" as Modulo | null,
   },
   {
     id: "junta-adjudicadora",
@@ -128,6 +139,7 @@ const MODULES = [
     textColor: "text-red-600",
     bgLight: "bg-red-50",
     available: true,
+    permiso: "mod_junta_adjudicadora" as Modulo | null,
   },
   {
     id: "contrato-cotizaciones",
@@ -139,13 +151,18 @@ const MODULES = [
     ring: "ring-cyan-200",
     textColor: "text-cyan-600",
     bgLight: "bg-cyan-50",
-    available: false,
+    available: true,
+    permiso: "mod_contrato_cotizaciones" as Modulo | null,
   },
 ];
 
 export default async function LauncherPage() {
   const session = await auth();
   if (!session) redirect("/login");
+
+  const rol = session.user.rol as Rol;
+  const permisos = await getPermisosFrescos(Number(session.user.id), rol);
+  const modules = MODULES.filter(m => m.permiso === null || permisos[m.permiso]);
 
   const userName = session.user.name ?? session.user.email ?? "Usuario";
 
@@ -182,7 +199,7 @@ export default async function LauncherPage() {
       {/* ── Module grid ─────────────────────────────────────────────── */}
       <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-10">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {MODULES.map((mod) => {
+          {modules.map((mod) => {
             const Icon = mod.icon;
             return (
               <div

@@ -1,6 +1,5 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import { ROL_LABELS, ROL_COLORS, type Rol } from "@/lib/permisos";
+import { ROL_LABELS, ROL_COLORS } from "@/lib/permisos";
+import { requireModuloAccess } from "@/lib/modulo-access";
 import DashboardShell from "@/components/DashboardShell";
 
 const CONTRATO_COTIZACIONES_NAV = [
@@ -10,10 +9,7 @@ const CONTRATO_COTIZACIONES_NAV = [
 ] as const;
 
 export default async function ContratoCotizacionesLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
-  if (!session) redirect("/login");
-
-  const rol = session.user.rol as Rol;
+  const { session, rol } = await requireModuloAccess("mod_contrato_cotizaciones");
 
   return (
     <DashboardShell
