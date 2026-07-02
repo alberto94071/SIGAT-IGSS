@@ -5,7 +5,7 @@ import { BookOpen, Search, X } from "lucide-react";
 type Item = {
   id: number;
   codigo_ppr: string | null;
-  codigo_rango: string | null;
+  codigo_igss: string | null;
   nombre: string;
   caracteristicas: string | null;
   presentacion: string | null;
@@ -24,7 +24,7 @@ export default function CatalogoPacClient({ items }: Props) {
     return items.filter(r =>
       r.nombre.toLowerCase().includes(q) ||
       (r.codigo_ppr ?? "").includes(q) ||
-      (r.codigo_rango ?? "").includes(q) ||
+      (r.codigo_igss ?? "").includes(q) ||
       (r.caracteristicas ?? "").toLowerCase().includes(q) ||
       r.subproducto.toLowerCase().includes(q)
     );
@@ -48,7 +48,7 @@ export default function CatalogoPacClient({ items }: Props) {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <input
           type="text"
-          placeholder="Buscar por nombre, código PPR o código rango…"
+          placeholder="Buscar por nombre, código PPR o código IGSS…"
           value={query}
           onChange={e => setQuery(e.target.value)}
           className="w-full pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -68,7 +68,7 @@ export default function CatalogoPacClient({ items }: Props) {
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
             <tr>
-              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Cód. Rango</th>
+              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Cód. IGSS</th>
               <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Cód. PPR</th>
               <th className="px-4 py-3 text-left font-semibold">Nombre</th>
               <th className="px-4 py-3 text-left font-semibold hidden md:table-cell">Características</th>
@@ -87,7 +87,7 @@ export default function CatalogoPacClient({ items }: Props) {
               filtered.map(r => (
                 <tr key={r.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 font-mono text-xs font-semibold text-blue-700 whitespace-nowrap">
-                    {r.codigo_rango ?? "—"}
+                    {r.codigo_igss ?? "—"}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">
                     {r.codigo_ppr ?? "—"}

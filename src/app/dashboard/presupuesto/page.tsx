@@ -14,7 +14,7 @@ export default async function PresupuestoPage() {
     db.select({
       id:              catalogoCompras.id,
       codigo_ppr:      catalogoCompras.codigo_ppr,
-      codigo_rango:    catalogoCompras.codigo_rango,
+      codigo_igss:     catalogoCompras.codigo_igss,
       nombre:          catalogoCompras.nombre,
       caracteristicas: catalogoCompras.caracteristicas,
       presentacion:    catalogoCompras.presentacion,

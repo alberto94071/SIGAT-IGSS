@@ -7,7 +7,7 @@ type Renglon = {
   ejercicio_fiscal: number;
   pg_spg_py_act_ob: string | null;
   subproducto: string | null;
-  renglon: number;
+  renglon: number | null;
   nombre: string;
   vigente: number | null;
   modificado: number | null;
@@ -22,7 +22,7 @@ type Renglon = {
 type CatItem = {
   id: number;
   codigo_ppr: string | null;
-  codigo_rango: string | null;
+  codigo_igss: string | null;
   nombre: string;
   caracteristicas: string | null;
   presentacion: string | null;
@@ -58,7 +58,7 @@ export default function PresupuestoClient({ renglones, catalogo }: Props) {
     return catalogo.filter(r =>
       r.nombre.toLowerCase().includes(q) ||
       (r.codigo_ppr ?? "").includes(q) ||
-      (r.codigo_rango ?? "").includes(q) ||
+      (r.codigo_igss ?? "").includes(q) ||
       (r.caracteristicas ?? "").toLowerCase().includes(q)
     );
   }, [catalogo, query]);
@@ -113,7 +113,7 @@ export default function PresupuestoClient({ renglones, catalogo }: Props) {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <input
           type="text"
-          placeholder={tab === "presupuesto" ? "Buscar renglón o descripción…" : "Buscar por nombre, código PPR o código rango…"}
+          placeholder={tab === "presupuesto" ? "Buscar renglón o descripción…" : "Buscar por nombre, código PPR o código IGSS…"}
           value={query}
           onChange={e => setQuery(e.target.value)}
           className="w-full pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -215,7 +215,7 @@ export default function PresupuestoClient({ renglones, catalogo }: Props) {
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Cód. Rango</th>
+                  <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Cód. IGSS</th>
                   <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Cód. PPR</th>
                   <th className="px-4 py-3 text-left font-semibold">Nombre</th>
                   <th className="px-4 py-3 text-left font-semibold hidden md:table-cell">Características</th>
@@ -232,7 +232,7 @@ export default function PresupuestoClient({ renglones, catalogo }: Props) {
                   filteredCatalogo.map(r => (
                     <tr key={r.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3 font-mono text-xs text-gray-600 whitespace-nowrap">
-                        {r.codigo_rango ?? "—"}
+                        {r.codigo_igss ?? "—"}
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">
                         {r.codigo_ppr ?? "—"}

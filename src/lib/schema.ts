@@ -320,10 +320,30 @@ export const baseDatosCentral = pgTable("base_datos_central", {
   nombre:          text("nombre").notNull(),
   caracteristicas: text("caracteristicas"),
   presentacion:    text("presentacion"),
+  codigo_rango:    text("codigo_rango"),
   renglon:         integer("renglon"),
   activo:          boolean("activo").notNull().default(true),
   created_at:      text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   updated_at:      text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Presupuesto por renglón ──────────────────────────────────────────────────
+export const presupuestoRenglones = pgTable("presupuesto_renglones", {
+  id:                   serial("id").primaryKey(),
+  ejercicio_fiscal:     integer("ejercicio_fiscal").notNull().default(2026),
+  pg_spg_py_act_ob:     text("pg_spg_py_act_ob"),
+  subproducto:          text("subproducto"),
+  renglon:              integer("renglon"),
+  nombre:               text("nombre").notNull(),
+  vigente:              doublePrecision("vigente"),
+  modificado:           doublePrecision("modificado"),
+  presupuesto:          doublePrecision("presupuesto"),
+  pre_compromiso:       doublePrecision("pre_compromiso"),
+  compromiso:           doublePrecision("compromiso"),
+  devengado:            doublePrecision("devengado"),
+  saldo_presupuestario: doublePrecision("saldo_presupuestario"),
+  saldo_disponible:     doublePrecision("saldo_disponible"),
+  created_at:           text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 // ─── Proveedores ──────────────────────────────────────────────────────────────
