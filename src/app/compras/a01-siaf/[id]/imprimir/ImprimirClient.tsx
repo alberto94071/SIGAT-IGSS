@@ -183,7 +183,11 @@ export default function ImprimirClient({
           const subprodEmptyRows = esUltima ? subprodRows - resumenSubproductos.length : subprodRows;
 
           return (
-            <div key={pageNum} className={`a4-sheet${i > 0 ? " a4-sheet-break" : ""}`}>
+            // El wrapper exterior NO es flex a propósito: los saltos de página forzados
+            // (break-before/page-break-before) no son fiables en Chromium cuando se
+            // aplican directamente sobre un elemento display:flex como .a4-sheet.
+            <div key={pageNum} className={`sheet-page${i > 0 ? " sheet-page-break" : ""}`}>
+            <div className="a4-sheet">
 
               {/* ── RECUADRO 1: Logo + Título (sin línea divisora) ── */}
               <div style={{
@@ -402,6 +406,7 @@ export default function ImprimirClient({
               </div>
 
             </div>
+            </div>
           );
         })}
       </div>
@@ -409,18 +414,18 @@ export default function ImprimirClient({
       <style>{`
         #print-wrapper {
           background: #94a3b8;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 24px;
           padding: 40px 20px;
           min-height: 100vh;
           margin-top: 52px;
           box-sizing: border-box;
         }
+        .sheet-page {
+          display: block;
+        }
         .a4-sheet {
           background: white;
           width: 210mm;
+          margin: 0 auto 24px auto;
           box-shadow: 0 4px 32px rgba(0,0,0,0.22);
           padding: 10mm 12mm 8mm 12mm;
           box-sizing: border-box;
@@ -437,8 +442,6 @@ export default function ImprimirClient({
             padding: 0 !important;
             margin: 0 !important;
             min-height: 0 !important;
-            display: block !important;
-            gap: 0 !important;
           }
           .a4-sheet {
             width: 100% !important;
@@ -446,7 +449,7 @@ export default function ImprimirClient({
             padding: 0 !important;
             margin: 0 !important;
           }
-          .a4-sheet-break {
+          .sheet-page-break {
             break-before: page;
             page-break-before: always;
           }

@@ -20,7 +20,7 @@ export default function DashboardShell({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden print:h-auto print:overflow-visible print:block">
       {/* Overlay móvil */}
       {open && (
         <div
@@ -39,7 +39,7 @@ export default function DashboardShell({
       </div>
 
       {/* Área principal */}
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0 print:overflow-visible print:block">
         <div className="print:hidden">
           <TopBar
             userName={userName}
