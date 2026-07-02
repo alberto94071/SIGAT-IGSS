@@ -83,7 +83,7 @@ export default function ConsolidacionesTable({ consolidaciones, acciones, onVerM
                       <td className="px-4 py-3 text-gray-400">
                         {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                       </td>
-                      <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
+                      <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap max-w-[180px] truncate" title={correlativo(c)}>
                         {correlativo(c)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
@@ -201,7 +201,15 @@ export default function ConsolidacionesTable({ consolidaciones, acciones, onVerM
                                 {c.nog && <p><span className="font-semibold">NOG:</span> {c.nog}</p>}
                                 {c.fecha_evento && <p><span className="font-semibold">Fecha evento:</span> {c.fecha_evento}</p>}
                                 {c.referencia && <p><span className="font-semibold">Referencia:</span> {c.referencia}</p>}
-                                {c.numero_adjudicacion && <p><span className="font-semibold">N° Adjudicación:</span> {c.numero_adjudicacion}</p>}
+                                {c.numero_adjudicacion && (
+                                  <p>
+                                    <span className="font-semibold">
+                                      {(c.tipo_compra === "Contrato Abierto" || c.tipo_compra === "Casos de Excepción")
+                                        ? "Razón de adjudicación:" : "N° Adjudicación:"}
+                                    </span> {c.numero_adjudicacion}
+                                  </p>
+                                )}
+                                {c.numero_a04 && <p><span className="font-semibold">N° A-04 SIAF:</span> {c.numero_a04}/{c.anio_a04}</p>}
                                 {c.proveedor_nombre && <p><span className="font-semibold">Proveedor:</span> {c.proveedor_nombre} {c.proveedor_nit && `· NIT: ${c.proveedor_nit}`}</p>}
                                 {c.regularizado !== null && <p><span className="font-semibold">Tipo:</span> {c.regularizado ? "Regularizado" : "Normal"}</p>}
                                 {c.numero_cheque && <p><span className="font-semibold">N° Cheque:</span> {c.numero_cheque}</p>}

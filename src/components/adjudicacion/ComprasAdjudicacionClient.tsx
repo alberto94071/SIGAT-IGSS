@@ -7,10 +7,11 @@ import {
 } from "lucide-react";
 import ConsolidacionesTable, { Q, correlativo } from "./ConsolidacionesTable";
 import OferentesEditor from "./OferentesEditor";
+import NitAutocomplete from "./NitAutocomplete";
 import {
   elegirTipoCompra, guardarCompraDirectaEvento, agregarOferente, eliminarOferente,
   elegirFormaBajaCuantia, buscarCotizacionServicio, confirmarBajaCuantiaServicios,
-  registrarDirectoUnico, enviarAJunta, registrarRegularizado,
+  adjudicarDirecto, enviarAJunta, registrarRegularizado,
 } from "@/lib/adjudicacion/compras-actions";
 import { completarAdjudicacion, anularConsolidacion } from "@/lib/adjudicacion/actions";
 import {
@@ -157,6 +158,8 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
 
   const [duNit, setDuNit] = useState(""); const [duNombre, setDuNombre] = useState("");
   const [duCosto, setDuCosto] = useState(""); const [duExento, setDuExento] = useState(false);
+  const [duProveedorId, setDuProveedorId] = useState<number | null>(null);
+  const [duRazon, setDuRazon] = useState(c.numero_adjudicacion ?? "");
 
   const [rgNit, setRgNit] = useState(""); const [rgNombre, setRgNombre] = useState("");
   const [rgMonto, setRgMonto] = useState(""); const [rgExento, setRgExento] = useState(false);
@@ -227,17 +230,27 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     onDone({ estado: "Enviado a Junta", tipo_compra: tipoCompra, referencia: referencia.trim() });
   }
 
-  async function enviarDirectoUnico() {
+  async function handleAdjudicarDirecto() {
     const costoNum = parseFloat(duCosto);
     if (!duNit.trim() || !duNombre.trim()) return setError("NIT y nombre son obligatorios");
-    if (!(costoNum > 0)) return setError("Ingresa un costo válido");
-    setLoading(true); setError("");
-    const res = await registrarDirectoUnico(c.id, {
-      nit: duNit.trim(), nombre: duNombre.trim(), costo: costoNum, exento_iva: duExento, referencia,
+    if (!(costoNum > 0)) return setError("Ingresa un costo de factura válido");
+    if (!duRazon.trim()) return setError("La razón de adjudicación es obligatoria");
+    setLoading(true); setError(""); setLimitExceeded(false);
+    const res = await adjudicarDirecto(c.id, {
+      proveedor_id: duProveedorId, nit: duNit.trim(), nombre: duNombre.trim(),
+      costo: costoNum, exento_iva: duExento, referencia, razon: duRazon.trim(),
     });
     setLoading(false);
+    if ("limitExceeded" in res) { setLimitExceeded(true); setError(res.error); return; }
     if ("error" in res) return setError(res.error);
-    onDone({ estado: "Enviado a Junta", tipo_compra: tipoCompra, referencia });
+    const esFondoRotativo = tipoCompra === "Casos de Excepción";
+    onDone({
+      estado: esFondoRotativo ? "Enviado a Fondo Rotativo" : "Enviado a Presupuesto",
+      destino: esFondoRotativo ? "fondo_rotativo" : "presupuesto",
+      tipo_compra: tipoCompra, referencia, numero_adjudicacion: duRazon.trim(),
+      proveedor_nit: duNit.trim(), proveedor_nombre: duNombre.trim(),
+      exento_iva: duExento, total: duExento ? costoNum : costoNum * 0.88,
+    });
   }
 
   async function enviarRegularizado() {
@@ -382,7 +395,11 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
             <div className="space-y-3">
               <div>
                 <label className="label flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" /> NIT</label>
-                <input className="input font-mono" value={rgNit} onChange={e => setRgNit(e.target.value)} />
+                <NitAutocomplete
+                  value={rgNit}
+                  onChange={setRgNit}
+                  onSelect={p => { setRgNit(p.nit ?? rgNit); setRgNombre(p.nombre); }}
+                />
               </div>
               <div>
                 <label className="label">Nombre del proveedor</label>
@@ -409,9 +426,14 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
             </div>
           )}
 
-          {/* Contrato Abierto / Casos de Excepción: proveedor único directo */}
+          {/* Contrato Abierto / Casos de Excepción: ya no pasan por Junta —
+              Compras adjudica directo con una razón y el costo de factura */}
           {(tipoCompra === "Contrato Abierto" || tipoCompra === "Casos de Excepción") && (
             <div className="space-y-3">
+              <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                Este tipo de compra no pasa por la Junta Adjudicadora — Compras adjudica directamente y la
+                consolidación pasa de una vez a {tipoCompra === "Casos de Excepción" ? "Fondo Rotativo" : "Presupuesto"}.
+              </p>
               {referenciaLabel && (
                 <div>
                   <label className="label">{referenciaLabel}</label>
@@ -420,7 +442,11 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
               )}
               <div>
                 <label className="label flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" /> NIT</label>
-                <input className="input font-mono" value={duNit} onChange={e => setDuNit(e.target.value)} />
+                <NitAutocomplete
+                  value={duNit}
+                  onChange={v => { setDuNit(v); setDuProveedorId(null); }}
+                  onSelect={p => { setDuNit(p.nit ?? duNit); setDuNombre(p.nombre); setDuProveedorId(p.id); }}
+                />
               </div>
               <div>
                 <label className="label">Nombre del proveedor</label>
@@ -428,13 +454,25 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
               </div>
               <div className="flex items-center gap-3">
                 <div className="relative flex-1">
-                  <label className="label flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" /> Costo</label>
+                  <label className="label flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" /> Costo de factura</label>
                   <input type="number" step="0.01" min="0.01" className="input" value={duCosto} onChange={e => setDuCosto(e.target.value)} />
                 </div>
                 <label className="flex items-center gap-1.5 text-xs text-gray-600 whitespace-nowrap mt-6">
                   <input type="checkbox" checked={duExento} onChange={e => setDuExento(e.target.checked)} className="w-3.5 h-3.5 accent-brand-600" />
                   Exento IVA
                 </label>
+              </div>
+              {duCosto && parseFloat(duCosto) > 0 && (
+                <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+                  {duExento
+                    ? <>Exento de IVA — saldo a pagar: <strong className="text-gray-900">{Q(parseFloat(duCosto))}</strong></>
+                    : <>IVA (12%): <strong>{Q(parseFloat(duCosto) * 0.12)}</strong> · Saldo a pagar sin IVA: <strong className="text-gray-900">{Q(parseFloat(duCosto) * 0.88)}</strong></>}
+                </p>
+              )}
+              <div>
+                <label className="label">Razón de adjudicación</label>
+                <textarea className="input" rows={2} value={duRazon} onChange={e => setDuRazon(e.target.value)}
+                  placeholder="Justificación de por qué se adjudica a este proveedor…" />
               </div>
             </div>
           )}
@@ -486,8 +524,8 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
               </button>
             )}
             {(tipoCompra === "Contrato Abierto" || tipoCompra === "Casos de Excepción") && (
-              <button onClick={enviarDirectoUnico} disabled={loading} className="btn-primary disabled:opacity-50">
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />} Enviar a Junta
+              <button onClick={handleAdjudicarDirecto} disabled={loading} className="btn-primary disabled:opacity-50">
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Gavel className="w-4 h-4" />} ADJUDICAR
               </button>
             )}
           </div>

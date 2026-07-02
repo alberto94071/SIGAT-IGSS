@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/lib/db";
-import { consolidaciones, oferentes, cotizacionesServicio, proveedores, siafCompras, siafComprasItems } from "@/lib/schema";
+import { consolidaciones, oferentes, cotizacionesServicio, siafCompras, siafComprasItems } from "@/lib/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { TIPOS, MAX_OFERENTES, REFERENCIA_LABEL, LIMITE_POR_TIPO, type TipoCompra } from "./types";
@@ -10,6 +10,15 @@ async function requireCompras(): Promise<{ error: string } | { uid: number }> {
   if (!session) return { error: "No autorizado" };
   if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
   return { uid: Number(session.user.id) };
+}
+
+// Correlativo A-04 SIAF — se asigna automáticamente a toda consolidación que
+// llega a Fondo Rotativo (Baja Cuantía Regularizado o adjudicación directa).
+async function siguienteNumeroA04(anio: number): Promise<number> {
+  const res = await db.execute(
+    sql`SELECT COALESCE(MAX(numero_a04), 0) + 1 AS next FROM consolidaciones WHERE anio_a04 = ${anio}`
+  );
+  return Number((res.rows[0] as any).next) || 1;
 }
 
 export async function elegirTipoCompra(consolidacionId: number, tipo: TipoCompra): Promise<{ ok: true } | { error: string }> {
@@ -50,18 +59,6 @@ export async function guardarCompraDirectaEvento(consolidacionId: number, data: 
   } catch {
     return { error: "Error al guardar el NOG" };
   }
-}
-
-export async function buscarOferentePorNit(nit: string) {
-  const session = await auth();
-  if (!session) return null;
-  const n = nit.trim();
-  if (!n) return null;
-  const [prov] = await db.select({ id: proveedores.id, nit: proveedores.nit, nombre: proveedores.nombre })
-    .from(proveedores)
-    .where(and(eq(proveedores.activo, true), eq(proveedores.nit, n)))
-    .limit(1);
-  return prov ?? null;
 }
 
 export async function agregarOferente(consolidacionId: number, data: {
@@ -172,14 +169,20 @@ export async function confirmarBajaCuantiaServicios(consolidacionId: number, cot
   }
 }
 
-export async function registrarDirectoUnico(consolidacionId: number, data: {
-  nit: string; nombre: string; costo: number; exento_iva: boolean; referencia: string;
-}): Promise<{ ok: true } | { error: string }> {
+// Contrato Abierto y Casos de Excepción ya no pasan por Junta Adjudicadora:
+// Compras adjudica directamente con una razón de adjudicación (texto libre) y
+// el costo de factura (con IVA incluido, salvo que se marque exento), y la
+// consolidación pasa de una vez a su bandeja destino — Excepción a Fondo
+// Rotativo (con número A-04), Contrato Abierto a Presupuesto.
+export async function adjudicarDirecto(consolidacionId: number, data: {
+  proveedor_id: number | null; nit: string; nombre: string;
+  costo: number; exento_iva: boolean; referencia: string; razon: string;
+}): Promise<{ ok: true } | { error: string; limitExceeded?: true }> {
   try {
     const check = await requireCompras();
     if ("error" in check) return check;
 
-    const [con] = await db.select({ tipo_compra: consolidaciones.tipo_compra })
+    const [con] = await db.select({ tipo_compra: consolidaciones.tipo_compra, referencia: consolidaciones.referencia })
       .from(consolidaciones).where(eq(consolidaciones.id, consolidacionId)).limit(1);
     if (!con) return { error: "No se encontró la consolidación" };
     const tipo = con.tipo_compra as TipoCompra | null;
@@ -187,24 +190,47 @@ export async function registrarDirectoUnico(consolidacionId: number, data: {
       return { error: "Esta acción solo aplica a Contrato Abierto o Casos de Excepción" };
 
     if (!data.nit.trim() || !data.nombre.trim()) return { error: "NIT y nombre son obligatorios" };
-    if (!(data.costo > 0)) return { error: "Ingresa un costo válido" };
+    if (!(data.costo > 0)) return { error: "Ingresa un costo de factura válido" };
+    if (!data.razon.trim()) return { error: "La razón de adjudicación es obligatoria" };
     const label = REFERENCIA_LABEL[tipo];
     if (label && !data.referencia.trim()) return { error: `El campo "${label}" es obligatorio` };
+
+    const total = data.exento_iva ? data.costo : data.costo * 0.88;
+    const limite = LIMITE_POR_TIPO[tipo];
+    if (total > limite) {
+      return {
+        error: `El total Q${total.toFixed(2)} supera el límite de Q${limite.toLocaleString("es-GT")} para ${tipo}`,
+        limitExceeded: true as const,
+      };
+    }
 
     await db.delete(oferentes).where(eq(oferentes.consolidacion_id, consolidacionId));
     await db.insert(oferentes).values({
       consolidacion_id: consolidacionId,
-      proveedor_id: null,
+      proveedor_id: data.proveedor_id,
       nit: data.nit.trim(), nombre: data.nombre.trim(),
       costo: data.costo, exento_iva: data.exento_iva,
       orden: 0, creado_por: check.uid,
     });
-    await db.update(consolidaciones).set({ referencia: data.referencia.trim() })
-      .where(eq(consolidaciones.id, consolidacionId));
 
-    return enviarAJunta(consolidacionId);
+    const anioActual = new Date().getFullYear();
+    const esFondoRotativo = tipo === "Casos de Excepción";
+    const numeroA04 = esFondoRotativo ? await siguienteNumeroA04(anioActual) : null;
+
+    await db.update(consolidaciones).set({
+      referencia: label ? data.referencia.trim() : con.referencia,
+      numero_adjudicacion: data.razon.trim(),
+      proveedor_id: data.proveedor_id,
+      proveedor_nit: data.nit.trim(), proveedor_nombre: data.nombre.trim(),
+      exento_iva: data.exento_iva, total,
+      destino: esFondoRotativo ? "fondo_rotativo" : "presupuesto",
+      estado:  esFondoRotativo ? "Enviado a Fondo Rotativo" : "Enviado a Presupuesto",
+      numero_a04: numeroA04, anio_a04: numeroA04 ? anioActual : null,
+    }).where(eq(consolidaciones.id, consolidacionId));
+
+    return { ok: true as const };
   } catch {
-    return { error: "Error al registrar el proveedor" };
+    return { error: "Error al adjudicar" };
   }
 }
 
@@ -270,11 +296,15 @@ export async function registrarRegularizado(consolidacionId: number, data: {
       };
     }
 
+    const anioActual = new Date().getFullYear();
+    const numeroA04 = await siguienteNumeroA04(anioActual);
+
     await db.update(consolidaciones).set({
       proveedor_nit: data.nit.trim(), proveedor_nombre: data.nombre.trim(),
       exento_iva: data.exento_iva, total,
       numero_cheque: data.numero_cheque.trim(),
       destino: "fondo_rotativo", estado: "Enviado a Fondo Rotativo",
+      numero_a04: numeroA04, anio_a04: anioActual,
     }).where(eq(consolidaciones.id, consolidacionId));
 
     return { ok: true as const };

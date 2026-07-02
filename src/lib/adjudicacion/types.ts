@@ -53,6 +53,8 @@ export type Consolidacion = {
   enviado_a_junta_en: string | null;
   oferente_ganador_id: number | null;
   numero_cheque: string | null;
+  numero_a04: number | null;
+  anio_a04: number | null;
   siaf: SiafResumen[];
   total_cantidad: number;
   precios: InsumoPrecio[];

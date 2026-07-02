@@ -1,6 +1,7 @@
 "use client";
 import { Fragment, useState } from "react";
-import { ChevronDown, ChevronRight, ShoppingCart, Loader2, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
+import { ChevronDown, ChevronRight, ShoppingCart, Loader2, CheckCircle2, Printer } from "lucide-react";
 import { generarOrdenDesdeDestino } from "@/lib/adjudicacion/actions";
 import type { Consolidacion } from "@/lib/adjudicacion/types";
 
@@ -83,6 +84,12 @@ export default function BandejaDestino({ consolidaciones: init, titulo }: Props)
                             {generando === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShoppingCart className="w-3 h-3" />}
                             Generar Orden
                           </button>
+                          {c.numero_a04 && (
+                            <Link href={`/compras/adjudicacion/${c.id}/imprimir-a04`} target="_blank"
+                              className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+                              <Printer className="w-3 h-3" /> Imprimir A-04
+                            </Link>
+                          )}
                           {error[c.id] && <p className="text-[10px] text-red-600">{error[c.id]}</p>}
                         </div>
                       </td>
@@ -131,6 +138,7 @@ export default function BandejaDestino({ consolidaciones: init, titulo }: Props)
                             {/* Datos adicionales */}
                             <div className="space-y-1 text-xs text-gray-600">
                               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Datos</p>
+                              {c.numero_a04 && <p><span className="font-semibold">N° A-04 SIAF:</span> {c.numero_a04}/{c.anio_a04}</p>}
                               {c.referencia && <p><span className="font-semibold">Referencia:</span> {c.referencia}</p>}
                               {c.nog && <p><span className="font-semibold">NOG:</span> {c.nog}</p>}
                               {c.fecha_evento && <p><span className="font-semibold">Fecha evento:</span> {c.fecha_evento}</p>}

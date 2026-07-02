@@ -245,6 +245,9 @@ export const consolidaciones = pgTable("consolidaciones", {
   enviado_a_junta_en:   text("enviado_a_junta_en"),
   oferente_ganador_id:  integer("oferente_ganador_id").references((): AnyPgColumn => oferentes.id),
   numero_cheque:        text("numero_cheque"),
+  // Correlativo A-04 SIAF, asignado automáticamente al llegar a Fondo Rotativo
+  numero_a04:           integer("numero_a04"),
+  anio_a04:             integer("anio_a04"),
 });
 
 // ─── Precio por insumo de cada consolidación adjudicada ──────────────────────

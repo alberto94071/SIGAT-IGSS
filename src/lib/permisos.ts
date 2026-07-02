@@ -24,16 +24,15 @@ export interface Permisos {
   mod_contrato_cotizaciones: boolean;
   mod_base_datos:            boolean;
   mod_fondo_rotativo:        boolean;
-  // Administración (usuarios y accesos) y Configuración — solo el superadmin las trae por defecto
+  // Administración — usuarios, accesos y configuración general. Solo el superadmin la trae por defecto
   mod_administracion:        boolean;
-  mod_configuracion:         boolean;
 }
 
 export type Modulo =
   | "mod_compras" | "mod_presupuesto" | "mod_junta_adjudicadora" | "mod_almacen"
   | "mod_caja_chica" | "mod_libros" | "mod_viaticos" | "mod_pasajes"
   | "mod_contrato_cotizaciones" | "mod_base_datos" | "mod_fondo_rotativo"
-  | "mod_administracion" | "mod_configuracion";
+  | "mod_administracion";
 
 const MODULOS_DEFAULT = {
   mod_compras: true, mod_presupuesto: true, mod_junta_adjudicadora: true,
@@ -48,25 +47,25 @@ export const PERMISOS_DEFAULT: Record<Rol, Permisos> = {
     servicios: true, pagos: true, banco: true, caja_chica: true,
     liquidacion: true, catalogos: true, reportes: true,
     documentos: true, usuarios: true, configuracion: true,
-    ...MODULOS_DEFAULT, mod_administracion: true, mod_configuracion: true,
+    ...MODULOS_DEFAULT, mod_administracion: true,
   },
   admin: {
     servicios: true, pagos: true, banco: true, caja_chica: true,
     liquidacion: true, catalogos: true, reportes: true,
     documentos: true, usuarios: false, configuracion: false,
-    ...MODULOS_DEFAULT, mod_administracion: false, mod_configuracion: false,
+    ...MODULOS_DEFAULT, mod_administracion: false,
   },
   operador: {
     servicios: true, pagos: true, banco: true, caja_chica: true,
     liquidacion: false, catalogos: false, reportes: true,
     documentos: true, usuarios: false, configuracion: false,
-    ...MODULOS_DEFAULT, mod_administracion: false, mod_configuracion: false,
+    ...MODULOS_DEFAULT, mod_administracion: false,
   },
   consulta: {
     servicios: false, pagos: false, banco: false, caja_chica: false,
     liquidacion: false, catalogos: false, reportes: true,
     documentos: false, usuarios: false, configuracion: false,
-    ...MODULOS_DEFAULT, mod_administracion: false, mod_configuracion: false,
+    ...MODULOS_DEFAULT, mod_administracion: false,
   },
 };
 

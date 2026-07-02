@@ -3,7 +3,8 @@ import { requireModuloAccess } from "@/lib/modulo-access";
 import DashboardShell from "@/components/DashboardShell";
 
 const ADMINISTRACION_NAV = [
-  { href: "/administracion", label: "Usuarios y Permisos", icon: "Users" },
+  { href: "/administracion",               label: "Usuarios y Permisos",   icon: "Users" },
+  { href: "/administracion/configuracion", label: "Configuración General", icon: "Settings" },
 ] as const;
 
 export default async function AdministracionLayout({ children }: { children: React.ReactNode }) {

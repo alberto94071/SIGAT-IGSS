@@ -42,8 +42,7 @@ const MODULOS_LAUNCHER: { key: keyof Permisos; label: string }[] = [
   { key: "mod_pasajes",               label: "Pago de Pasajes"        },
   { key: "mod_contrato_cotizaciones", label: "Contrato y Cotizaciones"},
   { key: "mod_base_datos",            label: "Base de Datos Central"  },
-  { key: "mod_administracion",        label: "Administración"         },
-  { key: "mod_configuracion",         label: "Configuración"          },
+  { key: "mod_administracion",        label: "Administración (Usuarios + Configuración)" },
 ];
 
 interface Props {

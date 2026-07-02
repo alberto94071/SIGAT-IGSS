@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
-import { Search, Loader2, Plus, Trash2, Building2 } from "lucide-react";
-import { buscarOferentePorNit } from "@/lib/adjudicacion/compras-actions";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { Q } from "./ConsolidacionesTable";
+import NitAutocomplete from "./NitAutocomplete";
 import type { Oferente } from "@/lib/adjudicacion/types";
 
 interface Props {
@@ -26,25 +26,16 @@ export default function OferentesEditor({
   const [costo, setCosto] = useState("");
   const [exentoIva, setExentoIva] = useState(false);
   const [proveedorId, setProveedorId] = useState<number | null>(null);
-  const [buscando, setBuscando] = useState(false);
   const [encontrado, setEncontrado] = useState(false);
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [error, setError] = useState("");
 
-  async function handleBuscar() {
-    if (!nit.trim()) return;
-    setBuscando(true); setEncontrado(false);
-    const prov = await buscarOferentePorNit(nit.trim());
-    setBuscando(false);
-    if (prov) {
-      setNombre(prov.nombre);
-      setProveedorId(prov.id);
-      setEncontrado(true);
-    } else {
-      setProveedorId(null);
-      setEncontrado(false);
-    }
+  function handleSelectProveedor(p: { id: number; nit: string | null; nombre: string }) {
+    setNit(p.nit ?? nit);
+    setNombre(p.nombre);
+    setProveedorId(p.id);
+    setEncontrado(true);
   }
 
   function resetForm() {
@@ -105,17 +96,12 @@ export default function OferentesEditor({
           <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
             Agregar oferente ({oferentes.length}/{maxOferentes})
           </p>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-              <input className="input pl-8 font-mono text-sm" placeholder="NIT"
-                value={nit} onChange={e => { setNit(e.target.value); setEncontrado(false); }} />
-            </div>
-            <button type="button" onClick={handleBuscar} disabled={buscando || !nit.trim()}
-              className="btn-secondary shrink-0 disabled:opacity-50">
-              {buscando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-            </button>
-          </div>
+          <NitAutocomplete
+            value={nit}
+            onChange={v => { setNit(v); setEncontrado(false); setProveedorId(null); }}
+            onSelect={handleSelectProveedor}
+            placeholder="NIT o nombre del oferente…"
+          />
           {encontrado && <p className="text-xs text-green-700">✓ Proveedor encontrado en catálogo</p>}
           <input className="input text-sm" placeholder="Nombre del oferente"
             value={nombre} onChange={e => setNombre(e.target.value)} />

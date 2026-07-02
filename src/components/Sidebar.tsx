@@ -46,6 +46,13 @@ interface Props {
 export default function Sidebar({ navItems, user, moduleLabel = "Módulo", onClose }: Props) {
   const pathname = usePathname();
 
+  // El nav activo es el href más específico (más largo) que calza con la ruta actual,
+  // para que rutas anidadas (p. ej. "/administracion" y "/administracion/configuracion")
+  // no se marquen ambas como activas a la vez.
+  const activeHref = navItems
+    .filter(item => pathname === item.href || pathname.startsWith(item.href + "/"))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+
   return (
     <aside className="w-60 bg-gray-900 text-white flex flex-col h-full">
       {/* Logo / Back to CIP */}
@@ -78,8 +85,7 @@ export default function Sidebar({ navItems, user, moduleLabel = "Módulo", onClo
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-0.5">
         {navItems.map(item => {
-          const isActive = pathname === item.href ||
-            (item.href !== "/dashboard" && pathname.startsWith(item.href));
+          const isActive = item.href === activeHref;
           return (
             <Link
               key={item.href}
