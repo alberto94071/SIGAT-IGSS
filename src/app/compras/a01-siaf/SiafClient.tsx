@@ -454,13 +454,11 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                         {canEdit && (
                           <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
-                              {(s.estado === "Aprobado" || s.estado === "Consolidado") && (
-                                <button onClick={() => openPrint(s.id)}
-                                  className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
-                                  title="Imprimir A-01 SIAF">
-                                  <Printer className="w-3.5 h-3.5" />
-                                </button>
-                              )}
+                              <button onClick={() => openPrint(s.id)}
+                                className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                                title="Imprimir A-01 SIAF">
+                                <Printer className="w-3.5 h-3.5" />
+                              </button>
                               {!finalizado && (
                                 <>
                                   <button onClick={() => openEdit(s)}
