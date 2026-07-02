@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { siafCompras, siafComprasItems, catalogoCompras, consolidaciones } from "@/lib/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
+import { crearNotificacion } from "@/lib/notificaciones";
 
 export async function getNextSiafNumeroCompras(): Promise<number> {
   const year = new Date().getFullYear();
@@ -99,6 +100,43 @@ export async function actualizarEstado(id: number, estado: string) {
     return { ok: true };
   } catch {
     return { error: "Error al actualizar estado" };
+  }
+}
+
+export async function rechazarSolicitud(id: number, motivo: string) {
+  try {
+    const trimmed = motivo.trim();
+    if (!trimmed) return { error: "Debes indicar el motivo del rechazo" };
+
+    const [sol] = await db.select().from(siafCompras).where(eq(siafCompras.id, id)).limit(1);
+    if (!sol) return { error: "Solicitud no encontrada" };
+
+    const session = await auth();
+    const uid = session ? Number(session.user.id) : null;
+    const ahora = new Date().toISOString().slice(0, 19).replace("T", " ");
+
+    await db.update(siafCompras).set({
+      estado:         "Rechazado",
+      motivo_rechazo: trimmed,
+      rechazado_por:  uid,
+      rechazado_en:   ahora,
+    }).where(eq(siafCompras.id, id));
+
+    if (sol.creado_por) {
+      await crearNotificacion({
+        usuario_id:      sol.creado_por,
+        tipo:            "siaf_rechazado",
+        titulo:          `SIAF ${sol.numero}/${sol.anio} rechazado`,
+        mensaje:         trimmed,
+        ruta:            `/compras/a01-siaf?ver=${id}`,
+        referencia_tipo: "siaf_compras",
+        referencia_id:   id,
+      });
+    }
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al rechazar la solicitud" };
   }
 }
 

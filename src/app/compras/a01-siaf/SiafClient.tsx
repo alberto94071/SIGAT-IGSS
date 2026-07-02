@@ -1,15 +1,15 @@
 "use client";
-import { Fragment, useState, useMemo } from "react";
+import { Fragment, useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   FileText, Plus, ChevronDown, ChevronRight, Search, X,
   Trash2, History, ClipboardList, CheckCircle2,
   Loader2, Package, Printer, XCircle, Layers, AlertTriangle, ShoppingCart,
-  Pencil, Gavel,
+  Pencil, Gavel, Info,
 } from "lucide-react";
 import {
   crearSolicitud, editarSolicitud, eliminarSolicitud, actualizarEstado,
-  getNextSiafNumeroCompras, consolidarSiaf,
+  getNextSiafNumeroCompras, consolidarSiaf, rechazarSolicitud,
 } from "./actions";
 
 type SolicitudItem = {
@@ -21,6 +21,9 @@ type SolicitudItem = {
 type Solicitud = {
   id: number; numero: number; anio: number; fecha: string; estado: string;
   observaciones: string | null;
+  motivo_rechazo: string | null;
+  rechazado_por_nombre: string | null;
+  rechazado_en: string | null;
   items: SolicitudItem[];
 };
 type CatEntry = {
@@ -47,9 +50,14 @@ const ESTADO_STYLE: Record<string, string> = {
 
 type Firmante = { id: number; nombre: string; cargo: string };
 
-interface Props { solicitudes: Solicitud[]; catalogo: CatEntry[]; canEdit: boolean; firmantes?: Firmante[]; }
+interface Props {
+  solicitudes: Solicitud[]; catalogo: CatEntry[]; canEdit: boolean; firmantes?: Firmante[];
+  currentUserName?: string; verInicial?: number | null;
+}
 
-export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, firmantes = [] }: Props) {
+export default function SiafClient({
+  solicitudes: initSol, catalogo, canEdit, firmantes = [], currentUserName, verInicial,
+}: Props) {
   const router = useRouter();
   const [solicitudes,  setSolicitudes]  = useState(initSol);
   const [viewMode,     setViewMode]     = useState<"solicitudes" | "historial">("solicitudes");
@@ -68,6 +76,17 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
   const [printSolId,   setPrintSolId]   = useState<number | null>(null);
   const [selFirmante1, setSelFirmante1] = useState<Firmante | null>(null);
   const [selFirmante2, setSelFirmante2] = useState<Firmante | null>(null);
+
+  // Modal rechazar (siempre pide justificación)
+  const [rechazarModal,   setRechazarModal]   = useState(false);
+  const [rechazarSolId,   setRechazarSolId]   = useState<number | null>(null);
+  const [rechazarMotivo,  setRechazarMotivo]  = useState("");
+  const [rechazarLoading, setRechazarLoading] = useState(false);
+  const [rechazarError,   setRechazarError]   = useState("");
+
+  // Modal ver motivo de rechazo
+  const [motivoModal, setMotivoModal] = useState(false);
+  const [motivoSol,   setMotivoSol]   = useState<Solicitud | null>(null);
 
   // Modal crear / editar
   const [modal,        setModal]        = useState(false);
@@ -158,6 +177,20 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
     solicitudes.filter(s => seleccionados.has(s.id)),
     [solicitudes, seleccionados]
   );
+
+  // Al llegar desde una notificación (?ver=id) — expande la solicitud y, si fue
+  // rechazada, muestra de una vez el motivo del rechazo.
+  useEffect(() => {
+    if (verInicial == null) return;
+    const sol = solicitudes.find(s => s.id === verInicial);
+    if (!sol) return;
+    setExpandedId(String(sol.id));
+    if (sol.estado === "Rechazado") {
+      setMotivoSol(sol);
+      setMotivoModal(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verInicial]);
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
@@ -285,6 +318,30 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
     setSolicitudes(p => p.map(s => s.id === id ? { ...s, estado } : s));
   }
 
+  function openRechazar(id: number) {
+    setRechazarSolId(id); setRechazarMotivo(""); setRechazarError(""); setRechazarModal(true);
+  }
+
+  async function confirmRechazar() {
+    if (!rechazarSolId) return;
+    const motivo = rechazarMotivo.trim();
+    if (!motivo) { setRechazarError("El motivo del rechazo es obligatorio"); return; }
+    setRechazarLoading(true);
+    setRechazarError("");
+    const res = await rechazarSolicitud(rechazarSolId, motivo);
+    setRechazarLoading(false);
+    if (res.error) { setRechazarError(res.error); return; }
+    const ahora = new Date().toISOString().slice(0, 19).replace("T", " ");
+    setSolicitudes(p => p.map(s => s.id === rechazarSolId
+      ? { ...s, estado: "Rechazado", motivo_rechazo: motivo, rechazado_por_nombre: currentUserName ?? null, rechazado_en: ahora }
+      : s));
+    setRechazarModal(false);
+  }
+
+  function openMotivo(sol: Solicitud) {
+    setMotivoSol(sol); setMotivoModal(true);
+  }
+
   async function handleConsolidar() {
     if (seleccionados.size === 0) return;
     if (!/^\d+$/.test(preOrden.trim())) {
@@ -380,7 +437,7 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                 {filteredSolicitudes.map(s => {
                   const rowId = String(s.id);
                   const expanded = expandedId === rowId;
-                  const finalizado = s.estado === "Aprobado" || s.estado === "Rechazado" || s.estado === "Consolidado" || s.estado === "Adjudicado" || s.estado === "Orden de Compra";
+                  const finalizado = s.estado === "Aprobado" || s.estado === "Consolidado" || s.estado === "Adjudicado" || s.estado === "Orden de Compra";
                   const isSelected = seleccionados.has(s.id);
                   const canSelect = s.estado === "Aprobado";
                   return (
@@ -405,40 +462,60 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
                           </span>
                         </td>
                         <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                          {s.estado === "Consolidado" ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-purple-100 text-purple-700">
-                              <Layers className="w-3 h-3" /> Consolidado
-                            </span>
-                          ) : s.estado === "Adjudicado" ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-blue-100 text-blue-700">
-                              <Gavel className="w-3 h-3" /> Adjudicado
-                            </span>
-                          ) : s.estado === "Orden de Compra" ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-indigo-100 text-indigo-700">
-                              <ShoppingCart className="w-3 h-3" /> Orden de Compra
-                            </span>
-                          ) : s.estado === "Aprobado" ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-700">
-                              <CheckCircle2 className="w-3 h-3" /> Aprobado
-                            </span>
-                          ) : s.estado === "Rechazado" ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-red-100 text-red-700">
-                              <XCircle className="w-3 h-3" /> Rechazado
-                            </span>
-                          ) : (
-                            <div className="flex gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {s.estado === "Consolidado" ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-purple-100 text-purple-700">
+                                <Layers className="w-3 h-3" /> Consolidado
+                              </span>
+                            ) : s.estado === "Adjudicado" ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-blue-100 text-blue-700">
+                                <Gavel className="w-3 h-3" /> Adjudicado
+                              </span>
+                            ) : s.estado === "Orden de Compra" ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-indigo-100 text-indigo-700">
+                                <ShoppingCart className="w-3 h-3" /> Orden de Compra
+                              </span>
+                            ) : s.estado === "Aprobado" ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-700">
+                                <CheckCircle2 className="w-3 h-3" /> Aprobado
+                              </span>
+                            ) : s.estado === "Rechazado" ? (
+                              <>
+                                <button onClick={() => openMotivo(s)}
+                                  className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+                                  title="Ver motivo del rechazo">
+                                  <XCircle className="w-3 h-3" /> Rechazado <Info className="w-3 h-3 opacity-60" />
+                                </button>
+                                <button
+                                  onClick={() => handleEstado(s.id, "Aprobado")}
+                                  className="text-xs font-medium px-2.5 py-1 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition-colors">
+                                  Aprobar
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => openRechazar(s.id)}
+                                  className="text-xs font-medium px-2.5 py-1 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors">
+                                  Rechazar
+                                </button>
+                                <button
+                                  onClick={() => handleEstado(s.id, "Aprobado")}
+                                  className="text-xs font-medium px-2.5 py-1 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition-colors">
+                                  Aprobar
+                                </button>
+                              </>
+                            )}
+                            {/* Rechazar siempre disponible, incluso en etapas avanzadas del proceso */}
+                            {["Aprobado", "Consolidado", "Adjudicado", "Orden de Compra"].includes(s.estado) && (
                               <button
-                                onClick={() => handleEstado(s.id, "Rechazado")}
-                                className="text-xs font-medium px-2.5 py-1 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors">
+                                onClick={() => openRechazar(s.id)}
+                                title="Rechazar solicitud"
+                                className="text-[11px] font-medium px-2 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors">
                                 Rechazar
                               </button>
-                              <button
-                                onClick={() => handleEstado(s.id, "Aprobado")}
-                                className="text-xs font-medium px-2.5 py-1 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition-colors">
-                                Aprobar
-                              </button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </td>
                         {/* Columna Selección — solo Aprobado muestra checkbox */}
                         <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
@@ -748,6 +825,86 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
               <button onClick={goToPrint} className="btn-primary">
                 <Printer className="w-4 h-4" /> Abrir para imprimir
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Rechazar solicitud (siempre pide justificación) ── */}
+      {rechazarModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <XCircle className="w-4 h-4 text-red-600" /> Rechazar solicitud
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">Debes indicar el motivo del rechazo</p>
+              </div>
+              <button onClick={() => setRechazarModal(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div>
+                <label className="label">
+                  Motivo del rechazo <span className="text-red-500 font-semibold">*</span>
+                </label>
+                <textarea
+                  className="input min-h-[90px] resize-none text-sm"
+                  placeholder="Explica por qué se rechaza esta solicitud…"
+                  value={rechazarMotivo}
+                  onChange={e => setRechazarMotivo(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              {rechazarError && (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {rechazarError}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button onClick={() => setRechazarModal(false)} className="btn-secondary">Cancelar</button>
+              <button onClick={confirmRechazar} disabled={rechazarLoading || !rechazarMotivo.trim()}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors">
+                {rechazarLoading
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Rechazando…</>
+                  : <><XCircle className="w-4 h-4" /> Confirmar rechazo</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Ver motivo de rechazo ── */}
+      {motivoModal && motivoSol && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <XCircle className="w-4 h-4 text-red-600" /> SIAF {motivoSol.numero}/{motivoSol.anio} — Rechazado
+                </h2>
+              </div>
+              <button onClick={() => setMotivoModal(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3 text-sm">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Motivo del rechazo</p>
+                <p className="text-gray-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2 whitespace-pre-wrap">
+                  {motivoSol.motivo_rechazo || "—"}
+                </p>
+              </div>
+              <div className="flex items-center justify-between text-xs text-gray-500 pt-1">
+                <span>Rechazado por: <strong className="text-gray-700">{motivoSol.rechazado_por_nombre ?? "—"}</strong></span>
+                <span>{motivoSol.rechazado_en ?? ""}</span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button onClick={() => setMotivoModal(false)} className="btn-secondary">Cerrar</button>
             </div>
           </div>
         </div>
