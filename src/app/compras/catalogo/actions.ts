@@ -44,7 +44,7 @@ export async function crearInsumoCompras(data: any) {
   try {
     await checkAuth();
     const [row] = await db.insert(catalogoCompras).values({
-      codigo_igss:     data.codigo_igss ? Number(data.codigo_igss) : null,
+      codigo_igss:     data.codigo_igss || null,
       codigo_ppr:      data.codigo_ppr || null,
       nombre:          data.nombre,
       caracteristicas: data.caracteristicas || null,
@@ -64,7 +64,7 @@ export async function editarInsumoCompras(data: any) {
   try {
     await checkAuth();
     await db.update(catalogoCompras).set({
-      codigo_igss:     data.codigo_igss ? Number(data.codigo_igss) : null,
+      codigo_igss:     data.codigo_igss || null,
       codigo_ppr:      data.codigo_ppr || null,
       nombre:          data.nombre,
       caracteristicas: data.caracteristicas || null,

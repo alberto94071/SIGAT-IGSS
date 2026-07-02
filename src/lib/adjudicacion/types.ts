@@ -3,7 +3,7 @@ export type SiafResumen = {
 };
 
 export type InsumoPrecio = {
-  codigo_igss: number | null;
+  codigo_igss: string | null;
   subproducto: string;
   nombre: string;
   unidad_medida: string | null;

@@ -2,21 +2,34 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { catalogoCompras } from "@/lib/schema";
-import { asc } from "drizzle-orm";
-import { type Rol } from "@/lib/permisos";
+import { asc, eq } from "drizzle-orm";
 import CatalogoComprasClient from "./CatalogoComprasClient";
 
 export default async function CatalogoComprasPage() {
   const session = await auth();
   if (!session) redirect("/login");
 
-  const rol = session.user.rol as Rol;
-  const canEdit = rol !== "consulta";
-
   const lista = await db
-    .select()
+    .select({
+      id:                      catalogoCompras.id,
+      ug:                      catalogoCompras.ug,
+      cc:                      catalogoCompras.cc,
+      estructura_programatica: catalogoCompras.estructura_programatica,
+      codigo_igss:             catalogoCompras.codigo_igss,
+      nombre:                  catalogoCompras.nombre,
+      codigo_nombre_ppr:       catalogoCompras.codigo_nombre_ppr,
+      nombre_ppr:              catalogoCompras.nombre_ppr,
+      codigo_presentacion_ppr: catalogoCompras.codigo_presentacion_ppr,
+      unidad_medida:           catalogoCompras.unidad_medida,
+      renglon:                 catalogoCompras.renglon,
+      subproducto:             catalogoCompras.subproducto,
+      cantidad:                catalogoCompras.cantidad,
+      precio_estimado:         catalogoCompras.precio_estimado,
+      monto:                   catalogoCompras.monto,
+    })
     .from(catalogoCompras)
+    .where(eq(catalogoCompras.activo, true))
     .orderBy(asc(catalogoCompras.nombre));
 
-  return <CatalogoComprasClient insumos={lista as any} canEdit={canEdit} />;
+  return <CatalogoComprasClient insumos={lista} />;
 }

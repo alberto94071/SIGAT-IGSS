@@ -180,18 +180,28 @@ export const auditLog = pgTable("audit_log", {
 
 // ─── Compras: catálogo de insumos autorizados de la unidad ───────────────────
 export const catalogoCompras = pgTable("catalogo_compras", {
-  id:              serial("id").primaryKey(),
-  codigo_igss:     integer("codigo_igss"),
-  codigo_ppr:      text("codigo_ppr"),
-  codigo_rango:    text("codigo_rango"),
-  nombre:          text("nombre").notNull(),
-  caracteristicas: text("caracteristicas"),
-  presentacion:    text("presentacion"),
-  unidad_medida:   text("unidad_medida"),
-  subproducto:     text("subproducto").notNull(),
-  cantidad:        doublePrecision("cantidad"),
-  activo:          boolean("activo").notNull().default(true),
-  created_at:      text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+  id:                      serial("id").primaryKey(),
+  // Columnas del PAC (Plan Anual de Compras)
+  ug:                      integer("ug"),
+  cc:                      integer("cc"),
+  estructura_programatica: text("estructura_programatica"),
+  codigo_igss:             text("codigo_igss"),       // "SC-122080" — texto, no entero
+  nombre:                  text("nombre").notNull(),
+  codigo_nombre_ppr:       integer("codigo_nombre_ppr"),
+  nombre_ppr:              text("nombre_ppr"),
+  codigo_presentacion_ppr: integer("codigo_presentacion_ppr"),
+  unidad_medida:           text("unidad_medida"),
+  renglon:                 integer("renglon"),
+  subproducto:             text("subproducto").notNull(),
+  cantidad:                doublePrecision("cantidad"),
+  precio_estimado:         doublePrecision("precio_estimado"),
+  monto:                   doublePrecision("monto"),
+  // Columnas legacy (compatibilidad)
+  codigo_ppr:              text("codigo_ppr"),
+  caracteristicas:         text("caracteristicas"),
+  presentacion:            text("presentacion"),
+  activo:                  boolean("activo").notNull().default(true),
+  created_at:              text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 // ─── Catálogo de subproductos (controlado por superadmin) ────────────────────
@@ -233,7 +243,7 @@ export const consolidaciones = pgTable("consolidaciones", {
 export const consolidacionPrecios = pgTable("consolidacion_precios", {
   id:               serial("id").primaryKey(),
   consolidacion_id: integer("consolidacion_id").notNull().references(() => consolidaciones.id, { onDelete: "cascade" }),
-  codigo_igss:      integer("codigo_igss"),
+  codigo_igss:      text("codigo_igss"),
   subproducto:      text("subproducto").notNull(),
   precio_unitario:  doublePrecision("precio_unitario").notNull(),
 });
@@ -277,7 +287,7 @@ export const siafComprasItems = pgTable("siaf_compras_items", {
   id:                  serial("id").primaryKey(),
   solicitud_id:        integer("solicitud_id").notNull().references(() => siafCompras.id, { onDelete: "cascade" }),
   catalogo_id:         integer("catalogo_id").references(() => catalogoCompras.id),
-  codigo_igss:         integer("codigo_igss"),
+  codigo_igss:         text("codigo_igss"),   // texto para coincidir con catalogoCompras.codigo_igss
   codigo_ppr:          text("codigo_ppr"),
   nombre:              text("nombre").notNull(),
   subproducto:         text("subproducto").notNull(),
@@ -307,7 +317,6 @@ export const baseDatosCentral = pgTable("base_datos_central", {
   id:              serial("id").primaryKey(),
   codigo_igss:     integer("codigo_igss"),
   codigo_ppr:      integer("codigo_ppr"),
-  codigo_rango:    text("codigo_rango"),
   nombre:          text("nombre").notNull(),
   caracteristicas: text("caracteristicas"),
   presentacion:    text("presentacion"),
@@ -315,26 +324,6 @@ export const baseDatosCentral = pgTable("base_datos_central", {
   activo:          boolean("activo").notNull().default(true),
   created_at:      text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   updated_at:      text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
-});
-
-// ─── Presupuesto por renglón ──────────────────────────────────────────────────
-export const presupuestoRenglones = pgTable("presupuesto_renglones", {
-  id:                    serial("id").primaryKey(),
-  ejercicio_fiscal:      integer("ejercicio_fiscal").notNull().default(2026),
-  pg_spg_py_act_ob:      text("pg_spg_py_act_ob"),
-  subproducto:           text("subproducto"),
-  renglon:               integer("renglon").notNull(),
-  nombre:                text("nombre").notNull(),
-  vigente:               doublePrecision("vigente").default(0),
-  modificado:            doublePrecision("modificado").default(0),
-  presupuesto:           doublePrecision("presupuesto").default(0),
-  pre_compromiso:        doublePrecision("pre_compromiso").default(0),
-  compromiso:            doublePrecision("compromiso").default(0),
-  devengado:             doublePrecision("devengado").default(0),
-  saldo_presupuestario:  doublePrecision("saldo_presupuestario").default(0),
-  saldo_disponible:      doublePrecision("saldo_disponible").default(0),
-  created_at:            text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
-  updated_at:            text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 // ─── Proveedores ──────────────────────────────────────────────────────────────

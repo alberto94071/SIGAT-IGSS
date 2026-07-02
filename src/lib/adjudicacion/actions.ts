@@ -25,7 +25,7 @@ export async function getConsolidacionesConDetalles(): Promise<Consolidacion[]> 
   }).from(siafCompras).where(isNotNull(siafCompras.consolidacion_id));
 
   const siafIds = siaf.map(s => s.id);
-  let items: { solicitud_id: number; codigo_igss: number | null; subproducto: string;
+  let items: { solicitud_id: number; codigo_igss: string | null; subproducto: string;
     nombre: string; unidad_medida: string | null; cantidad_solicitada: number }[] = [];
   if (siafIds.length > 0) {
     items = await db.select({
@@ -167,7 +167,7 @@ export async function anularConsolidacion(id: number) {
 export async function completarAdjudicacion(id: number, data: {
   referencia:   string | null;
   exento_iva:   boolean;
-  precios:      { codigo_igss: number | null; subproducto: string; precio_unitario: number }[];
+  precios:      { codigo_igss: string | null; subproducto: string; precio_unitario: number }[];
   regularizado: boolean | null;
 }) {
   try {

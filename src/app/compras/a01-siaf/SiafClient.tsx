@@ -14,7 +14,7 @@ import {
 
 type SolicitudItem = {
   id: number; solicitud_id: number; catalogo_id: number | null;
-  codigo_igss: number | null; codigo_ppr: string | null;
+  codigo_igss: string | null; codigo_ppr: string | null;
   nombre: string; subproducto: string; unidad_medida: string | null;
   cantidad_antes: number | null; cantidad_solicitada: number;
 };
@@ -24,13 +24,13 @@ type Solicitud = {
   items: SolicitudItem[];
 };
 type CatEntry = {
-  id: number; codigo_igss: number | null; codigo_ppr: string | null;
+  id: number; codigo_igss: string | null; codigo_ppr: string | null;
   nombre: string; subproducto: string; unidad_medida: string | null;
   cantidad: number | null;
 };
 type ModalItem = {
   key: number; catalogo_id: number;
-  codigo_igss: number | null; codigo_ppr: string | null;
+  codigo_igss: string | null; codigo_ppr: string | null;
   nombre: string; subproducto: string; unidad_medida: string | null;
   cantidad_solicitada: number;
 };
@@ -86,7 +86,7 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
   // Item builder
   const [itemSearch,        setItemSearch]        = useState("");
   const [showItemDrop,      setShowItemDrop]      = useState(false);
-  const [selCodigo,         setSelCodigo]         = useState<number | null>(null);
+  const [selCodigo,         setSelCodigo]         = useState<string | null>(null);
   const [subprodSelections, setSubprodSelections] = useState<Map<number, string>>(new Map());
 
   // ─── Computed ──────────────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
   const historialData = useMemo(() => {
     const q = query.toLowerCase().trim();
     const groups = new Map<string, {
-      key: string; codigo_igss: number | null; nombre: string;
+      key: string; codigo_igss: string | null; nombre: string;
       subproducto: string; unidad_medida: string | null;
       entries: { sol: Solicitud; item: SolicitudItem }[];
     }>();
@@ -137,7 +137,7 @@ export default function SiafClient({ solicitudes: initSol, catalogo, canEdit, fi
   const insumoSugg = useMemo(() => {
     if (!itemSearch || itemSearch.length < 1) return [];
     const q = itemSearch.toLowerCase();
-    const seen = new Set<number | null>();
+    const seen = new Set<string | null>();
     const res: CatEntry[] = [];
     for (const c of catalogo) {
       const ok = c.nombre.toLowerCase().includes(q) ||

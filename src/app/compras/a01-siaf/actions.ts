@@ -17,7 +17,7 @@ export async function crearSolicitud(data: {
   observaciones?: string | null;
   items: {
     catalogo_id: number;
-    codigo_igss: number | null;
+    codigo_igss: string | null;
     codigo_ppr: string | null;
     nombre: string;
     subproducto: string;
@@ -116,7 +116,7 @@ export async function editarSolicitud(id: number, data: {
   observaciones?: string | null;
   items: {
     catalogo_id: number;
-    codigo_igss: number | null;
+    codigo_igss: string | null;
     codigo_ppr: string | null;
     nombre: string;
     subproducto: string;
