@@ -192,15 +192,16 @@ export default function ImprimirClient({
           overflow: "hidden",
           display: "flex", flexDirection: "column",
         }}>
-          {/* Encabezado con divisores verticales entre columnas */}
+          {/* Encabezado con divisores verticales entre columnas — las celdas ocupan
+              toda la altura del encabezado para que la línea sea continua con la del cuerpo */}
           <div style={{
             display: "flex", borderBottom: B, height: HEADER_H,
-            alignItems: "center", flexShrink: 0,
+            flexShrink: 0,
             fontWeight: "bold", fontSize: "9pt", fontFamily: FONT, color: C,
           }}>
-            <div style={{ width: W_COD, textAlign: "center", flexShrink: 0, borderRight: B }}>Código</div>
-            <div style={{ flex: 1, textAlign: "center" }}>Descripción</div>
-            <div style={{ width: W_CANT, textAlign: "center", flexShrink: 0, borderLeft: B }}>Cantidad</div>
+            <div style={{ width: W_COD, flexShrink: 0, borderRight: B, display: "flex", alignItems: "center", justifyContent: "center" }}>Código</div>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>Descripción</div>
+            <div style={{ width: W_CANT, flexShrink: 0, borderLeft: B, display: "flex", alignItems: "center", justifyContent: "center" }}>Cantidad</div>
           </div>
 
           {/* Cuerpo con líneas verticales absolutas */}
@@ -239,13 +240,13 @@ export default function ImprimirClient({
 
           {/* Footer: Código de Subproducto + Total con línea vertical continua */}
           <div style={{ borderTop: B, flexShrink: 0, position: "relative" }}>
-            {/* Línea vertical continua que separa las dos columnas del footer */}
-            <div style={{ position: "absolute", right: 170, top: 0, bottom: 0, width: "2px", background: "#1a1a1a", zIndex: 1 }} />
+            {/* Línea vertical continua, exactamente a la mitad del recuadro */}
+            <div style={{ position: "absolute", left: "50%", marginLeft: "-1px", top: 0, bottom: 0, width: "2px", background: "#1a1a1a", zIndex: 1 }} />
 
             {/* Fila encabezado */}
             <div style={{ display: "flex", height: SUBPROD_H, alignItems: "center", fontWeight: "bold", fontSize: "8.5pt", fontFamily: FONT, color: C }}>
               <div style={{ flex: 1, textAlign: "center" }}>Código de Subproducto</div>
-              <div style={{ width: 170, textAlign: "center", flexShrink: 0 }}>Cantidad por Subproducto</div>
+              <div style={{ flex: 1, textAlign: "center" }}>Cantidad por Subproducto</div>
             </div>
 
             {/* Separador horizontal entre encabezado y Total */}
@@ -254,7 +255,7 @@ export default function ImprimirClient({
             {/* Fila Total */}
             <div style={{ display: "flex", height: TOTAL_H, alignItems: "center", fontFamily: FONT, color: C }}>
               <div style={{ flex: 1, textAlign: "right", paddingRight: "14px", fontWeight: "bold", fontSize: "9pt" }}>Total</div>
-              <div style={{ width: 170, textAlign: "center", fontWeight: "bold", fontSize: "10pt", flexShrink: 0 }}>
+              <div style={{ flex: 1, textAlign: "center", fontWeight: "bold", fontSize: "10pt" }}>
                 {totalGeneral.toLocaleString("es-GT")}
               </div>
             </div>

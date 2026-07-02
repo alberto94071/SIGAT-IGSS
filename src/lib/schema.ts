@@ -280,6 +280,9 @@ export const siafCompras = pgTable("siaf_compras", {
   observaciones:    text("observaciones"),
   consolidacion_id: integer("consolidacion_id"),
   creado_por:       integer("creado_por").references(() => usuarios.id),
+  motivo_rechazo:   text("motivo_rechazo"),
+  rechazado_por:    integer("rechazado_por").references(() => usuarios.id),
+  rechazado_en:     text("rechazado_en"),
   created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
@@ -358,4 +361,19 @@ export const proveedores = pgTable("proveedores", {
   activo:      boolean("activo").notNull().default(true),
   created_at:  text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   updated_at:  text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Notificaciones (campanita) ───────────────────────────────────────────────
+// tipo: 'siaf_rechazado' | ... (futuros tipos de otros procesos)
+export const notificaciones = pgTable("notificaciones", {
+  id:              serial("id").primaryKey(),
+  usuario_id:      integer("usuario_id").notNull().references(() => usuarios.id),
+  tipo:            text("tipo").notNull(),
+  titulo:          text("titulo").notNull(),
+  mensaje:         text("mensaje").notNull(),
+  ruta:            text("ruta"),
+  referencia_tipo: text("referencia_tipo"),
+  referencia_id:   integer("referencia_id"),
+  leida:           boolean("leida").notNull().default(false),
+  created_at:      text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
