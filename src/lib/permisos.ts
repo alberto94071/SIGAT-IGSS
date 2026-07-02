@@ -24,14 +24,16 @@ export interface Permisos {
   mod_contrato_cotizaciones: boolean;
   mod_base_datos:            boolean;
   mod_fondo_rotativo:        boolean;
-  // Administración (usuarios y accesos) — solo el superadmin lo trae por defecto
+  // Administración (usuarios y accesos) y Configuración — solo el superadmin las trae por defecto
   mod_administracion:        boolean;
+  mod_configuracion:         boolean;
 }
 
 export type Modulo =
   | "mod_compras" | "mod_presupuesto" | "mod_junta_adjudicadora" | "mod_almacen"
   | "mod_caja_chica" | "mod_libros" | "mod_viaticos" | "mod_pasajes"
-  | "mod_contrato_cotizaciones" | "mod_base_datos" | "mod_fondo_rotativo" | "mod_administracion";
+  | "mod_contrato_cotizaciones" | "mod_base_datos" | "mod_fondo_rotativo"
+  | "mod_administracion" | "mod_configuracion";
 
 const MODULOS_DEFAULT = {
   mod_compras: true, mod_presupuesto: true, mod_junta_adjudicadora: true,
@@ -46,25 +48,25 @@ export const PERMISOS_DEFAULT: Record<Rol, Permisos> = {
     servicios: true, pagos: true, banco: true, caja_chica: true,
     liquidacion: true, catalogos: true, reportes: true,
     documentos: true, usuarios: true, configuracion: true,
-    ...MODULOS_DEFAULT, mod_administracion: true,
+    ...MODULOS_DEFAULT, mod_administracion: true, mod_configuracion: true,
   },
   admin: {
     servicios: true, pagos: true, banco: true, caja_chica: true,
     liquidacion: true, catalogos: true, reportes: true,
     documentos: true, usuarios: false, configuracion: false,
-    ...MODULOS_DEFAULT, mod_administracion: false,
+    ...MODULOS_DEFAULT, mod_administracion: false, mod_configuracion: false,
   },
   operador: {
     servicios: true, pagos: true, banco: true, caja_chica: true,
     liquidacion: false, catalogos: false, reportes: true,
     documentos: true, usuarios: false, configuracion: false,
-    ...MODULOS_DEFAULT, mod_administracion: false,
+    ...MODULOS_DEFAULT, mod_administracion: false, mod_configuracion: false,
   },
   consulta: {
     servicios: false, pagos: false, banco: false, caja_chica: false,
     liquidacion: false, catalogos: false, reportes: true,
     documentos: false, usuarios: false, configuracion: false,
-    ...MODULOS_DEFAULT, mod_administracion: false,
+    ...MODULOS_DEFAULT, mod_administracion: false, mod_configuracion: false,
   },
 };
 
@@ -113,5 +115,4 @@ export const NAV_ITEMS = [
   { href: "/dashboard/presupuesto",   label: "Presupuesto",    icon: "TrendingUp",      permiso: "reportes"    },
   { href: "/dashboard/reportes",     label: "Reportes",       icon: "BarChart3",       permiso: "reportes"    },
   { href: "/dashboard/documentos",   label: "Documentos",     icon: "FileText",        permiso: "documentos"  },
-  { href: "/dashboard/configuracion",label: "Configuración",  icon: "Settings",        permiso: "configuracion"},
 ] as const;

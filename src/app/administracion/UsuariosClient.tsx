@@ -28,7 +28,6 @@ const MODULOS: { key: keyof Permisos; label: string }[] = [
   { key: "catalogos",     label: "Catálogos"      },
   { key: "reportes",      label: "Reportes"       },
   { key: "documentos",    label: "Documentos"     },
-  { key: "configuracion", label: "Configuración"  },
 ];
 
 const MODULOS_LAUNCHER: { key: keyof Permisos; label: string }[] = [
@@ -44,6 +43,7 @@ const MODULOS_LAUNCHER: { key: keyof Permisos; label: string }[] = [
   { key: "mod_contrato_cotizaciones", label: "Contrato y Cotizaciones"},
   { key: "mod_base_datos",            label: "Base de Datos Central"  },
   { key: "mod_administracion",        label: "Administración"         },
+  { key: "mod_configuracion",         label: "Configuración"          },
 ];
 
 interface Props {

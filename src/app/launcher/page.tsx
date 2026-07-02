@@ -4,7 +4,7 @@ import Link from "next/link";
 import {
   RotateCcw, MapPin, Bus, ArrowRight, Construction,
   ShieldCheck, ShoppingCart, Database, Calculator, Wallet,
-  Archive, Library, Gavel, FileSignature, UserCog
+  Archive, Library, Gavel, FileSignature, UserCog, Settings
 } from "lucide-react";
 import { type Modulo, type Rol } from "@/lib/permisos";
 import { getPermisosFrescos } from "@/lib/modulo-access";
@@ -166,6 +166,19 @@ const MODULES = [
     bgLight: "bg-rose-50",
     available: true,
     permiso: "mod_administracion" as Modulo | null,
+  },
+  {
+    id: "configuracion",
+    title: "Configuración",
+    description: "Datos generales de la unidad, fondo rotativo, firmantes y formatos de documentos.",
+    href: "/configuracion",
+    icon: Settings,
+    color: "bg-gray-600",
+    ring: "ring-gray-200",
+    textColor: "text-gray-600",
+    bgLight: "bg-gray-50",
+    available: true,
+    permiso: "mod_configuracion" as Modulo | null,
   },
 ];
 
