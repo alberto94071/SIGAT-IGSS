@@ -372,7 +372,7 @@ export default function UsuariosClient({ usuarios: init, isSuperAdmin, currentUs
                         onClick={() => setPermEdit(prev => ({ ...prev, [m.key]: !prev[m.key] }))}
                         className={`w-10 h-5 rounded-full transition-colors relative ${permEdit[m.key] ? "bg-brand-500" : "bg-gray-200"}`}
                       >
-                        <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${permEdit[m.key] ? "translate-x-5" : "translate-x-0.5"}`} />
+                        <span className={`absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${permEdit[m.key] ? "translate-x-5" : "translate-x-0"}`} />
                       </button>
                     </div>
                   </div>
@@ -398,7 +398,7 @@ export default function UsuariosClient({ usuarios: init, isSuperAdmin, currentUs
                         onClick={() => setPermEdit(prev => ({ ...prev, [m.key]: !prev[m.key] }))}
                         className={`w-10 h-5 rounded-full transition-colors relative ${permEdit[m.key] ? "bg-brand-500" : "bg-gray-200"}`}
                       >
-                        <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${permEdit[m.key] ? "translate-x-5" : "translate-x-0.5"}`} />
+                        <span className={`absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${permEdit[m.key] ? "translate-x-5" : "translate-x-0"}`} />
                       </button>
                     </div>
                   </div>
