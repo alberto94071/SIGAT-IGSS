@@ -27,7 +27,7 @@ const C = "#000";
 // Alturas fijas en px — calibradas para que el sheet tenga proporción A4 (1:1.41)
 // Ancho = 210mm ≈ 794px en pantalla a 96dpi → alto objetivo ≈ 1123px
 const H_BOX1 = 82;    // Logo + título
-const H_BOX2 = 130;   // Datos de registro (más alto para que quepa Dirección)
+const H_BOX2 = 142;   // Datos de registro (más alto para que quepa Dirección con aire abajo)
 const H_TABLE = 650;   // Tabla — el bloque más grande, da la proporción A4
 const H_FIRMA = 90;    // Recuadros de firma
 const H_JUST = 48;    // Justificación
@@ -51,12 +51,27 @@ export default function ImprimirClient({
   const corrLabel = `${solicitud.numero}/${solicitud.anio}`;
   const totalGeneral = items.reduce((s, i) => s + i.cantidad_solicitada, 0);
 
+  // Resumen: suma de cantidad_solicitada agrupada por subproducto
+  const resumenSubproductos = Object.values(
+    items.reduce((acc, item) => {
+      const key = item.subproducto || "—";
+      if (!acc[key]) acc[key] = { subproducto: key, cantidad: 0 };
+      acc[key].cantidad += item.cantidad_solicitada;
+      return acc;
+    }, {} as Record<string, { subproducto: string; cantidad: number }>)
+  );
+
   // Calcular cuántas filas vacías necesita la tabla para llenar el espacio fijo
   const HEADER_H = 26;
   const NOTA_H = 22;
-  const SUBPROD_H = 26;
+  const SUBPROD_HEADER_H = 22;
+  const SUBPROD_ROW_H = 18;
+  const SUBPROD_MIN_ROWS = 6;
+  const subprodRows = Math.max(SUBPROD_MIN_ROWS, resumenSubproductos.length);
+  const subprodEmptyRows = subprodRows - resumenSubproductos.length;
+  const SUBPROD_BODY_H = SUBPROD_ROW_H * subprodRows;
   const TOTAL_H = 24;
-  const FOOTER_H = NOTA_H + SUBPROD_H + TOTAL_H;
+  const FOOTER_H = NOTA_H + SUBPROD_HEADER_H + SUBPROD_BODY_H + TOTAL_H;
   const ROW_H = 24;
   const rowsArea = H_TABLE - HEADER_H - FOOTER_H;
   const maxRows = Math.floor(rowsArea / ROW_H);
@@ -144,7 +159,7 @@ export default function ImprimirClient({
         {/* ── RECUADRO 2: Datos de registro ── */}
         <div style={{
           border: B, borderRadius: R, height: H_BOX2, marginBottom: GAP,
-          padding: "8px 14px 12px 14px", boxSizing: "border-box",
+          padding: "8px 14px 22px 14px", boxSizing: "border-box",
         }}>
           {/* Fecha + Correlativo: cada campo centrado en su mitad */}
           <div style={{ display: "flex", marginBottom: "7px" }}>
@@ -192,43 +207,45 @@ export default function ImprimirClient({
           overflow: "hidden",
           display: "flex", flexDirection: "column",
         }}>
-          {/* Encabezado con divisores verticales entre columnas — las celdas ocupan
-              toda la altura del encabezado para que la línea sea continua con la del cuerpo */}
-          <div style={{
-            display: "flex", borderBottom: B, height: HEADER_H,
-            flexShrink: 0,
-            fontWeight: "bold", fontSize: "9pt", fontFamily: FONT, color: C,
-          }}>
-            <div style={{ width: W_COD, flexShrink: 0, borderRight: B, display: "flex", alignItems: "center", justifyContent: "center" }}>Código</div>
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>Descripción</div>
-            <div style={{ width: W_CANT, flexShrink: 0, borderLeft: B, display: "flex", alignItems: "center", justifyContent: "center" }}>Cantidad</div>
-          </div>
-
-          {/* Cuerpo con líneas verticales absolutas */}
-          <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+          {/* Encabezado + cuerpo comparten un mismo wrapper posicionado, con un único
+              par de líneas verticales absolutas que corren de punta a punta —
+              así la línea es una sola recta continua, sin desfase por box-sizing */}
+          <div style={{ flex: 1, position: "relative", display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <div style={{ position: "absolute", left: W_COD, top: 0, bottom: 0, width: "2px", background: "#1a1a1a", zIndex: 1 }} />
             <div style={{ position: "absolute", right: W_CANT, top: 0, bottom: 0, width: "2px", background: "#1a1a1a", zIndex: 1 }} />
 
-            {items.map(item => (
-              <div key={item.id} style={{ display: "flex", height: ROW_H, alignItems: "center", fontFamily: FONT, color: C }}>
-                <div style={{ width: W_COD, textAlign: "center", flexShrink: 0, fontFamily: "monospace", fontSize: "8pt" }}>
-                  {item.codigo_igss ?? ""}
-                </div>
-                <div style={{ flex: 1, padding: "0 8px", display: "flex", justifyContent: "space-between", alignItems: "center", overflow: "hidden" }}>
-                  <span style={{ textTransform: "uppercase", fontSize: "8pt", lineHeight: 1.2 }}>{item.nombre}</span>
-                  <span style={{ fontSize: "7.5pt", color: "#333", whiteSpace: "nowrap", marginLeft: "8px", flexShrink: 0 }}>
-                    {item.subproducto}
-                  </span>
-                </div>
-                <div style={{ width: W_CANT, textAlign: "center", flexShrink: 0, fontSize: "9pt" }}>
-                  {item.cantidad_solicitada.toLocaleString("es-GT")}
-                </div>
-              </div>
-            ))}
+            <div style={{
+              display: "flex", borderBottom: B, height: HEADER_H,
+              flexShrink: 0,
+              fontWeight: "bold", fontSize: "9pt", fontFamily: FONT, color: C,
+            }}>
+              <div style={{ width: W_COD, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>Código</div>
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>Descripción</div>
+              <div style={{ width: W_CANT, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>Cantidad</div>
+            </div>
 
-            {Array.from({ length: emptyRows }).map((_, i) => (
-              <div key={`e${i}`} style={{ height: ROW_H }} />
-            ))}
+            <div style={{ flex: 1, overflow: "hidden" }}>
+              {items.map(item => (
+                <div key={item.id} style={{ display: "flex", height: ROW_H, alignItems: "center", fontFamily: FONT, color: C }}>
+                  <div style={{ width: W_COD, textAlign: "center", flexShrink: 0, fontFamily: "monospace", fontSize: "8pt" }}>
+                    {item.codigo_igss ?? ""}
+                  </div>
+                  <div style={{ flex: 1, padding: "0 8px", display: "flex", justifyContent: "space-between", alignItems: "center", overflow: "hidden" }}>
+                    <span style={{ textTransform: "uppercase", fontSize: "8pt", lineHeight: 1.2 }}>{item.nombre}</span>
+                    <span style={{ fontSize: "7.5pt", color: "#333", whiteSpace: "nowrap", marginLeft: "8px", flexShrink: 0 }}>
+                      {item.subproducto}
+                    </span>
+                  </div>
+                  <div style={{ width: W_CANT, textAlign: "center", flexShrink: 0, fontSize: "9pt" }}>
+                    {item.cantidad_solicitada.toLocaleString("es-GT")}
+                  </div>
+                </div>
+              ))}
+
+              {Array.from({ length: emptyRows }).map((_, i) => (
+                <div key={`e${i}`} style={{ height: ROW_H }} />
+              ))}
+            </div>
           </div>
 
           {/* Nota */}
@@ -244,12 +261,39 @@ export default function ImprimirClient({
             <div style={{ position: "absolute", left: "50%", marginLeft: "-1px", top: 0, bottom: 0, width: "2px", background: "#1a1a1a", zIndex: 1 }} />
 
             {/* Fila encabezado */}
-            <div style={{ display: "flex", height: SUBPROD_H, alignItems: "center", fontWeight: "bold", fontSize: "8.5pt", fontFamily: FONT, color: C }}>
+            <div style={{ display: "flex", height: SUBPROD_HEADER_H, alignItems: "center", fontWeight: "bold", fontSize: "8.5pt", fontFamily: FONT, color: C }}>
               <div style={{ flex: 1, textAlign: "center" }}>Código de Subproducto</div>
               <div style={{ flex: 1, textAlign: "center" }}>Cantidad por Subproducto</div>
             </div>
 
-            {/* Separador horizontal entre encabezado y Total */}
+            {/* Separador horizontal entre encabezado y filas del resumen */}
+            <div style={{ borderTop: B }} />
+
+            {/* Cuerpo: resumen — suma de cantidad solicitada por subproducto */}
+            <div style={{ height: SUBPROD_BODY_H }}>
+              {resumenSubproductos.map((r, i) => (
+                <div key={r.subproducto} style={{
+                  display: "flex", height: SUBPROD_ROW_H, alignItems: "center",
+                  fontSize: "8pt", fontFamily: FONT, color: C,
+                  borderTop: i === 0 ? "none" : "1px solid #ccc",
+                }}>
+                  <div style={{ flex: 1, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: "0 6px" }}>
+                    {r.subproducto}
+                  </div>
+                  <div style={{ flex: 1, textAlign: "center" }}>
+                    {r.cantidad.toLocaleString("es-GT")}
+                  </div>
+                </div>
+              ))}
+              {Array.from({ length: subprodEmptyRows }).map((_, i) => (
+                <div key={`se${i}`} style={{
+                  display: "flex", height: SUBPROD_ROW_H,
+                  borderTop: (resumenSubproductos.length + i) === 0 ? "none" : "1px solid #ccc",
+                }} />
+              ))}
+            </div>
+
+            {/* Separador horizontal entre el resumen y Total */}
             <div style={{ borderTop: B }} />
 
             {/* Fila Total */}
