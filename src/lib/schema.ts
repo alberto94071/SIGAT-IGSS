@@ -387,6 +387,8 @@ export const baseDatosCentral = pgTable("base_datos_central", {
 export const presupuestoRenglones = pgTable("presupuesto_renglones", {
   id:                   serial("id").primaryKey(),
   ejercicio_fiscal:     integer("ejercicio_fiscal").notNull().default(2026),
+  ug:                   integer("ug"),
+  cc:                   integer("cc"),
   pg_spg_py_act_ob:     text("pg_spg_py_act_ob"),
   subproducto:          text("subproducto"),
   renglon:              integer("renglon"),
@@ -414,6 +416,22 @@ export const proveedores = pgTable("proveedores", {
   activo:      boolean("activo").notNull().default(true),
   created_at:  text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   updated_at:  text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Registro de NOG (Número de Operación de Guatecompras) ──────────────────────
+export const nogRegistros = pgTable("nog_registros", {
+  id:                   serial("id").primaryKey(),
+  nog:                  text("nog").notNull(),
+  proveedor_id:         integer("proveedor_id"),
+  proveedor_nit:        text("proveedor_nit"),
+  proveedor_nombre:     text("proveedor_nombre").notNull(),
+  insumo_id:            integer("insumo_id"),
+  insumo_nombre:        text("insumo_nombre").notNull(),
+  insumo_codigo_igss:   text("insumo_codigo_igss"),
+  subproducto:          text("subproducto"),
+  cantidad_autorizada:  doublePrecision("cantidad_autorizada").notNull(),
+  creado_por:           integer("creado_por").references(() => usuarios.id),
+  created_at:           text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 // ─── Notificaciones (campanita) ───────────────────────────────────────────────
