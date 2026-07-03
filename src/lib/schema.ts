@@ -430,6 +430,9 @@ export const nogRegistros = pgTable("nog_registros", {
   insumo_codigo_igss:   text("insumo_codigo_igss"),
   subproducto:          text("subproducto"),
   cantidad_autorizada:  doublePrecision("cantidad_autorizada").notNull(),
+  precio:               doublePrecision("precio"),
+  exento_iva:           boolean("exento_iva").notNull().default(false),
+  total:                doublePrecision("total"),
   creado_por:           integer("creado_por").references(() => usuarios.id),
   created_at:           text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });

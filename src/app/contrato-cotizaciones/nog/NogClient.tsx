@@ -1,15 +1,18 @@
 "use client";
 import { useState } from "react";
-import { Hash, Plus, X, Loader2, Trash2, Building2 } from "lucide-react";
+import { Hash, Plus, X, Loader2, Trash2, Building2, DollarSign } from "lucide-react";
 import { crearNog, eliminarNog } from "@/lib/nog-actions";
 import NitAutocomplete from "@/components/adjudicacion/NitAutocomplete";
 import InsumoAutocomplete from "@/components/InsumoAutocomplete";
+
+const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 type NogRow = {
   id: number; nog: string;
   proveedor_id: number | null; proveedor_nit: string | null; proveedor_nombre: string;
   insumo_id: number | null; insumo_nombre: string; insumo_codigo_igss: string | null;
   subproducto: string | null; cantidad_autorizada: number;
+  precio: number | null; exento_iva: boolean; total: number | null;
 };
 
 interface Props { nogs: NogRow[]; canEdit: boolean; }
@@ -60,6 +63,9 @@ export default function NogClient({ nogs: init, canEdit }: Props) {
                 <th className="px-4 py-3 text-left">Proveedor</th>
                 <th className="px-4 py-3 text-left">Insumo</th>
                 <th className="px-4 py-3 text-right whitespace-nowrap">Cantidad Autorizada</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Precio</th>
+                <th className="px-4 py-3 text-center whitespace-nowrap">IVA</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
                 {canEdit && <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>}
               </tr>
             </thead>
@@ -80,6 +86,17 @@ export default function NogClient({ nogs: init, canEdit }: Props) {
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-semibold text-gray-900 whitespace-nowrap">
                     {n.cantidad_autorizada.toLocaleString("es-GT")}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono text-gray-700 whitespace-nowrap">
+                    {n.precio != null ? Q(n.precio) : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-center whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${n.exento_iva ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+                      {n.exento_iva ? "Exento" : "Con IVA (12%)"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
+                    {n.total != null ? Q(n.total) : "—"}
                   </td>
                   {canEdit && (
                     <td className="px-4 py-3 text-right">
@@ -115,22 +132,30 @@ function AgregarNogModal({ onClose, onCreado }: { onClose: () => void; onCreado:
   const [insumoCodigo, setInsumoCodigo] = useState<string | null>(null);
   const [subproducto, setSubproducto] = useState<string | null>(null);
   const [cantidad, setCantidad] = useState("");
+  const [precio, setPrecio] = useState("");
+  const [exentoIva, setExentoIva] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const cantidadNum = parseFloat(cantidad);
+  const precioNum = parseFloat(precio);
+  const totalPreview = cantidadNum > 0 && precioNum > 0
+    ? (exentoIva ? cantidadNum * precioNum : cantidadNum * precioNum * 0.88)
+    : null;
+
   async function handleGuardar() {
-    const cantidadNum = parseFloat(cantidad);
     if (!nog.trim()) return setError("El número de NOG es obligatorio");
     if (!proveedorNombre.trim()) return setError("Selecciona o escribe el proveedor");
     if (!insumoNombre.trim()) return setError("Selecciona el insumo");
     if (!(cantidadNum > 0)) return setError("Ingresa una cantidad autorizada válida");
+    if (!(precioNum > 0)) return setError("Ingresa un precio válido");
 
     setSaving(true); setError("");
     const res = await crearNog({
       nog: nog.trim(),
       proveedor_id: proveedorId, proveedor_nit: nit.trim() || null, proveedor_nombre: proveedorNombre.trim(),
       insumo_id: insumoId, insumo_nombre: insumoNombre.trim(), insumo_codigo_igss: insumoCodigo, subproducto,
-      cantidad_autorizada: cantidadNum,
+      cantidad_autorizada: cantidadNum, precio: precioNum, exento_iva: exentoIva,
     });
     setSaving(false);
     if ("error" in res) return setError(res.error);
@@ -183,6 +208,25 @@ function AgregarNogModal({ onClose, onCreado }: { onClose: () => void; onCreado:
             <label className="label">Cantidad autorizada <span className="text-red-500 font-semibold">*</span></label>
             <input type="number" step="0.01" min="0.01" className="input" value={cantidad} onChange={e => setCantidad(e.target.value)} />
           </div>
+
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <label className="label flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" /> Precio <span className="text-red-500 font-semibold">*</span></label>
+              <input type="number" step="0.01" min="0.01" className="input" value={precio} onChange={e => setPrecio(e.target.value)} />
+            </div>
+            <label className="flex items-center gap-1.5 text-xs text-gray-600 whitespace-nowrap mt-6">
+              <input type="checkbox" checked={exentoIva} onChange={e => setExentoIva(e.target.checked)} className="w-3.5 h-3.5 accent-brand-600" />
+              Exento IVA
+            </label>
+          </div>
+
+          {totalPreview != null && (
+            <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+              {exentoIva
+                ? <>Exento de IVA — Total: <strong className="text-gray-900">{Q(totalPreview)}</strong></>
+                : <>Con IVA (se descuenta 12%) — Total: <strong className="text-gray-900">{Q(totalPreview)}</strong></>}
+            </p>
+          )}
 
           {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
         </div>

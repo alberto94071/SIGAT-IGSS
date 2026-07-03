@@ -34,7 +34,7 @@ export async function crearNog(data: {
   nog: string;
   proveedor_id: number | null; proveedor_nit: string | null; proveedor_nombre: string;
   insumo_id: number | null; insumo_nombre: string; insumo_codigo_igss: string | null; subproducto: string | null;
-  cantidad_autorizada: number;
+  cantidad_autorizada: number; precio: number; exento_iva: boolean;
 }): Promise<{ nog: typeof nogRegistros.$inferSelect } | { error: string }> {
   try {
     const session = await auth();
@@ -45,6 +45,10 @@ export async function crearNog(data: {
     if (!data.proveedor_nombre.trim()) return { error: "El proveedor es obligatorio" };
     if (!data.insumo_nombre.trim()) return { error: "El insumo es obligatorio" };
     if (!(data.cantidad_autorizada > 0)) return { error: "Ingresa una cantidad autorizada válida" };
+    if (!(data.precio > 0)) return { error: "Ingresa un precio válido" };
+
+    const bruto = data.cantidad_autorizada * data.precio;
+    const total = data.exento_iva ? bruto : bruto * 0.88;
 
     const [row] = await db.insert(nogRegistros).values({
       nog: data.nog.trim(),
@@ -56,6 +60,9 @@ export async function crearNog(data: {
       insumo_codigo_igss: data.insumo_codigo_igss,
       subproducto: data.subproducto,
       cantidad_autorizada: data.cantidad_autorizada,
+      precio: data.precio,
+      exento_iva: data.exento_iva,
+      total,
       creado_por: Number(session.user.id),
     }).returning();
 
