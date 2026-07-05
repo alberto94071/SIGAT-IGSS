@@ -252,6 +252,28 @@ export const consolidaciones = pgTable("consolidaciones", {
   acta_aprobada:        boolean("acta_aprobada").notNull().default(false),
 });
 
+// ─── Acta de Junta Adjudicadora — una por consolidación adjudicada ───────────
+// estado: 'Generada' | 'Aprobada' | 'Rechazada'
+export const actasAdjudicacion = pgTable("actas_adjudicacion", {
+  id:               serial("id").primaryKey(),
+  consolidacion_id: integer("consolidacion_id").notNull().unique()
+                      .references(() => consolidaciones.id, { onDelete: "cascade" }),
+  no_formulario:    text("no_formulario").notNull(),
+  no_acta:          text("no_acta").notNull(),
+  lugar:            text("lugar").notNull(),
+  fecha:            text("fecha").notNull(),
+  hora:             text("hora").notNull(),
+  estado:           text("estado").notNull().default("Generada"),
+  previsualizada:   boolean("previsualizada").notNull().default(false),
+  motivo_rechazo:   text("motivo_rechazo"),
+  generado_por:     integer("generado_por").references(() => usuarios.id),
+  aprobado_por:     integer("aprobado_por").references(() => usuarios.id),
+  aprobado_en:      text("aprobado_en"),
+  rechazado_por:    integer("rechazado_por").references(() => usuarios.id),
+  rechazado_en:     text("rechazado_en"),
+  created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
 // ─── Precio por insumo de cada consolidación adjudicada ──────────────────────
 export const consolidacionPrecios = pgTable("consolidacion_precios", {
   id:               serial("id").primaryKey(),
