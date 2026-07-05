@@ -1,0 +1,28 @@
+name: Migración — presupuesto_aplicado en SIAF Compras
+
+on:
+  workflow_dispatch:
+    inputs:
+      database_url:
+        description: 'DATABASE_URL de Neon PostgreSQL'
+        required: true
+        type: string
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar migración
+        env:
+          DATABASE_URL: ${{ inputs.database_url }}
+        run: node scripts/migrate-siaf-presupuesto-aplicado.mjs

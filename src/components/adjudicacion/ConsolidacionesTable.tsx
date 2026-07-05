@@ -202,12 +202,7 @@ export default function ConsolidacionesTable({ consolidaciones, acciones, onVerM
                                 {c.fecha_evento && <p><span className="font-semibold">Fecha evento:</span> {c.fecha_evento}</p>}
                                 {c.referencia && <p><span className="font-semibold">Referencia:</span> {c.referencia}</p>}
                                 {c.numero_adjudicacion && (
-                                  <p>
-                                    <span className="font-semibold">
-                                      {(c.tipo_compra === "Contrato Abierto" || c.tipo_compra === "Casos de Excepción")
-                                        ? "Razón de adjudicación:" : "N° Adjudicación:"}
-                                    </span> {c.numero_adjudicacion}
-                                  </p>
+                                  <p><span className="font-semibold">Razón de adjudicación:</span> {c.numero_adjudicacion}</p>
                                 )}
                                 {c.numero_a04 && <p><span className="font-semibold">N° A-04 SIAF:</span> {c.numero_a04}/{c.anio_a04}</p>}
                                 {c.proveedor_nombre && <p><span className="font-semibold">Proveedor:</span> {c.proveedor_nombre} {c.proveedor_nit && `· NIT: ${c.proveedor_nit}`}</p>}

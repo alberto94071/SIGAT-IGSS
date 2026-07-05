@@ -1,7 +1,7 @@
 "use server";
 import { db } from "@/lib/db";
 import { consolidaciones, oferentes, siafCompras } from "@/lib/schema";
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { crearNotificacion } from "@/lib/notificaciones";
 
@@ -20,7 +20,7 @@ export async function adjudicarJunta(consolidacionId: number, data: {
     if ("error" in check) return check;
 
     const numAdj = data.numero_adjudicacion.trim();
-    if (!/^\d+$/.test(numAdj)) return { error: "El Número de Adjudicación solo puede contener dígitos" };
+    if (!numAdj) return { error: "La razón de adjudicación es obligatoria" };
 
     const [con] = await db.select().from(consolidaciones).where(eq(consolidaciones.id, consolidacionId)).limit(1);
     if (!con) return { error: "No se encontró la consolidación" };
@@ -29,10 +29,6 @@ export async function adjudicarJunta(consolidacionId: number, data: {
     const [ofrt] = await db.select().from(oferentes)
       .where(and(eq(oferentes.id, data.oferenteId), eq(oferentes.consolidacion_id, consolidacionId))).limit(1);
     if (!ofrt) return { error: "El oferente elegido no pertenece a esta consolidación" };
-
-    const [existente] = await db.select({ id: consolidaciones.id }).from(consolidaciones)
-      .where(and(eq(consolidaciones.numero_adjudicacion, numAdj), ne(consolidaciones.id, consolidacionId))).limit(1);
-    if (existente) return { error: `Ya existe una consolidación con el Número de Adjudicación ${numAdj}` };
 
     await db.update(consolidaciones).set({
       estado:               "Adjudicado",

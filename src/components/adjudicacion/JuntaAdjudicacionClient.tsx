@@ -85,7 +85,7 @@ function RevisarModal({ consolidacion: c, onClose, onDone }: {
 
   async function handleAdjudicar() {
     if (!ganadorId) return setError("Selecciona al oferente ganador");
-    if (!/^\d+$/.test(numAdj.trim())) return setError("El Número de Adjudicación solo puede contener dígitos");
+    if (!numAdj.trim()) return setError("La razón de adjudicación es obligatoria");
     setLoading(true); setError("");
     const res = await adjudicarJunta(c.id, { oferenteId: ganadorId, numero_adjudicacion: numAdj.trim() });
     setLoading(false);
@@ -130,9 +130,9 @@ function RevisarModal({ consolidacion: c, onClose, onDone }: {
                   selectable selectedId={ganadorId} onSelect={setGanadorId} />
               </div>
               <div>
-                <label className="label flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> Número de Adjudicación (SIGES)</label>
-                <input className="input font-mono" value={numAdj}
-                  onChange={e => setNumAdj(e.target.value.replace(/\D/g, ""))} placeholder="Solo dígitos" />
+                <label className="label flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> Razón de Adjudicación</label>
+                <input className="input" value={numAdj}
+                  onChange={e => setNumAdj(e.target.value)} placeholder="Justificación de por qué se adjudica a este oferente…" />
               </div>
               {error && (
                 <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">

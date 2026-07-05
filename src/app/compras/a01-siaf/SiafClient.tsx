@@ -8,7 +8,7 @@ import {
   Pencil, Gavel, Info,
 } from "lucide-react";
 import {
-  crearSolicitud, editarSolicitud, eliminarSolicitud, actualizarEstado,
+  crearSolicitud, editarSolicitud, eliminarSolicitud, aprobarSolicitud,
   getNextSiafNumeroCompras, consolidarSiaf, rechazarSolicitud,
 } from "./actions";
 
@@ -29,7 +29,7 @@ type Solicitud = {
 type CatEntry = {
   id: number; codigo_igss: string | null; codigo_ppr: string | null;
   nombre: string; subproducto: string; unidad_medida: string | null;
-  cantidad: number | null;
+  cantidad: number | null; renglon: number | null;
 };
 type ModalItem = {
   key: number; catalogo_id: number;
@@ -152,6 +152,12 @@ export default function SiafClient({
         disponible: autorizado - total_sol, entries: sorted };
     });
   }, [solicitudes, catalogo, query]);
+
+  const renglonPorItem = useMemo(() => {
+    const map = new Map<string, number | null>();
+    for (const c of catalogo) map.set(`${c.codigo_igss}::${c.subproducto}`, c.renglon);
+    return map;
+  }, [catalogo]);
 
   const insumoSugg = useMemo(() => {
     if (!itemSearch || itemSearch.length < 1) return [];
@@ -313,9 +319,10 @@ export default function SiafClient({
     setSolicitudes(p => p.filter(s => s.id !== id));
   }
 
-  async function handleEstado(id: number, estado: string) {
-    await actualizarEstado(id, estado);
-    setSolicitudes(p => p.map(s => s.id === id ? { ...s, estado } : s));
+  async function handleAprobar(id: number) {
+    const res = await aprobarSolicitud(id);
+    if ("error" in res) { alert(res.error); return; }
+    setSolicitudes(p => p.map(s => s.id === id ? { ...s, estado: "Aprobado" } : s));
   }
 
   function openRechazar(id: number) {
@@ -487,7 +494,7 @@ export default function SiafClient({
                                   <XCircle className="w-3 h-3" /> Rechazado <Info className="w-3 h-3 opacity-60" />
                                 </button>
                                 <button
-                                  onClick={() => handleEstado(s.id, "Aprobado")}
+                                  onClick={() => handleAprobar(s.id)}
                                   className="text-xs font-medium px-2.5 py-1 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition-colors">
                                   Aprobar
                                 </button>
@@ -500,7 +507,7 @@ export default function SiafClient({
                                   Rechazar
                                 </button>
                                 <button
-                                  onClick={() => handleEstado(s.id, "Aprobado")}
+                                  onClick={() => handleAprobar(s.id)}
                                   className="text-xs font-medium px-2.5 py-1 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition-colors">
                                   Aprobar
                                 </button>
@@ -569,6 +576,7 @@ export default function SiafClient({
                                     <tr className="bg-gray-100">
                                       <th className="px-3 py-2 text-left font-semibold text-gray-600">Insumo</th>
                                       <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Subproducto</th>
+                                      <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Renglón</th>
                                       <th className="px-3 py-2 text-right font-semibold text-gray-500 whitespace-nowrap">Antes</th>
                                       <th className="px-3 py-2 text-right font-semibold text-yellow-700 whitespace-nowrap">Solicitado</th>
                                       <th className="px-3 py-2 text-right font-semibold text-green-700 whitespace-nowrap">Disponible</th>
@@ -578,10 +586,12 @@ export default function SiafClient({
                                     {s.items.map(item => {
                                       const despues = item.cantidad_antes != null
                                         ? item.cantidad_antes - item.cantidad_solicitada : null;
+                                      const renglon = renglonPorItem.get(`${item.codigo_igss}::${item.subproducto}`);
                                       return (
                                         <tr key={item.id}>
                                           <td className="px-3 py-2 font-medium text-gray-900">{item.nombre}</td>
                                           <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{item.subproducto}</td>
+                                          <td className="px-3 py-2 tabular-nums text-gray-600 whitespace-nowrap">{renglon ?? "—"}</td>
                                           <td className="px-3 py-2 text-right tabular-nums text-gray-500">
                                             {item.cantidad_antes?.toLocaleString("es-GT") ?? "—"}
                                           </td>

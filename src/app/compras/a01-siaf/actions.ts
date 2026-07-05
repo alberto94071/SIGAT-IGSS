@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/lib/db";
-import { siafCompras, siafComprasItems, catalogoCompras, consolidaciones } from "@/lib/schema";
+import { siafCompras, siafComprasItems, catalogoCompras, consolidaciones, presupuestoRenglones } from "@/lib/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { crearNotificacion } from "@/lib/notificaciones";
@@ -100,6 +100,60 @@ export async function actualizarEstado(id: number, estado: string) {
     return { ok: true };
   } catch {
     return { error: "Error al actualizar estado" };
+  }
+}
+
+// Al aprobar un SIAF: además de cambiar el estado, toma cada ítem, lo cruza
+// con el catálogo (mismo código IGSS + subproducto) para obtener su renglón
+// y precio estimado, multiplica cantidad × precio, y suma ese monto al
+// Pre-Compromiso del renglón/subproducto correspondiente en Presupuesto
+// General — para ir viendo un aproximado de cuánto se va comprometiendo por
+// renglón. Solo se aplica la primera vez que la solicitud queda Aprobada,
+// para no duplicar el monto si se rechaza y se vuelve a aprobar después.
+export async function aprobarSolicitud(id: number): Promise<{ ok: true } | { error: string }> {
+  try {
+    const [sol] = await db.select({ id: siafCompras.id, presupuesto_aplicado: siafCompras.presupuesto_aplicado })
+      .from(siafCompras).where(eq(siafCompras.id, id)).limit(1);
+    if (!sol) return { error: "Solicitud no encontrada" };
+
+    if (!sol.presupuesto_aplicado) {
+      const items = await db.select({
+        codigo_igss:         siafComprasItems.codigo_igss,
+        subproducto:         siafComprasItems.subproducto,
+        cantidad_solicitada: siafComprasItems.cantidad_solicitada,
+      }).from(siafComprasItems).where(eq(siafComprasItems.solicitud_id, id));
+
+      const montosPorGrupo = new Map<string, { renglon: number; subproducto: string; monto: number }>();
+      for (const item of items) {
+        if (item.codigo_igss == null) continue;
+        const [cat] = await db.select({ renglon: catalogoCompras.renglon, precio_estimado: catalogoCompras.precio_estimado })
+          .from(catalogoCompras)
+          .where(and(eq(catalogoCompras.codigo_igss, item.codigo_igss), eq(catalogoCompras.subproducto, item.subproducto)))
+          .limit(1);
+        if (!cat || cat.renglon == null || cat.precio_estimado == null) continue;
+
+        const monto = item.cantidad_solicitada * cat.precio_estimado;
+        const key = `${cat.renglon}::${item.subproducto}`;
+        const existente = montosPorGrupo.get(key);
+        if (existente) existente.monto += monto;
+        else montosPorGrupo.set(key, { renglon: cat.renglon, subproducto: item.subproducto, monto });
+      }
+
+      for (const { renglon, subproducto, monto } of montosPorGrupo.values()) {
+        await db.update(presupuestoRenglones)
+          .set({ pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${monto}` })
+          .where(and(
+            eq(presupuestoRenglones.renglon, renglon),
+            eq(presupuestoRenglones.subproducto, subproducto),
+            eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+          ));
+      }
+    }
+
+    await db.update(siafCompras).set({ estado: "Aprobado", presupuesto_aplicado: true }).where(eq(siafCompras.id, id));
+    return { ok: true };
+  } catch {
+    return { error: "Error al aprobar la solicitud" };
   }
 }
 

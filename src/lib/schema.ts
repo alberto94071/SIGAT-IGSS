@@ -336,6 +336,8 @@ export const siafCompras = pgTable("siaf_compras", {
   motivo_rechazo:   text("motivo_rechazo"),
   rechazado_por:    integer("rechazado_por").references(() => usuarios.id),
   rechazado_en:     text("rechazado_en"),
+  // Evita sumar dos veces el pre-compromiso si se rechaza y se vuelve a aprobar
+  presupuesto_aplicado: boolean("presupuesto_aplicado").notNull().default(false),
   created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
