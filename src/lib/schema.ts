@@ -248,6 +248,8 @@ export const consolidaciones = pgTable("consolidaciones", {
   // Correlativo A-04 SIAF, asignado automáticamente al llegar a Fondo Rotativo
   numero_a04:           integer("numero_a04"),
   anio_a04:             integer("anio_a04"),
+  // "Completar Adjudicación" (Compras) queda bloqueado hasta que el Acta se aprueba
+  acta_aprobada:        boolean("acta_aprobada").notNull().default(false),
 });
 
 // ─── Precio por insumo de cada consolidación adjudicada ──────────────────────

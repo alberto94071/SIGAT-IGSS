@@ -155,6 +155,7 @@ export async function completarAdjudicacion(id: number): Promise<{ ok: true } | 
     const [con] = await db.select().from(consolidaciones).where(eq(consolidaciones.id, id)).limit(1);
     if (!con) return { error: "No se encontró la consolidación" };
     if (con.estado !== "Adjudicado") return { error: "Solo se puede completar una consolidación en estado Adjudicado" };
+    if (!con.acta_aprobada) return { error: "No se puede completar la adjudicación hasta que el Acta esté aprobada" };
     const tipo = con.tipo_compra as TipoCompra | null;
     if (!tipo) return { error: "La consolidación no tiene un tipo de compra asignado" };
     if (!con.oferente_ganador_id) return { error: "La consolidación no tiene un oferente ganador registrado" };

@@ -55,6 +55,7 @@ export type Consolidacion = {
   numero_cheque: string | null;
   numero_a04: number | null;
   anio_a04: number | null;
+  acta_aprobada: boolean;
   siaf: SiafResumen[];
   total_cantidad: number;
   precios: InsumoPrecio[];

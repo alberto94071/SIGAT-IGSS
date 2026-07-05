@@ -74,12 +74,15 @@ export default function ComprasAdjudicacionClient({ consolidaciones: init, canEd
                 <Printer className="w-3 h-3" /> Carta de Conformidad
               </Link>
             )}
-            {canEdit && c.estado === "Adjudicado" && (
+            {canEdit && c.estado === "Adjudicado" && c.acta_aprobada && (
               <button onClick={() => handleCompletar(c)} disabled={completando === c.id}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
                 {completando === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShoppingCart className="w-3 h-3" />}
                 Completar Adjudicación
               </button>
+            )}
+            {c.estado === "Adjudicado" && !c.acta_aprobada && (
+              <span className="text-[11px] text-amber-600 max-w-[160px] text-right">Esperando aprobación del Acta</span>
             )}
             {["Enviado a Junta", "Enviado a Fondo Rotativo", "Enviado a Presupuesto", "Orden de Compra Generada"].includes(c.estado) && (
               <span className="flex items-center gap-1 text-xs text-gray-500">
