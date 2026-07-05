@@ -3,11 +3,13 @@ import { requireModuloAccess } from "@/lib/modulo-access";
 import DashboardShell from "@/components/DashboardShell";
 
 const COMPRAS_NAV = [
-  { href: "/compras/catalogo",     label: "Catálogo",     icon: "BookOpen"     },
-  { href: "/compras/a01-siaf",     label: "A-01 SIAF",    icon: "FileText"     },
-  { href: "/compras/adjudicacion", label: "Adjudicación", icon: "Gavel"        },
-  { href: "/compras/ordenes",      label: "Órdenes",      icon: "ShoppingCart" },
-  { href: "/compras/archivo",      label: "Archivo",      icon: "Archive"      },
+  { href: "/compras/catalogo",      label: "Catálogo",      icon: "BookOpen"     },
+  { href: "/compras/a01-siaf",      label: "A-01 SIAF",     icon: "FileText"     },
+  { href: "/compras/consolidacion", label: "Consolidación", icon: "Layers"       },
+  { href: "/compras/adjudicacion",  label: "Adjudicación",  icon: "Gavel"        },
+  { href: "/compras/ordenes",       label: "Órdenes",       icon: "ShoppingCart" },
+  { href: "/compras/archivo",       label: "Archivo",       icon: "Archive"      },
+  { href: "/compras/hoja-de-ruta",  label: "Hoja de Ruta",  icon: "Route"        },
 ] as const;
 
 export default async function ComprasLayout({ children }: { children: React.ReactNode }) {
