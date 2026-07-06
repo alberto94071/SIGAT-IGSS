@@ -94,14 +94,15 @@ async function construirHojaDeRuta(ids: number[]): Promise<HojaDeRuta[]> {
   }).sort((a, b) => b.siaf.id - a.siaf.id);
 }
 
-// Todo el historial (más reciente primero) — la búsqueda sobre esta lista se
-// hace en el cliente, para que la pantalla sirva tanto para "ver todo lo que
-// hemos hecho" como para buscar un caso puntual, sin dos pantallas separadas.
+// Todo el historial, sin excepción — un SIAF aparece aquí desde que se crea
+// (incluso en Borrador) y nunca se quita de la lista, sin importar en qué
+// estado o etapa termine; solo cambia su resumen de estado. La búsqueda sobre
+// esta lista se hace en el cliente, para que la pantalla sirva tanto para
+// "ver todo lo que hemos hecho" como para buscar un caso puntual.
 export async function listarHojaDeRuta(): Promise<HojaDeRuta[]> {
   const session = await auth();
   if (!session) return [];
 
-  const rows = await db.select({ id: siafCompras.id }).from(siafCompras)
-    .orderBy(sql`id DESC`).limit(500);
+  const rows = await db.select({ id: siafCompras.id }).from(siafCompras).orderBy(sql`id DESC`);
   return construirHojaDeRuta(rows.map(r => r.id));
 }
