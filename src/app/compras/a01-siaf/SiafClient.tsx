@@ -104,6 +104,7 @@ export default function SiafClient({
   const [itemSearch,        setItemSearch]        = useState("");
   const [showItemDrop,      setShowItemDrop]      = useState(false);
   const [selCodigo,         setSelCodigo]         = useState<string | null>(null);
+  const [selNombre,         setSelNombre]         = useState<string | null>(null);
   const [subprodSelections, setSubprodSelections] = useState<Map<number, string>>(new Map());
 
   // ─── Computed ──────────────────────────────────────────────────────────────
@@ -161,20 +162,24 @@ export default function SiafClient({
   const insumoSugg = useMemo(() => {
     if (!itemSearch || itemSearch.length < 1) return [];
     const q = itemSearch.toLowerCase();
-    const seen = new Set<string | null>();
+    // Se agrupa por código + nombre, no solo por código: varios insumos sin
+    // código real comparten el mismo placeholder (ej. "S/C") y no deben
+    // mezclarse entre sí.
+    const seen = new Set<string>();
     const res: CatEntry[] = [];
     for (const c of catalogo) {
       const ok = c.nombre.toLowerCase().includes(q) ||
         String(c.codigo_igss ?? "").includes(itemSearch) ||
         (c.codigo_ppr ?? "").toLowerCase().includes(q);
-      if (ok && !seen.has(c.codigo_igss)) { seen.add(c.codigo_igss); res.push(c); }
+      const key = `${c.codigo_igss}::${c.nombre}`;
+      if (ok && !seen.has(key)) { seen.add(key); res.push(c); }
     }
     return res.slice(0, 8);
   }, [itemSearch, catalogo]);
 
   const subprodEntries = useMemo(() =>
-    selCodigo == null ? [] : catalogo.filter(c => c.codigo_igss === selCodigo),
-    [selCodigo, catalogo]
+    selCodigo == null ? [] : catalogo.filter(c => c.codigo_igss === selCodigo && c.nombre === selNombre),
+    [selCodigo, selNombre, catalogo]
   );
 
   // Al llegar desde una notificación (?ver=id) — expande la solicitud y, si fue
@@ -198,7 +203,7 @@ export default function SiafClient({
     setModal(true); setModalItems([]); setModalError("");
     setNewFecha(new Date().toISOString().slice(0, 10));
     setNewJustificacion("");
-    setItemSearch(""); setSelCodigo(null); setSubprodSelections(new Map());
+    setItemSearch(""); setSelCodigo(null); setSelNombre(null); setSubprodSelections(new Map());
     setCorrLoading(true);
     const n = await getNextSiafNumeroCompras();
     setNextNumero(n); setCorrLoading(false);
@@ -212,7 +217,7 @@ export default function SiafClient({
     setModalError("");
     setNewFecha(sol.fecha);
     setNewJustificacion(sol.observaciones ?? "");
-    setItemSearch(""); setSelCodigo(null); setSubprodSelections(new Map());
+    setItemSearch(""); setSelCodigo(null); setSelNombre(null); setSubprodSelections(new Map());
     const prefilled: ModalItem[] = sol.items
       .filter(i => i.catalogo_id != null)
       .map(i => ({
@@ -248,7 +253,7 @@ export default function SiafClient({
     });
     if (newItems.length === 0) return;
     setModalItems(p => [...p, ...newItems]);
-    setItemSearch(""); setSelCodigo(null); setSubprodSelections(new Map());
+    setItemSearch(""); setSelCodigo(null); setSelNombre(null); setSubprodSelections(new Map());
   }
 
   async function handleGuardar() {
@@ -825,6 +830,7 @@ export default function SiafClient({
                       onChange={e => {
                         setItemSearch(e.target.value);
                         setSelCodigo(null);
+                        setSelNombre(null);
                         setSubprodSelections(new Map());
                         setShowItemDrop(true);
                       }}
@@ -839,6 +845,7 @@ export default function SiafClient({
                         <button key={i} type="button"
                           onMouseDown={() => {
                             setSelCodigo(c.codigo_igss);
+                            setSelNombre(c.nombre);
                             setItemSearch(c.nombre);
                             setSubprodSelections(new Map());
                             setShowItemDrop(false);
