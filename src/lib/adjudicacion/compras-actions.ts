@@ -266,7 +266,7 @@ export async function enviarAJunta(consolidacionId: number, data?: { referencia?
 }
 
 export async function registrarRegularizado(consolidacionId: number, data: {
-  nit: string; nombre: string; monto: number; exento_iva: boolean; numero_cheque: string;
+  nit: string; nombre: string; monto: number; exento_iva: boolean;
 }): Promise<{ ok: true } | { error: string; limitExceeded?: true }> {
   try {
     const check = await requireCompras();
@@ -280,7 +280,6 @@ export async function registrarRegularizado(consolidacionId: number, data: {
 
     if (!data.nit.trim() || !data.nombre.trim()) return { error: "NIT y nombre son obligatorios" };
     if (!(data.monto > 0)) return { error: "Ingresa un monto válido" };
-    if (!data.numero_cheque.trim()) return { error: "El número de cheque es obligatorio" };
 
     const total = data.exento_iva ? data.monto : data.monto * 0.88;
     const limite = LIMITE_POR_TIPO[con.tipo_compra as TipoCompra];
@@ -297,7 +296,6 @@ export async function registrarRegularizado(consolidacionId: number, data: {
     await db.update(consolidaciones).set({
       proveedor_nit: data.nit.trim(), proveedor_nombre: data.nombre.trim(),
       exento_iva: data.exento_iva, total,
-      numero_cheque: data.numero_cheque.trim(),
       destino: "fondo_rotativo", estado: "Enviado a Fondo Rotativo",
       numero_a04: numeroA04, anio_a04: anioActual,
     }).where(eq(consolidaciones.id, consolidacionId));

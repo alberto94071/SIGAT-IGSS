@@ -28,7 +28,7 @@ const MODULES = [
     id: "fondo-rotativo",
     title: "Fondo Rotativo",
     description: "Control y rendición del fondo rotativo interno: constitución, reintegros y conciliación bancaria.",
-    href: "/dashboard",
+    href: "/dashboard/siaf-04",
     icon: RotateCcw,
     color: "bg-orange-500",
     ring: "ring-orange-200",

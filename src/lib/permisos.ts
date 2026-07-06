@@ -97,21 +97,9 @@ export function canAccess(permisos: Permisos, modulo: keyof Permisos): boolean {
 }
 
 // Nav items con su permiso requerido
+// Fondo Rotativo se redujo temporalmente a solo SIAF-04 — ahí es donde
+// aterrizan todas las consolidaciones Regularizado (Baja Cuantía y Casos de
+// Excepción). El resto de pantallas del módulo se quitaron por ahora.
 export const NAV_ITEMS = [
-  { href: "/dashboard",              label: "Inicio",         icon: "LayoutDashboard", permiso: null          },
   { href: "/dashboard/siaf-04",      label: "SIAF-04",        icon: "FileText",        permiso: null          },
-  { href: "/dashboard/poliza",       label: "Póliza",         icon: "FileCheck",       permiso: null          },
-  { href: "/dashboard/viatico",      label: "Viático",        icon: "MapPin",          permiso: null          },
-  { href: "/dashboard/fri",          label: "FRI",            icon: "FileText",        permiso: null          },
-  { href: "/dashboard/vale",         label: "Vale",           icon: "Receipt",         permiso: null          },
-  { href: "/dashboard/baucher",      label: "Baucher",        icon: "Receipt",         permiso: null          },
-  { href: "/dashboard/servicios",    label: "Servicios",      icon: "Package",         permiso: "servicios"   },
-  { href: "/dashboard/pagos",        label: "Pagos",          icon: "CreditCard",      permiso: "pagos"       },
-  { href: "/dashboard/banco",        label: "Banco",          icon: "Landmark",        permiso: "banco"       },
-  { href: "/dashboard/caja-chica",   label: "Caja Chica",     icon: "Wallet",          permiso: "caja_chica"  },
-  { href: "/dashboard/liquidacion",  label: "Liquidación",    icon: "FileCheck",       permiso: "liquidacion" },
-  { href: "/dashboard/catalogos",    label: "Catálogos",      icon: "BookOpen",        permiso: "catalogos"   },
-  { href: "/dashboard/presupuesto",   label: "Presupuesto",    icon: "TrendingUp",      permiso: "reportes"    },
-  { href: "/dashboard/reportes",     label: "Reportes",       icon: "BarChart3",       permiso: "reportes"    },
-  { href: "/dashboard/documentos",   label: "Documentos",     icon: "FileText",        permiso: "documentos"  },
 ] as const;

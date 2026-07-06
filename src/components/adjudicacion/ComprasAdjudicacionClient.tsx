@@ -58,7 +58,7 @@ export default function ComprasAdjudicacionClient({ consolidaciones: init, canEd
                 <Gavel className="w-3 h-3" /> {c.estado === "Rechazado por Junta" ? "Corregir y reenviar" : "Iniciar adjudicación"}
               </button>
             )}
-            {c.numero_cheque && (
+            {c.regularizado === true && (
               <Link href={`/compras/adjudicacion/${c.id}/conformidad`} target="_blank"
                 className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
                 <Printer className="w-3 h-3" /> Carta de Conformidad
@@ -149,7 +149,6 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
 
   const [rgNit, setRgNit] = useState(""); const [rgNombre, setRgNombre] = useState("");
   const [rgMonto, setRgMonto] = useState(""); const [rgExento, setRgExento] = useState(false);
-  const [rgCheque, setRgCheque] = useState("");
 
   async function pickTipo(t: TipoCompra) {
     setLoading(true); setError("");
@@ -246,15 +245,14 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     const montoNum = parseFloat(rgMonto);
     if (!rgNit.trim() || !rgNombre.trim()) return setError("NIT y nombre son obligatorios");
     if (!(montoNum > 0)) return setError("Ingresa un monto válido");
-    if (!rgCheque.trim()) return setError("El número de cheque es obligatorio");
     setLoading(true); setError(""); setLimitExceeded(false);
     const res = await registrarRegularizado(c.id, {
-      nit: rgNit.trim(), nombre: rgNombre.trim(), monto: montoNum, exento_iva: rgExento, numero_cheque: rgCheque.trim(),
+      nit: rgNit.trim(), nombre: rgNombre.trim(), monto: montoNum, exento_iva: rgExento,
     });
     setLoading(false);
     if ("limitExceeded" in res) { setLimitExceeded(true); setError(res.error); return; }
     if ("error" in res) return setError(res.error);
-    onDone({ estado: "Enviado a Fondo Rotativo", destino: "fondo_rotativo", tipo_compra: tipoCompra });
+    onDone({ estado: "Enviado a Fondo Rotativo", destino: "fondo_rotativo", tipo_compra: tipoCompra, regularizado: true });
   }
 
   async function handleAnular() {
@@ -405,10 +403,6 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                   <input type="checkbox" checked={rgExento} onChange={e => setRgExento(e.target.checked)} className="w-3.5 h-3.5 accent-brand-600" />
                   Exento IVA
                 </label>
-              </div>
-              <div>
-                <label className="label">Número de cheque</label>
-                <input className="input font-mono" value={rgCheque} onChange={e => setRgCheque(e.target.value)} />
               </div>
               <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
                 Este caso no pasa por la Junta Adjudicadora — va directo a Fondo Rotativo. Recuerda imprimir el Acta
