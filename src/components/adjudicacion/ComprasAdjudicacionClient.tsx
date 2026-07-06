@@ -13,7 +13,7 @@ import {
   elegirFormaBajaCuantia, buscarCotizacionServicio, confirmarBajaCuantiaServicios,
   adjudicarDirecto, enviarAJunta, registrarRegularizado,
 } from "@/lib/adjudicacion/compras-actions";
-import { completarAdjudicacion, anularConsolidacion } from "@/lib/adjudicacion/actions";
+import { anularConsolidacion } from "@/lib/adjudicacion/actions";
 import {
   TIPOS, REFERENCIA_LABEL, MAX_OFERENTES, LIMITE_POR_TIPO,
   type TipoCompra, type Consolidacion, type CotizacionServicio, type Oferente,
@@ -27,20 +27,10 @@ export default function ComprasAdjudicacionClient({ consolidaciones: init, canEd
   const [consolidaciones, setConsolidaciones] = useState(init);
   const [wizardFor,   setWizardFor]   = useState<Consolidacion | null>(null);
   const [motivoFor,   setMotivoFor]   = useState<Consolidacion | null>(null);
-  const [completando, setCompletando] = useState<number | null>(null);
   const [rowError,    setRowError]    = useState<Record<number, string>>({});
 
   function updateConsolidacion(id: number, patch: Partial<Consolidacion>) {
     setConsolidaciones(p => p.map(c => c.id === id ? { ...c, ...patch } : c));
-  }
-
-  async function handleCompletar(c: Consolidacion) {
-    setCompletando(c.id);
-    setRowError(prev => ({ ...prev, [c.id]: "" }));
-    const res = await completarAdjudicacion(c.id);
-    setCompletando(null);
-    if ("error" in res) { setRowError(prev => ({ ...prev, [c.id]: res.error })); return; }
-    updateConsolidacion(c.id, { estado: "Enviado a Presupuesto", destino: "presupuesto" });
   }
 
   return (
@@ -74,15 +64,8 @@ export default function ComprasAdjudicacionClient({ consolidaciones: init, canEd
                 <Printer className="w-3 h-3" /> Carta de Conformidad
               </Link>
             )}
-            {canEdit && c.estado === "Adjudicado" && c.acta_aprobada && (
-              <button onClick={() => handleCompletar(c)} disabled={completando === c.id}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                {completando === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShoppingCart className="w-3 h-3" />}
-                Completar Adjudicación
-              </button>
-            )}
-            {c.estado === "Adjudicado" && !c.acta_aprobada && (
-              <span className="text-[11px] text-amber-600 max-w-[160px] text-right">Esperando aprobación del Acta</span>
+            {c.estado === "Adjudicado" && (
+              <span className="text-[11px] text-amber-600 max-w-[160px] text-right">En trámite de Acta — Junta Adjudicadora</span>
             )}
             {["Enviado a Junta", "Enviado a Fondo Rotativo", "Enviado a Presupuesto", "Orden de Compra Generada"].includes(c.estado) && (
               <span className="flex items-center gap-1 text-xs text-gray-500">

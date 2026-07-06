@@ -44,7 +44,9 @@ export default function ActaClient({ rows: init, canEdit }: Props) {
     const res = await aprobarActa(acta.id);
     setProcesando(null);
     if ("error" in res) { setRowError(p => ({ ...p, [acta.id]: res.error })); return; }
-    updateActa(acta.consolidacion_id, { ...acta, estado: "Aprobada" });
+    // Al aprobarse, la consolidación avanza a Compras/Órdenes y el acta se
+    // archiva en Historial — desaparece de esta pestaña.
+    setRows(p => p.filter(r => r.consolidacion.id !== acta.consolidacion_id));
   }
 
   return (

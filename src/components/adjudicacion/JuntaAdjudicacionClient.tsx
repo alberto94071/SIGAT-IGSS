@@ -23,15 +23,16 @@ export default function JuntaAdjudicacionClient({ consolidaciones: init, canEdit
         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
           <Gavel className="w-5 h-5" /> Adjudicaciones — Junta Adjudicadora
         </h1>
-        <p className="text-sm text-gray-500 mt-0.5">{consolidaciones.length} consolidación(es)</p>
+        <p className="text-sm text-gray-500 mt-0.5">{consolidaciones.length} consolidación(es) esperando revisión</p>
       </div>
 
       <ConsolidacionesTable
         consolidaciones={consolidaciones}
         onVerMotivo={setMotivoFor}
+        emptyLabel="No hay consolidaciones esperando revisión de la Junta. Estás al día."
         acciones={c => (
           <>
-            {canEdit && c.estado === "Enviado a Junta" && (
+            {canEdit && (
               <button onClick={() => setRevisarFor(c)}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors">
                 <Gavel className="w-3 h-3" /> Revisar

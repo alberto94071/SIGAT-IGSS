@@ -5,6 +5,7 @@ import DashboardShell from "@/components/DashboardShell";
 const JUNTA_ADJUDICADORA_NAV = [
   { href: "/junta-adjudicadora/adjudicacion", label: "Adjudicación", icon: "Gavel"    },
   { href: "/junta-adjudicadora/acta",         label: "Acta",         icon: "FileText" },
+  { href: "/junta-adjudicadora/historial",    label: "Historial",    icon: "Archive"  },
 ] as const;
 
 export default async function JuntaAdjudicadoraLayout({ children }: { children: React.ReactNode }) {

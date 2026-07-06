@@ -1,10 +1,7 @@
-import EnDesarrollo from "@/components/EnDesarrollo";
+import { getOrdenesEnDab } from "@/lib/adjudicacion/dab60-actions";
+import Dab60Client from "./Dab60Client";
 
-export default function Dab60Page() {
-  return (
-    <EnDesarrollo
-      title="DAB-60"
-      description="Próximamente podrás emitir y consultar formularios DAB-60 de Almacén."
-    />
-  );
+export default async function Dab60Page() {
+  const ordenes = await getOrdenesEnDab();
+  return <Dab60Client ordenes={ordenes} />;
 }

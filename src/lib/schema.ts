@@ -345,6 +345,20 @@ export const ordenesCompra = pgTable("ordenes_compra", {
   estado:           text("estado").notNull().default("Activa"),
   creado_por:       integer("creado_por"),
   created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+  // ── Pipeline Ordenes → Compromiso → Devengado → DAB-60 ──
+  codigo_ppr:                   text("codigo_ppr"),
+  fecha_notificacion_proveedor: text("fecha_notificacion_proveedor"),
+  no_compromiso:                text("no_compromiso"),
+  fecha_ingreso_producto:       text("fecha_ingreso_producto"),
+  no_factura:                   text("no_factura"),
+  serie_factura:                text("serie_factura"),
+  fecha_emision:                text("fecha_emision"),
+  lote:                         text("lote"),
+  fecha_vencimiento:            text("fecha_vencimiento"),
+  marca:                        text("marca"),
+  modelo:                       text("modelo"),
+  serie:                        text("serie"),
+  no_devengado:                 text("no_devengado"),
 });
 
 // ─── Compras: solicitudes A-01 SIAF ──────────────────────────────────────────

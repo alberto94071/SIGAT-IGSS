@@ -1,9 +1,10 @@
 "use server";
 import { db } from "@/lib/db";
-import { actasAdjudicacion, consolidaciones } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { actasAdjudicacion, consolidaciones, oferentes } from "@/lib/schema";
+import { eq, inArray, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { crearNotificacion } from "@/lib/notificaciones";
+import { LIMITE_POR_TIPO, type TipoCompra } from "./types";
 
 async function requireJunta(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -68,6 +69,10 @@ export async function marcarActaPrevisualizada(actaId: number): Promise<{ ok: tr
   }
 }
 
+// Aprobar el Acta ahora hace, en un solo paso, lo que antes requería un clic
+// aparte de "Completar Adjudicación" en Compras/Adjudicación: calcula el total
+// a partir del oferente ganador, valida el límite legal del tipo de compra, y
+// si todo está en orden envía la consolidación directo a Compras/Órdenes.
 export async function aprobarActa(actaId: number): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireJunta();
@@ -78,17 +83,53 @@ export async function aprobarActa(actaId: number): Promise<{ ok: true } | { erro
     if (!acta.previsualizada) return { error: "Debes previsualizar el acta antes de aprobarla" };
     if (acta.estado !== "Generada") return { error: "Esta acta ya fue procesada" };
 
+    const [con] = await db.select().from(consolidaciones).where(eq(consolidaciones.id, acta.consolidacion_id)).limit(1);
+    if (!con) return { error: "No se encontró la consolidación del acta" };
+    const tipo = con.tipo_compra as TipoCompra | null;
+    if (!tipo) return { error: "La consolidación no tiene un tipo de compra asignado" };
+    if (!con.oferente_ganador_id) return { error: "La consolidación no tiene un oferente ganador registrado" };
+
+    const [ganador] = await db.select().from(oferentes).where(eq(oferentes.id, con.oferente_ganador_id)).limit(1);
+    if (!ganador) return { error: "No se encontró el oferente ganador" };
+
+    const total = ganador.exento_iva ? ganador.costo : ganador.costo * 0.88;
+    const limite = LIMITE_POR_TIPO[tipo];
+    if (total > limite) {
+      return { error: `El total Q${total.toFixed(2)} supera el límite de Q${limite.toLocaleString("es-GT")} para ${tipo}. Rechaza el acta para que Compras corrija el precio.` };
+    }
+
     const ahora = new Date().toISOString().slice(0, 19).replace("T", " ");
     await db.update(actasAdjudicacion).set({
       estado: "Aprobada", aprobado_por: check.uid, aprobado_en: ahora,
     }).where(eq(actasAdjudicacion.id, actaId));
 
-    await db.update(consolidaciones).set({ acta_aprobada: true }).where(eq(consolidaciones.id, acta.consolidacion_id));
+    await db.update(consolidaciones).set({
+      acta_aprobada: true,
+      exento_iva: ganador.exento_iva,
+      total,
+      destino: "presupuesto",
+      estado: "Enviado a Presupuesto",
+    }).where(eq(consolidaciones.id, acta.consolidacion_id));
 
     return { ok: true };
   } catch {
     return { error: "Error al aprobar el acta" };
   }
+}
+
+export async function getActasHistorial() {
+  const actas = await db.select().from(actasAdjudicacion)
+    .where(eq(actasAdjudicacion.estado, "Aprobada"))
+    .orderBy(sql`aprobado_en DESC NULLS LAST, id DESC`);
+  if (actas.length === 0) return [];
+
+  const consolIds = actas.map(a => a.consolidacion_id);
+  const cons = await db.select().from(consolidaciones).where(inArray(consolidaciones.id, consolIds));
+  const consMap = new Map(cons.map(c => [c.id, c]));
+
+  return actas
+    .map(acta => ({ acta, consolidacion: consMap.get(acta.consolidacion_id) }))
+    .filter((r): r is { acta: typeof r.acta; consolidacion: NonNullable<typeof r.consolidacion> } => r.consolidacion != null);
 }
 
 export async function rechazarActa(actaId: number, motivo: string): Promise<{ ok: true } | { error: string }> {

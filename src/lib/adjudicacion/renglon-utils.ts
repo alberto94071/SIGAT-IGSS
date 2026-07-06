@@ -1,0 +1,40 @@
+import { db } from "@/lib/db";
+import { siafCompras, siafComprasItems, catalogoCompras } from "@/lib/schema";
+import { eq, and, inArray } from "drizzle-orm";
+
+export type GrupoRenglon = {
+  renglon: number | null; codigo_igss: string | null; subproducto: string;
+  nombre: string; cantidad: number;
+};
+
+// Agrupa los insumos de los SIAF consolidados de una consolidación por
+// renglón + subproducto (mismo cruce con el catálogo que usa la automatización
+// de pre-compromiso al aprobar un SIAF).
+export async function gruposRenglonDeConsolidacion(consolidacionId: number): Promise<GrupoRenglon[]> {
+  const siafIds = (await db.select({ id: siafCompras.id }).from(siafCompras)
+    .where(eq(siafCompras.consolidacion_id, consolidacionId))).map(s => s.id);
+  if (siafIds.length === 0) return [];
+
+  const items = await db.select({
+    codigo_igss:         siafComprasItems.codigo_igss,
+    subproducto:         siafComprasItems.subproducto,
+    nombre:              siafComprasItems.nombre,
+    cantidad_solicitada: siafComprasItems.cantidad_solicitada,
+  }).from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds));
+
+  const grupos = new Map<string, GrupoRenglon>();
+  for (const item of items) {
+    let renglon: number | null = null;
+    if (item.codigo_igss != null) {
+      const [cat] = await db.select({ renglon: catalogoCompras.renglon }).from(catalogoCompras)
+        .where(and(eq(catalogoCompras.codigo_igss, item.codigo_igss), eq(catalogoCompras.subproducto, item.subproducto)))
+        .limit(1);
+      renglon = cat?.renglon ?? null;
+    }
+    const key = `${item.codigo_igss}::${item.subproducto}`;
+    const existente = grupos.get(key);
+    if (existente) existente.cantidad += item.cantidad_solicitada;
+    else grupos.set(key, { renglon, codigo_igss: item.codigo_igss, subproducto: item.subproducto, nombre: item.nombre, cantidad: item.cantidad_solicitada });
+  }
+  return Array.from(grupos.values());
+}

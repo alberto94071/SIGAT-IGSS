@@ -7,7 +7,8 @@ import JuntaAdjudicacionClient from "@/components/adjudicacion/JuntaAdjudicacion
 export default async function JuntaAdjudicacionPage() {
   const session = await auth();
   if (!session) redirect("/login");
-  const consolidaciones = await getConsolidacionesConDetalles();
+  const consolidaciones = (await getConsolidacionesConDetalles())
+    .filter(c => c.estado === "Enviado a Junta");
   const rol = session.user.rol as Rol;
   const canEdit = rol !== "consulta";
   return <JuntaAdjudicacionClient consolidaciones={consolidaciones} canEdit={canEdit} />;

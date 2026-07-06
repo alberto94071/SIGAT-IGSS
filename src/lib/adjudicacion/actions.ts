@@ -6,8 +6,7 @@ import {
 } from "@/lib/schema";
 import { eq, sql, inArray, ilike, or, and, isNotNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import type { Consolidacion, InsumoPrecio, Oferente, TipoCompra } from "./types";
-import { LIMITE_POR_TIPO } from "./types";
+import type { Consolidacion, InsumoPrecio, Oferente } from "./types";
 
 // ─── Lectura ──────────────────────────────────────────────────────────────────
 
@@ -142,51 +141,10 @@ export async function anularConsolidacion(id: number): Promise<{ ok: true } | { 
   }
 }
 
-// ─── Completar Adjudicación (Compras) ────────────────────────────────────────
-// El total ya no se calcula por precio-por-insumo: queda determinado por el costo
-// del oferente que la Junta eligió como ganador (oferente_ganador_id).
-
-export async function completarAdjudicacion(id: number): Promise<{ ok: true } | { error: string; limitExceeded?: true }> {
-  try {
-    const session = await auth();
-    if (!session) return { error: "No autorizado" };
-    if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
-
-    const [con] = await db.select().from(consolidaciones).where(eq(consolidaciones.id, id)).limit(1);
-    if (!con) return { error: "No se encontró la consolidación" };
-    if (con.estado !== "Adjudicado") return { error: "Solo se puede completar una consolidación en estado Adjudicado" };
-    if (!con.acta_aprobada) return { error: "No se puede completar la adjudicación hasta que el Acta esté aprobada" };
-    const tipo = con.tipo_compra as TipoCompra | null;
-    if (!tipo) return { error: "La consolidación no tiene un tipo de compra asignado" };
-    if (!con.oferente_ganador_id) return { error: "La consolidación no tiene un oferente ganador registrado" };
-
-    const [ganador] = await db.select().from(oferentes)
-      .where(eq(oferentes.id, con.oferente_ganador_id)).limit(1);
-    if (!ganador) return { error: "No se encontró el oferente ganador" };
-
-    const total = ganador.exento_iva ? ganador.costo : ganador.costo * 0.88;
-    const limite = LIMITE_POR_TIPO[tipo];
-    if (total > limite) {
-      return {
-        error: `El total Q${total.toFixed(2)} supera el límite de Q${limite.toLocaleString("es-GT")} para ${tipo}`,
-        limitExceeded: true as const,
-      };
-    }
-
-    await db.update(consolidaciones).set({
-      exento_iva: ganador.exento_iva,
-      total,
-      destino:    "presupuesto",
-      estado:     "Enviado a Presupuesto",
-    }).where(eq(consolidaciones.id, id));
-
-    return { ok: true as const };
-  } catch {
-    return { error: "Error al completar la adjudicación" };
-  }
-}
-
-// ─── Pantallas destino (SIAF-04 / Presupuesto General) ───────────────────────
+// ─── Pantallas destino (SIAF-04) ──────────────────────────────────────────────
+// Nota: destino="presupuesto" ya no se genera aquí — esas consolidaciones pasan
+// directo a /compras/ordenes (ver ordenes-actions.ts) al aprobarse el Acta o al
+// adjudicar directo (Contrato Abierto). Esta bandeja solo queda para Fondo Rotativo.
 
 export async function getPendientesPorDestino(destino: "fondo_rotativo" | "presupuesto"): Promise<Consolidacion[]> {
   const estadoBuscar = destino === "fondo_rotativo" ? "Enviado a Fondo Rotativo" : "Enviado a Presupuesto";
