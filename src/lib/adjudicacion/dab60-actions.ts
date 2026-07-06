@@ -13,7 +13,10 @@ async function requireEdit(): Promise<{ error: string } | { uid: number }> {
 }
 
 export async function getOrdenesEnDab() {
-  return db.select().from(ordenesCompra).where(eq(ordenesCompra.estado, "En DAB")).orderBy(sql`created_at ASC`);
+  const ordenes = await db.select().from(ordenesCompra).where(eq(ordenesCompra.estado, "En DAB")).orderBy(sql`created_at ASC`);
+  return Promise.all(ordenes.map(async o => ({
+    ...o, renglones: await gruposRenglonDeConsolidacion(o.consolidacion_id),
+  })));
 }
 
 // Al ingresar la orden al DAB-60: precio unitario (el que Compras cargó en

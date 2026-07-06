@@ -7,6 +7,7 @@ import {
 import { eq, sql, inArray, ilike, or, and, isNotNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import type { Consolidacion, InsumoPrecio, Oferente } from "./types";
+import { renglonLookupMap } from "./renglon-utils";
 
 // ─── Lectura ──────────────────────────────────────────────────────────────────
 
@@ -56,6 +57,8 @@ export async function getConsolidacionesConDetalles(): Promise<Consolidacion[]> 
     for (const u of us) usuariosMap.set(u.id, u.nombre);
   }
 
+  const renglonMap = await renglonLookupMap();
+
   return cons.map(c => {
     const cSiaf = siaf.filter(s => s.consolidacion_id === c.id);
     const cSiafIds = new Set(cSiaf.map(s => s.id));
@@ -74,6 +77,7 @@ export async function getConsolidacionesConDetalles(): Promise<Consolidacion[]> 
           codigo_igss: item.codigo_igss, subproducto: item.subproducto,
           nombre: item.nombre, unidad_medida: item.unidad_medida,
           cantidad: item.cantidad_solicitada, precio_unitario: null,
+          renglon: renglonMap.get(key) ?? null,
         });
       }
     }
@@ -176,6 +180,8 @@ export async function getPendientesPorDestino(destino: "fondo_rotativo" | "presu
   const precios = await db.select().from(consolidacionPrecios)
     .where(inArray(consolidacionPrecios.consolidacion_id, cons.map(c => c.id)));
 
+  const renglonMap = await renglonLookupMap();
+
   return cons.map(c => {
     const cSiaf = siaf.filter(s => s.consolidacion_id === c.id);
     const cSiafIds = new Set(cSiaf.map(s => s.id));
@@ -192,6 +198,7 @@ export async function getPendientesPorDestino(destino: "fondo_rotativo" | "presu
           codigo_igss: item.codigo_igss, subproducto: item.subproducto,
           nombre: item.nombre, unidad_medida: item.unidad_medida,
           cantidad: item.cantidad_solicitada, precio_unitario: null,
+          renglon: renglonMap.get(key) ?? null,
         });
       }
     }

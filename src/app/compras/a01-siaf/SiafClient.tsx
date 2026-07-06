@@ -148,7 +148,7 @@ export default function SiafClient({
       const total_sol = g.entries.reduce((s, e) => s + e.item.cantidad_solicitada, 0);
       const autorizado = cat?.cantidad ?? 0;
       const sorted = [...g.entries].sort((a, b) => b.sol.fecha.localeCompare(a.sol.fecha));
-      return { ...g, autorizado, total_solicitado: total_sol,
+      return { ...g, autorizado, total_solicitado: total_sol, renglon: cat?.renglon ?? null,
         disponible: autorizado - total_sol, entries: sorted };
     });
   }, [solicitudes, catalogo, query]);
@@ -548,6 +548,7 @@ export default function SiafClient({
                   <th className="px-4 py-3 w-8"></th>
                   <th className="px-4 py-3 text-left">Insumo</th>
                   <th className="px-4 py-3 text-left whitespace-nowrap">Subproducto</th>
+                  <th className="px-4 py-3 text-left whitespace-nowrap">Renglón</th>
                   <th className="px-4 py-3 text-right whitespace-nowrap">Autorizado</th>
                   <th className="px-4 py-3 text-right whitespace-nowrap text-yellow-700">Solicitado</th>
                   <th className="px-4 py-3 text-right whitespace-nowrap text-green-700">Disponible</th>
@@ -568,6 +569,7 @@ export default function SiafClient({
                           <p className="text-xs text-gray-400">{g.entries.length} solicitud(es)</p>
                         </td>
                         <td className="px-4 py-3 font-mono text-xs text-gray-600 whitespace-nowrap">{g.subproducto}</td>
+                        <td className="px-4 py-3 tabular-nums text-gray-600 whitespace-nowrap">{g.renglon ?? "—"}</td>
                         <td className="px-4 py-3 text-right tabular-nums text-gray-700 whitespace-nowrap">
                           {g.autorizado.toLocaleString("es-GT")}
                         </td>
@@ -580,7 +582,7 @@ export default function SiafClient({
                       </tr>
                       {expanded && (
                         <tr className="bg-brand-50/40">
-                          <td colSpan={6} className="px-6 py-4">
+                          <td colSpan={7} className="px-6 py-4">
                             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                               Historial — {g.nombre} / {g.subproducto}
                             </p>

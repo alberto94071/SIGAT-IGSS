@@ -2,6 +2,19 @@ import { db } from "@/lib/db";
 import { siafCompras, siafComprasItems, catalogoCompras } from "@/lib/schema";
 import { eq, and, inArray } from "drizzle-orm";
 
+// Mapa completo codigo_igss::subproducto -> renglón, para anotar listas de
+// ítems ya cargadas sin hacer una consulta por ítem (mismo cruce que usa la
+// automatización de pre-compromiso, pero en un solo query).
+export async function renglonLookupMap(): Promise<Map<string, number | null>> {
+  const rows = await db.select({
+    codigo_igss: catalogoCompras.codigo_igss, subproducto: catalogoCompras.subproducto,
+    renglon: catalogoCompras.renglon,
+  }).from(catalogoCompras);
+  const map = new Map<string, number | null>();
+  for (const r of rows) map.set(`${r.codigo_igss}::${r.subproducto}`, r.renglon);
+  return map;
+}
+
 export type GrupoRenglon = {
   renglon: number | null; codigo_igss: string | null; subproducto: string;
   nombre: string; cantidad: number;

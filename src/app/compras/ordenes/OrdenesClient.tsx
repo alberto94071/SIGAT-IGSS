@@ -4,6 +4,7 @@ import {
   ShoppingCart, Search, X, Loader2, AlertTriangle, Hash, Calendar, Building2, DollarSign, Send,
 } from "lucide-react";
 import { generarOrdenDeCompra, enviarOrdenAPresupuesto, type ConsolidacionPendienteOrden } from "@/lib/adjudicacion/ordenes-actions";
+import RenglonBadges from "@/components/RenglonBadges";
 
 type OrdenGenerada = {
   id: number; numero: number; anio: number; fecha: string;
@@ -13,6 +14,7 @@ type OrdenGenerada = {
   costo_unitario: number | null; total_cantidad: number | null;
   exento_iva: boolean; total: number | null; estado: string;
   codigo_ppr: string | null; fecha_notificacion_proveedor: string | null;
+  renglones: { renglon: number | null; subproducto: string; nombre: string; cantidad: number }[];
 };
 
 const TIPO_COLOR: Record<string, string> = {
@@ -99,6 +101,7 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-900">{c.proveedor_nombre ?? "—"}</p>
                       {c.proveedor_nit && <p className="text-xs text-gray-400">NIT: {c.proveedor_nit}</p>}
+                      <RenglonBadges renglones={c.renglones} />
                     </td>
                     <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
                       {c.total != null ? Q(c.total) : "—"}
@@ -148,6 +151,7 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-900">{o.proveedor_nombre ?? "—"}</p>
                       {o.proveedor_nit && <p className="text-xs text-gray-400">NIT: {o.proveedor_nit}</p>}
+                      <RenglonBadges renglones={o.renglones} />
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-gray-700 whitespace-nowrap">
                       {o.costo_unitario != null ? Q(o.costo_unitario) : "—"}

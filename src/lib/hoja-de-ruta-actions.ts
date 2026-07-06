@@ -6,6 +6,7 @@ import {
 } from "@/lib/schema";
 import { inArray, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
+import { renglonLookupMap } from "@/lib/adjudicacion/renglon-utils";
 
 export type HojaDeRuta = {
   siaf: {
@@ -13,7 +14,7 @@ export type HojaDeRuta = {
     observaciones: string | null;
     creado_por_nombre: string | null; created_at: string | null;
     motivo_rechazo: string | null; rechazado_por_nombre: string | null; rechazado_en: string | null;
-    items: { id: number; nombre: string; subproducto: string; cantidad_solicitada: number }[];
+    items: { id: number; nombre: string; subproducto: string; cantidad_solicitada: number; renglon: number | null }[];
   };
   consolidacion: {
     id: number; numero: number; anio: number; fecha: string; pre_orden: string | null;
@@ -33,11 +34,17 @@ async function construirHojaDeRuta(ids: number[]): Promise<HojaDeRuta[]> {
   if (ids.length === 0) return [];
 
   const siafs = await db.select().from(siafCompras).where(inArray(siafCompras.id, ids));
-  const items = await db.select({
+  const itemsRaw = await db.select({
     id: siafComprasItems.id, solicitud_id: siafComprasItems.solicitud_id,
+    codigo_igss: siafComprasItems.codigo_igss,
     nombre: siafComprasItems.nombre, subproducto: siafComprasItems.subproducto,
     cantidad_solicitada: siafComprasItems.cantidad_solicitada,
   }).from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, ids));
+
+  const renglonMap = await renglonLookupMap();
+  const items = itemsRaw.map(i => ({
+    ...i, renglon: renglonMap.get(`${i.codigo_igss}::${i.subproducto}`) ?? null,
+  }));
 
   const consolIds = [...new Set(siafs.map(s => s.consolidacion_id).filter((v): v is number => v != null))];
   const consols = consolIds.length > 0

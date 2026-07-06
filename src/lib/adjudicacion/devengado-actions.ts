@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { ordenesCompra } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
+import { gruposRenglonDeConsolidacion } from "./renglon-utils";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -12,7 +13,10 @@ async function requireEdit(): Promise<{ error: string } | { uid: number }> {
 }
 
 export async function getOrdenesEnDevengado() {
-  return db.select().from(ordenesCompra).where(eq(ordenesCompra.estado, "En Devengado")).orderBy(sql`created_at ASC`);
+  const ordenes = await db.select().from(ordenesCompra).where(eq(ordenesCompra.estado, "En Devengado")).orderBy(sql`created_at ASC`);
+  return Promise.all(ordenes.map(async o => ({
+    ...o, renglones: await gruposRenglonDeConsolidacion(o.consolidacion_id),
+  })));
 }
 
 export type DevengarData = {

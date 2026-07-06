@@ -1,12 +1,15 @@
 "use client";
-import { useState, useMemo } from "react";
+import { Fragment, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, Search, Printer, X } from "lucide-react";
+import { Archive, Search, Printer, X, ChevronDown, ChevronRight, XCircle } from "lucide-react";
 
-type Item = { id: number; nombre: string; subproducto: string; cantidad_solicitada: number };
+type Item = { id: number; nombre: string; subproducto: string; cantidad_solicitada: number; renglon: number | null };
 type Solicitud = {
   id: number; numero: number; anio: number; fecha: string; estado: string;
-  observaciones: string | null; items: Item[];
+  observaciones: string | null;
+  creado_por_nombre: string | null;
+  motivo_rechazo: string | null; rechazado_por_nombre: string | null; rechazado_en: string | null;
+  items: Item[];
 };
 type Firmante = { id: number; nombre: string; cargo: string };
 
@@ -23,6 +26,7 @@ const ESTADO_STYLE: Record<string, string> = {
 export default function ArchivoClient({ solicitudes, firmantes }: { solicitudes: Solicitud[]; firmantes: Firmante[] }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const [printSol, setPrintSol] = useState<Solicitud | null>(null);
   const [selFirmante1, setSelFirmante1] = useState<Firmante | null>(null);
   const [selFirmante2, setSelFirmante2] = useState<Firmante | null>(null);
@@ -53,7 +57,7 @@ export default function ArchivoClient({ solicitudes, firmantes }: { solicitudes:
           <Archive className="w-5 h-5" /> Archivo — A-01 SIAF
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Todo SIAF generado queda aquí para siempre — desde aquí solo puedes verlo o volver a imprimirlo.
+          Todo SIAF generado queda aquí para siempre — desde aquí solo puedes ver el detalle o volver a imprimirlo.
         </p>
       </div>
 
@@ -68,6 +72,7 @@ export default function ArchivoClient({ solicitudes, firmantes }: { solicitudes:
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
+                <th className="px-4 py-3 w-8"></th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Correlativo</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Fecha</th>
                 <th className="px-4 py-3 text-left">Justificación</th>
@@ -75,27 +80,90 @@ export default function ArchivoClient({ solicitudes, firmantes }: { solicitudes:
                 <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filtered.map(s => (
-                <tr key={s.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">{s.numero}/{s.anio}</td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{s.fecha}</td>
-                  <td className="px-4 py-3 text-xs text-gray-600 max-w-xs truncate" title={s.observaciones ?? ""}>
-                    {s.observaciones ?? "—"}
-                  </td>
-                  <td className="px-4 py-3 text-center whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ESTADO_STYLE[s.estado] ?? "bg-gray-100 text-gray-600"}`}>
-                      {s.estado}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <button onClick={() => openPrint(s)}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors ml-auto">
-                      <Printer className="w-3 h-3" /> Ver / Imprimir
-                    </button>
-                  </td>
-                </tr>
-              ))}
+            <tbody>
+              {filtered.map(s => {
+                const expanded = expandedId === s.id;
+                return (
+                  <Fragment key={s.id}>
+                    <tr className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => setExpandedId(p => p === s.id ? null : s.id)}>
+                      <td className="px-4 py-3 text-gray-400">
+                        {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                      </td>
+                      <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">{s.numero}/{s.anio}</td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{s.fecha}</td>
+                      <td className="px-4 py-3 text-xs text-gray-600 max-w-xs truncate" title={s.observaciones ?? ""}>
+                        {s.observaciones ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 text-center whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ESTADO_STYLE[s.estado] ?? "bg-gray-100 text-gray-600"}`}>
+                          {s.estado}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => openPrint(s)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors ml-auto">
+                          <Printer className="w-3 h-3" /> Ver / Imprimir
+                        </button>
+                      </td>
+                    </tr>
+                    {expanded && (
+                      <tr className="bg-brand-50/40">
+                        <td colSpan={6} className="px-6 py-4 space-y-3">
+                          <div className="text-xs text-gray-600 space-y-1">
+                            <p><span className="font-semibold text-gray-500 uppercase tracking-wider text-[11px]">Justificación:</span> {s.observaciones || "—"}</p>
+                            {s.creado_por_nombre && <p><span className="font-semibold">Creado por:</span> {s.creado_por_nombre}</p>}
+                          </div>
+                          {s.estado === "Rechazado" && (
+                            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700">
+                              <XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                              <div>
+                                <p>{s.motivo_rechazo || "Sin motivo registrado"}</p>
+                                {(s.rechazado_por_nombre || s.rechazado_en) && (
+                                  <p className="text-red-500 mt-0.5">
+                                    {s.rechazado_por_nombre && `Rechazado por ${s.rechazado_por_nombre}`} {s.rechazado_en && `· ${s.rechazado_en}`}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                            Insumos en la solicitud {s.numero}/{s.anio}
+                          </p>
+                          {s.items.length === 0 ? (
+                            <p className="text-sm text-gray-400">Sin ítems</p>
+                          ) : (
+                            <div className="overflow-x-auto rounded-xl border border-gray-200">
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="bg-gray-100">
+                                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Insumo</th>
+                                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Subproducto</th>
+                                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Renglón</th>
+                                    <th className="px-3 py-2 text-right font-semibold text-gray-700 whitespace-nowrap">Cantidad</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 bg-white">
+                                  {s.items.map(item => (
+                                    <tr key={item.id}>
+                                      <td className="px-3 py-2 font-medium text-gray-900">{item.nombre}</td>
+                                      <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{item.subproducto}</td>
+                                      <td className="px-3 py-2 tabular-nums text-gray-600 whitespace-nowrap">{item.renglon ?? "—"}</td>
+                                      <td className="px-3 py-2 text-right tabular-nums font-semibold text-gray-900">
+                                        {item.cantidad_solicitada.toLocaleString("es-GT")}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
           {filtered.length === 0 && (

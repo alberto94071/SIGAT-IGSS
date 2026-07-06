@@ -180,6 +180,7 @@ export default function ConsolidacionesTable({ consolidaciones, acciones, onVerM
                                   <table className="w-full text-xs">
                                     <thead><tr className="bg-gray-100">
                                       <th className="px-3 py-1.5 text-left font-semibold text-gray-600">Insumo</th>
+                                      <th className="px-3 py-1.5 text-left font-semibold text-gray-600">Renglón</th>
                                       <th className="px-3 py-1.5 text-right font-semibold text-gray-600">Cant.</th>
                                       <th className="px-3 py-1.5 text-right font-semibold text-gray-600">Precio</th>
                                     </tr></thead>
@@ -187,6 +188,7 @@ export default function ConsolidacionesTable({ consolidaciones, acciones, onVerM
                                       {c.precios.map((p, i) => (
                                         <tr key={i}>
                                           <td className="px-3 py-2 text-gray-900 font-medium">{p.nombre}</td>
+                                          <td className="px-3 py-2 tabular-nums text-gray-600">{p.renglon ?? "—"}</td>
                                           <td className="px-3 py-2 text-right tabular-nums text-gray-600">{p.cantidad.toLocaleString("es-GT")}</td>
                                           <td className="px-3 py-2 text-right tabular-nums text-gray-700">{p.precio_unitario != null ? Q(p.precio_unitario) : "—"}</td>
                                         </tr>

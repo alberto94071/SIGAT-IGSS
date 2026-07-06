@@ -107,6 +107,7 @@ export default function BandejaDestino({ consolidaciones: init, titulo }: Props)
                                     <table className="w-full text-xs">
                                       <thead><tr className="bg-gray-100">
                                         <th className="px-3 py-1.5 text-left font-semibold text-gray-600">Insumo</th>
+                                        <th className="px-3 py-1.5 text-left font-semibold text-gray-600">Renglón</th>
                                         <th className="px-3 py-1.5 text-right font-semibold text-gray-600">Cant.</th>
                                         <th className="px-3 py-1.5 text-right font-semibold text-gray-600">Precio</th>
                                         <th className="px-3 py-1.5 text-right font-semibold text-gray-600">Subtotal</th>
@@ -115,6 +116,7 @@ export default function BandejaDestino({ consolidaciones: init, titulo }: Props)
                                         {c.precios.map((p, i) => (
                                           <tr key={i}>
                                             <td className="px-3 py-2 font-medium text-gray-900">{p.nombre}<span className="block text-gray-400 font-mono text-[10px]">{p.subproducto}</span></td>
+                                            <td className="px-3 py-2 tabular-nums text-gray-600">{p.renglon ?? "—"}</td>
                                             <td className="px-3 py-2 text-right tabular-nums text-gray-600">{p.cantidad.toLocaleString("es-GT")}</td>
                                             <td className="px-3 py-2 text-right tabular-nums">{p.precio_unitario != null ? Q(p.precio_unitario) : "—"}</td>
                                             <td className="px-3 py-2 text-right tabular-nums font-semibold text-gray-900">{p.precio_unitario != null ? Q(p.cantidad * p.precio_unitario) : "—"}</td>

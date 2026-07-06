@@ -9,6 +9,7 @@ export type InsumoPrecio = {
   unidad_medida: string | null;
   cantidad: number;
   precio_unitario: number | null;
+  renglon: number | null;
 };
 
 export type Oferente = {

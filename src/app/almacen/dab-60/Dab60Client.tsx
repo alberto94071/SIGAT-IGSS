@@ -2,12 +2,14 @@
 import { useState } from "react";
 import { Archive, Loader2, CheckCircle2 } from "lucide-react";
 import { procesarDab60 } from "@/lib/adjudicacion/dab60-actions";
+import RenglonBadges from "@/components/RenglonBadges";
 
 type Orden = {
   id: number; numero: number; anio: number;
   proveedor_nit: string | null; proveedor_nombre: string | null;
   total: number | null; costo_unitario: number | null; total_cantidad: number | null;
   no_devengado: string | null; no_factura: string | null;
+  renglones: { renglon: number | null; subproducto: string; nombre: string; cantidad: number }[];
 };
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -58,6 +60,7 @@ export default function Dab60Client({ ordenes: init }: { ordenes: Orden[] }) {
                   <td className="px-4 py-3">
                     <p className="font-medium text-gray-900">{o.proveedor_nombre ?? "—"}</p>
                     {o.proveedor_nit && <p className="text-xs text-gray-400">NIT: {o.proveedor_nit}</p>}
+                    <RenglonBadges renglones={o.renglones} />
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-gray-700 whitespace-nowrap">
                     {o.costo_unitario != null ? Q(o.costo_unitario) : "—"}

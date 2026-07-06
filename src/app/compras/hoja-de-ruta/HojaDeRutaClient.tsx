@@ -123,7 +123,7 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
                         {h.siaf.items.map(i => (
                           <span key={i.id} className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-mono">
-                            {i.nombre} ({i.cantidad_solicitada.toLocaleString("es-GT")})
+                            {i.nombre} · Renglón {i.renglon ?? "—"} ({i.cantidad_solicitada.toLocaleString("es-GT")})
                           </span>
                         ))}
                       </div>

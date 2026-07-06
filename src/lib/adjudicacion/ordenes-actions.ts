@@ -35,7 +35,10 @@ export async function getConsolidacionesPendientesOrden(): Promise<Consolidacion
 }
 
 export async function getOrdenesEnProceso() {
-  return db.select().from(ordenesCompra).where(eq(ordenesCompra.estado, "Generada")).orderBy(sql`created_at ASC`);
+  const ordenes = await db.select().from(ordenesCompra).where(eq(ordenesCompra.estado, "Generada")).orderBy(sql`created_at ASC`);
+  return Promise.all(ordenes.map(async o => ({
+    ...o, renglones: await gruposRenglonDeConsolidacion(o.consolidacion_id),
+  })));
 }
 
 export async function generarOrdenDeCompra(consolidacionId: number, data: {
