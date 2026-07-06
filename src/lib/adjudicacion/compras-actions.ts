@@ -13,7 +13,7 @@ async function requireCompras(): Promise<{ error: string } | { uid: number }> {
 }
 
 // Correlativo A-04 SIAF — se asigna automáticamente a toda consolidación que
-// llega a Fondo Rotativo (Baja Cuantía Regularizado o adjudicación directa).
+// llega a Fondo Rotativo (Baja Cuantía o Casos de Excepción, en su forma Regularizado).
 async function siguienteNumeroA04(anio: number): Promise<number> {
   const res = await db.execute(
     sql`SELECT COALESCE(MAX(numero_a04), 0) + 1 AS next FROM consolidaciones WHERE anio_a04 = ${anio}`
@@ -109,7 +109,8 @@ export async function elegirFormaBajaCuantia(consolidacionId: number, regulariza
     const [con] = await db.select({ tipo_compra: consolidaciones.tipo_compra })
       .from(consolidaciones).where(eq(consolidaciones.id, consolidacionId)).limit(1);
     if (!con) return { error: "No se encontró la consolidación" };
-    if (con.tipo_compra !== "Baja Cuantía") return { error: "Esta acción solo aplica a Baja Cuantía" };
+    if (con.tipo_compra !== "Baja Cuantía" && con.tipo_compra !== "Casos de Excepción")
+      return { error: "Esta acción solo aplica a Baja Cuantía o Casos de Excepción" };
 
     await db.update(consolidaciones).set({ regularizado }).where(eq(consolidaciones.id, consolidacionId));
     if (regularizado) return { ok: true as const, subTipo: null };
@@ -169,11 +170,12 @@ export async function confirmarBajaCuantiaServicios(consolidacionId: number, cot
   }
 }
 
-// Contrato Abierto y Casos de Excepción ya no pasan por Junta Adjudicadora:
-// Compras adjudica directamente con una razón de adjudicación (texto libre) y
-// el costo de factura (con IVA incluido, salvo que se marque exento), y la
-// consolidación pasa de una vez a su bandeja destino — Excepción a Fondo
-// Rotativo (con número A-04), Contrato Abierto a Presupuesto.
+// Contrato Abierto ya no pasa por Junta Adjudicadora: Compras adjudica
+// directamente con una razón de adjudicación (texto libre) y el costo de
+// factura (con IVA incluido, salvo que se marque exento), y la consolidación
+// pasa de una vez a Presupuesto. Casos de Excepción ahora se ramifica igual
+// que Baja Cuantía (Normal vs Regularizado) — ver elegirFormaBajaCuantia /
+// registrarRegularizado / enviarAJunta.
 export async function adjudicarDirecto(consolidacionId: number, data: {
   proveedor_id: number | null; nit: string; nombre: string;
   costo: number; exento_iva: boolean; referencia: string; razon: string;
@@ -186,8 +188,7 @@ export async function adjudicarDirecto(consolidacionId: number, data: {
       .from(consolidaciones).where(eq(consolidaciones.id, consolidacionId)).limit(1);
     if (!con) return { error: "No se encontró la consolidación" };
     const tipo = con.tipo_compra as TipoCompra | null;
-    if (tipo !== "Contrato Abierto" && tipo !== "Casos de Excepción")
-      return { error: "Esta acción solo aplica a Contrato Abierto o Casos de Excepción" };
+    if (tipo !== "Contrato Abierto") return { error: "Esta acción solo aplica a Contrato Abierto" };
 
     if (!data.nit.trim() || !data.nombre.trim()) return { error: "NIT y nombre son obligatorios" };
     if (!(data.costo > 0)) return { error: "Ingresa un costo de factura válido" };
@@ -213,19 +214,13 @@ export async function adjudicarDirecto(consolidacionId: number, data: {
       orden: 0, creado_por: check.uid,
     });
 
-    const anioActual = new Date().getFullYear();
-    const esFondoRotativo = tipo === "Casos de Excepción";
-    const numeroA04 = esFondoRotativo ? await siguienteNumeroA04(anioActual) : null;
-
     await db.update(consolidaciones).set({
       referencia: label ? data.referencia.trim() : con.referencia,
       numero_adjudicacion: data.razon.trim(),
       proveedor_id: data.proveedor_id,
       proveedor_nit: data.nit.trim(), proveedor_nombre: data.nombre.trim(),
       exento_iva: data.exento_iva, total,
-      destino: esFondoRotativo ? "fondo_rotativo" : "presupuesto",
-      estado:  esFondoRotativo ? "Enviado a Fondo Rotativo" : "Enviado a Presupuesto",
-      numero_a04: numeroA04, anio_a04: numeroA04 ? anioActual : null,
+      destino: "presupuesto", estado: "Enviado a Presupuesto",
     }).where(eq(consolidaciones.id, consolidacionId));
 
     return { ok: true as const };
@@ -280,15 +275,15 @@ export async function registrarRegularizado(consolidacionId: number, data: {
     const [con] = await db.select({ tipo_compra: consolidaciones.tipo_compra, regularizado: consolidaciones.regularizado })
       .from(consolidaciones).where(eq(consolidaciones.id, consolidacionId)).limit(1);
     if (!con) return { error: "No se encontró la consolidación" };
-    if (con.tipo_compra !== "Baja Cuantía" || con.regularizado !== true)
-      return { error: "Esta acción solo aplica a Baja Cuantía Regularizado" };
+    if ((con.tipo_compra !== "Baja Cuantía" && con.tipo_compra !== "Casos de Excepción") || con.regularizado !== true)
+      return { error: "Esta acción solo aplica a Baja Cuantía o Casos de Excepción, en su forma Regularizado" };
 
     if (!data.nit.trim() || !data.nombre.trim()) return { error: "NIT y nombre son obligatorios" };
     if (!(data.monto > 0)) return { error: "Ingresa un monto válido" };
     if (!data.numero_cheque.trim()) return { error: "El número de cheque es obligatorio" };
 
     const total = data.exento_iva ? data.monto : data.monto * 0.88;
-    const limite = LIMITE_POR_TIPO["Baja Cuantía"];
+    const limite = LIMITE_POR_TIPO[con.tipo_compra as TipoCompra];
     if (total > limite) {
       return {
         error: `El total Q${total.toFixed(2)} supera el límite de Q${limite.toLocaleString("es-GT")}`,

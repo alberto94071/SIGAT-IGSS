@@ -157,7 +157,10 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     setLoading(false);
     if ("error" in res) return setError(res.error);
     setTipoCompra(t);
-    if (t !== "Baja Cuantía") setOferentes([]);
+    setRegularizadoState(null);
+    setSubTipo(null);
+    setCotizId(null);
+    if (t !== "Baja Cuantía" && t !== "Casos de Excepción") setOferentes([]);
   }
 
   async function guardarEvento() {
@@ -198,7 +201,8 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
 
   async function finalizarEnviar() {
     if (oferentes.length === 0) return setError("Agrega al menos un oferente");
-    if (tipoCompra === "Baja Cuantía" && !referencia.trim()) return setError(`El campo "${REFERENCIA_LABEL["Baja Cuantía"]}" es obligatorio`);
+    const label = tipoCompra ? REFERENCIA_LABEL[tipoCompra] : null;
+    if (label && !referencia.trim()) return setError(`El campo "${label}" es obligatorio`);
     setLoading(true); setError("");
     const res = await enviarAJunta(c.id, { referencia: referencia.trim() || undefined });
     setLoading(false);
@@ -208,7 +212,8 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
 
   async function confirmarServicio() {
     if (!cotizId) return setError("Selecciona una cotización");
-    if (!referencia.trim()) return setError(`El campo "${REFERENCIA_LABEL["Baja Cuantía"]}" es obligatorio`);
+    const label = tipoCompra ? REFERENCIA_LABEL[tipoCompra] : null;
+    if (label && !referencia.trim()) return setError(`El campo "${label}" es obligatorio`);
     setLoading(true); setError("");
     const res = await confirmarBajaCuantiaServicios(c.id, cotizId, referencia.trim());
     setLoading(false);
@@ -229,10 +234,8 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     setLoading(false);
     if ("limitExceeded" in res) { setLimitExceeded(true); setError(res.error); return; }
     if ("error" in res) return setError(res.error);
-    const esFondoRotativo = tipoCompra === "Casos de Excepción";
     onDone({
-      estado: esFondoRotativo ? "Enviado a Fondo Rotativo" : "Enviado a Presupuesto",
-      destino: esFondoRotativo ? "fondo_rotativo" : "presupuesto",
+      estado: "Enviado a Presupuesto", destino: "presupuesto",
       tipo_compra: tipoCompra, referencia, numero_adjudicacion: duRazon.trim(),
       proveedor_nit: duNit.trim(), proveedor_nombre: duNombre.trim(),
       exento_iva: duExento, total: duExento ? costoNum : costoNum * 0.88,
@@ -263,6 +266,8 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
   }
 
   const referenciaLabel = tipoCompra && tipoCompra !== "Compra Directa" ? REFERENCIA_LABEL[tipoCompra] : null;
+  // Baja Cuantía y Casos de Excepción comparten la misma ramificación Normal/Regularizado.
+  const esBajaOExcepcion = tipoCompra === "Baja Cuantía" || tipoCompra === "Casos de Excepción";
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
@@ -312,8 +317,8 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
             </div>
           )}
 
-          {/* Baja Cuantía: elegir forma */}
-          {tipoCompra === "Baja Cuantía" && regularizado === null && (
+          {/* Baja Cuantía / Casos de Excepción: elegir forma */}
+          {esBajaOExcepcion && regularizado === null && (
             <div className="space-y-2">
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">¿Regularizado o Normal?</p>
               <div className="grid grid-cols-2 gap-3">
@@ -325,11 +330,11 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
             </div>
           )}
 
-          {/* Baja Cuantía Normal — con insumos */}
-          {tipoCompra === "Baja Cuantía" && regularizado === false && subTipo === "con_insumos" && (
+          {/* Normal — con insumos */}
+          {esBajaOExcepcion && regularizado === false && subTipo === "con_insumos" && (
             <div className="space-y-4">
               <div>
-                <label className="label">{REFERENCIA_LABEL["Baja Cuantía"]}</label>
+                <label className="label">{referenciaLabel}</label>
                 <input className="input" value={referencia} onChange={e => setReferencia(e.target.value)} />
               </div>
               <div>
@@ -340,11 +345,11 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
             </div>
           )}
 
-          {/* Baja Cuantía Normal — por servicios */}
-          {tipoCompra === "Baja Cuantía" && regularizado === false && subTipo === "por_servicios" && (
+          {/* Normal — por servicios */}
+          {esBajaOExcepcion && regularizado === false && subTipo === "por_servicios" && (
             <div className="space-y-4">
               <div>
-                <label className="label">{REFERENCIA_LABEL["Baja Cuantía"]}</label>
+                <label className="label">{referenciaLabel}</label>
                 <input className="input" value={referencia} onChange={e => setReferencia(e.target.value)} />
               </div>
               <div>
@@ -376,8 +381,8 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
             </div>
           )}
 
-          {/* Baja Cuantía Regularizado */}
-          {tipoCompra === "Baja Cuantía" && regularizado === true && (
+          {/* Regularizado (Baja Cuantía o Casos de Excepción) */}
+          {esBajaOExcepcion && regularizado === true && (
             <div className="space-y-3">
               <div>
                 <label className="label flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" /> NIT</label>
@@ -412,13 +417,13 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
             </div>
           )}
 
-          {/* Contrato Abierto / Casos de Excepción: ya no pasan por Junta —
-              Compras adjudica directo con una razón y el costo de factura */}
-          {(tipoCompra === "Contrato Abierto" || tipoCompra === "Casos de Excepción") && (
+          {/* Contrato Abierto: no pasa por Junta — Compras adjudica directo
+              con una razón y el costo de factura */}
+          {tipoCompra === "Contrato Abierto" && (
             <div className="space-y-3">
               <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
                 Este tipo de compra no pasa por la Junta Adjudicadora — Compras adjudica directamente y la
-                consolidación pasa de una vez a {tipoCompra === "Casos de Excepción" ? "Fondo Rotativo" : "Presupuesto"}.
+                consolidación pasa de una vez a Presupuesto.
               </p>
               {referenciaLabel && (
                 <div>
@@ -494,22 +499,22 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />} Enviar a Junta
               </button>
             )}
-            {tipoCompra === "Baja Cuantía" && regularizado === false && subTipo === "con_insumos" && (
+            {esBajaOExcepcion && regularizado === false && subTipo === "con_insumos" && (
               <button onClick={finalizarEnviar} disabled={loading || oferentes.length === 0} className="btn-primary disabled:opacity-50">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />} Enviar a Junta
               </button>
             )}
-            {tipoCompra === "Baja Cuantía" && regularizado === false && subTipo === "por_servicios" && (
+            {esBajaOExcepcion && regularizado === false && subTipo === "por_servicios" && (
               <button onClick={confirmarServicio} disabled={loading || !cotizId} className="btn-primary disabled:opacity-50">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />} Enviar a Junta
               </button>
             )}
-            {tipoCompra === "Baja Cuantía" && regularizado === true && (
+            {esBajaOExcepcion && regularizado === true && (
               <button onClick={enviarRegularizado} disabled={loading} className="btn-primary disabled:opacity-50">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />} Enviar a Fondo Rotativo
               </button>
             )}
-            {(tipoCompra === "Contrato Abierto" || tipoCompra === "Casos de Excepción") && (
+            {tipoCompra === "Contrato Abierto" && (
               <button onClick={handleAdjudicarDirecto} disabled={loading} className="btn-primary disabled:opacity-50">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Gavel className="w-4 h-4" />} ADJUDICAR
               </button>
