@@ -1,19 +1,26 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
-  Route, Search, Loader2, FileText, Layers, Gavel, ShoppingCart,
+  Route, Search, FileText, Layers, Gavel, ShoppingCart,
   XCircle, ChevronDown, ChevronRight,
 } from "lucide-react";
-import { buscarHojaDeRuta, type HojaDeRuta } from "@/lib/hoja-de-ruta-actions";
+import type { HojaDeRuta } from "@/lib/hoja-de-ruta-actions";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 function resumenEstado(h: HojaDeRuta): { texto: string; tono: "gray" | "green" | "red" | "amber" | "blue" } {
-  if (h.orden) return { texto: `Orden de Compra generada (${h.orden.numero}/${h.orden.anio})`, tono: "green" };
+  if (h.orden) {
+    const ref = `${h.orden.numero}/${h.orden.anio}`;
+    if (h.orden.estado === "Generada") return { texto: `Orden ${ref} generada — esperando enviar a Presupuesto en Compras/Órdenes`, tono: "blue" };
+    if (h.orden.estado === "En Compromiso") return { texto: `Orden ${ref} en Presupuesto/Compromiso — esperando comprometer`, tono: "amber" };
+    if (h.orden.estado === "En Devengado") return { texto: `Orden ${ref} en Presupuesto/Devengado — esperando devengar`, tono: "amber" };
+    if (h.orden.estado === "En DAB") return { texto: `Orden ${ref} esperando ingresar en Almacén/DAB-60`, tono: "amber" };
+    return { texto: `Orden de Compra generada (${ref})`, tono: "green" };
+  }
 
   if (h.acta) {
     if (h.acta.estado === "Rechazada") return { texto: "Acta rechazada — esperando corrección en Junta Adjudicadora/Acta", tono: "red" };
-    if (h.acta.estado === "Aprobada") return { texto: "Acta aprobada — esperando Completar Adjudicación en Compras/Adjudicación", tono: "blue" };
+    if (h.acta.estado === "Aprobada") return { texto: "Acta aprobada — pasando a Compras/Órdenes", tono: "blue" };
     return { texto: "Acta generada — esperando previsualización y aprobación en Junta Adjudicadora/Acta", tono: "amber" };
   }
 
@@ -40,20 +47,23 @@ const TONO_CLASSES: Record<string, string> = {
   blue: "bg-blue-100 text-blue-700",
 };
 
-export default function HojaDeRutaClient() {
+function coincide(h: HojaDeRuta, q: string): boolean {
+  const c = h.consolidacion;
+  const campos = [
+    `${h.siaf.numero}/${h.siaf.anio}`, h.siaf.numero.toString(),
+    c?.pre_orden, c?.numero_adjudicacion, c?.proveedor_nombre, c?.proveedor_nit,
+    h.orden ? `${h.orden.numero}/${h.orden.anio}` : null,
+    ...h.siaf.items.map(i => i.nombre),
+  ];
+  return campos.some(campo => campo != null && campo.toLowerCase().includes(q));
+}
+
+export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[] }) {
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<HojaDeRuta[] | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  async function handleBuscar() {
-    if (!query.trim()) return;
-    setLoading(true);
-    const res = await buscarHojaDeRuta(query.trim());
-    setLoading(false);
-    setResults(res);
-    setExpandedId(res.length === 1 ? res[0].siaf.id : null);
-  }
+  const q = query.toLowerCase().trim();
+  const results = useMemo(() => !q ? registros : registros.filter(h => coincide(h, q)), [registros, q]);
 
   return (
     <div className="space-y-5">
@@ -62,29 +72,23 @@ export default function HojaDeRutaClient() {
           <Route className="w-5 h-5" /> Hoja de Ruta
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Busca cualquier SIAF u orden por correlativo, Pre-Orden, razón de adjudicación, proveedor o insumo,
-          y mira en qué etapa está o dónde se quedó — sin que ocupe espacio en tus pantallas de trabajo.
+          Aquí ves todo lo que se ha hecho — {registros.length} solicitud(es) en total. Busca por correlativo,
+          Pre-Orden, razón de adjudicación, proveedor o insumo para encontrar un caso puntual, o simplemente
+          recorre la lista completa para ver en qué etapa va cada una.
         </p>
       </div>
 
-      <div className="flex gap-2 max-w-xl">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input className="input pl-9" placeholder="Ej. 45/2026, Pre-Orden 1023, NIT del proveedor…"
-            value={query} onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handleBuscar()} />
-        </div>
-        <button onClick={handleBuscar} disabled={loading || !query.trim()} className="btn-primary disabled:opacity-50">
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} Buscar
-        </button>
+      <div className="relative max-w-xl">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <input className="input pl-9" placeholder="Ej. 45/2026, Pre-Orden 1023, NIT del proveedor…"
+          value={query} onChange={e => setQuery(e.target.value)} />
       </div>
 
-      {results != null && (
-        <div className="space-y-3">
+      <div className="space-y-3">
           {results.length === 0 && (
             <div className="card p-10 text-center text-gray-400">
               <Route className="w-8 h-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">No se encontró ninguna solicitud con ese criterio.</p>
+              <p className="text-sm">{registros.length === 0 ? "Aún no hay solicitudes registradas." : "No se encontró ninguna solicitud con ese criterio."}</p>
             </div>
           )}
           {results.map(h => {
@@ -185,8 +189,7 @@ export default function HojaDeRutaClient() {
               </div>
             );
           })}
-        </div>
-      )}
+      </div>
     </div>
   );
 }

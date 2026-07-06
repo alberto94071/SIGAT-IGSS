@@ -4,7 +4,7 @@ import {
   siafCompras, siafComprasItems, consolidaciones, actasAdjudicacion,
   ordenesCompra, usuarios,
 } from "@/lib/schema";
-import { eq, or, ilike, and, inArray } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 
 export type HojaDeRuta = {
@@ -29,45 +29,8 @@ export type HojaDeRuta = {
   orden: { numero: number; anio: number; fecha: string; estado: string } | null;
 };
 
-export async function buscarHojaDeRuta(q: string): Promise<HojaDeRuta[]> {
-  const session = await auth();
-  if (!session) return [];
-  const query = q.trim();
-  if (query.length < 1) return [];
-
-  const siafIds = new Set<number>();
-
-  // 1. Coincidencia directa por número de SIAF (ej. "45" o "45/2026")
-  const numMatch = query.match(/^(\d+)(?:\/(\d{4}))?$/);
-  if (numMatch) {
-    const numero = Number(numMatch[1]);
-    const anio = numMatch[2] ? Number(numMatch[2]) : undefined;
-    const rows = await db.select({ id: siafCompras.id }).from(siafCompras)
-      .where(anio ? and(eq(siafCompras.numero, numero), eq(siafCompras.anio, anio)) : eq(siafCompras.numero, numero));
-    rows.forEach(r => siafIds.add(r.id));
-  }
-
-  // 2. Coincidencia por Pre-Orden, Razón de Adjudicación o proveedor en la consolidación
-  const consRows = await db.select({ id: consolidaciones.id }).from(consolidaciones).where(or(
-    ilike(consolidaciones.pre_orden, `%${query}%`),
-    ilike(consolidaciones.numero_adjudicacion, `%${query}%`),
-    ilike(consolidaciones.proveedor_nombre, `%${query}%`),
-    ilike(consolidaciones.proveedor_nit, `%${query}%`),
-  ));
-  if (consRows.length > 0) {
-    const consIds = consRows.map(c => c.id);
-    const siafRows = await db.select({ id: siafCompras.id }).from(siafCompras)
-      .where(inArray(siafCompras.consolidacion_id, consIds));
-    siafRows.forEach(r => siafIds.add(r.id));
-  }
-
-  // 3. Coincidencia por nombre de insumo dentro de los ítems del SIAF
-  const itemRows = await db.select({ solicitud_id: siafComprasItems.solicitud_id }).from(siafComprasItems)
-    .where(ilike(siafComprasItems.nombre, `%${query}%`)).limit(30);
-  itemRows.forEach(r => siafIds.add(r.solicitud_id));
-
-  if (siafIds.size === 0) return [];
-  const ids = [...siafIds].slice(0, 25);
+async function construirHojaDeRuta(ids: number[]): Promise<HojaDeRuta[]> {
+  if (ids.length === 0) return [];
 
   const siafs = await db.select().from(siafCompras).where(inArray(siafCompras.id, ids));
   const items = await db.select({
@@ -129,4 +92,16 @@ export async function buscarHojaDeRuta(q: string): Promise<HojaDeRuta[]> {
       orden: orden ? { numero: orden.numero, anio: orden.anio, fecha: orden.fecha, estado: orden.estado } : null,
     };
   }).sort((a, b) => b.siaf.id - a.siaf.id);
+}
+
+// Todo el historial (más reciente primero) — la búsqueda sobre esta lista se
+// hace en el cliente, para que la pantalla sirva tanto para "ver todo lo que
+// hemos hecho" como para buscar un caso puntual, sin dos pantallas separadas.
+export async function listarHojaDeRuta(): Promise<HojaDeRuta[]> {
+  const session = await auth();
+  if (!session) return [];
+
+  const rows = await db.select({ id: siafCompras.id }).from(siafCompras)
+    .orderBy(sql`id DESC`).limit(500);
+  return construirHojaDeRuta(rows.map(r => r.id));
 }
