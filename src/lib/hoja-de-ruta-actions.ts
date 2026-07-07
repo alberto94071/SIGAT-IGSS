@@ -2,7 +2,7 @@
 import { db } from "@/lib/db";
 import {
   siafCompras, siafComprasItems, consolidaciones, actasAdjudicacion,
-  ordenesCompra, usuarios,
+  ordenesCompra, fondoRotativoPagos, usuarios,
 } from "@/lib/schema";
 import { inArray, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
@@ -23,14 +23,19 @@ export type HojaDeRuta = {
     numero_adjudicacion: string | null;
     proveedor_nombre: string | null; proveedor_nit: string | null; total: number | null;
     numero_a04: number | null; anio_a04: number | null;
+    cotizacion_anual_id: number | null; referencia: string | null;
   } | null;
   acta: {
-    no_acta: string; no_formulario: string; estado: string; motivo_rechazo: string | null;
+    id: number; no_acta: string; no_formulario: string; estado: string; motivo_rechazo: string | null;
   } | null;
   orden: { numero: number; anio: number; fecha: string; estado: string } | null;
+  pago: {
+    forma_pago: string | null; estado: string;
+    numero_cheque: string | null; numero_vale: string | null;
+  } | null;
 };
 
-async function construirHojaDeRuta(ids: number[]): Promise<HojaDeRuta[]> {
+export async function construirHojaDeRuta(ids: number[]): Promise<HojaDeRuta[]> {
   if (ids.length === 0) return [];
 
   const siafs = await db.select().from(siafCompras).where(inArray(siafCompras.id, ids));
@@ -56,6 +61,9 @@ async function construirHojaDeRuta(ids: number[]): Promise<HojaDeRuta[]> {
   const ordenes = consolIds.length > 0
     ? await db.select().from(ordenesCompra).where(inArray(ordenesCompra.consolidacion_id, consolIds))
     : [];
+  const pagos = consolIds.length > 0
+    ? await db.select().from(fondoRotativoPagos).where(inArray(fondoRotativoPagos.consolidacion_id, consolIds))
+    : [];
 
   const usuarioIds = [...new Set([
     ...siafs.map(s => s.creado_por), ...siafs.map(s => s.rechazado_por),
@@ -70,6 +78,7 @@ async function construirHojaDeRuta(ids: number[]): Promise<HojaDeRuta[]> {
     const con = s.consolidacion_id != null ? consols.find(c => c.id === s.consolidacion_id) ?? null : null;
     const acta = con ? actas.find(a => a.consolidacion_id === con.id) ?? null : null;
     const orden = con ? ordenes.find(o => o.consolidacion_id === con.id) ?? null : null;
+    const pago = con ? pagos.find(p => p.consolidacion_id === con.id) ?? null : null;
 
     return {
       siaf: {
@@ -91,12 +100,17 @@ async function construirHojaDeRuta(ids: number[]): Promise<HojaDeRuta[]> {
         numero_adjudicacion: con.numero_adjudicacion,
         proveedor_nombre: con.proveedor_nombre, proveedor_nit: con.proveedor_nit, total: con.total,
         numero_a04: con.numero_a04, anio_a04: con.anio_a04,
+        cotizacion_anual_id: con.cotizacion_anual_id, referencia: con.referencia,
       } : null,
       acta: acta ? {
-        no_acta: acta.no_acta, no_formulario: acta.no_formulario,
+        id: acta.id, no_acta: acta.no_acta, no_formulario: acta.no_formulario,
         estado: acta.estado, motivo_rechazo: acta.motivo_rechazo,
       } : null,
       orden: orden ? { numero: orden.numero, anio: orden.anio, fecha: orden.fecha, estado: orden.estado } : null,
+      pago: pago ? {
+        forma_pago: pago.forma_pago, estado: pago.estado,
+        numero_cheque: pago.numero_cheque, numero_vale: pago.numero_vale,
+      } : null,
     };
   }).sort((a, b) => b.siaf.id - a.siaf.id);
 }
@@ -113,3 +127,4 @@ export async function listarHojaDeRuta(): Promise<HojaDeRuta[]> {
   const rows = await db.select({ id: siafCompras.id }).from(siafCompras).orderBy(sql`id DESC`);
   return construirHojaDeRuta(rows.map(r => r.id));
 }
+

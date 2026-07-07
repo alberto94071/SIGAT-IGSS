@@ -4,7 +4,7 @@ import Link from "next/link";
 import {
   RotateCcw, MapPin, Bus, ArrowRight, Construction,
   ShieldCheck, ShoppingCart, Database, Calculator, Wallet,
-  Archive, Library, Gavel, FileSignature, UserCog
+  Archive, Library, Gavel, FileSignature, UserCog, Route
 } from "lucide-react";
 import { type Modulo, type Rol } from "@/lib/permisos";
 import { getPermisosFrescos } from "@/lib/modulo-access";
@@ -166,6 +166,19 @@ const MODULES = [
     bgLight: "bg-rose-50",
     available: true,
     permiso: "mod_administracion" as Modulo | null,
+  },
+  {
+    id: "hoja-de-ruta",
+    title: "Hoja de Ruta",
+    description: "Rastrea el estado de un pedido o solicitud a lo largo de todo su recorrido, desde el A-01 SIAF hasta el pago.",
+    href: "/hoja-de-ruta",
+    icon: Route,
+    color: "bg-teal-500",
+    ring: "ring-teal-200",
+    textColor: "text-teal-600",
+    bgLight: "bg-teal-50",
+    available: true,
+    permiso: "mod_hoja_de_ruta" as Modulo | null,
   },
 ];
 

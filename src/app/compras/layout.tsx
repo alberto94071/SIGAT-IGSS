@@ -9,7 +9,6 @@ const COMPRAS_NAV = [
   { href: "/compras/adjudicacion",  label: "Adjudicación",  icon: "Gavel"        },
   { href: "/compras/ordenes",       label: "Órdenes",       icon: "ShoppingCart" },
   { href: "/compras/archivo",       label: "Archivo",       icon: "Archive"      },
-  { href: "/compras/hoja-de-ruta",  label: "Hoja de Ruta",  icon: "Route"        },
 ] as const;
 
 export default async function ComprasLayout({ children }: { children: React.ReactNode }) {

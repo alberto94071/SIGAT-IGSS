@@ -4,11 +4,13 @@ import { useRouter } from "next/navigation";
 import { Archive, Search, Printer, X, ChevronDown, ChevronRight, XCircle } from "lucide-react";
 
 type Item = { id: number; nombre: string; subproducto: string; cantidad_solicitada: number; renglon: number | null };
+type Destino = { texto: string; tono: "gray" | "green" | "red" | "amber" | "blue" };
 type Solicitud = {
   id: number; numero: number; anio: number; fecha: string; estado: string;
   observaciones: string | null;
   creado_por_nombre: string | null;
   motivo_rechazo: string | null; rechazado_por_nombre: string | null; rechazado_en: string | null;
+  destino: Destino | null;
   items: Item[];
 };
 type Firmante = { id: number; nombre: string; cargo: string };
@@ -21,6 +23,14 @@ const ESTADO_STYLE: Record<string, string> = {
   "Consolidado":     "bg-purple-100 text-purple-700",
   "Adjudicado":      "bg-blue-100 text-blue-700",
   "Orden de Compra": "bg-indigo-100 text-indigo-700",
+};
+
+const DESTINO_TONE_CLASSES: Record<string, string> = {
+  gray: "bg-gray-100 text-gray-600",
+  green: "bg-green-100 text-green-700",
+  red: "bg-red-100 text-red-700",
+  amber: "bg-amber-100 text-amber-700",
+  blue: "bg-blue-100 text-blue-700",
 };
 
 export default function ArchivoClient({ solicitudes, firmantes }: { solicitudes: Solicitud[]; firmantes: Firmante[] }) {
@@ -77,6 +87,7 @@ export default function ArchivoClient({ solicitudes, firmantes }: { solicitudes:
                 <th className="px-4 py-3 text-left whitespace-nowrap">Fecha</th>
                 <th className="px-4 py-3 text-left">Justificación</th>
                 <th className="px-4 py-3 text-center whitespace-nowrap">Estado</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">Destino</th>
                 <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>
               </tr>
             </thead>
@@ -100,6 +111,13 @@ export default function ArchivoClient({ solicitudes, firmantes }: { solicitudes:
                           {s.estado}
                         </span>
                       </td>
+                      <td className="px-4 py-3 max-w-xs">
+                        {s.destino && (
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${DESTINO_TONE_CLASSES[s.destino.tono]}`}>
+                            {s.destino.texto}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                         <button onClick={() => openPrint(s)}
                           className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors ml-auto">
@@ -109,7 +127,7 @@ export default function ArchivoClient({ solicitudes, firmantes }: { solicitudes:
                     </tr>
                     {expanded && (
                       <tr className="bg-brand-50/40">
-                        <td colSpan={6} className="px-6 py-4 space-y-3">
+                        <td colSpan={7} className="px-6 py-4 space-y-3">
                           <div className="text-xs text-gray-600 space-y-1">
                             <p><span className="font-semibold text-gray-500 uppercase tracking-wider text-[11px]">Justificación:</span> {s.observaciones || "—"}</p>
                             {s.creado_por_nombre && <p><span className="font-semibold">Creado por:</span> {s.creado_por_nombre}</p>}
