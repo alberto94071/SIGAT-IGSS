@@ -149,6 +149,11 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
 
   const [rgNit, setRgNit] = useState(""); const [rgNombre, setRgNombre] = useState("");
   const [rgMonto, setRgMonto] = useState(""); const [rgExento, setRgExento] = useState(false);
+  const [rgDireccion, setRgDireccion] = useState(""); const [rgTelefono, setRgTelefono] = useState("");
+  const [rgDteNumero, setRgDteNumero] = useState(""); const [rgDteSerie, setRgDteSerie] = useState("");
+  const [rgDteFecha, setRgDteFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [rgNoPedido, setRgNoPedido] = useState(""); const [rgDescripcion, setRgDescripcion] = useState("");
+  const [rgUnidadMedida, setRgUnidadMedida] = useState(""); const [rgCantidad, setRgCantidad] = useState("1");
 
   async function pickTipo(t: TipoCompra) {
     setLoading(true); setError("");
@@ -243,11 +248,22 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
 
   async function enviarRegularizado() {
     const montoNum = parseFloat(rgMonto);
+    const cantidadNum = parseFloat(rgCantidad);
     if (!rgNit.trim() || !rgNombre.trim()) return setError("NIT y nombre son obligatorios");
     if (!(montoNum > 0)) return setError("Ingresa un monto válido");
+    if (!rgDireccion.trim() || !rgTelefono.trim()) return setError("Dirección y teléfono del proveedor son obligatorios");
+    if (!rgDteNumero.trim() || !rgDteSerie.trim() || !rgDteFecha) return setError("Los datos del DTE son obligatorios");
+    if (!rgNoPedido.trim()) return setError("El No. de Pedido es obligatorio");
+    if (!rgDescripcion.trim()) return setError("La descripción del gasto es obligatoria");
+    if (!rgUnidadMedida.trim()) return setError("La unidad de medida es obligatoria");
+    if (!(cantidadNum > 0)) return setError("Ingresa una cantidad válida");
     setLoading(true); setError(""); setLimitExceeded(false);
     const res = await registrarRegularizado(c.id, {
       nit: rgNit.trim(), nombre: rgNombre.trim(), monto: montoNum, exento_iva: rgExento,
+      proveedor_direccion: rgDireccion.trim(), proveedor_telefono: rgTelefono.trim(),
+      dte_numero: rgDteNumero.trim(), dte_serie: rgDteSerie.trim(), dte_fecha: rgDteFecha,
+      no_pedido: rgNoPedido.trim(), descripcion: rgDescripcion.trim(),
+      unidad_medida: rgUnidadMedida.trim(), cantidad: cantidadNum,
     });
     setLoading(false);
     if ("limitExceeded" in res) { setLimitExceeded(true); setError(res.error); return; }
@@ -387,12 +403,24 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                 <NitAutocomplete
                   value={rgNit}
                   onChange={setRgNit}
-                  onSelect={p => { setRgNit(p.nit ?? rgNit); setRgNombre(p.nombre); }}
+                  onSelect={p => {
+                    setRgNit(p.nit ?? rgNit); setRgNombre(p.nombre);
+                    if (p.direccion) setRgDireccion(p.direccion);
+                    if (p.telefono) setRgTelefono(p.telefono);
+                  }}
                 />
               </div>
               <div>
                 <label className="label">Nombre del proveedor</label>
                 <input className="input" value={rgNombre} onChange={e => setRgNombre(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Dirección del proveedor</label>
+                <input className="input" value={rgDireccion} onChange={e => setRgDireccion(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Teléfono del proveedor</label>
+                <input className="input" value={rgTelefono} onChange={e => setRgTelefono(e.target.value)} />
               </div>
               <div className="flex items-center gap-3">
                 <div className="relative flex-1">
@@ -404,9 +432,45 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                   Exento IVA
                 </label>
               </div>
+
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider pt-2">Datos para la Forma A-04 SIAF</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">No. de Pedido</label>
+                  <input className="input font-mono" value={rgNoPedido} onChange={e => setRgNoPedido(e.target.value)} placeholder="Ej. 443/2026" />
+                </div>
+                <div>
+                  <label className="label">Unidad de Medida</label>
+                  <input className="input" value={rgUnidadMedida} onChange={e => setRgUnidadMedida(e.target.value)} placeholder="Ej. Mes; Unidad" />
+                </div>
+              </div>
+              <div>
+                <label className="label">Descripción del gasto</label>
+                <textarea className="input" rows={2} value={rgDescripcion} onChange={e => setRgDescripcion(e.target.value)}
+                  placeholder="Ej. Telefonía fija (77600553) correspondiente al periodo del 08/04/2026 hasta 07/05/2026" />
+              </div>
+              <div>
+                <label className="label">Cantidad</label>
+                <input type="number" step="0.01" min="0.01" className="input" value={rgCantidad} onChange={e => setRgCantidad(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="label">No. DTE</label>
+                  <input className="input font-mono" value={rgDteNumero} onChange={e => setRgDteNumero(e.target.value)} />
+                </div>
+                <div>
+                  <label className="label">Serie DTE</label>
+                  <input className="input font-mono" value={rgDteSerie} onChange={e => setRgDteSerie(e.target.value)} />
+                </div>
+                <div>
+                  <label className="label">Fecha DTE</label>
+                  <input type="date" className="input" value={rgDteFecha} onChange={e => setRgDteFecha(e.target.value)} />
+                </div>
+              </div>
+
               <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
-                Este caso no pasa por la Junta Adjudicadora — va directo a Fondo Rotativo. Recuerda imprimir el Acta
-                de Negociación del año y la Carta de Conformidad una vez confirmado.
+                Este caso no pasa por la Junta Adjudicadora — va directo a Fondo Rotativo. Recuerda imprimir la Forma
+                A-04 SIAF, el Acta de Negociación del año y la Carta de Conformidad una vez confirmado.
               </p>
             </div>
           )}

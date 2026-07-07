@@ -16,7 +16,7 @@ export async function renglonLookupMap(): Promise<Map<string, number | null>> {
 }
 
 export type GrupoRenglon = {
-  renglon: number | null; codigo_igss: string | null; subproducto: string;
+  renglon: number | null; codigo_igss: string | null; codigo_ppr: string | null; subproducto: string;
   nombre: string; cantidad: number;
 };
 
@@ -30,6 +30,7 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
 
   const items = await db.select({
     codigo_igss:         siafComprasItems.codigo_igss,
+    codigo_ppr:          siafComprasItems.codigo_ppr,
     subproducto:         siafComprasItems.subproducto,
     nombre:              siafComprasItems.nombre,
     cantidad_solicitada: siafComprasItems.cantidad_solicitada,
@@ -47,7 +48,10 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
     const key = `${item.codigo_igss}::${item.subproducto}`;
     const existente = grupos.get(key);
     if (existente) existente.cantidad += item.cantidad_solicitada;
-    else grupos.set(key, { renglon, codigo_igss: item.codigo_igss, subproducto: item.subproducto, nombre: item.nombre, cantidad: item.cantidad_solicitada });
+    else grupos.set(key, {
+      renglon, codigo_igss: item.codigo_igss, codigo_ppr: item.codigo_ppr,
+      subproducto: item.subproducto, nombre: item.nombre, cantidad: item.cantidad_solicitada,
+    });
   }
   return Array.from(grupos.values());
 }

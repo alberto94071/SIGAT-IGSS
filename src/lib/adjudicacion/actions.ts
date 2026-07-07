@@ -108,10 +108,11 @@ export async function buscarProveedoresAuto(q: string) {
   if (!session) return [];
   if (!q || q.trim().length < 2) return [];
   return db.select({
-    id:       proveedores.id,
-    nit:      proveedores.nit,
-    nombre:   proveedores.nombre,
-    telefono: proveedores.telefono,
+    id:        proveedores.id,
+    nit:       proveedores.nit,
+    nombre:    proveedores.nombre,
+    telefono:  proveedores.telefono,
+    direccion: proveedores.direccion,
   }).from(proveedores).where(
     and(
       eq(proveedores.activo, true),

@@ -1,8 +1,9 @@
 import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { consolidaciones, configuracion, siafCompras } from "@/lib/schema";
+import { consolidaciones, configuracion } from "@/lib/schema";
 import { eq } from "drizzle-orm";
+import { gruposRenglonDeConsolidacion } from "@/lib/adjudicacion/renglon-utils";
 import ImprimirA04Client from "./ImprimirA04Client";
 
 interface Props { params: Promise<{ id: string }> }
@@ -16,22 +17,20 @@ export default async function ImprimirA04Page({ params }: Props) {
   if (!con || !con.numero_a04) notFound();
 
   const [config] = await db.select().from(configuracion).limit(1);
-  const siafs = await db.select({ numero: siafCompras.numero, anio: siafCompras.anio })
-    .from(siafCompras).where(eq(siafCompras.consolidacion_id, con.id));
+
+  const renglones = await gruposRenglonDeConsolidacion(con.id);
 
   return (
     <ImprimirA04Client
       consolidacion={con as any}
-      siafs={siafs}
-      nombreUnidad={config?.nombre_unidad_ejecutora ?? config?.nombre_unidad ?? ""}
+      renglones={renglones}
+      nombreUnidad={config?.nombre_unidad ?? ""}
       codigoUnidad={config?.codigo_unidad ?? ""}
-      codigoContable={config?.codigo_contable ?? ""}
       direccionUnidad={config?.direccion_unidad ?? ""}
       municipio={config?.municipio ?? ""}
       nombreResponsable={config?.nombre_responsable ?? ""}
-      numeroEmpleadoResp={config?.numero_empleado_resp ?? ""}
-      nombreSolicitante={config?.nombre_solicitante ?? ""}
-      numeroEmpleadoSol={config?.numero_empleado_sol ?? ""}
+      nombreAnalistaPresupuesto={config?.nombre_analista_presupuesto ?? ""}
+      nombreDirector={config?.nombre_director ?? ""}
     />
   );
 }

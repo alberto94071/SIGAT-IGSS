@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Building2, Loader2 } from "lucide-react";
 import { buscarProveedoresAuto } from "@/lib/adjudicacion/actions";
 
-type ProveedorHit = { id: number; nit: string | null; nombre: string; telefono: string | null };
+type ProveedorHit = { id: number; nit: string | null; nombre: string; telefono: string | null; direccion?: string | null };
 
 interface Props {
   value: string;

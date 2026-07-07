@@ -23,6 +23,9 @@ export const configuracion = pgTable("configuracion", {
   centro_costo_nombre:     text("centro_costo_nombre").notNull().default("CENTRO DE COSTO: 121009 UNIDAD INTEGRAL DE ADSCRIPCIÓN, ACREDITACIÓN DE DERECHOS Y DESPACHO DE MEDICAMENTOS EN EL MUNICIPIO DE TEJUTLA, SAN MARCOS"),
   direccion_unidad:        text("direccion_unidad").notNull().default("2ª. AVENIDA 4-54 ZONA 2 TEJUTLA, SAN MARCOS"),
   justificacion_siaf:      text("justificacion_siaf").notNull().default("SERVICIOS NECESARIOS E INDISPENSABLES PARA BRINDAR ATENCIÓN A LOS PACIENTES DEL IGSS U.I.A.A.D.D.M. EN EL MUNICIPIO DE TEJUTLA."),
+  // Firmantes adicionales para Forma A-04 SIAF (el Encargado de Fondo Rotativo ya usa nombre_responsable)
+  nombre_analista_presupuesto: text("nombre_analista_presupuesto").notNull().default("Ener Ivandrino Vásquez Barrios"),
+  nombre_director:             text("nombre_director").notNull().default("Kareen Marisol Guevara Orozco"),
   updated_at:           text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
@@ -250,6 +253,18 @@ export const consolidaciones = pgTable("consolidaciones", {
   anio_a04:             integer("anio_a04"),
   // "Completar Adjudicación" (Compras) queda bloqueado hasta que el Acta se aprueba
   acta_aprobada:        boolean("acta_aprobada").notNull().default(false),
+  // ── Datos para imprimir la Forma A-04 SIAF (Regularizado) ──
+  proveedor_direccion: text("proveedor_direccion"),
+  proveedor_telefono:  text("proveedor_telefono"),
+  a04_fecha:           text("a04_fecha"),
+  a04_dte_numero:      text("a04_dte_numero"),
+  a04_dte_serie:       text("a04_dte_serie"),
+  a04_dte_fecha:       text("a04_dte_fecha"),
+  a04_no_pedido:       text("a04_no_pedido"),
+  a04_descripcion:     text("a04_descripcion"),
+  a04_unidad_medida:   text("a04_unidad_medida"),
+  a04_cantidad:        doublePrecision("a04_cantidad"),
+  monto_bruto:         doublePrecision("monto_bruto"),
 });
 
 // ─── Acta de Junta Adjudicadora — una por consolidación adjudicada ───────────

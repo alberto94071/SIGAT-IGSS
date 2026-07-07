@@ -267,6 +267,9 @@ export async function enviarAJunta(consolidacionId: number, data?: { referencia?
 
 export async function registrarRegularizado(consolidacionId: number, data: {
   nit: string; nombre: string; monto: number; exento_iva: boolean;
+  proveedor_direccion: string; proveedor_telefono: string;
+  dte_numero: string; dte_serie: string; dte_fecha: string;
+  no_pedido: string; descripcion: string; unidad_medida: string; cantidad: number;
 }): Promise<{ ok: true } | { error: string; limitExceeded?: true }> {
   try {
     const check = await requireCompras();
@@ -280,6 +283,14 @@ export async function registrarRegularizado(consolidacionId: number, data: {
 
     if (!data.nit.trim() || !data.nombre.trim()) return { error: "NIT y nombre son obligatorios" };
     if (!(data.monto > 0)) return { error: "Ingresa un monto válido" };
+    if (!data.proveedor_direccion.trim() || !data.proveedor_telefono.trim())
+      return { error: "Dirección y teléfono del proveedor son obligatorios" };
+    if (!data.dte_numero.trim() || !data.dte_serie.trim() || !data.dte_fecha)
+      return { error: "Los datos del DTE (número, serie y fecha) son obligatorios" };
+    if (!data.no_pedido.trim()) return { error: "El No. de Pedido es obligatorio" };
+    if (!data.descripcion.trim()) return { error: "La descripción del gasto es obligatoria" };
+    if (!data.unidad_medida.trim()) return { error: "La unidad de medida es obligatoria" };
+    if (!(data.cantidad > 0)) return { error: "Ingresa una cantidad válida" };
 
     const total = data.exento_iva ? data.monto : data.monto * 0.88;
     const limite = LIMITE_POR_TIPO[con.tipo_compra as TipoCompra];
@@ -292,12 +303,17 @@ export async function registrarRegularizado(consolidacionId: number, data: {
 
     const anioActual = new Date().getFullYear();
     const numeroA04 = await siguienteNumeroA04(anioActual);
+    const hoy = new Date().toISOString().slice(0, 10);
 
     await db.update(consolidaciones).set({
       proveedor_nit: data.nit.trim(), proveedor_nombre: data.nombre.trim(),
-      exento_iva: data.exento_iva, total,
+      exento_iva: data.exento_iva, total, monto_bruto: data.monto,
       destino: "fondo_rotativo", estado: "Enviado a Fondo Rotativo",
-      numero_a04: numeroA04, anio_a04: anioActual,
+      numero_a04: numeroA04, anio_a04: anioActual, a04_fecha: hoy,
+      proveedor_direccion: data.proveedor_direccion.trim(), proveedor_telefono: data.proveedor_telefono.trim(),
+      a04_dte_numero: data.dte_numero.trim(), a04_dte_serie: data.dte_serie.trim(), a04_dte_fecha: data.dte_fecha,
+      a04_no_pedido: data.no_pedido.trim(), a04_descripcion: data.descripcion.trim(),
+      a04_unidad_medida: data.unidad_medida.trim(), a04_cantidad: data.cantidad,
     }).where(eq(consolidaciones.id, consolidacionId));
 
     return { ok: true as const };
