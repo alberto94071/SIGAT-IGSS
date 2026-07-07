@@ -28,7 +28,14 @@ export type HojaDeRuta = {
   acta: {
     id: number; no_acta: string; no_formulario: string; estado: string; motivo_rechazo: string | null;
   } | null;
-  orden: { numero: number; anio: number; fecha: string; estado: string } | null;
+  orden: {
+    numero: number; anio: number; fecha: string; estado: string;
+    no_compromiso: string | null;
+    no_devengado: string | null; fecha_ingreso_producto: string | null;
+    no_factura: string | null; serie_factura: string | null; fecha_emision: string | null;
+    lote: string | null; fecha_vencimiento: string | null;
+    marca: string | null; modelo: string | null; serie: string | null;
+  } | null;
   pago: {
     forma_pago: string | null; estado: string;
     numero_cheque: string | null; fecha_emision_cheque: string | null;
@@ -107,7 +114,14 @@ export async function construirHojaDeRuta(ids: number[]): Promise<HojaDeRuta[]> 
         id: acta.id, no_acta: acta.no_acta, no_formulario: acta.no_formulario,
         estado: acta.estado, motivo_rechazo: acta.motivo_rechazo,
       } : null,
-      orden: orden ? { numero: orden.numero, anio: orden.anio, fecha: orden.fecha, estado: orden.estado } : null,
+      orden: orden ? {
+        numero: orden.numero, anio: orden.anio, fecha: orden.fecha, estado: orden.estado,
+        no_compromiso: orden.no_compromiso,
+        no_devengado: orden.no_devengado, fecha_ingreso_producto: orden.fecha_ingreso_producto,
+        no_factura: orden.no_factura, serie_factura: orden.serie_factura, fecha_emision: orden.fecha_emision,
+        lote: orden.lote, fecha_vencimiento: orden.fecha_vencimiento,
+        marca: orden.marca, modelo: orden.modelo, serie: orden.serie,
+      } : null,
       pago: pago ? {
         forma_pago: pago.forma_pago, estado: pago.estado,
         numero_cheque: pago.numero_cheque, fecha_emision_cheque: pago.fecha_emision_cheque,

@@ -118,7 +118,7 @@ export default function ActaClient({ rows: init, canEdit }: Props) {
                         </button>
                       )}
                       {acta && acta.estado === "Generada" && (
-                        <Link href={`/junta-adjudicadora/acta/${acta.id}/imprimir`} target="_blank"
+                        <Link href={`/junta-adjudicadora/acta/${acta.id}/imprimir`}
                           className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
                           <Printer className="w-3 h-3" /> Previsualizar / Imprimir
                         </Link>
@@ -136,7 +136,7 @@ export default function ActaClient({ rows: init, canEdit }: Props) {
                         </div>
                       )}
                       {acta && acta.estado === "Aprobada" && (
-                        <Link href={`/junta-adjudicadora/acta/${acta.id}/imprimir`} target="_blank"
+                        <Link href={`/junta-adjudicadora/acta/${acta.id}/imprimir`}
                           className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
                           <Printer className="w-3 h-3" /> Ver / Imprimir
                         </Link>

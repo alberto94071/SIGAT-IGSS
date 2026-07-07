@@ -85,7 +85,7 @@ export default function ComprasAdjudicacionClient({ consolidaciones: init, canEd
               </button>
             )}
             {c.regularizado === true && (
-              <Link href={`/compras/adjudicacion/${c.id}/conformidad`} target="_blank"
+              <Link href={`/compras/adjudicacion/${c.id}/conformidad`}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
                 <Printer className="w-3 h-3" /> Carta de Conformidad
               </Link>

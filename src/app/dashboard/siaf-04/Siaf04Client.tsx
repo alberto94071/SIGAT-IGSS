@@ -1,5 +1,6 @@
 "use client";
 import { Fragment, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, FileText, Loader2, CheckCircle2, X } from "lucide-react";
 import { generarSiaf04 } from "@/lib/adjudicacion/siaf04-actions";
 import type { Consolidacion } from "@/lib/adjudicacion/types";
@@ -107,6 +108,7 @@ export default function Siaf04Client({ consolidaciones: init }: Props) {
 function GenerarSiafModal({ consolidacion: c, onClose, onDone }: {
   consolidacion: Consolidacion; onClose: () => void; onDone: () => void;
 }) {
+  const router = useRouter();
   const [noFactura, setNoFactura] = useState("");
   const [serie, setSerie] = useState("");
   const [fechaEmision, setFechaEmision] = useState(new Date().toISOString().slice(0, 10));
@@ -122,8 +124,8 @@ function GenerarSiafModal({ consolidacion: c, onClose, onDone }: {
     const res = await generarSiaf04(c.id, { no_factura: noFactura.trim(), serie_factura: serie.trim(), fecha_emision: fechaEmision });
     setLoading(false);
     if ("error" in res) { setError(res.error); return; }
-    window.open(`/compras/adjudicacion/${c.id}/imprimir-a04`, "_blank");
     onDone();
+    router.push(`/compras/adjudicacion/${c.id}/imprimir-a04`);
   }
 
   return (
