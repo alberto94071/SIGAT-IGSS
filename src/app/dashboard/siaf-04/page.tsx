@@ -1,7 +1,7 @@
-import { getPendientesPorDestino } from "@/lib/adjudicacion/actions";
-import BandejaDestino from "@/components/adjudicacion/BandejaDestino";
+import { getPendientesSiaf04 } from "@/lib/adjudicacion/siaf04-actions";
+import Siaf04Client from "./Siaf04Client";
 
 export default async function Siaf04Page() {
-  const consolidaciones = await getPendientesPorDestino("fondo_rotativo");
-  return <BandejaDestino consolidaciones={consolidaciones} titulo="Fondo Rotativo — SIAF-04" />;
+  const consolidaciones = await getPendientesSiaf04();
+  return <Siaf04Client consolidaciones={consolidaciones} />;
 }

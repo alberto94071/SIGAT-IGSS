@@ -140,6 +140,28 @@ export const pagos = pgTable("pagos", {
   updated_at:        text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
+// ─── Fondo Rotativo: Pagos / Bancos / Libro Caja Chica ───────────────────────
+// Una sola tabla para las 3 pantallas — se diferencian por `forma_pago`/`estado`,
+// igual que ya se hace en otras partes de la app (BandejaDestino por destino/estado).
+// estado: 'Pendiente forma de pago' | 'Enviado a Bancos' | 'Enviado a Libro Caja Chica'
+export const fondoRotativoPagos = pgTable("fondo_rotativo_pagos", {
+  id:                    serial("id").primaryKey(),
+  consolidacion_id:      integer("consolidacion_id").notNull().unique()
+                          .references(() => consolidaciones.id),
+  no_factura:            text("no_factura").notNull(),
+  serie_factura:         text("serie_factura").notNull(),
+  fecha_emision_factura: text("fecha_emision_factura").notNull(),
+  forma_pago:            text("forma_pago"),
+  numero_cheque:         text("numero_cheque"),
+  fecha_emision_cheque:  text("fecha_emision_cheque"),
+  destinatario_nombre:   text("destinatario_nombre"),
+  fecha_pago:            text("fecha_pago"),
+  numero_vale:           text("numero_vale"),
+  estado:                text("estado").notNull().default("Pendiente forma de pago"),
+  creado_por:            integer("creado_por").references(() => usuarios.id),
+  created_at:            text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
 // ─── Movimientos bancarios (hoja Ban) ─────────────────────────────────────────
 export const movimientosBanco = pgTable("movimientos_banco", {
   id:                serial("id").primaryKey(),
@@ -273,6 +295,9 @@ export const consolidaciones = pgTable("consolidaciones", {
   a04_unidad_medida:   text("a04_unidad_medida"),
   a04_cantidad:        doublePrecision("a04_cantidad"),
   monto_bruto:         doublePrecision("monto_bruto"),
+  // Cotización anual (Contrato y Cotizaciones) que respaldó una Baja Cuantía/Normal
+  // enviada directo a Actas — solo trazabilidad, ver cotizacionesAnuales abajo.
+  cotizacion_anual_id: integer("cotizacion_anual_id"),
 });
 
 // ─── Acta de Junta Adjudicadora — una por consolidación adjudicada ───────────
@@ -320,6 +345,34 @@ export const cotizacionesServicio = pgTable("cotizaciones_servicio", {
   usado:                     boolean("usado").notNull().default(false),
   creado_por:                integer("creado_por").references(() => usuarios.id),
   created_at:                text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Cotizaciones anuales por proveedor (varios insumos con precio pactado) ──
+// Un proveedor puede tener varias cotizaciones vigentes en el mismo año (ej. una
+// renovación a mitad de año) — cada una con su propio número y sus propias
+// líneas de insumo, cada línea con su propio IVA (no uno solo para toda la
+// cotización). Se usan para Baja Cuantía/Normal con insumos: en vez de armar
+// una comparación manual de oferentes, Compras solo ingresa el número de
+// cotización y el sistema cruza los precios por código de insumo.
+export const cotizacionesAnuales = pgTable("cotizaciones_anuales", {
+  id:               serial("id").primaryKey(),
+  numero:           text("numero").notNull().unique(),
+  anio:             integer("anio").notNull(),
+  proveedor_id:     integer("proveedor_id"),
+  proveedor_nit:    text("proveedor_nit"),
+  proveedor_nombre: text("proveedor_nombre").notNull(),
+  fecha:            text("fecha").notNull(),
+  creado_por:       integer("creado_por").references(() => usuarios.id),
+  created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+export const cotizacionesAnualesItems = pgTable("cotizaciones_anuales_items", {
+  id:                  serial("id").primaryKey(),
+  cotizacion_anual_id: integer("cotizacion_anual_id").notNull()
+                         .references(() => cotizacionesAnuales.id, { onDelete: "cascade" }),
+  codigo_igss:         text("codigo_igss").notNull(),
+  precio_unitario:     doublePrecision("precio_unitario").notNull(),
+  exento_iva:          boolean("exento_iva").notNull().default(false),
 });
 
 // ─── Oferentes (comparación de proveedores por consolidación, hasta 10) ──────

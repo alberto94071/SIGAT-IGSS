@@ -28,6 +28,18 @@ export type ActaNegociacion = {
   anio: number; contenido: string | null; archivo_url: string | null;
 };
 
+export type CotizacionAnualItem = {
+  id: number; cotizacion_anual_id: number;
+  codigo_igss: string; precio_unitario: number; exento_iva: boolean;
+};
+
+export type CotizacionAnual = {
+  id: number; numero: string; anio: number;
+  proveedor_id: number | null; proveedor_nit: string | null; proveedor_nombre: string;
+  fecha: string;
+  items: CotizacionAnualItem[];
+};
+
 export type Consolidacion = {
   id: number; numero: number; anio: number; fecha: string;
   pre_orden: string | null;
@@ -57,6 +69,7 @@ export type Consolidacion = {
   numero_a04: number | null;
   anio_a04: number | null;
   acta_aprobada: boolean;
+  cotizacion_anual_id: number | null;
   siaf: SiafResumen[];
   total_cantidad: number;
   precios: InsumoPrecio[];
