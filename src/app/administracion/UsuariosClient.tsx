@@ -43,6 +43,7 @@ const MODULOS_LAUNCHER: { key: keyof Permisos; label: string }[] = [
   { key: "mod_contrato_cotizaciones", label: "Contrato y Cotizaciones"},
   { key: "mod_base_datos",            label: "Base de Datos Central"  },
   { key: "mod_administracion",        label: "Administración (Usuarios + Configuración)" },
+  { key: "mod_hoja_de_ruta",          label: "Hoja de Ruta"           },
 ];
 
 interface Props {

@@ -1,45 +1,16 @@
 "use client";
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import {
-  Route, Search, FileText, Layers, Gavel, ShoppingCart,
-  XCircle, ChevronDown, ChevronRight,
+  Route, Search, FileText, Layers, Gavel, ShoppingCart, Printer,
+  XCircle, ChevronDown, ChevronRight, Wallet,
 } from "lucide-react";
 import type { HojaDeRuta } from "@/lib/hoja-de-ruta-actions";
+import { resumenEstado, type Tono } from "@/lib/hoja-de-ruta-utils";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-function resumenEstado(h: HojaDeRuta): { texto: string; tono: "gray" | "green" | "red" | "amber" | "blue" } {
-  if (h.orden) {
-    const ref = `${h.orden.numero}/${h.orden.anio}`;
-    if (h.orden.estado === "Generada") return { texto: `Orden ${ref} generada — esperando enviar a Presupuesto en Compras/Órdenes`, tono: "blue" };
-    if (h.orden.estado === "En Compromiso") return { texto: `Orden ${ref} en Presupuesto/Compromiso — esperando comprometer`, tono: "amber" };
-    if (h.orden.estado === "En Devengado") return { texto: `Orden ${ref} en Presupuesto/Devengado — esperando devengar`, tono: "amber" };
-    if (h.orden.estado === "En DAB") return { texto: `Orden ${ref} esperando ingresar en Almacén/DAB-60`, tono: "amber" };
-    return { texto: `Orden de Compra generada (${ref})`, tono: "green" };
-  }
-
-  if (h.acta) {
-    if (h.acta.estado === "Rechazada") return { texto: "Acta rechazada — esperando corrección en Junta Adjudicadora/Acta", tono: "red" };
-    if (h.acta.estado === "Aprobada") return { texto: "Acta aprobada — pasando a Compras/Órdenes", tono: "blue" };
-    return { texto: "Acta generada — esperando previsualización y aprobación en Junta Adjudicadora/Acta", tono: "amber" };
-  }
-
-  if (h.consolidacion) {
-    const c = h.consolidacion;
-    if (c.estado === "Rechazado por Junta") return { texto: "Rechazado por la Junta Adjudicadora — esperando corrección en Compras/Adjudicación", tono: "red" };
-    if (c.estado === "Adjudicado") return { texto: "Adjudicado — esperando generar el Acta en Junta Adjudicadora/Acta", tono: "blue" };
-    if (c.estado === "Enviado a Junta") return { texto: "Enviado a Junta Adjudicadora — esperando revisión", tono: "amber" };
-    if (c.estado === "Enviado a Fondo Rotativo") return { texto: "En bandeja de Fondo Rotativo — esperando generar la orden", tono: "blue" };
-    if (c.estado === "Enviado a Presupuesto") return { texto: "En bandeja de Presupuesto — esperando generar la orden", tono: "blue" };
-    return { texto: "En Compras/Adjudicación — pendiente iniciar la adjudicación", tono: "amber" };
-  }
-
-  if (h.siaf.estado === "Rechazado") return { texto: "Rechazado — esperando corrección en Compras/A-01 SIAF", tono: "red" };
-  if (h.siaf.estado === "Aprobado") return { texto: "Aprobado — esperando consolidarse en Compras/Consolidación", tono: "blue" };
-  return { texto: "Borrador — pendiente de aprobar en Compras/A-01 SIAF", tono: "gray" };
-}
-
-const TONO_CLASSES: Record<string, string> = {
+const TONO_CLASSES: Record<Tono, string> = {
   gray: "bg-gray-100 text-gray-700",
   green: "bg-green-100 text-green-700",
   red: "bg-red-100 text-red-700",
@@ -74,7 +45,7 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
         <p className="text-sm text-gray-500 mt-0.5">
           Aquí ves todo lo que se ha hecho — {registros.length} solicitud(es) en total. Busca por correlativo,
           Pre-Orden, razón de adjudicación, proveedor o insumo para encontrar un caso puntual, o simplemente
-          recorre la lista completa para ver en qué etapa va cada una.
+          recorre la lista completa para ver en qué etapa va cada una y volver a imprimir sus documentos.
         </p>
       </div>
 
@@ -115,9 +86,10 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
                 </button>
 
                 {expanded && (
-                  <div className="border-t border-gray-100 px-5 py-4 space-y-4">
+                  <div className="border-t border-gray-100 px-5 py-4 space-y-4" onClick={e => e.stopPropagation()}>
                     {/* Paso 1: SIAF */}
-                    <Paso icon={FileText} titulo={`SIAF ${h.siaf.numero}/${h.siaf.anio}`} activo>
+                    <Paso icon={FileText} titulo={`SIAF ${h.siaf.numero}/${h.siaf.anio}`} activo
+                      accion={<PrintLink href={`/compras/a01-siaf/${h.siaf.id}/imprimir?firmantes=`} label="Imprimir A-01 SIAF" />}>
                       <p className="text-xs text-gray-500">Fecha: {h.siaf.fecha} {h.siaf.creado_por_nombre && `· Creado por ${h.siaf.creado_por_nombre}`}</p>
                       {h.siaf.observaciones && <p className="text-xs text-gray-500">Justificación: {h.siaf.observaciones}</p>}
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -147,8 +119,8 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
                         {h.consolidacion.numero_adjudicacion && (
                           <p className="text-xs text-gray-500">Razón de adjudicación: {h.consolidacion.numero_adjudicacion}</p>
                         )}
-                        {h.consolidacion.numero_a04 && (
-                          <p className="text-xs text-gray-500">N° A-04 SIAF: {h.consolidacion.numero_a04}/{h.consolidacion.anio_a04}</p>
+                        {h.consolidacion.cotizacion_anual_id && (
+                          <p className="text-xs text-gray-500">Cotización anual: {h.consolidacion.referencia ?? "—"}</p>
                         )}
                         {h.consolidacion.estado === "Rechazado por Junta" && (
                           <RechazoBox motivo={h.consolidacion.motivo_rechazo} por={h.consolidacion.rechazado_por_nombre} en={h.consolidacion.rechazado_en} />
@@ -162,7 +134,8 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
 
                     {/* Paso 3: Acta */}
                     {h.acta ? (
-                      <Paso icon={Gavel} titulo={`Acta ${h.acta.no_acta}`} activo>
+                      <Paso icon={Gavel} titulo={`Acta ${h.acta.no_acta}`} activo
+                        accion={<PrintLink href={`/junta-adjudicadora/acta/${h.acta.id}/imprimir`} label="Ver / Imprimir Acta" />}>
                         <p className="text-xs text-gray-500">Formulario: {h.acta.no_formulario} · Estado: {h.acta.estado}</p>
                         {h.acta.estado === "Rechazada" && (
                           <RechazoBox motivo={h.acta.motivo_rechazo} por={null} en={null} />
@@ -174,7 +147,19 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
                       </Paso>
                     )}
 
-                    {/* Paso 4: Orden de compra */}
+                    {/* Paso 4: SIAF-04 (Fondo Rotativo) */}
+                    {h.consolidacion?.numero_a04 ? (
+                      <Paso icon={FileText} titulo={`SIAF-04 ${h.consolidacion.numero_a04}/${h.consolidacion.anio_a04}`} activo
+                        accion={<PrintLink href={`/compras/adjudicacion/${h.consolidacion.id}/imprimir-a04`} label="Ver / Imprimir SIAF-04" />}>
+                        <p className="text-xs text-gray-500">Correlativo A-04 SIAF generado en Fondo Rotativo.</p>
+                      </Paso>
+                    ) : (
+                      <Paso icon={FileText} titulo="SIAF-04 (Fondo Rotativo)" activo={false}>
+                        <p className="text-xs text-gray-400">Aún no se ha generado.</p>
+                      </Paso>
+                    )}
+
+                    {/* Paso 5: Orden de compra */}
                     {h.orden ? (
                       <Paso icon={ShoppingCart} titulo={`Orden de Compra ${h.orden.numero}/${h.orden.anio}`} activo>
                         <p className="text-xs text-gray-500">Fecha: {h.orden.fecha} · Estado: {h.orden.estado}</p>
@@ -182,6 +167,22 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
                     ) : (
                       <Paso icon={ShoppingCart} titulo="Orden de Compra" activo={false}>
                         <p className="text-xs text-gray-400">Aún no se ha generado.</p>
+                      </Paso>
+                    )}
+
+                    {/* Paso 6: Pago (Fondo Rotativo) */}
+                    {h.pago ? (
+                      <Paso icon={Wallet} titulo="Pago (Fondo Rotativo)" activo>
+                        <p className="text-xs text-gray-500">
+                          {h.pago.forma_pago === "cheque" && `Cheque ${h.pago.numero_cheque ?? "—"}`}
+                          {h.pago.forma_pago === "efectivo" && `Efectivo · Vale ${h.pago.numero_vale ?? "—"}`}
+                          {!h.pago.forma_pago && "Esperando elegir forma de pago"}
+                          {" · "}Estado: {h.pago.estado}
+                        </p>
+                      </Paso>
+                    ) : (
+                      <Paso icon={Wallet} titulo="Pago (Fondo Rotativo)" activo={false}>
+                        <p className="text-xs text-gray-400">Aún no aplica.</p>
                       </Paso>
                     )}
                   </div>
@@ -194,8 +195,18 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
   );
 }
 
-function Paso({ icon: Icon, titulo, activo, children }: {
-  icon: React.ComponentType<{ className?: string }>; titulo: string; activo: boolean; children?: React.ReactNode;
+function PrintLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link href={href} target="_blank"
+      className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+      <Printer className="w-3 h-3" /> {label}
+    </Link>
+  );
+}
+
+function Paso({ icon: Icon, titulo, activo, accion, children }: {
+  icon: React.ComponentType<{ className?: string }>; titulo: string; activo: boolean;
+  accion?: React.ReactNode; children?: React.ReactNode;
 }) {
   return (
     <div className="flex gap-3">
@@ -203,7 +214,10 @@ function Paso({ icon: Icon, titulo, activo, children }: {
         <Icon className="w-4 h-4" />
       </div>
       <div className="flex-1 min-w-0 pt-1">
-        <p className={`text-sm font-semibold ${activo ? "text-gray-900" : "text-gray-400"}`}>{titulo}</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className={`text-sm font-semibold ${activo ? "text-gray-900" : "text-gray-400"}`}>{titulo}</p>
+          {accion}
+        </div>
         <div className="mt-0.5 space-y-1">{children}</div>
       </div>
     </div>

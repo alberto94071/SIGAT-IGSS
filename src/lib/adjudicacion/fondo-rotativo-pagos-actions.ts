@@ -1,7 +1,7 @@
 "use server";
 import { db } from "@/lib/db";
 import { fondoRotativoPagos, consolidaciones } from "@/lib/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 
 async function requireCompras(): Promise<{ error: string } | { uid: number }> {
@@ -48,6 +48,14 @@ export async function getLibroBancos(): Promise<PagoFondoRotativo[]> {
 
 export async function getLibroCajaChica(): Promise<PagoFondoRotativo[]> {
   const rows = await db.select().from(fondoRotativoPagos).where(eq(fondoRotativoPagos.estado, "Enviado a Libro Caja Chica"));
+  return conDetalle(rows);
+}
+
+// Historial completo de Fondo Rotativo — toda consolidación que ya generó su
+// SIAF-04, sin importar en qué parte del flujo (Pagos, Bancos o Libro Caja
+// Chica) haya quedado. Aquí solo se puede volver a ver/imprimir el SIAF-04.
+export async function getArchivoFondoRotativo(): Promise<PagoFondoRotativo[]> {
+  const rows = await db.select().from(fondoRotativoPagos).orderBy(sql`id DESC`);
   return conDetalle(rows);
 }
 

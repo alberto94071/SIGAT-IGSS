@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { siafCompras, siafComprasItems, catalogoFirmantes, usuarios } from "@/lib/schema";
 import { desc, asc, eq, inArray } from "drizzle-orm";
 import { renglonLookupMap } from "@/lib/adjudicacion/renglon-utils";
+import { construirHojaDeRuta } from "@/lib/hoja-de-ruta-actions";
+import { resumenEstado } from "@/lib/hoja-de-ruta-utils";
 import ArchivoClient from "./ArchivoClient";
 
 export default async function ArchivoComprasPage() {
@@ -26,10 +28,14 @@ export default async function ArchivoComprasPage() {
     : [];
   const usuariosMap = new Map(usuariosList.map(u => [u.id, u.nombre]));
 
+  const hojaDeRuta = await construirHojaDeRuta(solicitudesList.map(s => s.id));
+  const destinoMap = new Map(hojaDeRuta.map(h => [h.siaf.id, resumenEstado(h)]));
+
   const solicitudes = solicitudesList.map(s => ({
     ...s,
     creado_por_nombre: s.creado_por != null ? usuariosMap.get(s.creado_por) ?? null : null,
     rechazado_por_nombre: s.rechazado_por != null ? usuariosMap.get(s.rechazado_por) ?? null : null,
+    destino: destinoMap.get(s.id) ?? null,
     items: itemsList.filter(i => i.solicitud_id === s.id).map(i => ({
       ...i, renglon: renglonMap.get(`${i.codigo_igss}::${i.subproducto}`) ?? null,
     })),

@@ -26,13 +26,16 @@ export interface Permisos {
   mod_fondo_rotativo:        boolean;
   // Administración — usuarios, accesos y configuración general. Solo el superadmin la trae por defecto
   mod_administracion:        boolean;
+  // Hoja de Ruta — rastreo de pedidos, standalone. Solo el superadmin la trae por
+  // defecto; el resto se habilita manualmente por usuario desde Administración.
+  mod_hoja_de_ruta:          boolean;
 }
 
 export type Modulo =
   | "mod_compras" | "mod_presupuesto" | "mod_junta_adjudicadora" | "mod_almacen"
   | "mod_caja_chica" | "mod_libros" | "mod_viaticos" | "mod_pasajes"
   | "mod_contrato_cotizaciones" | "mod_base_datos" | "mod_fondo_rotativo"
-  | "mod_administracion";
+  | "mod_administracion" | "mod_hoja_de_ruta";
 
 const MODULOS_DEFAULT = {
   mod_compras: true, mod_presupuesto: true, mod_junta_adjudicadora: true,
@@ -47,25 +50,25 @@ export const PERMISOS_DEFAULT: Record<Rol, Permisos> = {
     servicios: true, pagos: true, banco: true, caja_chica: true,
     liquidacion: true, catalogos: true, reportes: true,
     documentos: true, usuarios: true, configuracion: true,
-    ...MODULOS_DEFAULT, mod_administracion: true,
+    ...MODULOS_DEFAULT, mod_administracion: true, mod_hoja_de_ruta: true,
   },
   admin: {
     servicios: true, pagos: true, banco: true, caja_chica: true,
     liquidacion: true, catalogos: true, reportes: true,
     documentos: true, usuarios: false, configuracion: false,
-    ...MODULOS_DEFAULT, mod_administracion: false,
+    ...MODULOS_DEFAULT, mod_administracion: false, mod_hoja_de_ruta: false,
   },
   operador: {
     servicios: true, pagos: true, banco: true, caja_chica: true,
     liquidacion: false, catalogos: false, reportes: true,
     documentos: true, usuarios: false, configuracion: false,
-    ...MODULOS_DEFAULT, mod_administracion: false,
+    ...MODULOS_DEFAULT, mod_administracion: false, mod_hoja_de_ruta: false,
   },
   consulta: {
     servicios: false, pagos: false, banco: false, caja_chica: false,
     liquidacion: false, catalogos: false, reportes: true,
     documentos: false, usuarios: false, configuracion: false,
-    ...MODULOS_DEFAULT, mod_administracion: false,
+    ...MODULOS_DEFAULT, mod_administracion: false, mod_hoja_de_ruta: false,
   },
 };
 
@@ -104,4 +107,5 @@ export const NAV_ITEMS = [
   { href: "/dashboard/voucher",            label: "Voucher",             icon: "Receipt",   permiso: null },
   { href: "/dashboard/libro-conciliacion", label: "Libro Conciliación",  icon: "Scale",     permiso: null },
   { href: "/dashboard/libro-caja-chica",   label: "Libro Caja Chica",    icon: "Coins",     permiso: null },
+  { href: "/dashboard/archivo",            label: "Archivo",             icon: "Archive",   permiso: null },
 ] as const;
