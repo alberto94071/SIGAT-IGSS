@@ -87,8 +87,11 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
 
                 {expanded && (
                   <div className="border-t border-gray-100 px-5 py-4 space-y-4" onClick={e => e.stopPropagation()}>
-                    {/* Paso 1: SIAF */}
-                    <Paso icon={FileText} titulo={`SIAF ${h.siaf.numero}/${h.siaf.anio}`} activo
+                    {/* Solo se muestran los pasos por los que el caso YA pasó — nada de
+                        placeholders para etapas futuras o rutas que nunca tomó. */}
+
+                    {/* Paso: SIAF */}
+                    <Paso icon={FileText} titulo={`SIAF ${h.siaf.numero}/${h.siaf.anio}`}
                       accion={<PrintLink href={`/compras/a01-siaf/${h.siaf.id}/imprimir?firmantes=`} label="Imprimir A-01 SIAF" />}>
                       <p className="text-xs text-gray-500">Fecha: {h.siaf.fecha} {h.siaf.creado_por_nombre && `· Creado por ${h.siaf.creado_por_nombre}`}</p>
                       {h.siaf.observaciones && <p className="text-xs text-gray-500">Justificación: {h.siaf.observaciones}</p>}
@@ -104,9 +107,9 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
                       )}
                     </Paso>
 
-                    {/* Paso 2: Consolidación */}
-                    {h.consolidacion ? (
-                      <Paso icon={Layers} titulo={`Consolidación — Pre-Orden ${h.consolidacion.pre_orden ?? "—"}`} activo>
+                    {/* Paso: Consolidación */}
+                    {h.consolidacion && (
+                      <Paso icon={Layers} titulo={`Consolidación — Pre-Orden ${h.consolidacion.pre_orden ?? "—"}`}>
                         <p className="text-xs text-gray-500">
                           Tipo: {h.consolidacion.tipo_compra ?? "—"} · Estado: {h.consolidacion.estado}
                         </p>
@@ -126,63 +129,44 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
                           <RechazoBox motivo={h.consolidacion.motivo_rechazo} por={h.consolidacion.rechazado_por_nombre} en={h.consolidacion.rechazado_en} />
                         )}
                       </Paso>
-                    ) : (
-                      <Paso icon={Layers} titulo="Consolidación" activo={false}>
-                        <p className="text-xs text-gray-400">Aún no se ha consolidado.</p>
-                      </Paso>
                     )}
 
-                    {/* Paso 3: Acta */}
-                    {h.acta ? (
-                      <Paso icon={Gavel} titulo={`Acta ${h.acta.no_acta}`} activo
+                    {/* Paso: Acta (solo si esta consolidación pasó por Junta Adjudicadora) */}
+                    {h.acta && (
+                      <Paso icon={Gavel} titulo={`Acta ${h.acta.no_acta}`}
                         accion={<PrintLink href={`/junta-adjudicadora/acta/${h.acta.id}/imprimir`} label="Ver / Imprimir Acta" />}>
                         <p className="text-xs text-gray-500">Formulario: {h.acta.no_formulario} · Estado: {h.acta.estado}</p>
                         {h.acta.estado === "Rechazada" && (
                           <RechazoBox motivo={h.acta.motivo_rechazo} por={null} en={null} />
                         )}
                       </Paso>
-                    ) : (
-                      <Paso icon={Gavel} titulo="Acta de Junta Adjudicadora" activo={false}>
-                        <p className="text-xs text-gray-400">Aún no se ha generado.</p>
-                      </Paso>
                     )}
 
-                    {/* Paso 4: SIAF-04 (Fondo Rotativo) */}
-                    {h.consolidacion?.numero_a04 ? (
-                      <Paso icon={FileText} titulo={`SIAF-04 ${h.consolidacion.numero_a04}/${h.consolidacion.anio_a04}`} activo
+                    {/* Paso: SIAF-04 (solo si ya se generó, camino de Fondo Rotativo) */}
+                    {h.consolidacion?.numero_a04 != null && (
+                      <Paso icon={FileText} titulo={`SIAF-04 ${h.consolidacion.numero_a04}/${h.consolidacion.anio_a04}`}
                         accion={<PrintLink href={`/compras/adjudicacion/${h.consolidacion.id}/imprimir-a04`} label="Ver / Imprimir SIAF-04" />}>
                         <p className="text-xs text-gray-500">Correlativo A-04 SIAF generado en Fondo Rotativo.</p>
                       </Paso>
-                    ) : (
-                      <Paso icon={FileText} titulo="SIAF-04 (Fondo Rotativo)" activo={false}>
-                        <p className="text-xs text-gray-400">Aún no se ha generado.</p>
-                      </Paso>
                     )}
 
-                    {/* Paso 5: Orden de compra */}
-                    {h.orden ? (
-                      <Paso icon={ShoppingCart} titulo={`Orden de Compra ${h.orden.numero}/${h.orden.anio}`} activo>
+                    {/* Paso: Orden de compra (solo camino de Presupuesto) */}
+                    {h.orden && (
+                      <Paso icon={ShoppingCart} titulo={`Orden de Compra ${h.orden.numero}/${h.orden.anio}`}>
                         <p className="text-xs text-gray-500">Fecha: {h.orden.fecha} · Estado: {h.orden.estado}</p>
                       </Paso>
-                    ) : (
-                      <Paso icon={ShoppingCart} titulo="Orden de Compra" activo={false}>
-                        <p className="text-xs text-gray-400">Aún no se ha generado.</p>
-                      </Paso>
                     )}
 
-                    {/* Paso 6: Pago (Fondo Rotativo) */}
-                    {h.pago ? (
-                      <Paso icon={Wallet} titulo="Pago (Fondo Rotativo)" activo>
+                    {/* Paso: Pago (solo camino de Fondo Rotativo, una vez generado el SIAF-04) */}
+                    {h.pago && (
+                      <Paso icon={Wallet} titulo="Pago (Fondo Rotativo)">
                         <p className="text-xs text-gray-500">
-                          {h.pago.forma_pago === "cheque" && `Cheque ${h.pago.numero_cheque ?? "—"}`}
-                          {h.pago.forma_pago === "efectivo" && `Efectivo · Vale ${h.pago.numero_vale ?? "—"}`}
-                          {!h.pago.forma_pago && "Esperando elegir forma de pago"}
-                          {" · "}Estado: {h.pago.estado}
+                          {!h.pago.forma_pago && "Esperando elegir forma de pago en Fondo Rotativo/Pagos"}
+                          {h.pago.forma_pago === "cheque" &&
+                            `Cheque No. ${h.pago.numero_cheque ?? "—"}${h.pago.fecha_emision_cheque ? ` · Emitido el ${h.pago.fecha_emision_cheque}` : ""} → Enviado a Fondo Rotativo/Bancos`}
+                          {h.pago.forma_pago === "efectivo" &&
+                            `Efectivo · Vale No. ${h.pago.numero_vale ?? "—"}${h.pago.fecha_pago ? ` · Pagado el ${h.pago.fecha_pago}` : ""} → Enviado a Fondo Rotativo/Libro Caja Chica`}
                         </p>
-                      </Paso>
-                    ) : (
-                      <Paso icon={Wallet} titulo="Pago (Fondo Rotativo)" activo={false}>
-                        <p className="text-xs text-gray-400">Aún no aplica.</p>
                       </Paso>
                     )}
                   </div>
@@ -204,18 +188,18 @@ function PrintLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-function Paso({ icon: Icon, titulo, activo, accion, children }: {
-  icon: React.ComponentType<{ className?: string }>; titulo: string; activo: boolean;
+function Paso({ icon: Icon, titulo, accion, children }: {
+  icon: React.ComponentType<{ className?: string }>; titulo: string;
   accion?: React.ReactNode; children?: React.ReactNode;
 }) {
   return (
     <div className="flex gap-3">
-      <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${activo ? "bg-brand-100 text-brand-700" : "bg-gray-100 text-gray-400"}`}>
+      <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-brand-100 text-brand-700">
         <Icon className="w-4 h-4" />
       </div>
       <div className="flex-1 min-w-0 pt-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className={`text-sm font-semibold ${activo ? "text-gray-900" : "text-gray-400"}`}>{titulo}</p>
+          <p className="text-sm font-semibold text-gray-900">{titulo}</p>
           {accion}
         </div>
         <div className="mt-0.5 space-y-1">{children}</div>
