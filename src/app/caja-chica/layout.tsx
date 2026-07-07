@@ -8,6 +8,7 @@ const CAJA_CHICA_NAV = [
   { href: "/caja-chica/sps-23",           label: "SPS-23",           icon: "FileText"  },
   { href: "/caja-chica/poliza",           label: "Póliza",           icon: "FileCheck" },
   { href: "/caja-chica/liquidacion",      label: "Liquidación",      icon: "FileCheck" },
+  { href: "/caja-chica/libro-caja-chica", label: "Libro Caja Chica", icon: "Coins"     },
 ] as const;
 
 export default async function CajaChicaLayout({ children }: { children: React.ReactNode }) {

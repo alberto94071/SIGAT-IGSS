@@ -1,15 +1,15 @@
 import { Coins } from "lucide-react";
-import { getLibroCajaChica } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import { getLibroCajaChica } from "@/lib/caja-chica-liquidacion-actions";
 import LibroFondoRotativoTable from "@/components/adjudicacion/LibroFondoRotativoTable";
 
-export default async function LibroCajaChicaPage() {
+export default async function CajaChicaLibroCajaChicaPage() {
   const pagos = await getLibroCajaChica();
   return (
     <LibroFondoRotativoTable
       pagos={pagos}
-      titulo="Fondo Rotativo — Libro Caja Chica"
+      titulo="Libro Caja Chica"
       icon={Coins}
-      mensajeVacio="No hay pagos en efectivo enviados al Libro de Caja Chica todavía."
+      mensajeVacio="No hay vales liquidados todavía."
       tipo="caja_chica"
     />
   );

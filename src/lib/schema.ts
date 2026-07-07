@@ -157,6 +157,9 @@ export const fondoRotativoPagos = pgTable("fondo_rotativo_pagos", {
   destinatario_nombre:   text("destinatario_nombre"),
   fecha_pago:            text("fecha_pago"),
   numero_vale:           text("numero_vale"),
+  vale_id:               integer("vale_id").references((): AnyPgColumn => valesCajaChica.id),
+  // 'Pendiente forma de pago' → (cheque) 'Enviado a Bancos'
+  //                          → (efectivo) 'Enviado a Liquidación' → 'Liquidado'
   estado:                text("estado").notNull().default("Pendiente forma de pago"),
   creado_por:            integer("creado_por").references(() => usuarios.id),
   created_at:            text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
@@ -569,6 +572,9 @@ export const valesCajaChica = pgTable("vales_caja_chica", {
   numero_cheque:               text("numero_cheque").notNull(),
   fecha_emision:               text("fecha_emision").notNull(),
   fecha_entregado:             text("fecha_entregado").notNull(),
+  // 'Pendiente' (recién generado, visible en Fondo Rotativo/Vales) | 'Usado' (ya
+  // se ligó a un pago en efectivo desde Fondo Rotativo/Pagos)
+  estado:                      text("estado").notNull().default("Pendiente"),
   creado_por:                  integer("creado_por").references(() => usuarios.id),
   created_at:                  text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });

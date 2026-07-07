@@ -2,8 +2,11 @@
 import { useState } from "react";
 import { Wallet, Loader2, CheckCircle2, X, Banknote, Coins } from "lucide-react";
 import { registrarFormaPagoCheque, registrarFormaPagoEfectivo, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import { getValesPendientes } from "@/app/caja-chica/vale/actions";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+type ValePendiente = { id: number; numero: number; monto: number; solicitante_nombre: string };
 
 interface Props { pagos: PagoFondoRotativo[]; }
 
@@ -86,15 +89,25 @@ function FormaPagoModal({ pago, onClose, onDone }: {
   const [numeroCheque, setNumeroCheque] = useState("");
   const [fechaEmisionCheque, setFechaEmisionCheque] = useState(new Date().toISOString().slice(0, 10));
   const [fechaPago, setFechaPago] = useState(new Date().toISOString().slice(0, 10));
-  const [numeroVale, setNumeroVale] = useState("");
+  const [vales, setVales] = useState<ValePendiente[]>([]);
+  const [valesLoading, setValesLoading] = useState(false);
+  const [valeId, setValeId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  async function pickEfectivo() {
+    setForma("efectivo");
+    setValesLoading(true);
+    const r = await getValesPendientes();
+    setValesLoading(false);
+    setVales(r as unknown as ValePendiente[]);
+  }
 
   async function handleConfirmar() {
     setLoading(true); setError("");
     const res = forma === "cheque"
       ? await registrarFormaPagoCheque(pago.id, { numero_cheque: numeroCheque.trim(), fecha_emision_cheque: fechaEmisionCheque })
-      : await registrarFormaPagoEfectivo(pago.id, { fecha_pago: fechaPago, numero_vale: numeroVale.trim() });
+      : await registrarFormaPagoEfectivo(pago.id, { fecha_pago: fechaPago, vale_id: valeId! });
     setLoading(false);
     if ("error" in res) { setError(res.error); return; }
     onDone();
@@ -116,7 +129,7 @@ function FormaPagoModal({ pago, onClose, onDone }: {
                 className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-gray-200 hover:border-brand-300 text-sm font-medium text-gray-700">
                 <Banknote className="w-5 h-5" /> Cheque
               </button>
-              <button onClick={() => setForma("efectivo")}
+              <button onClick={pickEfectivo}
                 className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-gray-200 hover:border-brand-300 text-sm font-medium text-gray-700">
                 <Coins className="w-5 h-5" /> Efectivo
               </button>
@@ -147,8 +160,28 @@ function FormaPagoModal({ pago, onClose, onDone }: {
                 <input type="date" className="input" value={fechaPago} onChange={e => setFechaPago(e.target.value)} />
               </div>
               <div>
-                <label className="label">No. de vale</label>
-                <input className="input font-mono" value={numeroVale} onChange={e => setNumeroVale(e.target.value)} autoFocus />
+                <label className="label">Vale de Caja Chica</label>
+                {valesLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                ) : vales.length === 0 ? (
+                  <p className="text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                    No hay vales pendientes en Fondo Rotativo/Vales. Deben generarlo primero en Caja Chica/Vale.
+                  </p>
+                ) : (
+                  <div className="border border-gray-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+                    {vales.map(v => (
+                      <label key={v.id}
+                        className={`flex items-center gap-3 px-4 py-2.5 border-b border-gray-100 last:border-0 cursor-pointer ${valeId === v.id ? "bg-brand-50" : "bg-white"}`}>
+                        <input type="radio" name="vale" checked={valeId === v.id} onChange={() => setValeId(v.id)} className="w-4 h-4 accent-brand-600" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-mono font-bold text-gray-900">{String(v.numero).padStart(7, "0")}</p>
+                          <p className="text-xs text-gray-400 truncate">{v.solicitante_nombre}</p>
+                        </div>
+                        <p className="text-sm font-bold text-gray-900 shrink-0">{Q(v.monto)}</p>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -164,8 +197,8 @@ function FormaPagoModal({ pago, onClose, onDone }: {
             </button>
           )}
           {forma === "efectivo" && (
-            <button onClick={handleConfirmar} disabled={loading || !numeroVale.trim() || !fechaPago} className="btn-primary disabled:opacity-50">
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />} Enviar a Libro Caja Chica
+            <button onClick={handleConfirmar} disabled={loading || !valeId || !fechaPago} className="btn-primary disabled:opacity-50">
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />} Enviar a Liquidación
             </button>
           )}
         </div>

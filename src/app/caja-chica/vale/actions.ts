@@ -2,7 +2,7 @@
 import { db } from "@/lib/db";
 import { valesCajaChica } from "@/lib/schema";
 import { auth } from "@/lib/auth";
-import { desc, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -13,6 +13,15 @@ async function requireEdit(): Promise<{ error: string } | { uid: number }> {
 
 export async function getVales() {
   return db.select().from(valesCajaChica).orderBy(desc(valesCajaChica.numero));
+}
+
+// Vales que todavía no se han ligado a ningún pago en efectivo de Fondo
+// Rotativo — son los que aparecen en Fondo Rotativo/Vales y los que se pueden
+// elegir al registrar un pago en efectivo en Fondo Rotativo/Pagos.
+export async function getValesPendientes() {
+  return db.select().from(valesCajaChica)
+    .where(eq(valesCajaChica.estado, "Pendiente"))
+    .orderBy(desc(valesCajaChica.numero));
 }
 
 export type NuevoValeData = {

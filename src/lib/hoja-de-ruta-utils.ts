@@ -10,8 +10,10 @@ export function resumenEstado(h: HojaDeRuta): { texto: string; tono: Tono } {
   if (h.pago) {
     if (h.pago.estado === "Enviado a Bancos")
       return { texto: `Pago con cheque ${h.pago.numero_cheque ?? ""} enviado a Fondo Rotativo/Bancos`, tono: "green" };
-    if (h.pago.estado === "Enviado a Libro Caja Chica")
-      return { texto: `Pago en efectivo (vale ${h.pago.numero_vale ?? "—"}) enviado a Fondo Rotativo/Libro Caja Chica`, tono: "green" };
+    if (h.pago.estado === "Enviado a Liquidación")
+      return { texto: `Pago en efectivo (vale ${h.pago.numero_vale ?? "—"}) esperando liquidarse en Caja Chica/Liquidación`, tono: "amber" };
+    if (h.pago.estado === "Liquidado")
+      return { texto: `Vale ${h.pago.numero_vale ?? "—"} liquidado — en Caja Chica/Libro Caja Chica`, tono: "green" };
     return { texto: "SIAF-04 generado — esperando forma de pago en Fondo Rotativo/Pagos", tono: "blue" };
   }
 
