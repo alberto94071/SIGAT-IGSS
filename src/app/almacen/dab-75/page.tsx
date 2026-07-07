@@ -1,10 +1,14 @@
-import EnDesarrollo from "@/components/EnDesarrollo";
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { type Rol } from "@/lib/permisos";
+import { getRequisiciones } from "./actions";
+import Dab75Client from "./Dab75Client";
 
-export default function Dab75Page() {
-  return (
-    <EnDesarrollo
-      title="DAB-75"
-      description="Próximamente podrás emitir y consultar formularios DAB-75 de Almacén."
-    />
-  );
+export default async function Dab75Page() {
+  const session = await auth();
+  if (!session) redirect("/login");
+  const rol = session.user.rol as Rol;
+  const canEdit = rol !== "consulta";
+  const requisiciones = await getRequisiciones();
+  return <Dab75Client requisiciones={requisiciones} canEdit={canEdit} />;
 }
