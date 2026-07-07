@@ -3,7 +3,7 @@ import { Fragment, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, Search, Printer, X, ChevronDown, ChevronRight, XCircle } from "lucide-react";
 
-type Item = { id: number; nombre: string; subproducto: string; cantidad_solicitada: number; renglon: number | null };
+type Item = { id: number; codigo_igss: string | null; nombre: string; subproducto: string; cantidad_solicitada: number; renglon: number | null };
 type Destino = { texto: string; tono: "gray" | "green" | "red" | "amber" | "blue" };
 type Solicitud = {
   id: number; numero: number; anio: number; fecha: string; estado: string;
@@ -155,6 +155,7 @@ export default function ArchivoClient({ solicitudes, firmantes }: { solicitudes:
                               <table className="w-full text-xs">
                                 <thead>
                                   <tr className="bg-gray-100">
+                                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Código IGSS</th>
                                     <th className="px-3 py-2 text-left font-semibold text-gray-600">Insumo</th>
                                     <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Subproducto</th>
                                     <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Renglón</th>
@@ -164,6 +165,7 @@ export default function ArchivoClient({ solicitudes, firmantes }: { solicitudes:
                                 <tbody className="divide-y divide-gray-100 bg-white">
                                   {s.items.map(item => (
                                     <tr key={item.id}>
+                                      <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{item.codigo_igss ?? "—"}</td>
                                       <td className="px-3 py-2 font-medium text-gray-900">{item.nombre}</td>
                                       <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{item.subproducto}</td>
                                       <td className="px-3 py-2 tabular-nums text-gray-600 whitespace-nowrap">{item.renglon ?? "—"}</td>

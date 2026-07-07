@@ -489,6 +489,7 @@ export default function SiafClient({
                                 <table className="w-full text-xs">
                                   <thead>
                                     <tr className="bg-gray-100">
+                                      <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Código IGSS</th>
                                       <th className="px-3 py-2 text-left font-semibold text-gray-600">Insumo</th>
                                       <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Subproducto</th>
                                       <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Renglón</th>
@@ -504,6 +505,7 @@ export default function SiafClient({
                                       const renglon = renglonPorItem.get(`${item.codigo_igss}::${item.subproducto}`);
                                       return (
                                         <tr key={item.id}>
+                                          <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{item.codigo_igss ?? "—"}</td>
                                           <td className="px-3 py-2 font-medium text-gray-900">{item.nombre}</td>
                                           <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{item.subproducto}</td>
                                           <td className="px-3 py-2 tabular-nums text-gray-600 whitespace-nowrap">{renglon ?? "—"}</td>
@@ -546,6 +548,7 @@ export default function SiafClient({
               <thead>
                 <tr className="table-header">
                   <th className="px-4 py-3 w-8"></th>
+                  <th className="px-4 py-3 text-left whitespace-nowrap">Código IGSS</th>
                   <th className="px-4 py-3 text-left">Insumo</th>
                   <th className="px-4 py-3 text-left whitespace-nowrap">Subproducto</th>
                   <th className="px-4 py-3 text-left whitespace-nowrap">Renglón</th>
@@ -564,6 +567,7 @@ export default function SiafClient({
                         <td className="px-4 py-3 text-gray-400">
                           {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                         </td>
+                        <td className="px-4 py-3 font-mono text-xs text-gray-600 whitespace-nowrap">{g.codigo_igss ?? "—"}</td>
                         <td className="px-4 py-3">
                           <p className="font-medium text-gray-900">{g.nombre}</p>
                           <p className="text-xs text-gray-400">{g.entries.length} solicitud(es)</p>
@@ -582,7 +586,7 @@ export default function SiafClient({
                       </tr>
                       {expanded && (
                         <tr className="bg-brand-50/40">
-                          <td colSpan={7} className="px-6 py-4">
+                          <td colSpan={8} className="px-6 py-4">
                             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                               Historial — {g.nombre} / {g.subproducto}
                             </p>
