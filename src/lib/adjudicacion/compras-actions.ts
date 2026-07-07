@@ -1,8 +1,12 @@
 "use server";
 import { db } from "@/lib/db";
-import { consolidaciones, oferentes, cotizacionesServicio, siafCompras, siafComprasItems } from "@/lib/schema";
+import {
+  consolidaciones, oferentes, cotizacionesServicio, siafCompras, siafComprasItems,
+  cotizacionesAnuales, cotizacionesAnualesItems,
+} from "@/lib/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
+import { crearNotificacion } from "@/lib/notificaciones";
 import { TIPOS, MAX_OFERENTES, REFERENCIA_LABEL, LIMITE_POR_TIPO, type TipoCompra } from "./types";
 
 async function requireCompras(): Promise<{ error: string } | { uid: number }> {
@@ -12,13 +16,49 @@ async function requireCompras(): Promise<{ error: string } | { uid: number }> {
   return { uid: Number(session.user.id) };
 }
 
-// Correlativo A-04 SIAF — se asigna automáticamente a toda consolidación que
-// llega a Fondo Rotativo (Baja Cuantía o Casos de Excepción, en su forma Regularizado).
-async function siguienteNumeroA04(anio: number): Promise<number> {
-  const res = await db.execute(
-    sql`SELECT COALESCE(MAX(numero_a04), 0) + 1 AS next FROM consolidaciones WHERE anio_a04 = ${anio}`
-  );
-  return Number((res.rows[0] as any).next) || 1;
+// Rechazo de Compras antes de enviar a Junta — distinto del rechazo de Junta
+// (rechazarJunta en junta-actions.ts): este regresa la solicitud a Consolidación
+// (no a A01-SIAF), deshaciendo la consolidación por completo para que se vuelva a
+// armar (posiblemente con otro Pre Orden).
+export async function rechazarEnAdjudicacion(consolidacionId: number, motivo: string): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireCompras();
+    if ("error" in check) return check;
+
+    const trimmed = motivo.trim();
+    if (!trimmed) return { error: "Debes indicar el motivo del rechazo" };
+
+    const [con] = await db.select().from(consolidaciones).where(eq(consolidaciones.id, consolidacionId)).limit(1);
+    if (!con) return { error: "No se encontró la consolidación" };
+    if (con.estado !== "Pendiente adjudicación" && con.estado !== "Rechazado por Junta")
+      return { error: "Esta consolidación ya no se puede rechazar desde Adjudicación" };
+
+    await db.update(siafCompras)
+      .set({ estado: "Aprobado", consolidacion_id: null })
+      .where(eq(siafCompras.consolidacion_id, consolidacionId));
+    // Libera cualquier cotización de servicio que se hubiera reservado para esta consolidación
+    await db.update(cotizacionesServicio)
+      .set({ usado: false, usado_en_consolidacion_id: null })
+      .where(eq(cotizacionesServicio.usado_en_consolidacion_id, consolidacionId));
+    await db.delete(consolidaciones).where(eq(consolidaciones.id, consolidacionId));
+
+    if (con.creado_por) {
+      const correlativo = con.pre_orden ? `PRE-${con.pre_orden}` : `${con.numero}/${con.anio}`;
+      await crearNotificacion({
+        usuario_id:      con.creado_por,
+        tipo:            "consolidacion_rechazada",
+        titulo:          `Consolidación ${correlativo} rechazada`,
+        mensaje:         trimmed,
+        ruta:            `/compras/consolidacion`,
+        referencia_tipo: "consolidaciones",
+        referencia_id:   consolidacionId,
+      });
+    }
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al rechazar la consolidación" };
+  }
 }
 
 export async function elegirTipoCompra(consolidacionId: number, tipo: TipoCompra): Promise<{ ok: true } | { error: string }> {
@@ -170,6 +210,85 @@ export async function confirmarBajaCuantiaServicios(consolidacionId: number, cot
   }
 }
 
+// Baja Cuantía/Normal con insumos, respaldada por una cotización anual (varios
+// insumos con precio ya pactado por proveedor). A diferencia de la comparación
+// manual de oferentes, aquí el precio de cada insumo se cruza automáticamente
+// por código contra la cotización — no hay "ganador" que elegir, así que se
+// salta por completo la pantalla de Junta Adjudicadora/Adjudicación (SIGES) y
+// se pasa directo a "Adjudicado", que ya es justo el estado que
+// getActasPendientes() usa para poblar Junta Adjudicadora/Acta. Junta sigue
+// revisando/aprobando ahí, igual que hoy.
+export async function confirmarBajaCuantiaConCotizacionAnual(consolidacionId: number, cotizacionAnualId: number): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireCompras();
+    if ("error" in check) return check;
+
+    const [con] = await db.select().from(consolidaciones).where(eq(consolidaciones.id, consolidacionId)).limit(1);
+    if (!con) return { error: "No se encontró la consolidación" };
+    if (con.tipo_compra !== "Baja Cuantía")
+      return { error: "Esta acción solo aplica a Baja Cuantía" };
+    if (con.estado !== "Pendiente adjudicación" && con.estado !== "Rechazado por Junta")
+      return { error: "Esta consolidación ya no está disponible para adjudicar" };
+
+    const [cotAnual] = await db.select().from(cotizacionesAnuales)
+      .where(eq(cotizacionesAnuales.id, cotizacionAnualId)).limit(1);
+    if (!cotAnual) return { error: "No se encontró la cotización anual" };
+
+    const lineas = await db.select().from(cotizacionesAnualesItems)
+      .where(eq(cotizacionesAnualesItems.cotizacion_anual_id, cotizacionAnualId));
+    const precioPorCodigo = new Map(lineas.map(l => [l.codigo_igss, l]));
+
+    const siafs = await db.select({ id: siafCompras.id }).from(siafCompras)
+      .where(eq(siafCompras.consolidacion_id, consolidacionId));
+    const items = siafs.length > 0
+      ? await db.select().from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafs.map(s => s.id)))
+      : [];
+    if (items.length === 0) return { error: "Esta consolidación no tiene insumos" };
+
+    const faltantes: string[] = [];
+    let total = 0;
+    for (const item of items) {
+      const linea = item.codigo_igss ? precioPorCodigo.get(item.codigo_igss) : undefined;
+      if (!linea) { faltantes.push(item.codigo_igss ?? item.nombre); continue; }
+      const bruto = item.cantidad_solicitada * linea.precio_unitario;
+      total += linea.exento_iva ? bruto : bruto * 0.88;
+    }
+    if (faltantes.length > 0)
+      return { error: `La cotización ${cotAnual.numero} no tiene precio para: ${faltantes.join(", ")}` };
+
+    await db.delete(oferentes).where(eq(oferentes.consolidacion_id, consolidacionId));
+    // exento_iva=true porque el IVA ya se aplicó por línea al calcular `total` —
+    // evita que aprobarActa() lo vuelva a descontar.
+    const [ofrt] = await db.insert(oferentes).values({
+      consolidacion_id: consolidacionId,
+      proveedor_id: cotAnual.proveedor_id,
+      nit: cotAnual.proveedor_nit ?? "",
+      nombre: cotAnual.proveedor_nombre,
+      costo: total,
+      exento_iva: true,
+      orden: 0,
+      creado_por: check.uid,
+    }).returning();
+
+    await db.update(consolidaciones).set({
+      estado: "Adjudicado",
+      oferente_ganador_id: ofrt.id,
+      proveedor_id: cotAnual.proveedor_id,
+      proveedor_nit: cotAnual.proveedor_nit,
+      proveedor_nombre: cotAnual.proveedor_nombre,
+      cotizacion_anual_id: cotizacionAnualId,
+      referencia: cotAnual.numero,
+      motivo_rechazo: null, rechazado_por: null, rechazado_en: null,
+    }).where(eq(consolidaciones.id, consolidacionId));
+
+    await db.update(siafCompras).set({ estado: "Adjudicado" }).where(eq(siafCompras.consolidacion_id, consolidacionId));
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al confirmar la Baja Cuantía con cotización anual" };
+  }
+}
+
 // Contrato Abierto ya no pasa por Junta Adjudicadora: Compras adjudica
 // directamente con una razón de adjudicación (texto libre) y el costo de
 // factura (con IVA incluido, salvo que se marque exento), y la consolidación
@@ -265,10 +384,15 @@ export async function enviarAJunta(consolidacionId: number, data?: { referencia?
   }
 }
 
+// Nota: el No. de Pedido, la Unidad de Medida, la Descripción y la Cantidad ya
+// no se piden al usuario — se derivan de los SIAF/insumos consolidados (ver
+// ComprasAdjudicacionClient.tsx). Los datos de factura/DTE y el correlativo
+// A-04 SIAF (numero_a04/anio_a04) ya no se capturan aquí: se generan más
+// adelante en Fondo Rotativo/SIAF-04 (ver siaf04-actions.ts), cuando ya se
+// tiene la factura física en mano.
 export async function registrarRegularizado(consolidacionId: number, data: {
   nit: string; nombre: string; monto: number; exento_iva: boolean;
   proveedor_direccion: string; proveedor_telefono: string;
-  dte_numero: string; dte_serie: string; dte_fecha: string;
   no_pedido: string; descripcion: string; unidad_medida: string; cantidad: number;
 }): Promise<{ ok: true } | { error: string; limitExceeded?: true }> {
   try {
@@ -283,10 +407,7 @@ export async function registrarRegularizado(consolidacionId: number, data: {
 
     if (!data.nit.trim() || !data.nombre.trim()) return { error: "NIT y nombre son obligatorios" };
     if (!(data.monto > 0)) return { error: "Ingresa un monto válido" };
-    if (!data.proveedor_direccion.trim() || !data.proveedor_telefono.trim())
-      return { error: "Dirección y teléfono del proveedor son obligatorios" };
-    if (!data.dte_numero.trim() || !data.dte_serie.trim() || !data.dte_fecha)
-      return { error: "Los datos del DTE (número, serie y fecha) son obligatorios" };
+    if (!data.proveedor_direccion.trim()) return { error: "La dirección del proveedor es obligatoria" };
     if (!data.no_pedido.trim()) return { error: "El No. de Pedido es obligatorio" };
     if (!data.descripcion.trim()) return { error: "La descripción del gasto es obligatoria" };
     if (!data.unidad_medida.trim()) return { error: "La unidad de medida es obligatoria" };
@@ -301,17 +422,11 @@ export async function registrarRegularizado(consolidacionId: number, data: {
       };
     }
 
-    const anioActual = new Date().getFullYear();
-    const numeroA04 = await siguienteNumeroA04(anioActual);
-    const hoy = new Date().toISOString().slice(0, 10);
-
     await db.update(consolidaciones).set({
       proveedor_nit: data.nit.trim(), proveedor_nombre: data.nombre.trim(),
       exento_iva: data.exento_iva, total, monto_bruto: data.monto,
       destino: "fondo_rotativo", estado: "Enviado a Fondo Rotativo",
-      numero_a04: numeroA04, anio_a04: anioActual, a04_fecha: hoy,
       proveedor_direccion: data.proveedor_direccion.trim(), proveedor_telefono: data.proveedor_telefono.trim(),
-      a04_dte_numero: data.dte_numero.trim(), a04_dte_serie: data.dte_serie.trim(), a04_dte_fecha: data.dte_fecha,
       a04_no_pedido: data.no_pedido.trim(), a04_descripcion: data.descripcion.trim(),
       a04_unidad_medida: data.unidad_medida.trim(), a04_cantidad: data.cantidad,
     }).where(eq(consolidaciones.id, consolidacionId));

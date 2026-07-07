@@ -7,7 +7,7 @@ import {
   FileCheck, BookOpen, BarChart3, FileText, Users, Settings, LogOut,
   ChevronLeft, Gavel, ShoppingCart, MapPin, Receipt, Calculator,
   Archive, Library, FileSignature, Hash, LayoutGrid, TrendingUp,
-  Layers, Route,
+  Layers, Route, Scale, Coins,
 } from "lucide-react";
 import { type Rol, ROL_LABELS } from "@/lib/permisos";
 import clsx from "clsx";
@@ -37,6 +37,8 @@ const ICONS: Record<string, React.ReactNode> = {
   TrendingUp:      <TrendingUp      className="w-4 h-4" />,
   Layers:          <Layers          className="w-4 h-4" />,
   Route:           <Route           className="w-4 h-4" />,
+  Scale:           <Scale           className="w-4 h-4" />,
+  Coins:           <Coins           className="w-4 h-4" />,
 };
 
 interface Props {

@@ -1,9 +1,9 @@
 "use client";
 import { Fragment, useState, useMemo } from "react";
 import {
-  Layers, ChevronDown, ChevronRight, Search, X, Loader2, AlertTriangle, CheckCircle2,
+  Layers, ChevronDown, ChevronRight, Search, X, Loader2, AlertTriangle, CheckCircle2, XCircle,
 } from "lucide-react";
-import { consolidarSiaf } from "../a01-siaf/actions";
+import { consolidarSiaf, rechazarSolicitud } from "../a01-siaf/actions";
 
 type SolicitudItem = {
   id: number; nombre: string; subproducto: string; cantidad_solicitada: number; renglon: number | null;
@@ -25,6 +25,12 @@ export default function ConsolidacionClient({ solicitudes: init, canEdit }: Prop
   const [consolLoading, setConsolLoading] = useState(false);
   const [consolError, setConsolError] = useState("");
   const [preOrden, setPreOrden] = useState("");
+
+  const [rechazarModal, setRechazarModal] = useState(false);
+  const [rechazarSolId, setRechazarSolId] = useState<number | null>(null);
+  const [rechazarMotivo, setRechazarMotivo] = useState("");
+  const [rechazarLoading, setRechazarLoading] = useState(false);
+  const [rechazarError, setRechazarError] = useState("");
 
   const filtered = useMemo(() => {
     if (!query.trim()) return solicitudes;
@@ -51,8 +57,8 @@ export default function ConsolidacionClient({ solicitudes: init, canEdit }: Prop
 
   async function handleConsolidar() {
     if (seleccionados.size === 0) return;
-    if (!/^\d+$/.test(preOrden.trim())) {
-      setConsolError("Ingresa un Número de Pre Orden válido (solo dígitos)");
+    if (!/^[A-Za-z0-9]+$/.test(preOrden.trim())) {
+      setConsolError("Ingresa un Número de Pre Orden válido (solo letras y números)");
       return;
     }
     setConsolLoading(true);
@@ -66,6 +72,28 @@ export default function ConsolidacionClient({ solicitudes: init, canEdit }: Prop
     setSeleccionados(new Set());
     setConsolModal(false);
     setPreOrden("");
+  }
+
+  function openRechazar(id: number) {
+    setRechazarSolId(id); setRechazarMotivo(""); setRechazarError(""); setRechazarModal(true);
+  }
+
+  async function confirmRechazar() {
+    if (!rechazarSolId) return;
+    const motivo = rechazarMotivo.trim();
+    if (!motivo) { setRechazarError("El motivo del rechazo es obligatorio"); return; }
+    setRechazarLoading(true);
+    setRechazarError("");
+    const res = await rechazarSolicitud(rechazarSolId, motivo);
+    setRechazarLoading(false);
+    if (res.error) { setRechazarError(res.error); return; }
+    setSolicitudes(p => p.filter(s => s.id !== rechazarSolId));
+    setSeleccionados(prev => {
+      const next = new Set(prev);
+      next.delete(rechazarSolId);
+      return next;
+    });
+    setRechazarModal(false);
   }
 
   return (
@@ -104,6 +132,7 @@ export default function ConsolidacionClient({ solicitudes: init, canEdit }: Prop
                 <th className="px-4 py-3 text-left whitespace-nowrap">Correlativo</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Fecha</th>
                 <th className="px-4 py-3 text-center whitespace-nowrap">Ítems</th>
+                {canEdit && <th className="px-4 py-3 text-center whitespace-nowrap">Acciones</th>}
                 {canEdit && <th className="px-4 py-3 text-center whitespace-nowrap w-12">Sel.</th>}
               </tr>
             </thead>
@@ -128,6 +157,15 @@ export default function ConsolidacionClient({ solicitudes: init, canEdit }: Prop
                       </td>
                       {canEdit && (
                         <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                          <button
+                            onClick={() => openRechazar(s.id)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg text-red-600 hover:bg-red-50 transition-colors">
+                            <XCircle className="w-3.5 h-3.5" /> Rechazar
+                          </button>
+                        </td>
+                      )}
+                      {canEdit && (
+                        <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={isSelected} onChange={() => toggleSeleccion(s.id)}
                             className="w-4 h-4 accent-purple-600 cursor-pointer" />
                         </td>
@@ -135,7 +173,7 @@ export default function ConsolidacionClient({ solicitudes: init, canEdit }: Prop
                     </tr>
                     {expanded && (
                       <tr className="bg-brand-50/40">
-                        <td colSpan={canEdit ? 5 : 4} className="px-6 py-4">
+                        <td colSpan={canEdit ? 6 : 4} className="px-6 py-4">
                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                             Insumos en la solicitud {s.numero}/{s.anio}
                           </p>
@@ -212,10 +250,9 @@ export default function ConsolidacionClient({ solicitudes: init, canEdit }: Prop
                 <label className="label">Número de Pre Orden <span className="text-red-500 font-semibold">*</span></label>
                 <input
                   className="input font-mono"
-                  inputMode="numeric"
                   value={preOrden}
-                  onChange={e => setPreOrden(e.target.value.replace(/\D/g, ""))}
-                  placeholder="Ej: 1023"
+                  onChange={e => setPreOrden(e.target.value.replace(/[^A-Za-z0-9]/g, ""))}
+                  placeholder="Ej: 1023 o PO-2026-A"
                   autoFocus
                 />
               </div>
@@ -232,11 +269,59 @@ export default function ConsolidacionClient({ solicitudes: init, canEdit }: Prop
             </div>
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
               <button onClick={() => setConsolModal(false)} className="btn-secondary">Cancelar</button>
-              <button onClick={handleConsolidar} disabled={consolLoading || !/^\d+$/.test(preOrden.trim())}
+              <button onClick={handleConsolidar} disabled={consolLoading || !/^[A-Za-z0-9]+$/.test(preOrden.trim())}
                 className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 transition-colors">
                 {consolLoading
                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Consolidando…</>
                   : <><Layers className="w-4 h-4" /> Confirmar consolidación</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rechazarModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <XCircle className="w-4 h-4 text-red-600" /> Rechazar solicitud
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Regresa a A01-SIAF. Debes indicar el motivo del rechazo.
+                </p>
+              </div>
+              <button onClick={() => setRechazarModal(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div>
+                <label className="label">
+                  Motivo del rechazo <span className="text-red-500 font-semibold">*</span>
+                </label>
+                <textarea
+                  className="input min-h-[90px] resize-none text-sm"
+                  placeholder="Explica por qué se rechaza esta solicitud…"
+                  value={rechazarMotivo}
+                  onChange={e => setRechazarMotivo(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              {rechazarError && (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {rechazarError}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button onClick={() => setRechazarModal(false)} className="btn-secondary">Cancelar</button>
+              <button onClick={confirmRechazar} disabled={rechazarLoading || !rechazarMotivo.trim()}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors">
+                {rechazarLoading
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Rechazando…</>
+                  : <><XCircle className="w-4 h-4" /> Confirmar rechazo</>}
               </button>
             </div>
           </div>

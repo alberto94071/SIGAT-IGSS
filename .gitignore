@@ -33,3 +33,6 @@ drizzle/
 database.sqlite
 database.sqlite-shm
 database.sqlite-wal
+
+# Claude Code — configuración local personal
+.claude/settings.local.json

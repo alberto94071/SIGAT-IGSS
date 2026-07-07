@@ -3,7 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   Gavel, X, Loader2, AlertTriangle, CheckCircle2, Hash, Calendar,
-  ShoppingCart, Building2, DollarSign, Layers, XCircle, FileText, Printer,
+  ShoppingCart, Building2, DollarSign, Layers, XCircle, FileText, Printer, Search,
 } from "lucide-react";
 import ConsolidacionesTable, { Q, correlativo } from "./ConsolidacionesTable";
 import OferentesEditor from "./OferentesEditor";
@@ -11,12 +11,14 @@ import NitAutocomplete from "./NitAutocomplete";
 import {
   elegirTipoCompra, guardarCompraDirectaEvento, agregarOferente, eliminarOferente,
   elegirFormaBajaCuantia, buscarCotizacionServicio, confirmarBajaCuantiaServicios,
-  adjudicarDirecto, enviarAJunta, registrarRegularizado,
+  adjudicarDirecto, enviarAJunta, registrarRegularizado, rechazarEnAdjudicacion,
+  confirmarBajaCuantiaConCotizacionAnual,
 } from "@/lib/adjudicacion/compras-actions";
+import { buscarCotizacionAnualPorNumero } from "@/lib/adjudicacion/cotizaciones-actions";
 import { anularConsolidacion } from "@/lib/adjudicacion/actions";
 import {
   TIPOS, REFERENCIA_LABEL, MAX_OFERENTES, LIMITE_POR_TIPO,
-  type TipoCompra, type Consolidacion, type CotizacionServicio, type Oferente,
+  type TipoCompra, type Consolidacion, type CotizacionServicio, type Oferente, type CotizacionAnual,
 } from "@/lib/adjudicacion/types";
 
 interface Props { consolidaciones: Consolidacion[]; canEdit: boolean; }
@@ -28,6 +30,24 @@ export default function ComprasAdjudicacionClient({ consolidaciones: init, canEd
   const [wizardFor,   setWizardFor]   = useState<Consolidacion | null>(null);
   const [motivoFor,   setMotivoFor]   = useState<Consolidacion | null>(null);
   const [rowError,    setRowError]    = useState<Record<number, string>>({});
+
+  const [rechazoFor,     setRechazoFor]     = useState<Consolidacion | null>(null);
+  const [rechazoMotivo,  setRechazoMotivo]  = useState("");
+  const [rechazoLoading, setRechazoLoading] = useState(false);
+  const [rechazoError,   setRechazoError]   = useState("");
+
+  async function confirmRechazoAdjudicacion() {
+    if (!rechazoFor) return;
+    const motivo = rechazoMotivo.trim();
+    if (!motivo) { setRechazoError("El motivo del rechazo es obligatorio"); return; }
+    setRechazoLoading(true);
+    setRechazoError("");
+    const res = await rechazarEnAdjudicacion(rechazoFor.id, motivo);
+    setRechazoLoading(false);
+    if ("error" in res) { setRechazoError(res.error); return; }
+    setConsolidaciones(p => p.filter(c => c.id !== rechazoFor.id));
+    setRechazoFor(null);
+  }
 
   function updateConsolidacion(id: number, patch: Partial<Consolidacion>) {
     setConsolidaciones(p => p.map(c => c.id === id ? { ...c, ...patch } : c));
@@ -56,6 +76,12 @@ export default function ComprasAdjudicacionClient({ consolidaciones: init, canEd
               <button onClick={() => setWizardFor(c)}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors">
                 <Gavel className="w-3 h-3" /> {c.estado === "Rechazado por Junta" ? "Corregir y reenviar" : "Iniciar adjudicación"}
+              </button>
+            )}
+            {canEdit && (c.estado === "Pendiente adjudicación" || c.estado === "Rechazado por Junta") && (
+              <button onClick={() => { setRechazoFor(c); setRechazoMotivo(""); setRechazoError(""); }}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors">
+                <XCircle className="w-3 h-3" /> Rechazar
               </button>
             )}
             {c.regularizado === true && (
@@ -116,6 +142,54 @@ export default function ComprasAdjudicacionClient({ consolidaciones: init, canEd
           </div>
         </div>
       )}
+
+      {rechazoFor && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <XCircle className="w-4 h-4 text-red-600" /> Rechazar {correlativo(rechazoFor)}
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Regresa a Consolidación. Debes indicar el motivo del rechazo.
+                </p>
+              </div>
+              <button onClick={() => setRechazoFor(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div>
+                <label className="label">
+                  Motivo del rechazo <span className="text-red-500 font-semibold">*</span>
+                </label>
+                <textarea
+                  className="input min-h-[90px] resize-none text-sm"
+                  placeholder="Explica por qué se rechaza esta consolidación…"
+                  value={rechazoMotivo}
+                  onChange={e => setRechazoMotivo(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              {rechazoError && (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {rechazoError}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button onClick={() => setRechazoFor(null)} className="btn-secondary">Cancelar</button>
+              <button onClick={confirmRechazoAdjudicacion} disabled={rechazoLoading || !rechazoMotivo.trim()}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors">
+                {rechazoLoading
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Rechazando…</>
+                  : <><XCircle className="w-4 h-4" /> Confirmar rechazo</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -142,6 +216,11 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
   const [cotizLoading,   setCotizLoading]   = useState(false);
   const [cotizId,        setCotizId]        = useState<number | null>(null);
 
+  const [cotizAnualNumero,  setCotizAnualNumero]  = useState("");
+  const [cotizAnualFound,   setCotizAnualFound]   = useState<CotizacionAnual | null>(null);
+  const [cotizAnualLoading, setCotizAnualLoading] = useState(false);
+  const [cotizAnualError,   setCotizAnualError]   = useState("");
+
   const [duNit, setDuNit] = useState(""); const [duNombre, setDuNombre] = useState("");
   const [duCosto, setDuCosto] = useState(""); const [duExento, setDuExento] = useState(false);
   const [duProveedorId, setDuProveedorId] = useState<number | null>(null);
@@ -150,10 +229,6 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
   const [rgNit, setRgNit] = useState(""); const [rgNombre, setRgNombre] = useState("");
   const [rgMonto, setRgMonto] = useState(""); const [rgExento, setRgExento] = useState(false);
   const [rgDireccion, setRgDireccion] = useState(""); const [rgTelefono, setRgTelefono] = useState("");
-  const [rgDteNumero, setRgDteNumero] = useState(""); const [rgDteSerie, setRgDteSerie] = useState("");
-  const [rgDteFecha, setRgDteFecha] = useState(new Date().toISOString().slice(0, 10));
-  const [rgNoPedido, setRgNoPedido] = useState(""); const [rgDescripcion, setRgDescripcion] = useState("");
-  const [rgUnidadMedida, setRgUnidadMedida] = useState(""); const [rgCantidad, setRgCantidad] = useState("1");
 
   async function pickTipo(t: TipoCompra) {
     setLoading(true); setError("");
@@ -225,6 +300,26 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     onDone({ estado: "Enviado a Junta", tipo_compra: tipoCompra, referencia: referencia.trim() });
   }
 
+  async function buscarCotizAnual() {
+    const numero = cotizAnualNumero.trim();
+    setCotizAnualFound(null);
+    if (!numero) { setCotizAnualError(""); return; }
+    setCotizAnualLoading(true); setCotizAnualError("");
+    const res = await buscarCotizacionAnualPorNumero(numero);
+    setCotizAnualLoading(false);
+    if (!res) { setCotizAnualError(`No se encontró la cotización anual ${numero}`); return; }
+    setCotizAnualFound(res);
+  }
+
+  async function confirmarActas() {
+    if (!cotizAnualFound) return setError("Busca y selecciona una cotización anual válida");
+    setLoading(true); setError("");
+    const res = await confirmarBajaCuantiaConCotizacionAnual(c.id, cotizAnualFound.id);
+    setLoading(false);
+    if ("error" in res) return setError(res.error);
+    onDone({ estado: "Adjudicado", tipo_compra: tipoCompra, cotizacion_anual_id: cotizAnualFound.id, referencia: cotizAnualFound.numero });
+  }
+
   async function handleAdjudicarDirecto() {
     const costoNum = parseFloat(duCosto);
     if (!duNit.trim() || !duNombre.trim()) return setError("NIT y nombre son obligatorios");
@@ -248,22 +343,20 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
 
   async function enviarRegularizado() {
     const montoNum = parseFloat(rgMonto);
-    const cantidadNum = parseFloat(rgCantidad);
     if (!rgNit.trim() || !rgNombre.trim()) return setError("NIT y nombre son obligatorios");
     if (!(montoNum > 0)) return setError("Ingresa un monto válido");
-    if (!rgDireccion.trim() || !rgTelefono.trim()) return setError("Dirección y teléfono del proveedor son obligatorios");
-    if (!rgDteNumero.trim() || !rgDteSerie.trim() || !rgDteFecha) return setError("Los datos del DTE son obligatorios");
-    if (!rgNoPedido.trim()) return setError("El No. de Pedido es obligatorio");
-    if (!rgDescripcion.trim()) return setError("La descripción del gasto es obligatoria");
-    if (!rgUnidadMedida.trim()) return setError("La unidad de medida es obligatoria");
-    if (!(cantidadNum > 0)) return setError("Ingresa una cantidad válida");
+    if (!rgDireccion.trim()) return setError("La dirección del proveedor es obligatoria");
+    // No. de Pedido, Unidad de Medida, Descripción y Cantidad ya no se piden —
+    // se derivan de los SIAF/insumos consolidados.
+    const noPedido = c.siaf.map(s => `${s.numero}/${s.anio}`).join(", ");
+    const unidadMedida = c.precios[0]?.unidad_medida ?? "";
+    const descripcion = c.precios.map(p => p.nombre).join(", ");
+    const cantidad = c.precios.reduce((sum, p) => sum + (p.cantidad || 0), 0);
     setLoading(true); setError(""); setLimitExceeded(false);
     const res = await registrarRegularizado(c.id, {
       nit: rgNit.trim(), nombre: rgNombre.trim(), monto: montoNum, exento_iva: rgExento,
       proveedor_direccion: rgDireccion.trim(), proveedor_telefono: rgTelefono.trim(),
-      dte_numero: rgDteNumero.trim(), dte_serie: rgDteSerie.trim(), dte_fecha: rgDteFecha,
-      no_pedido: rgNoPedido.trim(), descripcion: rgDescripcion.trim(),
-      unidad_medida: rgUnidadMedida.trim(), cantidad: cantidadNum,
+      no_pedido: noPedido, descripcion, unidad_medida: unidadMedida, cantidad,
     });
     setLoading(false);
     if ("limitExceeded" in res) { setLimitExceeded(true); setError(res.error); return; }
@@ -344,8 +437,39 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
             </div>
           )}
 
-          {/* Normal — con insumos */}
-          {esBajaOExcepcion && regularizado === false && subTipo === "con_insumos" && (
+          {/* Normal — con insumos (Baja Cuantía): cotización anual con cruce automático de precios */}
+          {tipoCompra === "Baja Cuantía" && regularizado === false && subTipo === "con_insumos" && (
+            <div className="space-y-4">
+              <div>
+                <label className="label">Número de cotización anual</label>
+                <div className="flex gap-2">
+                  <input className="input font-mono" value={cotizAnualNumero}
+                    onChange={e => { setCotizAnualNumero(e.target.value); setCotizAnualFound(null); }}
+                    placeholder="Ej. COT-03/2026" />
+                  <button onClick={buscarCotizAnual} disabled={cotizAnualLoading || !cotizAnualNumero.trim()}
+                    className="btn-secondary shrink-0 disabled:opacity-50">
+                    {cotizAnualLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} Buscar
+                  </button>
+                </div>
+                {cotizAnualError && <p className="text-xs text-red-600 mt-1">{cotizAnualError}</p>}
+              </div>
+              {cotizAnualFound && (
+                <div className="border border-green-200 bg-green-50 rounded-xl px-4 py-3 text-sm">
+                  <p className="font-semibold text-gray-900">{cotizAnualFound.proveedor_nombre}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {cotizAnualFound.numero} · {cotizAnualFound.items.length} insumo(s) con precio pactado
+                  </p>
+                </div>
+              )}
+              <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                Los precios de los insumos consolidados se cruzan automáticamente contra esta cotización por
+                código de insumo. Va directo a Junta Adjudicadora/Acta — no pasa por elegir ganador ni número SIGES.
+              </p>
+            </div>
+          )}
+
+          {/* Normal — con insumos (Casos de Excepción): comparación manual de oferentes */}
+          {tipoCompra === "Casos de Excepción" && regularizado === false && subTipo === "con_insumos" && (
             <div className="space-y-4">
               <div>
                 <label className="label">{referenciaLabel}</label>
@@ -418,10 +542,6 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                 <label className="label">Dirección del proveedor</label>
                 <input className="input" value={rgDireccion} onChange={e => setRgDireccion(e.target.value)} />
               </div>
-              <div>
-                <label className="label">Teléfono del proveedor</label>
-                <input className="input" value={rgTelefono} onChange={e => setRgTelefono(e.target.value)} />
-              </div>
               <div className="flex items-center gap-3">
                 <div className="relative flex-1">
                   <label className="label flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" /> Monto</label>
@@ -433,44 +553,10 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                 </label>
               </div>
 
-              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider pt-2">Datos para la Forma A-04 SIAF</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">No. de Pedido</label>
-                  <input className="input font-mono" value={rgNoPedido} onChange={e => setRgNoPedido(e.target.value)} placeholder="Ej. 443/2026" />
-                </div>
-                <div>
-                  <label className="label">Unidad de Medida</label>
-                  <input className="input" value={rgUnidadMedida} onChange={e => setRgUnidadMedida(e.target.value)} placeholder="Ej. Mes; Unidad" />
-                </div>
-              </div>
-              <div>
-                <label className="label">Descripción del gasto</label>
-                <textarea className="input" rows={2} value={rgDescripcion} onChange={e => setRgDescripcion(e.target.value)}
-                  placeholder="Ej. Telefonía fija (77600553) correspondiente al periodo del 08/04/2026 hasta 07/05/2026" />
-              </div>
-              <div>
-                <label className="label">Cantidad</label>
-                <input type="number" step="0.01" min="0.01" className="input" value={rgCantidad} onChange={e => setRgCantidad(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="label">No. DTE</label>
-                  <input className="input font-mono" value={rgDteNumero} onChange={e => setRgDteNumero(e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Serie DTE</label>
-                  <input className="input font-mono" value={rgDteSerie} onChange={e => setRgDteSerie(e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Fecha DTE</label>
-                  <input type="date" className="input" value={rgDteFecha} onChange={e => setRgDteFecha(e.target.value)} />
-                </div>
-              </div>
-
               <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
-                Este caso no pasa por la Junta Adjudicadora — va directo a Fondo Rotativo. Recuerda imprimir la Forma
-                A-04 SIAF, el Acta de Negociación del año y la Carta de Conformidad una vez confirmado.
+                Este caso no pasa por la Junta Adjudicadora — va directo a Fondo Rotativo. El No. de Pedido y la
+                Unidad de Medida se toman del SIAF consolidado. La factura y el correlativo A-04 SIAF se capturan
+                más adelante, al recibirla, desde Fondo Rotativo/SIAF-04.
               </p>
             </div>
           )}
@@ -557,7 +643,12 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />} Enviar a Junta
               </button>
             )}
-            {esBajaOExcepcion && regularizado === false && subTipo === "con_insumos" && (
+            {tipoCompra === "Baja Cuantía" && regularizado === false && subTipo === "con_insumos" && (
+              <button onClick={confirmarActas} disabled={loading || !cotizAnualFound} className="btn-primary disabled:opacity-50">
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />} Enviar a Actas
+              </button>
+            )}
+            {tipoCompra === "Casos de Excepción" && regularizado === false && subTipo === "con_insumos" && (
               <button onClick={finalizarEnviar} disabled={loading || oferentes.length === 0} className="btn-primary disabled:opacity-50">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />} Enviar a Junta
               </button>

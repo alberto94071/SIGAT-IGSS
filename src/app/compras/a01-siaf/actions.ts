@@ -284,8 +284,8 @@ export async function editarSolicitud(id: number, data: {
 export async function consolidarSiaf(ids: number[], preOrden: string) {
   try {
     const pre = preOrden.trim();
-    if (!/^\d+$/.test(pre)) {
-      return { error: "El Número de Pre Orden solo puede contener dígitos" };
+    if (!/^[A-Za-z0-9]+$/.test(pre)) {
+      return { error: "El Número de Pre Orden solo puede contener letras y números" };
     }
 
     const session = await auth();

@@ -30,6 +30,10 @@ export const configuracion = pgTable("configuracion", {
   nit_responsable:           text("nit_responsable").notNull().default("18864325"),
   nombre_dependencia_medica: text("nombre_dependencia_medica").notNull()
     .default("Unidad Integral de Adscripción, Acreditación de Derechos y Despacho de Medicamentos, en el Municipio de Tejutla"),
+  // Datos adicionales para la Planilla de Viático (Formulario V-L)
+  nombre_encargado_unidad: text("nombre_encargado_unidad").notNull().default("Lilia Zucely Pérez Fuentes"),
+  cargo_encargado_unidad:  text("cargo_encargado_unidad").notNull().default("Analista \"A\" con funciones de Encargada de Unidad"),
+  entidad_recibio_viatico: text("entidad_recibio_viatico").notNull().default("IGSS U.I.A.A.D.D.M. en el Municipio de Tejutla"),
   updated_at:           text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
@@ -134,6 +138,28 @@ export const pagos = pgTable("pagos", {
   creado_por:        integer("creado_por").references(() => usuarios.id),
   created_at:        text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   updated_at:        text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Fondo Rotativo: Pagos / Bancos / Libro Caja Chica ───────────────────────
+// Una sola tabla para las 3 pantallas — se diferencian por `forma_pago`/`estado`,
+// igual que ya se hace en otras partes de la app (BandejaDestino por destino/estado).
+// estado: 'Pendiente forma de pago' | 'Enviado a Bancos' | 'Enviado a Libro Caja Chica'
+export const fondoRotativoPagos = pgTable("fondo_rotativo_pagos", {
+  id:                    serial("id").primaryKey(),
+  consolidacion_id:      integer("consolidacion_id").notNull().unique()
+                          .references(() => consolidaciones.id),
+  no_factura:            text("no_factura").notNull(),
+  serie_factura:         text("serie_factura").notNull(),
+  fecha_emision_factura: text("fecha_emision_factura").notNull(),
+  forma_pago:            text("forma_pago"),
+  numero_cheque:         text("numero_cheque"),
+  fecha_emision_cheque:  text("fecha_emision_cheque"),
+  destinatario_nombre:   text("destinatario_nombre"),
+  fecha_pago:            text("fecha_pago"),
+  numero_vale:           text("numero_vale"),
+  estado:                text("estado").notNull().default("Pendiente forma de pago"),
+  creado_por:            integer("creado_por").references(() => usuarios.id),
+  created_at:            text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 // ─── Movimientos bancarios (hoja Ban) ─────────────────────────────────────────
@@ -269,6 +295,9 @@ export const consolidaciones = pgTable("consolidaciones", {
   a04_unidad_medida:   text("a04_unidad_medida"),
   a04_cantidad:        doublePrecision("a04_cantidad"),
   monto_bruto:         doublePrecision("monto_bruto"),
+  // Cotización anual (Contrato y Cotizaciones) que respaldó una Baja Cuantía/Normal
+  // enviada directo a Actas — solo trazabilidad, ver cotizacionesAnuales abajo.
+  cotizacion_anual_id: integer("cotizacion_anual_id"),
 });
 
 // ─── Acta de Junta Adjudicadora — una por consolidación adjudicada ───────────
@@ -316,6 +345,34 @@ export const cotizacionesServicio = pgTable("cotizaciones_servicio", {
   usado:                     boolean("usado").notNull().default(false),
   creado_por:                integer("creado_por").references(() => usuarios.id),
   created_at:                text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Cotizaciones anuales por proveedor (varios insumos con precio pactado) ──
+// Un proveedor puede tener varias cotizaciones vigentes en el mismo año (ej. una
+// renovación a mitad de año) — cada una con su propio número y sus propias
+// líneas de insumo, cada línea con su propio IVA (no uno solo para toda la
+// cotización). Se usan para Baja Cuantía/Normal con insumos: en vez de armar
+// una comparación manual de oferentes, Compras solo ingresa el número de
+// cotización y el sistema cruza los precios por código de insumo.
+export const cotizacionesAnuales = pgTable("cotizaciones_anuales", {
+  id:               serial("id").primaryKey(),
+  numero:           text("numero").notNull().unique(),
+  anio:             integer("anio").notNull(),
+  proveedor_id:     integer("proveedor_id"),
+  proveedor_nit:    text("proveedor_nit"),
+  proveedor_nombre: text("proveedor_nombre").notNull(),
+  fecha:            text("fecha").notNull(),
+  creado_por:       integer("creado_por").references(() => usuarios.id),
+  created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+export const cotizacionesAnualesItems = pgTable("cotizaciones_anuales_items", {
+  id:                  serial("id").primaryKey(),
+  cotizacion_anual_id: integer("cotizacion_anual_id").notNull()
+                         .references(() => cotizacionesAnuales.id, { onDelete: "cascade" }),
+  codigo_igss:         text("codigo_igss").notNull(),
+  precio_unitario:     doublePrecision("precio_unitario").notNull(),
+  exento_iva:          boolean("exento_iva").notNull().default(false),
 });
 
 // ─── Oferentes (comparación de proveedores por consolidación, hasta 10) ──────
@@ -529,4 +586,69 @@ export const notificaciones = pgTable("notificaciones", {
   referencia_id:   integer("referencia_id"),
   leida:           boolean("leida").notNull().default(false),
   created_at:      text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── DAB-75: Requisición a Bodega Local (Almacén) ─────────────────────────────
+// Formulario pre-impreso: aquí solo se guardan los datos que luego se imprimen
+// sobre la hoja ya impresa (sin dibujar líneas ni casillas).
+export const requisicionesBodega = pgTable("requisiciones_bodega", {
+  id:                    serial("id").primaryKey(),
+  no_pedido:             text("no_pedido").notNull(),
+  fecha_emision:         text("fecha_emision").notNull(),
+  clave_administrativa:  text("clave_administrativa").notNull(),
+  sala_servicio:         text("sala_servicio").notNull(),
+  bodega:                text("bodega").notNull(), // "I" | "II"
+  fecha_despacho:        text("fecha_despacho"),
+  solicita_nombre:       text("solicita_nombre").notNull(),
+  solicita_no_empleado:  text("solicita_no_empleado").notNull(),
+  solicita_cargo:        text("solicita_cargo").notNull(),
+  entrega_nombre:        text("entrega_nombre"),
+  entrega_no_empleado:   text("entrega_no_empleado"),
+  entrega_cargo:         text("entrega_cargo"),
+  recibe_nombre:         text("recibe_nombre"),
+  recibe_no_empleado:    text("recibe_no_empleado"),
+  recibe_cargo:          text("recibe_cargo"),
+  director_nombre:       text("director_nombre"),
+  creado_por:            integer("creado_por").references(() => usuarios.id),
+  created_at:            text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+export const requisicionBodegaItems = pgTable("requisicion_bodega_items", {
+  id:                  serial("id").primaryKey(),
+  requisicion_id:      integer("requisicion_id").notNull().references(() => requisicionesBodega.id, { onDelete: "cascade" }),
+  codigo:              text("codigo").notNull(),
+  nombre:              text("nombre").notNull(),
+  cantidad_solicitada: doublePrecision("cantidad_solicitada").notNull(),
+  orden:               integer("orden").notNull().default(0),
+});
+
+// ─── Planilla de Viático — Formulario V-L (Pago de Viáticos) ─────────────────
+// Igual que DAB-75: formulario pre-impreso, solo se posicionan los datos.
+export const viaticoLiquidaciones = pgTable("viatico_liquidaciones", {
+  id:                       serial("id").primaryKey(),
+  comisiones_json:          text("comisiones_json").notNull().default("[]"), // [{tipo, lugar}]
+  dias:                     integer("dias").notNull().default(0),
+  gasto_desayuno:           doublePrecision("gasto_desayuno"),
+  gasto_almuerzo:           doublePrecision("gasto_almuerzo"),
+  gasto_cena:               doublePrecision("gasto_cena"),
+  gasto_hospedaje:          doublePrecision("gasto_hospedaje"),
+  otros_gastos:             doublePrecision("otros_gastos").notNull().default(0),
+  recibido_va_no:           text("recibido_va_no"),
+  recibido_va_monto:        doublePrecision("recibido_va_monto"),
+  reintegro:                doublePrecision("reintegro"),
+  complemento:              doublePrecision("complemento"),
+  forma_pago:               text("forma_pago"),
+  fecha_pago:               text("fecha_pago"),
+  persona_nombre:           text("persona_nombre").notNull(),
+  persona_nit:              text("persona_nit").notNull(),
+  persona_cargo:            text("persona_cargo").notNull(),
+  persona_grupo:            text("persona_grupo"),
+  persona_no_empleado:      text("persona_no_empleado").notNull(),
+  persona_sueldo:           doublePrecision("persona_sueldo"),
+  persona_categoria_puesto: text("persona_categoria_puesto"),
+  partida_presupuestaria:   text("partida_presupuestaria"),
+  nombramiento_numero:      text("nombramiento_numero"),
+  fecha_nombramiento:       text("fecha_nombramiento"),
+  creado_por:               integer("creado_por").references(() => usuarios.id),
+  created_at:               text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });

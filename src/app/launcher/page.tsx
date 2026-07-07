@@ -27,7 +27,7 @@ const MODULES = [
   {
     id: "fondo-rotativo",
     title: "Fondo Rotativo",
-    description: "Control y rendición del fondo rotativo interno: constitución, reintegros y conciliación bancaria.",
+    description: "SIAF-04, Pagos, Bancos y Libro de Caja Chica de las compras Regularizado del fondo rotativo interno.",
     href: "/dashboard/siaf-04",
     icon: RotateCcw,
     color: "bg-orange-500",
