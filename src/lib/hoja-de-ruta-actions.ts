@@ -14,7 +14,7 @@ export type HojaDeRuta = {
     observaciones: string | null;
     creado_por_nombre: string | null; created_at: string | null;
     motivo_rechazo: string | null; rechazado_por_nombre: string | null; rechazado_en: string | null;
-    items: { id: number; nombre: string; subproducto: string; cantidad_solicitada: number; renglon: number | null }[];
+    items: { id: number; codigo_igss: string | null; nombre: string; subproducto: string; cantidad_solicitada: number; renglon: number | null }[];
   };
   consolidacion: {
     id: number; numero: number; anio: number; fecha: string; pre_orden: string | null;

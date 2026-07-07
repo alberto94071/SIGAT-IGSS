@@ -1,6 +1,7 @@
 "use client";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Printer, ArrowLeft } from "lucide-react";
+import { Printer, ArrowLeft, ChevronDown, X } from "lucide-react";
 
 type Consolidacion = {
   id: number; tipo_compra: string | null;
@@ -13,13 +14,14 @@ type Consolidacion = {
   a04_unidad_medida: string | null; a04_cantidad: number | null;
 };
 type Renglon = { renglon: number | null; codigo_ppr: string | null; nombre: string };
+type Firmante = { id: number; nombre: string; cargo: string };
 
 interface Props {
   consolidacion: Consolidacion;
   renglones: Renglon[];
   nombreUnidad: string; codigoUnidad: string;
   direccionUnidad: string; municipio: string;
-  nombreResponsable: string; nombreAnalistaPresupuesto: string; nombreDirector: string;
+  todosFirmantes: Firmante[]; firmantesSeleccionados: Firmante[];
 }
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -33,6 +35,8 @@ const METODO_LABEL: Record<string, string> = {
   "Baja Cuantía": "BAJA CUANTÍA", "Compra Directa": "COMPRA DIRECTA",
   "Contrato Abierto": "CONTRATO ABIERTO", "Casos de Excepción": "CASOS DE EXCEPCIÓN",
 };
+
+const FIRMA_SLOTS = ["Encargado de Fondo Rotativo", "Analista de Presupuesto", "Director \"C\""] as const;
 
 function Radio({ marcado }: { marcado: boolean }) {
   return (
@@ -48,15 +52,17 @@ function Radio({ marcado }: { marcado: boolean }) {
 
 export default function ImprimirA04Client({
   consolidacion: c, renglones, nombreUnidad, codigoUnidad,
-  direccionUnidad, municipio, nombreResponsable, nombreAnalistaPresupuesto, nombreDirector,
+  direccionUnidad, municipio, todosFirmantes, firmantesSeleccionados: initFirmantes,
 }: Props) {
   const router = useRouter();
   const correlativoA04 = `${c.numero_a04}-${c.anio_a04}`;
+  const [firmantes, setFirmantes] = useState<Firmante[]>(initFirmantes);
+  const [showSelector, setShowSelector] = useState(initFirmantes.length === 0);
+  const [slot, setSlot] = useState<0 | 1 | 2>(0);
 
-  // "Consultorio del Instituto en San Marcos / U.I.A.A.D.D.M. en el Municipio de X"
-  const [parteConsultorio, parteUiaaddm] = nombreUnidad.includes("/")
-    ? nombreUnidad.split("/").map(s => s.trim())
-    : [nombreUnidad, nombreUnidad];
+  function pickFirmante(idx: 0 | 1 | 2, f: Firmante) {
+    setFirmantes(p => { const n = [...p]; n[idx] = f; return n; });
+  }
 
   const renglon = renglones[0];
   const montoBruto = c.monto_bruto ?? c.total ?? 0;
@@ -71,11 +77,48 @@ export default function ImprimirA04Client({
         </button>
         <span className="text-gray-300">|</span>
         <span className="text-sm font-semibold text-gray-700">A-04 SIAF — {correlativoA04}</span>
-        <button onClick={() => window.print()}
-          className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700">
-          <Printer className="w-4 h-4" /> Imprimir
-        </button>
+        <div className="flex items-center gap-3 ml-auto">
+          {[0, 1, 2].map(idx => (
+            <button key={idx}
+              onClick={() => { setSlot(idx as 0 | 1 | 2); setShowSelector(true); }}
+              className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 max-w-[220px]">
+              <span className="truncate">
+                {firmantes[idx]
+                  ? <><strong>{firmantes[idx].nombre}</strong> — {firmantes[idx].cargo}</>
+                  : <span className="text-gray-400">{FIRMA_SLOTS[idx]}…</span>}
+              </span>
+              <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" />
+            </button>
+          ))}
+          <button onClick={() => window.print()}
+            className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700">
+            <Printer className="w-4 h-4" /> Imprimir
+          </button>
+        </div>
       </div>
+
+      {showSelector && (
+        <div className="no-print fixed inset-0 bg-black/30 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <p className="font-semibold text-sm">Selecciona firmante — {FIRMA_SLOTS[slot]}</p>
+              <button onClick={() => setShowSelector(false)}><X className="w-4 h-4 text-gray-400" /></button>
+            </div>
+            <div className="py-2 max-h-64 overflow-y-auto">
+              {todosFirmantes.map(f => (
+                <button key={f.id} onMouseDown={() => { pickFirmante(slot, f); setShowSelector(false); }}
+                  className="w-full text-left px-4 py-2.5 hover:bg-brand-50">
+                  <p className="text-sm font-medium">{f.nombre}</p>
+                  <p className="text-xs text-gray-500">{f.cargo}</p>
+                </button>
+              ))}
+              {todosFirmantes.length === 0 && (
+                <p className="text-sm text-gray-400 text-center py-6">No hay firmantes configurados.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div id="print-wrapper">
         <div id="a4-sheet" style={{ fontFamily: FONT, color: C }}>
@@ -189,15 +232,10 @@ export default function ImprimirA04Client({
 
           {/* Firmas */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginTop: "20px" }}>
-            {[
-              { nombre: nombreResponsable, cargo: "Encargado de Fondo Rotativo", unidad: parteUiaaddm },
-              { nombre: nombreAnalistaPresupuesto, cargo: "Analista de Presupuesto", unidad: parteConsultorio },
-              { nombre: nombreDirector, cargo: "Director \"C\"", unidad: parteConsultorio },
-            ].map((f, i) => (
+            {[0, 1, 2].map(i => (
               <div key={i} style={{ border: B, borderRadius: R, padding: "28px 10px 10px 10px", textAlign: "center", fontSize: "8.5pt" }}>
-                <p style={{ margin: 0, fontWeight: "bold" }}>{f.nombre || "—"}</p>
-                <p style={{ margin: "2px 0 0 0" }}>{f.cargo}</p>
-                <p style={{ margin: "2px 0 0 0", color: "#444" }}>{f.unidad}</p>
+                <p style={{ margin: 0, fontWeight: "bold" }}>{firmantes[i]?.nombre || "—"}</p>
+                <p style={{ margin: "2px 0 0 0" }}>{firmantes[i]?.cargo || FIRMA_SLOTS[i]}</p>
               </div>
             ))}
           </div>
@@ -210,12 +248,12 @@ export default function ImprimirA04Client({
           padding: 40px 20px; min-height: 100vh; margin-top: 52px; box-sizing: border-box;
         }
         #a4-sheet {
-          background: white; width: 210mm; min-height: 297mm; box-shadow: 0 4px 32px rgba(0,0,0,0.22);
+          background: white; width: 297mm; min-height: 210mm; box-shadow: 0 4px 32px rgba(0,0,0,0.22);
           padding: 14mm; box-sizing: border-box;
         }
         .no-print { display: block; }
         @media print {
-          @page { size: A4 portrait; margin: 10mm; }
+          @page { size: A4 landscape; margin: 10mm; }
           .no-print { display: none !important; }
           #print-wrapper { background: white !important; padding: 0 !important; margin: 0 !important; min-height: 0 !important; display: block !important; }
           #a4-sheet { width: 100% !important; min-height: 0 !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; }
