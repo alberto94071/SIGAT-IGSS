@@ -1,10 +1,7 @@
-import EnDesarrollo from "@/components/EnDesarrollo";
+import { getLiquidacionesPendientes } from "@/lib/caja-chica-liquidacion-actions";
+import LiquidacionClient from "./LiquidacionClient";
 
-export default function CajaChicaLiquidacionPage() {
-  return (
-    <EnDesarrollo
-      title="Liquidación"
-      description="Próximamente podrás liquidar movimientos de Caja Chica."
-    />
-  );
+export default async function CajaChicaLiquidacionPage() {
+  const pagos = await getLiquidacionesPendientes();
+  return <LiquidacionClient pagos={pagos} />;
 }

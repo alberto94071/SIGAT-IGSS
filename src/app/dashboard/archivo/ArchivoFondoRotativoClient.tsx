@@ -7,9 +7,10 @@ import type { PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const ESTADO_STYLE: Record<string, string> = {
-  "Pendiente forma de pago":      "bg-amber-100 text-amber-700",
-  "Enviado a Bancos":             "bg-blue-100 text-blue-700",
-  "Enviado a Libro Caja Chica":   "bg-green-100 text-green-700",
+  "Pendiente forma de pago": "bg-amber-100 text-amber-700",
+  "Enviado a Bancos":        "bg-blue-100 text-blue-700",
+  "Enviado a Liquidación":   "bg-amber-100 text-amber-700",
+  "Liquidado":               "bg-green-100 text-green-700",
 };
 
 interface Props { pagos: PagoFondoRotativo[]; }

@@ -3,7 +3,7 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   Route, Search, FileText, Layers, Gavel, ShoppingCart, Printer,
-  XCircle, ChevronDown, ChevronRight, Wallet, Calculator, Archive, Landmark, Coins,
+  XCircle, ChevronDown, ChevronRight, Wallet, Calculator, Archive, Landmark, Coins, FileCheck,
 } from "lucide-react";
 import type { HojaDeRuta } from "@/lib/hoja-de-ruta-actions";
 import { resumenEstado, type Tono } from "@/lib/hoja-de-ruta-utils";
@@ -203,10 +203,17 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
                       </Paso>
                     )}
 
-                    {/* Paso: Fondo Rotativo/Libro Caja Chica */}
-                    {h.pago?.estado === "Enviado a Libro Caja Chica" && (
-                      <Paso icon={Coins} titulo="Fondo Rotativo/Libro Caja Chica">
-                        <p className="text-xs text-gray-500">Vale No. {h.pago.numero_vale ?? "—"} enviado a Libro Caja Chica</p>
+                    {/* Paso: Caja Chica/Liquidación (pago en efectivo esperando o ya liquidado) */}
+                    {(h.pago?.estado === "Enviado a Liquidación" || h.pago?.estado === "Liquidado") && (
+                      <Paso icon={FileCheck} titulo="Caja Chica/Liquidación">
+                        <p className="text-xs text-gray-500">Vale No. {h.pago.numero_vale ?? "—"} enviado a liquidar</p>
+                      </Paso>
+                    )}
+
+                    {/* Paso: Caja Chica/Libro Caja Chica */}
+                    {h.pago?.estado === "Liquidado" && (
+                      <Paso icon={Coins} titulo="Caja Chica/Libro Caja Chica">
+                        <p className="text-xs text-gray-500">Vale No. {h.pago.numero_vale ?? "—"} liquidado</p>
                       </Paso>
                     )}
                   </div>

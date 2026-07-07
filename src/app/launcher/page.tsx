@@ -92,14 +92,14 @@ const MODULES = [
   {
     id: "caja-chica",
     title: "Caja Chica",
-    description: "Vales, solicitud de pasaje, SPS-23, pólizas y liquidación de Caja Chica.",
+    description: "Vales, solicitud de pasaje, SPS-23, pólizas, liquidación y Libro de Caja Chica.",
     href: "/caja-chica",
     icon: Wallet,
     color: "bg-amber-500",
     ring: "ring-amber-200",
     textColor: "text-amber-600",
     bgLight: "bg-amber-50",
-    available: false,
+    available: true,
     permiso: "mod_caja_chica" as Modulo | null,
   },
   {
