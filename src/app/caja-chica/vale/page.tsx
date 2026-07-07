@@ -1,10 +1,14 @@
-import EnDesarrollo from "@/components/EnDesarrollo";
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { type Rol } from "@/lib/permisos";
+import { getVales } from "./actions";
+import ValeClient from "./ValeClient";
 
-export default function CajaChicaValePage() {
-  return (
-    <EnDesarrollo
-      title="Vale"
-      description="Próximamente podrás emitir y consultar vales de Caja Chica."
-    />
-  );
+export default async function CajaChicaValePage() {
+  const session = await auth();
+  if (!session) redirect("/login");
+  const rol = session.user.rol as Rol;
+  const canEdit = rol !== "consulta";
+  const vales = await getVales();
+  return <ValeClient vales={vales} canEdit={canEdit} />;
 }

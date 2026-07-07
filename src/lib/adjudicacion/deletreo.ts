@@ -98,6 +98,17 @@ export function fechaEnLetras(isoDate: string): string {
   return `${diaSemana} ${diaMes} de ${mes} del año ${anio}`;
 }
 
+// 2188.96 → "Dos mil, ciento ochenta y ocho quetzales con 96/100."
+export function montoEnLetras(monto: number): string {
+  const centavosTotales = Math.round(monto * 100);
+  const quetzales = Math.floor(centavosTotales / 100);
+  const centavos = centavosTotales % 100;
+  let palabras = numeroALetras(quetzales);
+  palabras = palabras.replace(/\bmil\b(?=\s)/, "mil,");
+  palabras = palabras.charAt(0).toUpperCase() + palabras.slice(1);
+  return `${palabras} quetzales con ${String(centavos).padStart(2, "0")}/100.`;
+}
+
 // "08:00" → "ocho horas en punto"; "08:15" → "ocho horas con quince minutos"
 export function horaEnLetras(hhmm: string): string {
   const [h, min] = hhmm.split(":").map(Number);

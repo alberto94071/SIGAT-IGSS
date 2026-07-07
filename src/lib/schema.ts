@@ -26,6 +26,10 @@ export const configuracion = pgTable("configuracion", {
   // Firmantes adicionales para Forma A-04 SIAF (el Encargado de Fondo Rotativo ya usa nombre_responsable)
   nombre_analista_presupuesto: text("nombre_analista_presupuesto").notNull().default("Ener Ivandrino Vásquez Barrios"),
   nombre_director:             text("nombre_director").notNull().default("Kareen Marisol Guevara Orozco"),
+  // Datos adicionales para el Vale de Caja Chica
+  nit_responsable:           text("nit_responsable").notNull().default("18864325"),
+  nombre_dependencia_medica: text("nombre_dependencia_medica").notNull()
+    .default("Unidad Integral de Adscripción, Acreditación de Derechos y Despacho de Medicamentos, en el Municipio de Tejutla"),
   updated_at:           text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
@@ -490,6 +494,26 @@ export const nogRegistros = pgTable("nog_registros", {
   total:                doublePrecision("total"),
   creado_por:           integer("creado_por").references(() => usuarios.id),
   created_at:           text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Vale de Caja Chica ───────────────────────────────────────────────────────
+export const valesCajaChica = pgTable("vales_caja_chica", {
+  id:                          serial("id").primaryKey(),
+  numero:                      integer("numero").notNull(),
+  fecha:                       text("fecha").notNull(),
+  monto:                       doublePrecision("monto").notNull(),
+  motivo:                      text("motivo").notNull(),
+  solicitante_nombre:          text("solicitante_nombre").notNull(),
+  solicitante_numero_empleado: text("solicitante_numero_empleado").notNull(),
+  solicitante_nit:             text("solicitante_nit").notNull(),
+  jefe_nombre:                 text("jefe_nombre").notNull(),
+  jefe_numero_empleado:        text("jefe_numero_empleado").notNull(),
+  jefe_nit:                    text("jefe_nit").notNull(),
+  numero_cheque:               text("numero_cheque").notNull(),
+  fecha_emision:               text("fecha_emision").notNull(),
+  fecha_entregado:             text("fecha_entregado").notNull(),
+  creado_por:                  integer("creado_por").references(() => usuarios.id),
+  created_at:                  text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 // ─── Notificaciones (campanita) ───────────────────────────────────────────────
