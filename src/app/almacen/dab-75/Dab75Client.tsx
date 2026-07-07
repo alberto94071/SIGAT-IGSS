@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Archive, Plus, X, Loader2, AlertTriangle, Printer, Trash2 } from "lucide-react";
 import { crearRequisicion, type ItemRequisicion } from "./actions";
 
@@ -10,6 +11,7 @@ type Requisicion = {
 };
 
 export default function Dab75Client({ requisiciones: init, canEdit }: { requisiciones: Requisicion[]; canEdit: boolean }) {
+  const router = useRouter();
   const [requisiciones, setRequisiciones] = useState(init);
   const [modal, setModal] = useState(false);
 
@@ -52,7 +54,7 @@ export default function Dab75Client({ requisiciones: init, canEdit }: { requisic
                   <td className="px-4 py-3 text-gray-700 whitespace-nowrap">Bodega {r.bodega}</td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{r.items.length} insumo(s)</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <Link href={`/almacen/dab-75/${r.id}/imprimir`} target="_blank"
+                    <Link href={`/almacen/dab-75/${r.id}/imprimir`}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors ml-auto w-fit">
                       <Printer className="w-3 h-3" /> Imprimir
                     </Link>
@@ -73,7 +75,7 @@ export default function Dab75Client({ requisiciones: init, canEdit }: { requisic
       {modal && (
         <NuevaRequisicionModal
           onClose={() => setModal(false)}
-          onCreado={(id) => { setModal(false); window.open(`/almacen/dab-75/${id}/imprimir`, "_blank"); location.reload(); }}
+          onCreado={(id) => { setModal(false); router.push(`/almacen/dab-75/${id}/imprimir`); }}
         />
       )}
     </div>

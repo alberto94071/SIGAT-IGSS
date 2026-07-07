@@ -81,7 +81,7 @@ export default function HistorialClient({ rows }: { rows: Row[] }) {
                   </td>
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{acta.aprobado_en ?? "—"}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <Link href={`/junta-adjudicadora/acta/${acta.id}/imprimir`} target="_blank"
+                    <Link href={`/junta-adjudicadora/acta/${acta.id}/imprimir`}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors w-fit ml-auto">
                       <Printer className="w-3 h-3" /> Ver / Imprimir
                     </Link>

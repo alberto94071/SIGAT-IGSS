@@ -3,7 +3,7 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   Route, Search, FileText, Layers, Gavel, ShoppingCart, Printer,
-  XCircle, ChevronDown, ChevronRight, Wallet,
+  XCircle, ChevronDown, ChevronRight, Wallet, Calculator, Archive, Landmark, Coins,
 } from "lucide-react";
 import type { HojaDeRuta } from "@/lib/hoja-de-ruta-actions";
 import { resumenEstado, type Tono } from "@/lib/hoja-de-ruta-utils";
@@ -150,23 +150,63 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
                       </Paso>
                     )}
 
-                    {/* Paso: Orden de compra (solo camino de Presupuesto) */}
+                    {/* Cada cambio de ruta del lado de Presupuesto/Almacén es su propio paso —
+                        solo aparece una vez que la solicitud realmente pasó por ahí. */}
+
+                    {/* Paso: Compras/Órdenes */}
                     {h.orden && (
-                      <Paso icon={ShoppingCart} titulo={`Orden de Compra ${h.orden.numero}/${h.orden.anio}`}>
-                        <p className="text-xs text-gray-500">Fecha: {h.orden.fecha} · Estado: {h.orden.estado}</p>
+                      <Paso icon={ShoppingCart} titulo={`Compras/Órdenes — Orden ${h.orden.numero}/${h.orden.anio}`}>
+                        <p className="text-xs text-gray-500">Fecha: {h.orden.fecha}</p>
                       </Paso>
                     )}
 
-                    {/* Paso: Pago (solo camino de Fondo Rotativo, una vez generado el SIAF-04) */}
-                    {h.pago && (
-                      <Paso icon={Wallet} titulo="Pago (Fondo Rotativo)">
+                    {/* Paso: Presupuesto/Compromiso */}
+                    {h.orden?.no_compromiso && (
+                      <Paso icon={Calculator} titulo={`Presupuesto/Compromiso — No. ${h.orden.no_compromiso}`} />
+                    )}
+
+                    {/* Paso: Presupuesto/Devengado */}
+                    {h.orden?.no_devengado && (
+                      <Paso icon={Calculator} titulo={`Presupuesto/Devengado — No. ${h.orden.no_devengado}`}>
                         <p className="text-xs text-gray-500">
-                          {!h.pago.forma_pago && "Esperando elegir forma de pago en Fondo Rotativo/Pagos"}
-                          {h.pago.forma_pago === "cheque" &&
-                            `Cheque No. ${h.pago.numero_cheque ?? "—"}${h.pago.fecha_emision_cheque ? ` · Emitido el ${h.pago.fecha_emision_cheque}` : ""} → Enviado a Fondo Rotativo/Bancos`}
-                          {h.pago.forma_pago === "efectivo" &&
-                            `Efectivo · Vale No. ${h.pago.numero_vale ?? "—"}${h.pago.fecha_pago ? ` · Pagado el ${h.pago.fecha_pago}` : ""} → Enviado a Fondo Rotativo/Libro Caja Chica`}
+                          Factura {h.orden.serie_factura}-{h.orden.no_factura} · Emisión {h.orden.fecha_emision}
+                          {h.orden.fecha_ingreso_producto && <> · Ingreso: {h.orden.fecha_ingreso_producto}</>}
                         </p>
+                        <p className="text-xs text-gray-500">
+                          Lote {h.orden.lote} · Vence {h.orden.fecha_vencimiento} · {h.orden.marca} {h.orden.modelo} · Serie {h.orden.serie}
+                        </p>
+                      </Paso>
+                    )}
+
+                    {/* Paso: Almacén/DAB-60 */}
+                    {h.orden?.estado === "Completada" && (
+                      <Paso icon={Archive} titulo="Almacén/DAB-60 — Completada" />
+                    )}
+
+                    {/* Cada cambio de ruta del lado de Fondo Rotativo es su propio paso. */}
+
+                    {/* Paso: Fondo Rotativo/Pagos */}
+                    {h.pago && (
+                      <Paso icon={Wallet} titulo="Fondo Rotativo/Pagos">
+                        <p className="text-xs text-gray-500">
+                          {!h.pago.forma_pago && "Esperando elegir forma de pago"}
+                          {h.pago.forma_pago === "cheque" && `Se pagó con cheque No. ${h.pago.numero_cheque ?? "—"}${h.pago.fecha_emision_cheque ? ` · Emitido el ${h.pago.fecha_emision_cheque}` : ""}`}
+                          {h.pago.forma_pago === "efectivo" && `Se pagó en efectivo · Vale No. ${h.pago.numero_vale ?? "—"}${h.pago.fecha_pago ? ` · Pagado el ${h.pago.fecha_pago}` : ""}`}
+                        </p>
+                      </Paso>
+                    )}
+
+                    {/* Paso: Fondo Rotativo/Bancos */}
+                    {h.pago?.estado === "Enviado a Bancos" && (
+                      <Paso icon={Landmark} titulo="Fondo Rotativo/Bancos">
+                        <p className="text-xs text-gray-500">Cheque No. {h.pago.numero_cheque ?? "—"} enviado a Bancos</p>
+                      </Paso>
+                    )}
+
+                    {/* Paso: Fondo Rotativo/Libro Caja Chica */}
+                    {h.pago?.estado === "Enviado a Libro Caja Chica" && (
+                      <Paso icon={Coins} titulo="Fondo Rotativo/Libro Caja Chica">
+                        <p className="text-xs text-gray-500">Vale No. {h.pago.numero_vale ?? "—"} enviado a Libro Caja Chica</p>
                       </Paso>
                     )}
                   </div>
@@ -181,7 +221,7 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
 
 function PrintLink({ href, label }: { href: string; label: string }) {
   return (
-    <Link href={href} target="_blank"
+    <Link href={href}
       className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
       <Printer className="w-3 h-3" /> {label}
     </Link>

@@ -73,7 +73,7 @@ export default function ArchivoFondoRotativoClient({ pagos }: Props) {
                     {p.total != null ? Q(p.total) : "—"}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <Link href={`/compras/adjudicacion/${p.consolidacion_id}/imprimir-a04`} target="_blank"
+                    <Link href={`/compras/adjudicacion/${p.consolidacion_id}/imprimir-a04`}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors ml-auto">
                       <Printer className="w-3 h-3" /> Ver / Imprimir
                     </Link>

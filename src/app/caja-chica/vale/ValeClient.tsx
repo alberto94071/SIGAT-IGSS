@@ -56,7 +56,7 @@ export default function ValeClient({ vales: init, canEdit }: { vales: Vale[]; ca
                   <td className="px-4 py-3 text-gray-700">{v.solicitante_nombre}</td>
                   <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">{Q(v.monto)}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <Link href={`/caja-chica/vale/${v.id}/imprimir`} target="_blank"
+                    <Link href={`/caja-chica/vale/${v.id}/imprimir`}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors ml-auto w-fit">
                       <Printer className="w-3 h-3" /> Imprimir
                     </Link>

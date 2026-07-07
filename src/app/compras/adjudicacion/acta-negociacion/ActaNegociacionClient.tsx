@@ -45,7 +45,7 @@ export default function ActaNegociacionClient({ anio, acta, isSuperAdmin }: Prop
               <option key={a} value={a}>{a}</option>
             ))}
           </select>
-          <a href={`/compras/adjudicacion/acta-negociacion/imprimir/${anio}`} target="_blank" rel="noreferrer"
+          <a href={`/compras/adjudicacion/acta-negociacion/imprimir/${anio}`}
             className="btn-secondary">
             <Printer className="w-4 h-4" /> Imprimir
           </a>
