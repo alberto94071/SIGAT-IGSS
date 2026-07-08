@@ -1,0 +1,625 @@
+[
+{
+"punto_partida": "Tejutla, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 15.0,
+"total": 30.0,
+"en_letras": "Treinta quetzalez con 00/100"
+},
+{
+"punto_partida": "Tejutla, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 37.5,
+"total": 75.0,
+"en_letras": "Setenta y cinco quetzalez con 00/100"
+},
+{
+"punto_partida": "Tejutla, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 115.0,
+"total": 230.0,
+"en_letras": "Doscientos treinta quetzalez con 00/100"
+},
+{
+"punto_partida": "Tejutla, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 15.0,
+"total": 30.0,
+"en_letras": "Treinta quetzalez con 00/100"
+},
+{
+"punto_partida": "Sipacapa, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 45.0,
+"total": 90.0,
+"en_letras": "Noventa quetzalez con 00/100"
+},
+{
+"punto_partida": "Sipacapa, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 67.5,
+"total": 135.0,
+"en_letras": "Ciento treinta y cinco quetzalez con 00/100"
+},
+{
+"punto_partida": "Sipacapa, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 145.0,
+"total": 290.0,
+"en_letras": "Doscientos noventa quetzalez con 00/100"
+},
+{
+"punto_partida": "Sipacapa, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 45.0,
+"total": 90.0,
+"en_letras": "Noventa quetzalez con 00/100"
+},
+{
+"punto_partida": "San Miguel Ixtahuacan, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 50.0,
+"total": 100.0,
+"en_letras": "cien quetzalez con 00/100"
+},
+{
+"punto_partida": "San Miguel Ixtahuacan, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 72.5,
+"total": 145.0,
+"en_letras": "Ciento cuarenta y cinco quetzalez con 00/100"
+},
+{
+"punto_partida": "San Miguel Ixtahuacan, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 150.0,
+"total": 300.0,
+"en_letras": "Trescientos quetzalez con 00/100"
+},
+{
+"punto_partida": "San Miguel Ixtahuacan, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 50.0,
+"total": 100.0,
+"en_letras": "cien quetzalez con 00/100"
+},
+{
+"punto_partida": "Concepcion Tutuapa, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 30.0,
+"total": 60.0,
+"en_letras": "sesenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Concepcion Tutuapa, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 52.5,
+"total": 105.0,
+"en_letras": "Ciento cinco quetzalez con 00/100"
+},
+{
+"punto_partida": "Concepcion Tutuapa, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 130.0,
+"total": 260.0,
+"en_letras": "Doscientos sesenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Concepcion Tutuapa, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 30.0,
+"total": 60.0,
+"en_letras": "sesenta quetzalez con 00/100"
+},
+{
+"punto_partida": "San Lorenzo, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 15.0,
+"total": 30.0,
+"en_letras": "Treinta quetzalez con 00/100"
+},
+{
+"punto_partida": "San Lorenzo, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 37.5,
+"total": 75.0,
+"en_letras": "Setenta y cinco quetzalez con 00/100"
+},
+{
+"punto_partida": "San Lorenzo, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 115.0,
+"total": 230.0,
+"en_letras": "Doscientos treinta quetzalez con 00/100"
+},
+{
+"punto_partida": "San Lorenzo, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 15.0,
+"total": 30.0,
+"en_letras": "Treinta quetzalez con 00/100"
+},
+{
+"punto_partida": "Comitancillo, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 20.0,
+"total": 40.0,
+"en_letras": "Cuarenta  quetzalez con 00/100"
+},
+{
+"punto_partida": "Comitancillo, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 42.5,
+"total": 85.0,
+"en_letras": "Ochenta y cinco quetzalez con 00/100"
+},
+{
+"punto_partida": "Comitancillo, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 120.0,
+"total": 240.0,
+"en_letras": "Doscientos cuarenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Comitancillo, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 20.0,
+"total": 40.0,
+"en_letras": "Cuarenta  quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea los Cerezos, Tejutla, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 50.0,
+"total": 100.0,
+"en_letras": "cien quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea los Cerezos, Tejutla, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 72.5,
+"total": 145.0,
+"en_letras": "Ciento cuarenta y cinco quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea los Cerezos, Tejutla, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 150.0,
+"total": 300.0,
+"en_letras": "Trescientos quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea los Cerezos, Tejutla, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 50.0,
+"total": 100.0,
+"en_letras": "cien quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Antigua Tutuapa, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 40.0,
+"total": 80.0,
+"en_letras": "Ochenta quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea Antigua Tutuapa, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 62.5,
+"total": 125.0,
+"en_letras": "Ciento veinticinco quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Antigua Tutuapa, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 140.0,
+"total": 280.0,
+"en_letras": "Docientos ochenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Antigua Tutuapa, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 40.0,
+"total": 80.0,
+"en_letras": "Ochenta quetzales con 00/100."
+},
+{
+"punto_partida": "Canton La Independencia, Concepcion Tutuapa, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 35.0,
+"total": 70.0,
+"en_letras": "Setenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Canton La Independencia, Concepcion Tutuapa, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 57.5,
+"total": 115.0,
+"en_letras": "Ciento quince quetzalez con 00/100"
+},
+{
+"punto_partida": "Canton La Independencia, Concepcion Tutuapa, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 135.0,
+"total": 270.0,
+"en_letras": "Docientos setenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Canton La Independencia, Concepcion Tutuapa, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 35.0,
+"total": 70.0,
+"en_letras": "Setenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Berlin, Concepcion Tutuapa, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 35.0,
+"total": 70.0,
+"en_letras": "Setenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Berlin, Concepcion Tutuapa, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 57.5,
+"total": 115.0,
+"en_letras": "Ciento quince quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Berlin, Concepcion Tutuapa, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 135.0,
+"total": 270.0,
+"en_letras": "Docientos setenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Berlin, Concepcion Tutuapa, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 35.0,
+"total": 70.0,
+"en_letras": "Setenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Canton El Soche, Concepcion Tutuapa, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 50.0,
+"total": 100.0,
+"en_letras": "cien quetzalez con 00/100"
+},
+{
+"punto_partida": "Canton El Soche, Concepcion Tutuapa, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 72.5,
+"total": 145.0,
+"en_letras": "Ciento cuarenta y cinco quetzalez con 00/100"
+},
+{
+"punto_partida": "Canton El Soche, Concepcion Tutuapa, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 150.0,
+"total": 300.0,
+"en_letras": "Trescientos quetzalez con 00/100"
+},
+{
+"punto_partida": "Canton El Soche, Concepcion Tutuapa, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 50.0,
+"total": 100.0,
+"en_letras": "cien quetzalez con 00/100"
+},
+{
+"punto_partida": "Caserio Chamul, Concepcion Tutuapa, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 55.0,
+"total": 110.0,
+"en_letras": "Ciento diez quetzales con 00/100."
+},
+{
+"punto_partida": "Caserio Chamul, Concepcion Tutuapa, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 77.5,
+"total": 155.0,
+"en_letras": "Ciento cincuenta y cinco quetzales con 00/100."
+},
+{
+"punto_partida": "Caserio Chamul, Concepcion Tutuapa, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 155.0,
+"total": 310.0,
+"en_letras": "Trescientos diez quetzalez con 00/100"
+},
+{
+"punto_partida": "Caserio Chamul, Concepcion Tutuapa, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 55.0,
+"total": 110.0,
+"en_letras": "Ciento diez quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea La Florida, San Miguel Ixtahuacan, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 85.0,
+"total": 170.0,
+"en_letras": "Ciento setenta quetzalez con 00/100."
+},
+{
+"punto_partida": "Aldea La Florida, San Miguel Ixtahuacan, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 107.5,
+"total": 215.0,
+"en_letras": "Docientos quince quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea La Florida, San Miguel Ixtahuacan, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 185.0,
+"total": 370.0,
+"en_letras": "Trescientos setenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea La Florida, San Miguel Ixtahuacan, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 85.0,
+"total": 170.0,
+"en_letras": "Ciento setenta quetzalez con 00/100."
+},
+{
+"punto_partida": "Aldea San Jose la Frontera, Comitancillo, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 40.0,
+"total": 80.0,
+"en_letras": "Ochenta quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea San Jose la Frontera, Comitancillo, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 62.5,
+"total": 125.0,
+"en_letras": "Ciento veinticinco quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea San Jose la Frontera, Comitancillo, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 140.0,
+"total": 280.0,
+"en_letras": "Docientos ochenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea San Jose la Frontera, Comitancillo, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 40.0,
+"total": 80.0,
+"en_letras": "Ochenta quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea Queca, Sipacapa, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 55.0,
+"total": 110.0,
+"en_letras": "Ciento diez quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea Queca, Sipacapa, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 77.5,
+"total": 155.0,
+"en_letras": "Ciento cincuenta y cinco quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea Queca, Sipacapa, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 155.0,
+"total": 310.0,
+"en_letras": "Trescientos diez quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Queca, Sipacapa, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 55.0,
+"total": 110.0,
+"en_letras": "Ciento diez quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea Escupija, Sipacapa, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 70.0,
+"total": 140.0,
+"en_letras": "Ciento cuarenta quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea Escupija, Sipacapa, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 92.5,
+"total": 185.0,
+"en_letras": "Ciento ochenta y cinco quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea Escupija, Sipacapa, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 170.0,
+"total": 340.0,
+"en_letras": "Trescientos cuarenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Escupija, Sipacapa, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 70.0,
+"total": 140.0,
+"en_letras": "Ciento cuarenta quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea El Salitre, San Miguel Ixtahuacan, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 70.0,
+"total": 140.0,
+"en_letras": "Ciento cuarenta quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea El Salitre, San Miguel Ixtahuacan, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 92.5,
+"total": 185.0,
+"en_letras": "Ciento ochenta y cinco quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea El Salitre, San Miguel Ixtahuacan, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 170.0,
+"total": 340.0,
+"en_letras": "Trescientos cuarenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea El Salitre, San Miguel Ixtahuacan, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 70.0,
+"total": 140.0,
+"en_letras": "Ciento cuarenta quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea Siete Platos, San Miguel Ixtahuacan, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 75.0,
+"total": 150.0,
+"en_letras": "Ciento cincuenta quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea Siete Platos, San Miguel Ixtahuacan, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 97.5,
+"total": 195.0,
+"en_letras": "Ciento noventa y cinco quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Siete Platos, San Miguel Ixtahuacan, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 175.0,
+"total": 350.0,
+"en_letras": "Trescientos cincuenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Siete Platos, San Miguel Ixtahuacan, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 75.0,
+"total": 150.0,
+"en_letras": "Ciento cincuenta quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea Tuicampana, San Miguel Ixtahuacan, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 55.0,
+"total": 110.0,
+"en_letras": "Ciento diez quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea Tuicampana, San Miguel Ixtahuacan, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 77.5,
+"total": 155.0,
+"en_letras": "Ciento cincuenta y cinco quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea Tuicampana, San Miguel Ixtahuacan, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 155.0,
+"total": 310.0,
+"en_letras": "Trescientos diez quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Tuicampana, San Miguel Ixtahuacan, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 55.0,
+"total": 110.0,
+"en_letras": "Ciento diez quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea Tuimuj, Comitancillo (via Sipacapa), San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 35.0,
+"total": 70.0,
+"en_letras": "Setenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Tuimuj, Comitancillo (via Sipacapa), San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 57.5,
+"total": 115.0,
+"en_letras": "Ciento quince quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Tuimuj, Comitancillo (via Sipacapa), San Marcos",
+"destino": "Guatemala",
+"valor_ida": 135.0,
+"total": 270.0,
+"en_letras": "Docientos setenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Tuimuj, Comitancillo (via Sipacapa), San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 35.0,
+"total": 70.0,
+"en_letras": "Setenta quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea San Isidro, Sipacapa, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 55.0,
+"total": 110.0,
+"en_letras": "Ciento diez quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea San Isidro, Sipacapa, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 77.5,
+"total": 155.0,
+"en_letras": "Ciento cincuenta y cinco quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea San Isidro, Sipacapa, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 155.0,
+"total": 310.0,
+"en_letras": "Trescientos diez quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea San Isidro, Sipacapa, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 55.0,
+"total": 110.0,
+"en_letras": "Ciento diez quetzales con 00/100."
+},
+{
+"punto_partida": "Aldea Tuichilupe, Comitancillo, San Marcos",
+"destino": "San Marcos, San Marcos",
+"valor_ida": 15.0,
+"total": 30.0,
+"en_letras": "Treinta quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Tuichilupe, Comitancillo, San Marcos",
+"destino": "Quetzaltenango",
+"valor_ida": 37.5,
+"total": 75.0,
+"en_letras": "Setenta y cinco quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Tuichilupe, Comitancillo, San Marcos",
+"destino": "Guatemala",
+"valor_ida": 115.0,
+"total": 230.0,
+"en_letras": "Doscientos treinta quetzalez con 00/100"
+},
+{
+"punto_partida": "Aldea Tuichilupe, Comitancillo, San Marcos",
+"destino": "San Pedro Sac. S.M.",
+"valor_ida": 15.0,
+"total": 30.0,
+"en_letras": "Treinta quetzalez con 00/100"
+},
+{
+"punto_partida": "San Pedro Sac. S.M.",
+"destino": "Quetzaltenango",
+"valor_ida": 22.5,
+"total": 45.0,
+"en_letras": "Cuarenta y cinco quetzalez 00/100."
+}
+]
