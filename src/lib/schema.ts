@@ -695,13 +695,36 @@ export const pasajesTarifario = pgTable("pasajes_tarifario", {
   created_at:     text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
-// Historial de pasajes pagados — equivalente a la hoja "Informe"/"TABLA
-// PASAJES", llenado desde el formulario "Ingreso de Datos". Los datos del
-// afiliado se copian al momento del pago (denormalizado) para que el recibo
-// impreso no cambie si luego se actualiza la base de afiliados.
+// Solicitud de Pago de Pasaje (SPS-75) — memo de autorización dirigido al Jefe
+// de Unidad, que pide el pago de un tramo (ida o vuelta) para un afiliado.
+// Se genera primero; su DPD-23 (el recibo de pago en sí) se genera después,
+// desde Caja Chica/DPD-23, ya con los datos de forma de pago.
+export const pasajesSolicitudes = pgTable("pasajes_solicitudes", {
+  id:               serial("id").primaryKey(),
+  numero:           integer("numero").notNull().unique(),
+  fecha:            text("fecha").notNull(),
+  afiliacion:       text("afiliacion").notNull(),
+  nombre_afiliado:  text("nombre_afiliado").notNull(),
+  direccion:        text("direccion"),
+  tramo:            text("tramo").notNull(), // "Ida" | "Vuelta"
+  punto_partida:    text("punto_partida").notNull(),
+  destino:          text("destino").notNull(),
+  observaciones:    text("observaciones"), // texto libre del solicitante (hacia dónde fue / motivo)
+  // 'Pendiente DPD-23' (esperando generar el recibo de pago) | 'Generado'
+  estado:           text("estado").notNull().default("Pendiente DPD-23"),
+  creado_por:       integer("creado_por").references(() => usuarios.id),
+  created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// Historial de pasajes pagados — el recibo DPD-23 en sí, generado a partir de
+// una Solicitud de Pago de Pasaje (SPS-75) ya con forma de pago (cheque +
+// vale). Los datos del afiliado se copian al momento del pago (denormalizado)
+// para que el recibo impreso no cambie si luego se actualiza la base de
+// afiliados.
 export const pasajesPagos = pgTable("pasajes_pagos", {
   id:               serial("id").primaryKey(),
   formulario_no:    integer("formulario_no").notNull().unique(),
+  solicitud_id:     integer("solicitud_id").references(() => pasajesSolicitudes.id),
   fecha_pago:       text("fecha_pago").notNull(),
   afiliacion:       text("afiliacion").notNull(),
   nombre_afiliado:  text("nombre_afiliado").notNull(),

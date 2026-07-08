@@ -41,9 +41,27 @@ async function main() {
     )
   `;
   await sql`
+    CREATE TABLE IF NOT EXISTS pasajes_solicitudes (
+      id               SERIAL PRIMARY KEY,
+      numero           INTEGER NOT NULL UNIQUE,
+      fecha            TEXT NOT NULL,
+      afiliacion       TEXT NOT NULL,
+      nombre_afiliado  TEXT NOT NULL,
+      direccion        TEXT,
+      tramo            TEXT NOT NULL,
+      punto_partida    TEXT NOT NULL,
+      destino          TEXT NOT NULL,
+      observaciones    TEXT,
+      estado           TEXT NOT NULL DEFAULT 'Pendiente DPD-23',
+      creado_por       INTEGER REFERENCES usuarios(id),
+      created_at       TEXT DEFAULT to_char(now(), 'YYYY-MM-DD HH24:MI:SS')
+    )
+  `;
+  await sql`
     CREATE TABLE IF NOT EXISTS pasajes_pagos (
       id               SERIAL PRIMARY KEY,
       formulario_no    INTEGER NOT NULL UNIQUE,
+      solicitud_id     INTEGER REFERENCES pasajes_solicitudes(id),
       fecha_pago       TEXT NOT NULL,
       afiliacion       TEXT NOT NULL,
       nombre_afiliado  TEXT NOT NULL,
@@ -65,7 +83,8 @@ async function main() {
       created_at       TEXT DEFAULT to_char(now(), 'YYYY-MM-DD HH24:MI:SS')
     )
   `;
-  console.log("✓ Tablas pasajes_afiliados, pasajes_tarifario, pasajes_pagos");
+  await sql`ALTER TABLE pasajes_pagos ADD COLUMN IF NOT EXISTS solicitud_id INTEGER REFERENCES pasajes_solicitudes(id)`;
+  console.log("✓ Tablas pasajes_afiliados, pasajes_tarifario, pasajes_solicitudes, pasajes_pagos");
 
   const tarifas = JSON.parse(readFileSync(join(__dirname, "data/pasajes-tarifario.json"), "utf-8"));
   const { rows } = await sql`SELECT COUNT(*)::int AS n FROM pasajes_tarifario`;

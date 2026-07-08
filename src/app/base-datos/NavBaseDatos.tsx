@@ -1,12 +1,13 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Users2, Package } from "lucide-react";
+import { LayoutGrid, Users2, Package, IdCard } from "lucide-react";
 
 const TABS = [
   { label: "Insumos",      href: "/base-datos/insumos",      icon: Package  },
   { label: "Subproductos", href: "/base-datos/subproductos", icon: LayoutGrid },
   { label: "Proveedores",  href: "/base-datos/proveedores",  icon: Users2   },
+  { label: "Afiliados",    href: "/base-datos/afiliados",    icon: IdCard   },
 ];
 
 export default function NavBaseDatos() {

@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { type Rol } from "@/lib/permisos";
-import { listarPagosPasajes, listarTarifario, getValesParaPasaje } from "@/lib/pasajes-actions";
+import { listarSolicitudesPasaje, listarTarifario } from "@/lib/pasajes-actions";
 import SolicitudPasajeClient from "./SolicitudPasajeClient";
 
 export default async function SolicitudPasajePage() {
@@ -10,11 +10,10 @@ export default async function SolicitudPasajePage() {
   const rol = session.user.rol as Rol;
   const canEdit = rol !== "consulta";
 
-  const [pagos, tarifario, vales] = await Promise.all([
-    listarPagosPasajes(),
+  const [solicitudes, tarifario] = await Promise.all([
+    listarSolicitudesPasaje(),
     listarTarifario(),
-    getValesParaPasaje(),
   ]);
 
-  return <SolicitudPasajeClient pagos={pagos} tarifario={tarifario} vales={vales} canEdit={canEdit} />;
+  return <SolicitudPasajeClient solicitudes={solicitudes} tarifario={tarifario} canEdit={canEdit} />;
 }

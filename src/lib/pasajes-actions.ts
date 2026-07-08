@@ -1,22 +1,15 @@
 "use server";
 import { db } from "@/lib/db";
-import { pasajesAfiliados, pasajesTarifario, pasajesPagos, valesCajaChica, usuarios } from "@/lib/schema";
+import { pasajesAfiliados, pasajesTarifario, pasajesSolicitudes, pasajesPagos, valesCajaChica, usuarios } from "@/lib/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
+import { buscarAfiliadoPorAfiliacion } from "@/lib/afiliados-actions";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
   if (!session) return { error: "No autorizado" };
   if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
   return { uid: Number(session.user.id) };
-}
-
-// ─── Afiliados (autocompletado) ──────────────────────────────────────────────
-export async function buscarAfiliado(afiliacion: string) {
-  const a = afiliacion.trim();
-  if (!a) return null;
-  const [row] = await db.select().from(pasajesAfiliados).where(eq(pasajesAfiliados.afiliacion, a)).limit(1);
-  return row ?? null;
 }
 
 // ─── Tarifario ────────────────────────────────────────────────────────────────
@@ -85,7 +78,68 @@ export async function getValesParaPasaje() {
   }).from(valesCajaChica).where(eq(valesCajaChica.estado, "Pendiente")).orderBy(desc(valesCajaChica.numero));
 }
 
-// ─── Historial de pagos de pasajes ────────────────────────────────────────────
+// ─── Solicitud de Pago de Pasaje (SPS-75) ────────────────────────────────────
+export type NuevaSolicitudData = {
+  afiliacion: string;
+  tramo: "Ida" | "Vuelta";
+  punto_partida: string;
+  destino: string;
+  observaciones: string;
+};
+
+export async function crearSolicitudPasaje(data: NuevaSolicitudData): Promise<{ ok: true; numero: number } | { error: string }> {
+  try {
+    const check = await requireEdit();
+    if ("error" in check) return check;
+
+    if (!data.afiliacion.trim()) return { error: "El número de afiliación es obligatorio" };
+    if (data.tramo !== "Ida" && data.tramo !== "Vuelta") return { error: "Selecciona Ida o Vuelta" };
+    if (!data.punto_partida.trim() || !data.destino.trim()) return { error: "Punto de partida y destino son obligatorios" };
+
+    const afiliado = await buscarAfiliadoPorAfiliacion(data.afiliacion);
+    if (!afiliado) return { error: "No se encontró un afiliado con ese número de afiliación" };
+
+    const tarifa = await buscarTarifa(data.punto_partida, data.destino);
+    if (!tarifa) return { error: `No existe tarifa registrada para la ruta "${data.punto_partida}" → "${data.destino}". Regístrala primero en Caja Chica/Tarifario.` };
+
+    const res = await db.execute(sql`SELECT COALESCE(MAX(numero), 0) + 1 AS next FROM pasajes_solicitudes`);
+    const numero = Number((res.rows[0] as any).next) || 1;
+
+    await db.insert(pasajesSolicitudes).values({
+      numero,
+      fecha: new Date().toISOString().slice(0, 10),
+      afiliacion: afiliado.afiliacion,
+      nombre_afiliado: afiliado.nombre,
+      direccion: afiliado.direccion,
+      tramo: data.tramo,
+      punto_partida: data.punto_partida.trim(),
+      destino: data.destino.trim(),
+      observaciones: data.observaciones.trim() || null,
+      creado_por: check.uid,
+    });
+
+    return { ok: true, numero };
+  } catch {
+    return { error: "Error al registrar la solicitud de pasaje" };
+  }
+}
+
+export async function listarSolicitudesPasaje() {
+  return db.select().from(pasajesSolicitudes).orderBy(desc(pasajesSolicitudes.numero));
+}
+
+export async function listarSolicitudesPendientes() {
+  return db.select().from(pasajesSolicitudes)
+    .where(eq(pasajesSolicitudes.estado, "Pendiente DPD-23"))
+    .orderBy(desc(pasajesSolicitudes.numero));
+}
+
+export async function getSolicitudPasaje(numero: number) {
+  const [row] = await db.select().from(pasajesSolicitudes).where(eq(pasajesSolicitudes.numero, numero)).limit(1);
+  return row ?? null;
+}
+
+// ─── DPD-23 — generado a partir de una Solicitud de Pago de Pasaje ───────────
 export async function siguienteFormularioNo(): Promise<number> {
   const res = await db.execute(sql`SELECT COALESCE(MAX(formulario_no), 0) + 1 AS next FROM pasajes_pagos`);
   return Number((res.rows[0] as any).next) || 1;
@@ -108,45 +162,40 @@ export async function getPagoPasaje(formularioNo: number) {
   return row ?? null;
 }
 
-export type NuevoPagoPasajeData = {
-  afiliacion: string;
-  punto_partida: string;
-  destino: string;
-  ida: boolean;
-  vuelta: boolean;
-  observaciones: string;
+export type GenerarDpd23Data = {
   fecha_cita: string;
   poliza_no: number | null;
   cheque_no: string;
   vale_id: number;
 };
 
-export async function registrarPagoPasaje(data: NuevoPagoPasajeData): Promise<{ ok: true; formulario_no: number } | { error: string }> {
+export async function generarDpd23DesdeSolicitud(solicitudId: number, data: GenerarDpd23Data): Promise<{ ok: true; formulario_no: number } | { error: string }> {
   try {
     const check = await requireEdit();
     if ("error" in check) return check;
 
-    if (!data.afiliacion.trim()) return { error: "El número de afiliación es obligatorio" };
-    if (!data.punto_partida.trim() || !data.destino.trim()) return { error: "Punto de partida y destino son obligatorios" };
-    if (!data.ida && !data.vuelta) return { error: "Selecciona al menos Ida o Vuelta" };
     if (!data.cheque_no.trim()) return { error: "El número de cheque es obligatorio" };
     if (!data.vale_id) return { error: "El número de vale es obligatorio" };
 
-    const afiliado = await buscarAfiliado(data.afiliacion);
-    if (!afiliado) return { error: "No se encontró un afiliado con ese número de afiliación" };
+    const [solicitud] = await db.select().from(pasajesSolicitudes).where(eq(pasajesSolicitudes.id, solicitudId)).limit(1);
+    if (!solicitud) return { error: "No se encontró la solicitud" };
+    if (solicitud.estado !== "Pendiente DPD-23") return { error: "Esta solicitud ya tiene un DPD-23 generado" };
 
-    const tarifa = await buscarTarifa(data.punto_partida, data.destino);
-    if (!tarifa) return { error: `No existe tarifa registrada para la ruta "${data.punto_partida}" → "${data.destino}". Regístrala primero en Caja Chica/Tarifario.` };
+    const afiliado = await buscarAfiliadoPorAfiliacion(solicitud.afiliacion);
+    if (!afiliado) return { error: "No se encontró el afiliado de la solicitud" };
+
+    const tarifa = await buscarTarifa(solicitud.punto_partida, solicitud.destino);
+    if (!tarifa) return { error: `No existe tarifa registrada para la ruta "${solicitud.punto_partida}" → "${solicitud.destino}"` };
 
     const [vale] = await db.select().from(valesCajaChica).where(eq(valesCajaChica.id, data.vale_id)).limit(1);
     if (!vale) return { error: "No se encontró el vale seleccionado" };
     if (vale.estado !== "Pendiente") return { error: "El vale seleccionado ya fue utilizado" };
 
-    const valorPasaje = (data.ida ? tarifa.valor_ida : 0) + (data.vuelta ? tarifa.valor_ida : 0);
     const formularioNo = await siguienteFormularioNo();
 
     await db.insert(pasajesPagos).values({
       formulario_no: formularioNo,
+      solicitud_id: solicitud.id,
       fecha_pago: new Date().toISOString().slice(0, 10),
       afiliacion: afiliado.afiliacion,
       nombre_afiliado: afiliado.nombre,
@@ -154,12 +203,12 @@ export async function registrarPagoPasaje(data: NuevoPagoPasajeData): Promise<{ 
       dpi: afiliado.dpi,
       numero_patronal: afiliado.numero_patronal,
       patrono: afiliado.patrono,
-      punto_partida: data.punto_partida.trim(),
-      destino: data.destino.trim(),
-      ida: data.ida,
-      vuelta: data.vuelta,
-      valor_pasaje: valorPasaje,
-      observaciones: data.observaciones.trim() || null,
+      punto_partida: solicitud.punto_partida,
+      destino: solicitud.destino,
+      ida: solicitud.tramo === "Ida",
+      vuelta: solicitud.tramo === "Vuelta",
+      valor_pasaje: tarifa.valor_ida,
+      observaciones: solicitud.observaciones,
       fecha_cita: data.fecha_cita || null,
       poliza_no: data.poliza_no,
       cheque_no: data.cheque_no.trim(),
@@ -168,10 +217,11 @@ export async function registrarPagoPasaje(data: NuevoPagoPasajeData): Promise<{ 
     });
 
     await db.update(valesCajaChica).set({ estado: "Usado" }).where(eq(valesCajaChica.id, data.vale_id));
+    await db.update(pasajesSolicitudes).set({ estado: "Generado" }).where(eq(pasajesSolicitudes.id, solicitud.id));
 
     return { ok: true, formulario_no: formularioNo };
   } catch {
-    return { error: "Error al registrar el pago de pasaje" };
+    return { error: "Error al generar el DPD-23" };
   }
 }
 
