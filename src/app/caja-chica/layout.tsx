@@ -5,7 +5,8 @@ import DashboardShell from "@/components/DashboardShell";
 const CAJA_CHICA_NAV = [
   { href: "/caja-chica/vale",             label: "Vale",             icon: "Receipt"   },
   { href: "/caja-chica/solicitud-pasaje", label: "Solicitud Pasaje", icon: "MapPin"    },
-  { href: "/caja-chica/sps-23",           label: "SPS-23",           icon: "FileText"  },
+  { href: "/caja-chica/tarifario",        label: "Tarifario",        icon: "Layers"    },
+  { href: "/caja-chica/sps-23",           label: "DPD-23",           icon: "FileText"  },
   { href: "/caja-chica/poliza",           label: "Póliza",           icon: "FileCheck" },
   { href: "/caja-chica/liquidacion",      label: "Liquidación",      icon: "FileCheck" },
   { href: "/caja-chica/libro-caja-chica", label: "Libro Caja Chica", icon: "Coins"     },

@@ -34,6 +34,9 @@ export const configuracion = pgTable("configuracion", {
   nombre_encargado_unidad: text("nombre_encargado_unidad").notNull().default("Lilia Zucely Pérez Fuentes"),
   cargo_encargado_unidad:  text("cargo_encargado_unidad").notNull().default("Analista \"A\" con funciones de Encargada de Unidad"),
   entidad_recibio_viatico: text("entidad_recibio_viatico").notNull().default("IGSS U.I.A.A.D.D.M. en el Municipio de Tejutla"),
+  // Datos adicionales para el DPD-23 (Recibo de Gastos de Transporte)
+  nombre_secretaria_unidad: text("nombre_secretaria_unidad").notNull().default("Elesinda Gabriela Rodriguez Orozco"),
+  cargo_secretaria_unidad:  text("cargo_secretaria_unidad").notNull().default("Secretaria \"A\""),
   updated_at:           text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
@@ -657,4 +660,65 @@ export const viaticoLiquidaciones = pgTable("viatico_liquidaciones", {
   fecha_nombramiento:       text("fecha_nombramiento"),
   creado_por:               integer("creado_por").references(() => usuarios.id),
   created_at:               text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Pago de Pasajes (Caja Chica/Solicitud Pasaje) ───────────────────────────
+// Portado del libro de Excel "PASAJES_TEJUTLA" usado hasta ahora: base de
+// afiliados + tarifario por ruta (datos de referencia, importados una vez) y
+// el historial real de pasajes pagados (formulario "Ingreso de Datos").
+
+// Base de afiliados — solo lectura/autocompletado al capturar un pago (igual
+// que el VLOOKUP contra la hoja "Base de Datos" del libro original).
+export const pasajesAfiliados = pgTable("pasajes_afiliados", {
+  id:               serial("id").primaryKey(),
+  afiliacion:       text("afiliacion").notNull().unique(),
+  dpi:              text("dpi"),
+  nombre:           text("nombre").notNull(),
+  calidad:          text("calidad"),
+  edad:             integer("edad"),
+  sexo:             text("sexo"),
+  direccion:        text("direccion"),
+  telefono:         text("telefono"),
+  fallecido:        text("fallecido"), // "S" | "N"
+  numero_patronal:  text("numero_patronal"),
+  patrono:          text("patrono"),
+});
+
+// Tarifario por ruta — administrable desde Caja Chica/Tarifario (igual que la
+// hoja "Tarifa": precio de ida = precio de vuelta, por punto de partida/destino).
+export const pasajesTarifario = pgTable("pasajes_tarifario", {
+  id:             serial("id").primaryKey(),
+  punto_partida:  text("punto_partida").notNull(),
+  destino:        text("destino").notNull(),
+  valor_ida:      doublePrecision("valor_ida").notNull(),
+  creado_por:     integer("creado_por").references(() => usuarios.id),
+  created_at:     text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// Historial de pasajes pagados — equivalente a la hoja "Informe"/"TABLA
+// PASAJES", llenado desde el formulario "Ingreso de Datos". Los datos del
+// afiliado se copian al momento del pago (denormalizado) para que el recibo
+// impreso no cambie si luego se actualiza la base de afiliados.
+export const pasajesPagos = pgTable("pasajes_pagos", {
+  id:               serial("id").primaryKey(),
+  formulario_no:    integer("formulario_no").notNull().unique(),
+  fecha_pago:       text("fecha_pago").notNull(),
+  afiliacion:       text("afiliacion").notNull(),
+  nombre_afiliado:  text("nombre_afiliado").notNull(),
+  calidad:          text("calidad"),
+  dpi:              text("dpi"),
+  numero_patronal:  text("numero_patronal"),
+  patrono:          text("patrono"),
+  punto_partida:    text("punto_partida").notNull(),
+  destino:          text("destino").notNull(),
+  ida:              boolean("ida").notNull().default(true),
+  vuelta:           boolean("vuelta").notNull().default(true),
+  valor_pasaje:     doublePrecision("valor_pasaje").notNull(),
+  observaciones:    text("observaciones"),
+  fecha_cita:       text("fecha_cita"),
+  poliza_no:        integer("poliza_no"),
+  cheque_no:        text("cheque_no"),
+  vale_id:          integer("vale_id").references(() => valesCajaChica.id),
+  creado_por:       integer("creado_por").references(() => usuarios.id),
+  created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });

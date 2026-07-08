@@ -36,3 +36,7 @@ database.sqlite-wal
 
 # Claude Code — configuración local personal
 .claude/settings.local.json
+
+# Datos personales de afiliados (DPI, nombre, dirección, teléfono) — no se
+# versionan en git. Ver scripts/migrate-pasajes.mjs.
+scripts/data/pasajes-afiliados.json
