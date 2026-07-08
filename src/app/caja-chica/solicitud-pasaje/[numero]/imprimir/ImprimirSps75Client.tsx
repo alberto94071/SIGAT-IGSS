@@ -1,33 +1,41 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
+import { nombreNatural } from "@/lib/nombre-utils";
 
 type Solicitud = {
   numero: number; fecha: string; afiliacion: string; nombre_afiliado: string;
   direccion: string | null; tramo: string; punto_partida: string; destino: string;
-  observaciones: string | null;
+  lugar_especifico: string | null; especialidad: string | null;
+  caso_concluido: boolean; fecha_cita: string | null; observaciones: string | null;
 };
 
 interface Props {
   solicitud: Solicitud;
   nombreUnidad: string;
+  nombreJefe: string; cargoJefe: string;
+  nombreSolicitante: string; cargoSolicitante: string;
 }
 
-const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
-  "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
-
-function fechaLarga(iso: string): string {
+function fechaCorta(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
-  return `${d} de ${MESES[m - 1]} de ${y}`;
+  return `${d}/${String(m).padStart(2, "0")}/${y}`;
 }
 
 const FONT = "Arial, Helvetica, sans-serif";
 const B = "1.5px solid #1a1a1a";
 const C = "#000";
+const Casilla = ({ marcado }: { marcado: boolean }) => (
+  <span style={{ display: "inline-block", width: "14px", height: "14px", border: "1.2px solid #000", textAlign: "center", lineHeight: "14px", fontSize: "10pt", marginRight: "6px" }}>
+    {marcado ? "✓" : ""}
+  </span>
+);
 
-export default function ImprimirSps75Client({ solicitud: s, nombreUnidad }: Props) {
+export default function ImprimirSps75Client({
+  solicitud: s, nombreUnidad, nombreJefe, cargoJefe, nombreSolicitante, cargoSolicitante,
+}: Props) {
   const router = useRouter();
-  const anio = s.fecha.slice(0, 4);
+  const destinoCompleto = s.lugar_especifico ? `${s.destino}: ${s.lugar_especifico}` : s.destino;
 
   return (
     <>
@@ -36,7 +44,7 @@ export default function ImprimirSps75Client({ solicitud: s, nombreUnidad }: Prop
           <ArrowLeft className="w-4 h-4" /> Volver
         </button>
         <span className="text-gray-300">|</span>
-        <span className="text-sm font-semibold text-gray-700">SPS-75 — Solicitud {s.numero}/{anio}</span>
+        <span className="text-sm font-semibold text-gray-700">SPS-75 — Solicitud {s.numero}</span>
         <button onClick={() => window.print()}
           className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700">
           <Printer className="w-4 h-4" /> Imprimir
@@ -44,61 +52,61 @@ export default function ImprimirSps75Client({ solicitud: s, nombreUnidad }: Prop
       </div>
 
       <div id="print-wrapper">
-        <div id="a4-sheet" style={{ fontFamily: FONT, color: C, border: B, borderRadius: "8px", padding: "18px" }}>
+        <div id="a4-sheet" style={{ fontFamily: FONT, color: C, border: B, borderRadius: "8px", padding: "20px" }}>
 
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "8pt", marginBottom: "6px" }}>
-            <span />
-            <span style={{ fontWeight: "bold" }}>SPS-75</span>
-          </div>
-
-          <div style={{ textAlign: "center", marginBottom: "12px" }}>
-            <p style={{ margin: 0, fontSize: "10pt", fontWeight: "bold" }}>Instituto Guatemalteco de Seguridad Social</p>
-            <p style={{ margin: "2px 0 0 0", fontSize: "8.5pt" }}>{nombreUnidad}</p>
-            <p style={{ margin: "8px 0 0 0", fontSize: "12pt", fontWeight: "bold", textDecoration: "underline" }}>
-              SOLICITUD DE PAGO DE PASAJE
-            </p>
-          </div>
-
-          <div style={{ fontSize: "10pt", padding: "0 4px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}>
-              <span>No. Solicitud: <strong>{s.numero}/{anio}</strong></span>
-              <span>Fecha: <strong>{fechaLarga(s.fecha)}</strong></span>
+          <div style={{ display: "flex", alignItems: "flex-start", marginBottom: "10px" }}>
+            <img src="/LOGO_SIAF01.svg" alt="IGSS" style={{ height: "48px", width: "auto", flexShrink: 0 }} />
+            <div style={{ flex: 1, textAlign: "center" }}>
+              <p style={{ margin: 0, fontSize: "13pt", fontWeight: "bold" }}>SOLICITUD DE GASTOS DE TRANSPORTE</p>
             </div>
+            <div style={{ width: "60px", flexShrink: 0, textAlign: "right", fontSize: "9pt", fontWeight: "bold" }}>SPS-75</div>
+          </div>
 
-            <p style={{ margin: "0 0 16px 0", fontWeight: "bold" }}>Señor: Jefe de Unidad</p>
+          <div style={{ fontSize: "10.5pt", padding: "0 6px" }}>
+            <p style={{ margin: "0 0 10px 0" }}>Fecha: <strong>{fechaCorta(s.fecha)}</strong></p>
+            <p style={{ margin: "0 0 10px 0" }}>Caso número: <strong>{s.afiliacion}</strong></p>
+            <p style={{ margin: "0 0 16px 0" }}>Nombre afiliado: <strong>{nombreNatural(s.nombre_afiliado)}</strong></p>
 
-            <p style={{ margin: "0 0 4px 0" }}><span style={{ display: "inline-block", width: "110px" }}>Caso Número:</span> <strong>{s.afiliacion}</strong></p>
-            <p style={{ margin: "0 0 16px 0" }}><span style={{ display: "inline-block", width: "110px" }}>Nombre de afiliado:</span> <strong>{s.nombre_afiliado}</strong></p>
+            <p style={{ margin: "0 0 2px 0", fontWeight: "bold" }}>{nombreJefe}, {cargoJefe.toUpperCase()}</p>
+            <p style={{ margin: "0 0 16px 0" }}>Señor: <span style={{ display: "inline-block", borderBottom: "1px solid #000", width: "70%" }}>&nbsp;</span></p>
 
             <p style={{ margin: "0 0 16px 0", lineHeight: 1.6 }}>
-              Por este medio solicito se autorice el pago de pasaje correspondiente al tramo de{" "}
-              <strong>{s.tramo === "Ida" ? "ida" : "regreso"}</strong>, de <strong>{s.punto_partida}</strong> a <strong>{s.destino}</strong>, a
-              favor del afiliado mencionado.
+              Se ruega a esa Dependencia, proporcionar a la persona cuya identificación se cita en el ipígrafe, los gastos indispensables de transporte,
             </p>
 
-            <div style={{ display: "flex", gap: "24px", marginBottom: "16px" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ display: "inline-block", width: "14px", height: "14px", border: "1.2px solid #000", textAlign: "center", lineHeight: "14px", fontSize: "10pt" }}>
-                  {s.tramo === "Ida" ? "X" : ""}
-                </span> Ida
-              </label>
-              <label style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ display: "inline-block", width: "14px", height: "14px", border: "1.2px solid #000", textAlign: "center", lineHeight: "14px", fontSize: "10pt" }}>
-                  {s.tramo === "Vuelta" ? "X" : ""}
-                </span> Regreso
-              </label>
+            <div style={{ marginBottom: "16px", paddingLeft: "40px" }}>
+              <p style={{ margin: "0 0 8px 0" }}><Casilla marcado={s.tramo === "Ida"} />Ida</p>
+              <p style={{ margin: 0 }}><Casilla marcado={s.tramo === "Vuelta"} />vuelta</p>
+            </div>
+
+            <p style={{ margin: "0 0 16px 0" }}>
+              para conducirse a <span style={{ fontWeight: "bold" }}>{destinoCompleto}</span>
+            </p>
+
+            <p style={{ margin: "0 0 10px 0" }}>en virtud de que:</p>
+            <div style={{ marginBottom: "16px", paddingLeft: "40px" }}>
+              <p style={{ margin: "0 0 8px 0" }}><Casilla marcado={s.caso_concluido} />Su caso fue concluido</p>
+              <p style={{ margin: 0 }}>
+                Se le citó para el día <span style={{ fontWeight: "bold" }}>{s.fecha_cita ? fechaCorta(s.fecha_cita) : ""}</span>
+              </p>
             </div>
 
             <p style={{ margin: "0 0 4px 0" }}>Observaciones:</p>
-            <div style={{ border: "1px solid #ccc", borderRadius: "6px", padding: "10px 12px", minHeight: "70px", fontSize: "9.5pt", marginBottom: "30px" }}>
-              {s.direccion && <p style={{ margin: "0 0 6px 0" }}>PACIENTE CON RESIDENCIA EN: {s.direccion}</p>}
-              <p style={{ margin: 0 }}>{s.observaciones ?? ""}</p>
+            <div style={{ borderBottom: "1px solid #999", paddingBottom: "4px", marginBottom: "6px", fontSize: "9.5pt" }}>
+              {s.direccion && <>PACIENTE CON RESIDENCIA EN: {s.direccion}.</>}
+            </div>
+            <div style={{ borderBottom: "1px solid #999", paddingBottom: "4px", marginBottom: "24px", fontSize: "9.5pt", minHeight: "18px" }}>
+              {s.observaciones ?? ""}
             </div>
 
-            <div style={{ textAlign: "center", maxWidth: "320px", margin: "40px auto 0 auto" }}>
-              <div style={{ borderBottom: "1px solid #000", height: "40px" }} />
-              <p style={{ margin: "2px 0 0 0", fontSize: "8.5pt" }}>Firma del Solicitante</p>
-            </div>
+            <p style={{ margin: "0 0 30px 0" }}>Atentamente,</p>
+
+            <p style={{ margin: "0 0 2px 0" }}>Firma del solicitante: <span style={{ display: "inline-block", borderBottom: "1px solid #000", width: "50%" }}>&nbsp;</span></p>
+            <p style={{ margin: "0 0 2px 0" }}>Nombre del solicitante: <strong>{nombreSolicitante}</strong></p>
+            <p style={{ margin: "0 0 20px 0" }}>Cargo del solicitante: <strong>{cargoSolicitante}</strong></p>
+
+            <p style={{ margin: "0 0 4px 0" }}>Transporte ordenado por: <strong>{s.especialidad ?? ""}</strong></p>
+            <p style={{ margin: 0, fontSize: "9pt", color: "#333" }}>Unidad Médica: {nombreUnidad}</p>
           </div>
         </div>
       </div>
@@ -109,7 +117,7 @@ export default function ImprimirSps75Client({ solicitud: s, nombreUnidad }: Prop
           padding: 40px 20px; min-height: 100vh; margin-top: 52px; box-sizing: border-box;
         }
         #a4-sheet {
-          background: white; width: 210mm; min-height: 148mm; box-shadow: 0 4px 32px rgba(0,0,0,0.22);
+          background: white; width: 210mm; min-height: 280mm; box-shadow: 0 4px 32px rgba(0,0,0,0.22);
           box-sizing: border-box;
         }
         .no-print { display: block; }

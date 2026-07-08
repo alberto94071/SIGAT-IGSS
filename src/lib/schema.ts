@@ -709,6 +709,10 @@ export const pasajesSolicitudes = pgTable("pasajes_solicitudes", {
   tramo:            text("tramo").notNull(), // "Ida" | "Vuelta"
   punto_partida:    text("punto_partida").notNull(),
   destino:          text("destino").notNull(),
+  lugar_especifico: text("lugar_especifico"), // ej. "Consultorio San Marcos" — detalle impreso junto al destino
+  especialidad:     text("especialidad"),     // "Transporte ordenado por" (ej. "MEDICINA GENERAL")
+  caso_concluido:   boolean("caso_concluido").notNull().default(false),
+  fecha_cita:       text("fecha_cita"), // "Se le citó para el día" — solo si no es caso concluido
   observaciones:    text("observaciones"), // texto libre del solicitante (hacia dónde fue / motivo)
   // 'Pendiente DPD-23' (esperando generar el recibo de pago) | 'Generado'
   estado:           text("estado").notNull().default("Pendiente DPD-23"),

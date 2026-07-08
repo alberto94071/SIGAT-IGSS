@@ -19,6 +19,10 @@ export default async function Sps75ImprimirPage({ params }: { params: Promise<{ 
     <ImprimirSps75Client
       solicitud={solicitud}
       nombreUnidad={config?.nombre_dependencia_medica ?? "Unidad Integral de Adscripción, Acreditación de Derechos y Despacho de Medicamentos, en el Municipio de Tejutla"}
+      nombreJefe={config?.nombre_encargado_unidad ?? "Lilia Zucely Pérez Fuentes"}
+      cargoJefe={config?.cargo_encargado_unidad ?? 'Analista "A"'}
+      nombreSolicitante={config?.nombre_secretaria_unidad ?? "Elesinda Gabriela Rodriguez Orozco"}
+      cargoSolicitante={config?.cargo_secretaria_unidad ?? 'Secretaria "A"'}
     />
   );
 }

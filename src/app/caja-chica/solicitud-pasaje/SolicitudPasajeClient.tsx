@@ -152,7 +152,11 @@ function NuevaSolicitudModal({
     [tarifario, puntoPartida]
   );
   const [destino, setDestino] = useState("");
+  const [lugarEspecifico, setLugarEspecifico] = useState("");
+  const [especialidad, setEspecialidad] = useState("");
   const [tramo, setTramo] = useState<"Ida" | "Vuelta">("Ida");
+  const [casoConcluido, setCasoConcluido] = useState(false);
+  const [fechaCita, setFechaCita] = useState("");
   const [observaciones, setObservaciones] = useState("");
 
   const [saving, setSaving] = useState(false);
@@ -163,9 +167,11 @@ function NuevaSolicitudModal({
   async function handleGuardar() {
     if (!afiliado) return setError("Busca y selecciona al afiliado");
     if (!puntoPartida || !destino) return setError("Selecciona el punto de partida y el destino");
+    if (!casoConcluido && !fechaCita) return setError("Indica la fecha de la cita, o marca que el caso fue concluido");
 
     const data: NuevaSolicitudData = {
-      afiliacion: afiliado.afiliacion, tramo, punto_partida: puntoPartida, destino, observaciones,
+      afiliacion: afiliado.afiliacion, tramo, punto_partida: puntoPartida, destino,
+      lugar_especifico: lugarEspecifico, especialidad, caso_concluido: casoConcluido, fecha_cita: fechaCita, observaciones,
     };
     setSaving(true); setError("");
     const res = await crearSolicitudPasaje(data);
@@ -220,6 +226,12 @@ function NuevaSolicitudModal({
           </div>
 
           <div>
+            <label className="label">Lugar específico (opcional)</label>
+            <input className="input" value={lugarEspecifico} onChange={e => setLugarEspecifico(e.target.value)}
+              placeholder="Ej. Consultorio San Marcos" />
+          </div>
+
+          <div>
             <label className="label">Tramo a pagar</label>
             <div className="flex gap-4">
               <label className="flex items-center gap-1.5 text-sm text-gray-700">
@@ -234,6 +246,25 @@ function NuevaSolicitudModal({
               <p className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
                 No existe tarifa para esta ruta. Regístrala primero en Caja Chica/Tarifario.
               </p>
+            )}
+          </div>
+
+          <div>
+            <label className="label">Transporte ordenado por (servicio / especialidad)</label>
+            <input className="input" value={especialidad} onChange={e => setEspecialidad(e.target.value)}
+              placeholder="Ej. MEDICINA GENERAL" />
+          </div>
+
+          <div>
+            <label className="flex items-center gap-1.5 text-sm text-gray-700 mb-1.5">
+              <input type="checkbox" checked={casoConcluido} onChange={e => setCasoConcluido(e.target.checked)} className="w-4 h-4 accent-brand-600" />
+              Su caso fue concluido
+            </label>
+            {!casoConcluido && (
+              <div>
+                <label className="label">Se le citó para el día</label>
+                <input type="date" className="input" value={fechaCita} onChange={e => setFechaCita(e.target.value)} />
+              </div>
             )}
           </div>
 

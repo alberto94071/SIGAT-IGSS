@@ -51,12 +51,20 @@ async function main() {
       tramo            TEXT NOT NULL,
       punto_partida    TEXT NOT NULL,
       destino          TEXT NOT NULL,
+      lugar_especifico TEXT,
+      especialidad     TEXT,
+      caso_concluido   BOOLEAN NOT NULL DEFAULT false,
+      fecha_cita       TEXT,
       observaciones    TEXT,
       estado           TEXT NOT NULL DEFAULT 'Pendiente DPD-23',
       creado_por       INTEGER REFERENCES usuarios(id),
       created_at       TEXT DEFAULT to_char(now(), 'YYYY-MM-DD HH24:MI:SS')
     )
   `;
+  await sql`ALTER TABLE pasajes_solicitudes ADD COLUMN IF NOT EXISTS lugar_especifico TEXT`;
+  await sql`ALTER TABLE pasajes_solicitudes ADD COLUMN IF NOT EXISTS especialidad TEXT`;
+  await sql`ALTER TABLE pasajes_solicitudes ADD COLUMN IF NOT EXISTS caso_concluido BOOLEAN NOT NULL DEFAULT false`;
+  await sql`ALTER TABLE pasajes_solicitudes ADD COLUMN IF NOT EXISTS fecha_cita TEXT`;
   await sql`
     CREATE TABLE IF NOT EXISTS pasajes_pagos (
       id               SERIAL PRIMARY KEY,

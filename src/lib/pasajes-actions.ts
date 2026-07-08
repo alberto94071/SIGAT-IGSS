@@ -84,6 +84,10 @@ export type NuevaSolicitudData = {
   tramo: "Ida" | "Vuelta";
   punto_partida: string;
   destino: string;
+  lugar_especifico: string;
+  especialidad: string;
+  caso_concluido: boolean;
+  fecha_cita: string;
   observaciones: string;
 };
 
@@ -95,6 +99,7 @@ export async function crearSolicitudPasaje(data: NuevaSolicitudData): Promise<{ 
     if (!data.afiliacion.trim()) return { error: "El número de afiliación es obligatorio" };
     if (data.tramo !== "Ida" && data.tramo !== "Vuelta") return { error: "Selecciona Ida o Vuelta" };
     if (!data.punto_partida.trim() || !data.destino.trim()) return { error: "Punto de partida y destino son obligatorios" };
+    if (!data.caso_concluido && !data.fecha_cita) return { error: "Indica la fecha de la cita, o marca que el caso fue concluido" };
 
     const afiliado = await buscarAfiliadoPorAfiliacion(data.afiliacion);
     if (!afiliado) return { error: "No se encontró un afiliado con ese número de afiliación" };
@@ -114,6 +119,10 @@ export async function crearSolicitudPasaje(data: NuevaSolicitudData): Promise<{ 
       tramo: data.tramo,
       punto_partida: data.punto_partida.trim(),
       destino: data.destino.trim(),
+      lugar_especifico: data.lugar_especifico.trim() || null,
+      especialidad: data.especialidad.trim() || null,
+      caso_concluido: data.caso_concluido,
+      fecha_cita: data.caso_concluido ? null : (data.fecha_cita || null),
       observaciones: data.observaciones.trim() || null,
       creado_por: check.uid,
     });
@@ -163,7 +172,6 @@ export async function getPagoPasaje(formularioNo: number) {
 }
 
 export type GenerarDpd23Data = {
-  fecha_cita: string;
   poliza_no: number | null;
   cheque_no: string;
   vale_id: number;
@@ -209,7 +217,7 @@ export async function generarDpd23DesdeSolicitud(solicitudId: number, data: Gene
       vuelta: solicitud.tramo === "Vuelta",
       valor_pasaje: tarifa.valor_ida,
       observaciones: solicitud.observaciones,
-      fecha_cita: data.fecha_cita || null,
+      fecha_cita: solicitud.fecha_cita,
       poliza_no: data.poliza_no,
       cheque_no: data.cheque_no.trim(),
       vale_id: data.vale_id,

@@ -18,11 +18,18 @@ interface Props {
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
   "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
 
 function fechaCorta(iso: string | null): string {
   if (!iso) return "";
   const [y, m, d] = iso.split("-").map(Number);
   return `${d} de ${MESES[m - 1]} de ${y}`;
+}
+function fechaConDia(iso: string | null): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map(Number);
+  const dia = DIAS[new Date(y, m - 1, d).getDay()];
+  return `${dia}, ${d} de ${MESES[m - 1]} de ${y}`;
 }
 
 const FONT = "Arial, Helvetica, sans-serif";
@@ -34,8 +41,6 @@ export default function ImprimirDpd23Client({
 }: Props) {
   const router = useRouter();
   const anio = p.fecha_pago ? p.fecha_pago.slice(0, 4) : String(new Date().getFullYear());
-  const valorIda = p.ida ? (p.vuelta ? p.valor_pasaje / 2 : p.valor_pasaje) : 0;
-  const valorVuelta = p.vuelta ? (p.ida ? p.valor_pasaje / 2 : p.valor_pasaje) : 0;
   const direccion = p.ida && p.vuelta ? "Ida y Vuelta" : p.ida ? "Ida" : "Vuelta";
 
   return (
@@ -55,25 +60,24 @@ export default function ImprimirDpd23Client({
       <div id="print-wrapper">
         <div id="a4-sheet" style={{ fontFamily: FONT, color: C, border: B, borderRadius: "8px", padding: "18px" }}>
 
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "8pt", marginBottom: "6px" }}>
-            <span />
-            <span style={{ fontWeight: "bold" }}>DPD-23</span>
+          <div style={{ display: "flex", alignItems: "flex-start", marginBottom: "8px" }}>
+            <img src="/LOGO_SIAF01.svg" alt="IGSS" style={{ height: "46px", width: "auto", flexShrink: 0 }} />
+            <div style={{ flex: 1, textAlign: "left", marginLeft: "10px" }}>
+              <p style={{ margin: 0, fontSize: "10pt", fontWeight: "bold" }}>Instituto Guatemalteco de Seguridad Social</p>
+              <p style={{ margin: "2px 0 0 0", fontSize: "8.5pt" }}>
+                Unidad Integral de Adscripción, Acreditación de Derechos y Despacho de Medicamentos en el Municipio de Tejutla.
+              </p>
+            </div>
+            <div style={{ width: "60px", flexShrink: 0, textAlign: "right", fontSize: "9pt", fontWeight: "bold" }}>DPD-23</div>
           </div>
-
-          <div style={{ textAlign: "center", marginBottom: "10px" }}>
-            <p style={{ margin: 0, fontSize: "10pt", fontWeight: "bold" }}>Instituto Guatemalteco de Seguridad Social</p>
-            <p style={{ margin: "2px 0 0 0", fontSize: "8.5pt" }}>
-              Unidad Integral de Adscripción, Acreditación de Derechos y Despacho de Medicamentos en el Municipio de Tejutla.
-            </p>
-            <p style={{ margin: "8px 0 0 0", fontSize: "13pt", fontWeight: "bold", textDecoration: "underline" }}>
-              RECIBO DE GASTOS DE TRANSPORTE
-            </p>
-          </div>
+          <p style={{ margin: "0 0 10px 0", fontSize: "12pt", fontWeight: "bold", textAlign: "center" }}>
+            RECIBO DE GASTOS DE TRANSPORTE
+          </p>
 
           <div style={{ fontSize: "10pt", padding: "0 4px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
-              <span>No. Correlativo: <strong>{p.formulario_no}/{anio}</strong></span>
-              <span>POR: <strong>Q{p.valor_pasaje.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.00</strong></span>
+              <span>No. Correlativo: <strong>{p.formulario_no} /{anio}</strong></span>
+              <span>POR: <strong>Q  {p.valor_pasaje.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
             </div>
 
             <p style={{ margin: "0 0 4px 0" }}><span style={{ display: "inline-block", width: "70px" }}>Cuenta:</span> <strong>{codigoContable}</strong></p>
@@ -87,13 +91,9 @@ export default function ImprimirDpd23Client({
               {" "}Sección X del Capítulo II del Acuerdo número 466 de Junta Directiva, para conducirse de: <strong>{p.punto_partida}</strong> A: <strong>{p.destino}</strong>.
             </p>
 
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "14px" }}>
               <span>distribuidos así: <strong>{direccion}</strong></span>
-              <span>del día: <strong>{fechaCorta(p.fecha_cita)}</strong></span>
-            </div>
-            <div style={{ display: "flex", gap: "24px", fontSize: "9pt", color: "#555", marginBottom: "14px" }}>
-              {p.ida && <span>Ida: <strong style={{ color: "#000" }}>Q{valorIda.toFixed(2)}</strong></span>}
-              {p.vuelta && <span>Vuelta: <strong style={{ color: "#000" }}>Q{valorVuelta.toFixed(2)}</strong></span>}
+              <span>del día: <strong>{fechaConDia(p.fecha_cita)}</strong></span>
             </div>
 
             <p style={{ margin: "0 0 20px 0" }}><span style={{ display: "inline-block", width: "40px" }}>Por:</span> {p.observaciones ?? ""}</p>

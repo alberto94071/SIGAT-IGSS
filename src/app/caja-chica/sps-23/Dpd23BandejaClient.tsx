@@ -132,7 +132,6 @@ export default function Dpd23BandejaClient({
 function GenerarDpd23Modal({
   solicitud, vales, onClose, onGenerado,
 }: { solicitud: Solicitud; vales: Vale[]; onClose: () => void; onGenerado: (formularioNo: number) => void }) {
-  const [fechaCita, setFechaCita] = useState("");
   const [polizaNo, setPolizaNo] = useState("");
   const [chequeNo, setChequeNo] = useState("");
   const [valeId, setValeId] = useState<number | null>(null);
@@ -144,7 +143,7 @@ function GenerarDpd23Modal({
     if (!chequeNo.trim()) return setError("El número de cheque es obligatorio");
     if (!valeId) return setError("Selecciona el número de vale");
 
-    const data: GenerarDpd23Data = { fecha_cita: fechaCita, poliza_no: polizaNo ? Number(polizaNo) : null, cheque_no: chequeNo, vale_id: valeId };
+    const data: GenerarDpd23Data = { poliza_no: polizaNo ? Number(polizaNo) : null, cheque_no: chequeNo, vale_id: valeId };
     setSaving(true); setError("");
     const res = await generarDpd23DesdeSolicitud(solicitud.id, data);
     setSaving(false);
@@ -182,15 +181,9 @@ function GenerarDpd23Modal({
             <strong>{solicitud.nombre_afiliado}</strong> — {solicitud.punto_partida} → {solicitud.destino} ({solicitud.tramo})
           </p>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Fecha de Cita</label>
-              <input type="date" className="input" value={fechaCita} onChange={e => setFechaCita(e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Póliza No.</label>
-              <input type="number" className="input" value={polizaNo} onChange={e => setPolizaNo(e.target.value)} />
-            </div>
+          <div>
+            <label className="label">Póliza No.</label>
+            <input type="number" className="input" value={polizaNo} onChange={e => setPolizaNo(e.target.value)} />
           </div>
 
           <div>
