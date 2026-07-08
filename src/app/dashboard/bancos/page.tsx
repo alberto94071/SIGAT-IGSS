@@ -10,7 +10,6 @@ export default async function BancosPage() {
       titulo="Fondo Rotativo — Bancos"
       icon={Landmark}
       mensajeVacio="No hay pagos con cheque enviados a Bancos todavía."
-      tipo="bancos"
     />
   );
 }

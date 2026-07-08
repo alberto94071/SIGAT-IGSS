@@ -39,7 +39,7 @@ export type HojaDeRuta = {
   pago: {
     forma_pago: string | null; estado: string;
     numero_cheque: string | null; fecha_emision_cheque: string | null;
-    numero_vale: string | null; fecha_pago: string | null;
+    numero_vale: string | null; fecha_pago: string | null; vale_id: number | null;
   } | null;
 };
 
@@ -125,7 +125,7 @@ export async function construirHojaDeRuta(ids: number[]): Promise<HojaDeRuta[]> 
       pago: pago ? {
         forma_pago: pago.forma_pago, estado: pago.estado,
         numero_cheque: pago.numero_cheque, fecha_emision_cheque: pago.fecha_emision_cheque,
-        numero_vale: pago.numero_vale, fecha_pago: pago.fecha_pago,
+        numero_vale: pago.numero_vale, fecha_pago: pago.fecha_pago, vale_id: pago.vale_id,
       } : null,
     };
   }).sort((a, b) => b.siaf.id - a.siaf.id);

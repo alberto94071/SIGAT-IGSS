@@ -4,10 +4,10 @@ import { Printer, ArrowLeft } from "lucide-react";
 import { montoEnLetras } from "@/lib/adjudicacion/deletreo";
 
 type Vale = {
-  id: number; numero: number; fecha: string; monto: number; motivo: string;
+  id: number; numero: number; fecha: string; monto: number; monto_autorizado: number | null; motivo: string;
   solicitante_nombre: string; solicitante_numero_empleado: string; solicitante_nit: string;
   jefe_nombre: string; jefe_numero_empleado: string; jefe_nit: string;
-  numero_cheque: string; fecha_emision: string; fecha_entregado: string;
+  numero_cheque: string | null; fecha_emision: string | null; fecha_entregado: string | null;
 };
 
 interface Props {
@@ -24,7 +24,8 @@ function fechaCorta(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
   return `${d} de ${MESES[m - 1]} de ${y}`;
 }
-function fechaNumerica(iso: string): string {
+function fechaNumerica(iso: string | null): string {
+  if (!iso) return "";
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y}`;
 }
@@ -38,6 +39,7 @@ export default function ImprimirValeClient({
 }: Props) {
   const router = useRouter();
   const correlativo = String(v.numero).padStart(7, "0");
+  const monto = v.monto_autorizado ?? v.monto;
 
   return (
     <>
@@ -68,7 +70,7 @@ export default function ImprimirValeClient({
               <p style={{ margin: 0 }}>No.</p>
               <p style={{ margin: "0 0 8px 0", fontWeight: "bold", fontSize: "15pt", fontFamily: "monospace" }}>{correlativo}</p>
               <p style={{ margin: 0 }}>Por Q.</p>
-              <p style={{ margin: 0, fontWeight: "bold", fontSize: "13pt" }}>{v.monto.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              <p style={{ margin: 0, fontWeight: "bold", fontSize: "13pt" }}>{monto.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
           </div>
 
@@ -89,7 +91,7 @@ export default function ImprimirValeClient({
 
             <p style={{ margin: "0 0 2px 0" }}>
               <span style={{ display: "inline-block", width: "110px" }}>La cantidad de:</span>
-              <strong style={{ fontSize: "11pt" }}>{montoEnLetras(v.monto)}</strong>
+              <strong style={{ fontSize: "11pt" }}>{montoEnLetras(monto)}</strong>
             </p>
             <p style={{ margin: "0 0 12px 110px", textAlign: "center", fontSize: "8pt", color: "#555" }}>(En letras)</p>
 
@@ -145,7 +147,7 @@ export default function ImprimirValeClient({
                   <span style={{ color: "#555" }}>CHEQUE No.:</span> <strong>{v.numero_cheque}</strong>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
-                  <span style={{ color: "#555" }}>VALOR Q.:</span> <strong>{Q(v.monto)}</strong>
+                  <span style={{ color: "#555" }}>VALOR Q.:</span> <strong>{Q(monto)}</strong>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
                   <span style={{ color: "#555" }}>FECHA EMISIÓN:</span> <strong>{fechaNumerica(v.fecha_emision)}</strong>

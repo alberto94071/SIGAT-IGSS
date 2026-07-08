@@ -187,7 +187,13 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
 
                     {/* Paso: Fondo Rotativo/Pagos */}
                     {h.pago && (
-                      <Paso icon={Wallet} titulo="Fondo Rotativo/Pagos">
+                      <Paso icon={Wallet} titulo="Fondo Rotativo/Pagos"
+                        accion={h.pago.forma_pago === "efectivo" && h.pago.vale_id != null ? (
+                          <>
+                            <PrintLink href={`/caja-chica/vale/${h.pago.vale_id}/imprimir`} label="Ver / Imprimir Vale" />
+                            <PrintLink href={`/dashboard/voucher/${h.pago.vale_id}/imprimir`} label="Ver / Imprimir Voucher" />
+                          </>
+                        ) : undefined}>
                         <p className="text-xs text-gray-500">
                           {!h.pago.forma_pago && "Esperando elegir forma de pago"}
                           {h.pago.forma_pago === "cheque" && `Se pagó con cheque No. ${h.pago.numero_cheque ?? "—"}${h.pago.fecha_emision_cheque ? ` · Emitido el ${h.pago.fecha_emision_cheque}` : ""}`}

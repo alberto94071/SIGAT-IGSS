@@ -27,7 +27,7 @@ const MODULES = [
   {
     id: "fondo-rotativo",
     title: "Fondo Rotativo",
-    description: "SIAF-04, Pagos, Bancos y Libro de Caja Chica de las compras Regularizado del fondo rotativo interno.",
+    description: "SIAF-04, Pagos, Bancos, Vales, Voucher y Libro de Caja Chica de las compras Regularizado del fondo rotativo interno.",
     href: "/dashboard/siaf-04",
     icon: RotateCcw,
     color: "bg-orange-500",
@@ -66,14 +66,14 @@ const MODULES = [
   {
     id: "pasajes",
     title: "Pago de Pasajes",
-    description: "Control y registro de pagos por concepto de pasajes y gastos de transportación.",
+    description: "Solicitud de pasaje (SPS-75), DPD-23, tarifario y pólizas de pasajes pagados a afiliados.",
     href: "/pasajes",
     icon: Bus,
     color: "bg-purple-500",
     ring: "ring-purple-200",
     textColor: "text-purple-600",
     bgLight: "bg-purple-50",
-    available: false,
+    available: true,
     permiso: "mod_pasajes" as Modulo | null,
   },
   {
@@ -92,7 +92,7 @@ const MODULES = [
   {
     id: "caja-chica",
     title: "Caja Chica",
-    description: "Vales, solicitud de pasaje, SPS-23, pólizas, liquidación y Libro de Caja Chica.",
+    description: "Vale de Caja Chica, Liquidación y Libro de Caja Chica.",
     href: "/caja-chica",
     icon: Wallet,
     color: "bg-amber-500",

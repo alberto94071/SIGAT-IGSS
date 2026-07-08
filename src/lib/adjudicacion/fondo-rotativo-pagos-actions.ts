@@ -89,11 +89,11 @@ export async function registrarFormaPagoCheque(id: number, data: {
   }
 }
 
-// El pago en efectivo se liga a un vale REAL generado en Caja Chica/Vale (no
-// texto libre) — el vale debe estar "Pendiente" (todavía no usado en otro
-// pago). Al confirmar, el pago pasa a Fondo Rotativo → Caja Chica/Liquidación
-// (no a un "Libro Caja Chica" propio de Fondo Rotativo, que ya no existe) y el
-// vale se marca "Usado" para que no se pueda volver a elegir.
+// El pago en efectivo se liga al vale de "gastos varios" activo (con cheque ya
+// asignado en Fondo Rotativo/Vales) generado en Caja Chica/Vale. Un mismo vale
+// puede financiar varios pagos en efectivo antes de liquidarse, así que aquí
+// NO se marca el vale como usado — solo se liquida como un todo desde Caja
+// Chica/Liquidación una vez que Caja Chica termina de usarlo.
 export async function registrarFormaPagoEfectivo(id: number, data: {
   fecha_pago: string; vale_id: number;
 }): Promise<{ ok: true } | { error: string }> {
@@ -109,7 +109,7 @@ export async function registrarFormaPagoEfectivo(id: number, data: {
 
     const [vale] = await db.select().from(valesCajaChica).where(eq(valesCajaChica.id, data.vale_id)).limit(1);
     if (!vale) return { error: "No se encontró el vale seleccionado" };
-    if (vale.estado !== "Pendiente") return { error: "Ese vale ya fue usado en otro pago" };
+    if (vale.tipo !== "gastos_varios" || vale.estado !== "Activo") return { error: "Ese vale no está activo" };
 
     await db.update(fondoRotativoPagos).set({
       forma_pago: "efectivo",
@@ -118,8 +118,6 @@ export async function registrarFormaPagoEfectivo(id: number, data: {
       vale_id: vale.id,
       estado: "Enviado a Liquidación",
     }).where(eq(fondoRotativoPagos.id, id));
-
-    await db.update(valesCajaChica).set({ estado: "Usado" }).where(eq(valesCajaChica.id, vale.id));
 
     return { ok: true };
   } catch {

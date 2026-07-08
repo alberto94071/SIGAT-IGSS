@@ -1,22 +1,25 @@
 "use client";
 import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Bus, Plus, X, Loader2, AlertTriangle, Printer, Search } from "lucide-react";
-import { crearSolicitudPasaje, type NuevaSolicitudData } from "@/lib/pasajes-actions";
+import { Bus, Plus, X, Loader2, AlertTriangle, Printer, Search, Pencil } from "lucide-react";
+import { crearSolicitudPasaje, editarYReenviarSolicitud, type NuevaSolicitudData, type Tramo } from "@/lib/pasajes-actions";
 import { buscarAfiliados } from "@/lib/afiliados-actions";
 
 type Tarifa = { id: number; punto_partida: string; destino: string; valor_ida: number };
 type Afiliado = { id: number; afiliacion: string; nombre: string; calidad: string | null; direccion: string | null };
 type Solicitud = {
   id: number; numero: number; fecha: string; afiliacion: string; nombre_afiliado: string;
-  tramo: string; punto_partida: string; destino: string; estado: string;
+  tramo: string; punto_partida: string; destino: string; estado: string; motivo_rechazo: string | null;
 };
+
+const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function SolicitudPasajeClient({
   solicitudes: init, tarifario, canEdit,
 }: { solicitudes: Solicitud[]; tarifario: Tarifa[]; canEdit: boolean }) {
   const [solicitudes, setSolicitudes] = useState(init);
   const [modal, setModal] = useState(false);
+  const [editando, setEditando] = useState<Solicitud | null>(null);
 
   return (
     <div className="space-y-5">
@@ -61,16 +64,28 @@ export default function SolicitudPasajeClient({
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{s.tramo}</td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                      s.estado === "Generado" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                      s.estado === "Generado" ? "bg-green-100 text-green-700"
+                        : s.estado === "Rechazada" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
                     }`}>
                       {s.estado}
                     </span>
+                    {s.estado === "Rechazada" && s.motivo_rechazo && (
+                      <p className="text-[10px] text-red-600 mt-0.5 max-w-[180px]" title={s.motivo_rechazo}>{s.motivo_rechazo}</p>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <Link href={`/caja-chica/solicitud-pasaje/${s.numero}/imprimir`}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors ml-auto w-fit">
-                      <Printer className="w-3 h-3" /> SPS-75
-                    </Link>
+                    <div className="flex justify-end gap-1.5">
+                      {s.estado === "Rechazada" && canEdit && (
+                        <button onClick={() => setEditando(s)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors w-fit">
+                          <Pencil className="w-3 h-3" /> Editar y reenviar
+                        </button>
+                      )}
+                      <Link href={`/pasajes/solicitud-pasaje/${s.numero}/imprimir`}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors w-fit">
+                        <Printer className="w-3 h-3" /> SPS-75
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -86,10 +101,18 @@ export default function SolicitudPasajeClient({
       </div>
 
       {modal && (
-        <NuevaSolicitudModal
+        <SolicitudModal
           tarifario={tarifario}
           onClose={() => setModal(false)}
           onCreado={s => { setSolicitudes(prev => [s, ...prev]); setModal(false); }}
+        />
+      )}
+      {editando && (
+        <SolicitudModal
+          tarifario={tarifario}
+          solicitudExistente={editando}
+          onClose={() => setEditando(null)}
+          onCreado={s => { setSolicitudes(prev => prev.map(x => x.id === s.id ? s : x)); setEditando(null); }}
         />
       )}
     </div>
@@ -140,21 +163,24 @@ function AfiliadoPicker({ onSeleccionar }: { onSeleccionar: (a: Afiliado) => voi
   );
 }
 
-function NuevaSolicitudModal({
-  tarifario, onClose, onCreado,
-}: { tarifario: Tarifa[]; onClose: () => void; onCreado: (s: Solicitud) => void }) {
-  const [afiliado, setAfiliado] = useState<Afiliado | null>(null);
+function SolicitudModal({
+  tarifario, solicitudExistente, onClose, onCreado,
+}: { tarifario: Tarifa[]; solicitudExistente?: Solicitud; onClose: () => void; onCreado: (s: Solicitud) => void }) {
+  const editando = !!solicitudExistente;
+  const [afiliado, setAfiliado] = useState<Afiliado | null>(
+    solicitudExistente ? { id: 0, afiliacion: solicitudExistente.afiliacion, nombre: solicitudExistente.nombre_afiliado, calidad: null, direccion: null } : null
+  );
 
   const puntos = useMemo(() => Array.from(new Set(tarifario.map(t => t.punto_partida))).sort(), [tarifario]);
-  const [puntoPartida, setPuntoPartida] = useState("");
+  const [puntoPartida, setPuntoPartida] = useState(solicitudExistente?.punto_partida ?? "");
   const destinos = useMemo(
     () => Array.from(new Set(tarifario.filter(t => t.punto_partida === puntoPartida).map(t => t.destino))).sort(),
     [tarifario, puntoPartida]
   );
-  const [destino, setDestino] = useState("");
+  const [destino, setDestino] = useState(solicitudExistente?.destino ?? "");
   const [lugarEspecifico, setLugarEspecifico] = useState("");
   const [especialidad, setEspecialidad] = useState("");
-  const [tramo, setTramo] = useState<"Ida" | "Vuelta">("Ida");
+  const [tramo, setTramo] = useState<Tramo>((solicitudExistente?.tramo as Tramo) ?? "Ida");
   const [casoConcluido, setCasoConcluido] = useState(false);
   const [fechaCita, setFechaCita] = useState("");
   const [observaciones, setObservaciones] = useState("");
@@ -163,6 +189,7 @@ function NuevaSolicitudModal({
   const [error, setError] = useState("");
 
   const tarifa = tarifario.find(t => t.punto_partida === puntoPartida && t.destino === destino) ?? null;
+  const valor = tarifa ? (tramo === "Ida y Vuelta" ? tarifa.valor_ida * 2 : tarifa.valor_ida) : 0;
 
   async function handleGuardar() {
     if (!afiliado) return setError("Busca y selecciona al afiliado");
@@ -174,6 +201,15 @@ function NuevaSolicitudModal({
       lugar_especifico: lugarEspecifico, especialidad, caso_concluido: casoConcluido, fecha_cita: fechaCita, observaciones,
     };
     setSaving(true); setError("");
+
+    if (editando) {
+      const res = await editarYReenviarSolicitud(solicitudExistente!.id, data);
+      setSaving(false);
+      if ("error" in res) return setError(res.error);
+      onCreado({ ...solicitudExistente!, tramo, punto_partida: puntoPartida, destino, estado: "Pendiente DPD-23", motivo_rechazo: null });
+      return;
+    }
+
     const res = await crearSolicitudPasaje(data);
     setSaving(false);
     if ("error" in res) return setError(res.error);
@@ -181,7 +217,7 @@ function NuevaSolicitudModal({
     onCreado({
       id: res.numero, numero: res.numero, fecha: new Date().toISOString().slice(0, 10),
       afiliacion: afiliado.afiliacion, nombre_afiliado: afiliado.nombre, tramo,
-      punto_partida: puntoPartida, destino, estado: "Pendiente DPD-23",
+      punto_partida: puntoPartida, destino, estado: "Pendiente DPD-23", motivo_rechazo: null,
     });
   }
 
@@ -189,7 +225,7 @@ function NuevaSolicitudModal({
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
       <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-          <h2 className="font-semibold text-gray-900">Solicitar Pago de Pasaje (SPS-75)</h2>
+          <h2 className="font-semibold text-gray-900">{editando ? "Editar y reenviar SPS-75" : "Solicitar Pago de Pasaje (SPS-75)"}</h2>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X className="w-4 h-4" /></button>
         </div>
         <div className="px-5 py-5 space-y-4">
@@ -201,7 +237,7 @@ function NuevaSolicitudModal({
                   <p className="text-sm font-semibold text-gray-900">{afiliado.nombre}</p>
                   <p className="text-xs text-gray-500 font-mono">{afiliado.afiliacion} {afiliado.calidad ? `— ${afiliado.calidad}` : ""}</p>
                 </div>
-                <button onClick={() => setAfiliado(null)} className="text-xs text-gray-500 hover:text-red-600">Cambiar</button>
+                {!editando && <button onClick={() => setAfiliado(null)} className="text-xs text-gray-500 hover:text-red-600">Cambiar</button>}
               </div>
             ) : (
               <AfiliadoPicker onSeleccionar={setAfiliado} />
@@ -233,18 +269,21 @@ function NuevaSolicitudModal({
 
           <div>
             <label className="label">Tramo a pagar</label>
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-4">
               <label className="flex items-center gap-1.5 text-sm text-gray-700">
                 <input type="radio" name="tramo" checked={tramo === "Ida"} onChange={() => setTramo("Ida")} className="w-4 h-4 accent-brand-600" /> Solo ida
               </label>
               <label className="flex items-center gap-1.5 text-sm text-gray-700">
                 <input type="radio" name="tramo" checked={tramo === "Vuelta"} onChange={() => setTramo("Vuelta")} className="w-4 h-4 accent-brand-600" /> Solo regreso
               </label>
-              {tarifa && <span className="ml-auto text-sm font-mono font-bold text-green-700">Q{tarifa.valor_ida.toFixed(2)}</span>}
+              <label className="flex items-center gap-1.5 text-sm text-gray-700">
+                <input type="radio" name="tramo" checked={tramo === "Ida y Vuelta"} onChange={() => setTramo("Ida y Vuelta")} className="w-4 h-4 accent-brand-600" /> Ida y vuelta
+              </label>
+              {tarifa && <span className="ml-auto text-sm font-mono font-bold text-green-700">{Q(valor)}</span>}
             </div>
             {puntoPartida && destino && !tarifa && (
               <p className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-                No existe tarifa para esta ruta. Regístrala primero en Caja Chica/Tarifario.
+                No existe tarifa para esta ruta. Regístrala primero en Pago de Pasajes/Tarifario.
               </p>
             )}
           </div>
@@ -288,7 +327,7 @@ function NuevaSolicitudModal({
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
           <button onClick={onClose} className="btn-secondary">Cancelar</button>
           <button onClick={handleGuardar} disabled={saving} className="btn-primary disabled:opacity-50">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Generar SPS-75
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} {editando ? "Reenviar SPS-75" : "Generar SPS-75"}
           </button>
         </div>
       </div>
