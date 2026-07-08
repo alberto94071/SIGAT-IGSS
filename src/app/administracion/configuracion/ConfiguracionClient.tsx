@@ -75,7 +75,7 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
     setFirmantes(p => p.map(x => x.id === f.id ? { ...x, activo: !x.activo } : x));
   }
 
-  const Field = ({ label, k, type = "text" }: { label: string; k: keyof Config; type?: string }) => (
+  const Field = ({ label, k, type = "text", helper }: { label: string; k: keyof Config; type?: string; helper?: string }) => (
     <div>
       <label className="label">{label}</label>
       <input
@@ -83,6 +83,7 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
         value={String(form[k] ?? "")}
         onChange={e => set(k, type === "number" ? Number(e.target.value) : e.target.value)}
       />
+      {helper && <p className="text-xs text-gray-400 mt-1">{helper}</p>}
     </div>
   );
 
@@ -124,8 +125,10 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
       <section className="card p-5 space-y-4">
         <h2 className="font-semibold text-gray-700 text-sm uppercase tracking-wide">Fondo rotativo</h2>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Monto inicial del fondo (Q)" k="monto_fondo_rotativo" type="number" />
-          <Field label="Efectivo en caja (Q)" k="efectivo_caja" type="number" />
+          <Field label="Monto del fondo rotativo (Q)" k="monto_fondo_rotativo" type="number"
+            helper="El techo autorizado por resolución para el fondo en el banco. No cambia con cada vale." />
+          <Field label="Efectivo en caja (Q)" k="efectivo_caja" type="number"
+            helper="Saldo líquido disponible ahora mismo para autorizar vales. Baja con cada cheque y sube con las boletas de depósito de liquidaciones." />
         </div>
         <Field label="Resolución del fondo" k="resolucion_fondo" />
       </section>
