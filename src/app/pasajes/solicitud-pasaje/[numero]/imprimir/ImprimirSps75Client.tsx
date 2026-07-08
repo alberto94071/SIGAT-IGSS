@@ -75,8 +75,8 @@ export default function ImprimirSps75Client({
             </p>
 
             <div style={{ marginBottom: "16px", paddingLeft: "40px" }}>
-              <p style={{ margin: "0 0 8px 0" }}><Casilla marcado={s.tramo === "Ida"} />Ida</p>
-              <p style={{ margin: 0 }}><Casilla marcado={s.tramo === "Vuelta"} />vuelta</p>
+              <p style={{ margin: "0 0 8px 0" }}><Casilla marcado={s.tramo === "Ida" || s.tramo === "Ida y Vuelta"} />Ida</p>
+              <p style={{ margin: 0 }}><Casilla marcado={s.tramo === "Vuelta" || s.tramo === "Ida y Vuelta"} />vuelta</p>
             </div>
 
             <p style={{ margin: "0 0 16px 0" }}>

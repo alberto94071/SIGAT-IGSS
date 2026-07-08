@@ -1,26 +1,24 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { FileText, Printer, X, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
-import { generarDpd23DesdeSolicitud, type GenerarDpd23Data } from "@/lib/pasajes-actions";
+import { FileText, Printer, X, Loader2, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { aceptarSolicitudPasaje, rechazarSolicitudPasaje } from "@/lib/pasajes-actions";
 
 type Solicitud = {
   id: number; numero: number; fecha: string; afiliacion: string; nombre_afiliado: string;
   tramo: string; punto_partida: string; destino: string;
 };
-type Vale = { id: number; numero: number; monto: number; solicitante_nombre: string };
 type Pago = {
   id: number; formulario_no: number; fecha_pago: string; afiliacion: string; nombre_afiliado: string;
 };
 
-const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
 export default function Dpd23BandejaClient({
-  pendientes: init, pagos, vales, canEdit,
-}: { pendientes: Solicitud[]; pagos: Pago[]; vales: Vale[]; canEdit: boolean }) {
+  pendientes: init, pagos, canEdit,
+}: { pendientes: Solicitud[]; pagos: Pago[]; canEdit: boolean }) {
   const [pendientes, setPendientes] = useState(init);
   const [generados, setGenerados] = useState(pagos);
-  const [modal, setModal] = useState<Solicitud | null>(null);
+  const [aceptando, setAceptando] = useState<Solicitud | null>(null);
+  const [rechazando, setRechazando] = useState<Solicitud | null>(null);
 
   return (
     <div className="space-y-6">
@@ -28,7 +26,7 @@ export default function Dpd23BandejaClient({
         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
           <FileText className="w-5 h-5" /> DPD-23 — Recibo de Gastos de Transporte
         </h1>
-        <p className="text-sm text-gray-500 mt-0.5">Genera el recibo de pago a partir de una solicitud (SPS-75) ya autorizada.</p>
+        <p className="text-sm text-gray-500 mt-0.5">Acepta o rechaza cada solicitud (SPS-75) para generar su recibo de pago.</p>
       </div>
 
       <div>
@@ -58,10 +56,16 @@ export default function Dpd23BandejaClient({
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{s.tramo}</td>
                     {canEdit && (
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <button onClick={() => setModal(s)}
-                          className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors">
-                          Generar DPD-23
-                        </button>
+                        <div className="flex justify-end gap-1.5">
+                          <button onClick={() => setRechazando(s)}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
+                            <XCircle className="w-3 h-3" /> Rechazar
+                          </button>
+                          <button onClick={() => setAceptando(s)}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors">
+                            <CheckCircle2 className="w-3 h-3" /> Aceptar
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -97,7 +101,7 @@ export default function Dpd23BandejaClient({
                     <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{p.afiliacion}</td>
                     <td className="px-4 py-3 text-gray-700">{p.nombre_afiliado}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <Link href={`/caja-chica/sps-23/${p.formulario_no}`}
+                      <Link href={`/pasajes/dpd-23/${p.formulario_no}`}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors ml-auto w-fit">
                         <Printer className="w-3 h-3" /> Imprimir
                       </Link>
@@ -113,15 +117,24 @@ export default function Dpd23BandejaClient({
         </div>
       </div>
 
-      {modal && (
-        <GenerarDpd23Modal
-          solicitud={modal}
-          vales={vales}
-          onClose={() => setModal(null)}
-          onGenerado={(formularioNo) => {
-            setPendientes(prev => prev.filter(s => s.id !== modal.id));
-            setGenerados(prev => [{ id: formularioNo, formulario_no: formularioNo, fecha_pago: new Date().toISOString().slice(0, 10), afiliacion: modal.afiliacion, nombre_afiliado: modal.nombre_afiliado }, ...prev]);
-            setModal(null);
+      {aceptando && (
+        <AceptarModal
+          solicitud={aceptando}
+          onClose={() => setAceptando(null)}
+          onAceptado={(formularioNo) => {
+            setPendientes(prev => prev.filter(s => s.id !== aceptando.id));
+            setGenerados(prev => [{ id: formularioNo, formulario_no: formularioNo, fecha_pago: new Date().toISOString().slice(0, 10), afiliacion: aceptando.afiliacion, nombre_afiliado: aceptando.nombre_afiliado }, ...prev]);
+            setAceptando(null);
+          }}
+        />
+      )}
+      {rechazando && (
+        <RechazarModal
+          solicitud={rechazando}
+          onClose={() => setRechazando(null)}
+          onRechazado={() => {
+            setPendientes(prev => prev.filter(s => s.id !== rechazando.id));
+            setRechazando(null);
           }}
         />
       )}
@@ -129,23 +142,14 @@ export default function Dpd23BandejaClient({
   );
 }
 
-function GenerarDpd23Modal({
-  solicitud, vales, onClose, onGenerado,
-}: { solicitud: Solicitud; vales: Vale[]; onClose: () => void; onGenerado: (formularioNo: number) => void }) {
-  const [polizaNo, setPolizaNo] = useState("");
-  const [chequeNo, setChequeNo] = useState("");
-  const [valeId, setValeId] = useState<number | null>(null);
+function AceptarModal({ solicitud, onClose, onAceptado }: { solicitud: Solicitud; onClose: () => void; onAceptado: (formularioNo: number) => void }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [listo, setListo] = useState<number | null>(null);
 
-  async function handleGenerar() {
-    if (!chequeNo.trim()) return setError("El número de cheque es obligatorio");
-    if (!valeId) return setError("Selecciona el número de vale");
-
-    const data: GenerarDpd23Data = { poliza_no: polizaNo ? Number(polizaNo) : null, cheque_no: chequeNo, vale_id: valeId };
+  async function handleAceptar() {
     setSaving(true); setError("");
-    const res = await generarDpd23DesdeSolicitud(solicitud.id, data);
+    const res = await aceptarSolicitudPasaje(solicitud.id);
     setSaving(false);
     if ("error" in res) return setError(res.error);
     setListo(res.formulario_no);
@@ -159,7 +163,7 @@ function GenerarDpd23Modal({
           <p className="text-gray-900 font-semibold">DPD-23 generado</p>
           <div className="flex justify-center gap-2">
             <button onClick={onClose} className="btn-secondary">Cerrar</button>
-            <Link href={`/caja-chica/sps-23/${listo}`} onClick={() => onGenerado(listo)}
+            <Link href={`/pasajes/dpd-23/${listo}`} onClick={() => onAceptado(listo)}
               className="btn-primary flex items-center gap-2">
               <Printer className="w-4 h-4" /> Imprimir DPD-23
             </Link>
@@ -170,60 +174,66 @@ function GenerarDpd23Modal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg max-h-[92vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-          <h2 className="font-semibold text-gray-900">Generar DPD-23 — Solicitud {String(solicitud.numero).padStart(4, "0")}</h2>
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+        <h2 className="font-semibold text-gray-900">Aceptar solicitud {String(solicitud.numero).padStart(4, "0")}</h2>
+        <p className="text-sm text-gray-600">
+          <strong>{solicitud.nombre_afiliado}</strong> — {solicitud.punto_partida} → {solicitud.destino} ({solicitud.tramo})
+        </p>
+        <p className="text-sm text-gray-500">Se generará el DPD-23 con estos datos.</p>
+        {error && (
+          <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />{error}
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="btn-secondary">Cancelar</button>
+          <button onClick={handleAceptar} disabled={saving} className="btn-primary disabled:opacity-50">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Aceptar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RechazarModal({ solicitud, onClose, onRechazado }: { solicitud: Solicitud; onClose: () => void; onRechazado: () => void }) {
+  const [motivo, setMotivo] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleRechazar() {
+    if (!motivo.trim()) return setError("El motivo del rechazo es obligatorio");
+    setSaving(true); setError("");
+    const res = await rechazarSolicitudPasaje(solicitud.id, motivo);
+    setSaving(false);
+    if ("error" in res) return setError(res.error);
+    onRechazado();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-gray-900">Rechazar solicitud {String(solicitud.numero).padStart(4, "0")}</h2>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X className="w-4 h-4" /></button>
         </div>
-        <div className="px-5 py-5 space-y-4">
-          <p className="text-sm text-gray-600">
-            <strong>{solicitud.nombre_afiliado}</strong> — {solicitud.punto_partida} → {solicitud.destino} ({solicitud.tramo})
-          </p>
-
-          <div>
-            <label className="label">Póliza No.</label>
-            <input type="number" className="input" value={polizaNo} onChange={e => setPolizaNo(e.target.value)} />
-          </div>
-
-          <div>
-            <label className="label">Cheque No.</label>
-            <input className="input font-mono" value={chequeNo} onChange={e => setChequeNo(e.target.value)} />
-          </div>
-
-          <div>
-            <label className="label">Vale de Caja Chica</label>
-            {vales.length === 0 ? (
-              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-                No hay vales pendientes. Debes generarlo primero en Caja Chica/Vale.
-              </p>
-            ) : (
-              <div className="border border-gray-200 rounded-lg max-h-40 overflow-y-auto">
-                {vales.map(v => (
-                  <label key={v.id}
-                    className={`flex items-center gap-3 px-4 py-2.5 border-b border-gray-100 last:border-0 cursor-pointer ${valeId === v.id ? "bg-brand-50" : "bg-white"}`}>
-                    <input type="radio" name="vale" checked={valeId === v.id} onChange={() => setValeId(v.id)} className="w-4 h-4 accent-brand-600" />
-                    <div className="flex-1 text-sm">
-                      <p className="font-mono font-semibold text-gray-900">{String(v.numero).padStart(7, "0")}</p>
-                      <p className="text-xs text-gray-500">{v.solicitante_nombre}</p>
-                    </div>
-                    <span className="font-mono text-sm font-bold text-green-700">{Q(v.monto)}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {error && (
-            <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />{error}
-            </div>
-          )}
+        <p className="text-sm text-gray-600">
+          <strong>{solicitud.nombre_afiliado}</strong> — {solicitud.punto_partida} → {solicitud.destino}
+        </p>
+        <div>
+          <label className="label">Motivo del rechazo</label>
+          <textarea className="input" rows={2} value={motivo} onChange={e => setMotivo(e.target.value)} />
         </div>
-        <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+        {error && (
+          <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />{error}
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
           <button onClick={onClose} className="btn-secondary">Cancelar</button>
-          <button onClick={handleGenerar} disabled={saving} className="btn-primary disabled:opacity-50">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Generar DPD-23
+          <button onClick={handleRechazar} disabled={saving} className="px-4 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} Rechazar
           </button>
         </div>
       </div>

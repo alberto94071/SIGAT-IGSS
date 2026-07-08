@@ -8,10 +8,9 @@ interface Props {
   titulo: string;
   icon: LucideIcon;
   mensajeVacio: string;
-  tipo: "bancos" | "caja_chica";
 }
 
-export default function LibroFondoRotativoTable({ pagos, titulo, icon: Icon, mensajeVacio, tipo }: Props) {
+export default function LibroFondoRotativoTable({ pagos, titulo, icon: Icon, mensajeVacio }: Props) {
   if (pagos.length === 0) {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 text-center max-w-lg mx-auto mt-10">
@@ -39,17 +38,8 @@ export default function LibroFondoRotativoTable({ pagos, titulo, icon: Icon, men
                 <th className="px-4 py-3 text-left whitespace-nowrap">No. A-04 SIAF</th>
                 <th className="px-4 py-3 text-left">Destinatario</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Factura</th>
-                {tipo === "bancos" ? (
-                  <>
-                    <th className="px-4 py-3 text-left whitespace-nowrap">No. Cheque</th>
-                    <th className="px-4 py-3 text-left whitespace-nowrap">Fecha emisión</th>
-                  </>
-                ) : (
-                  <>
-                    <th className="px-4 py-3 text-left whitespace-nowrap">No. Vale</th>
-                    <th className="px-4 py-3 text-left whitespace-nowrap">Fecha de pago</th>
-                  </>
-                )}
+                <th className="px-4 py-3 text-left whitespace-nowrap">No. Cheque</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">Fecha emisión</th>
                 <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
               </tr>
             </thead>
@@ -63,17 +53,8 @@ export default function LibroFondoRotativoTable({ pagos, titulo, icon: Icon, men
                   <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
                     {p.serie_factura}-{p.no_factura} · {p.fecha_emision_factura}
                   </td>
-                  {tipo === "bancos" ? (
-                    <>
-                      <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{p.numero_cheque ?? "—"}</td>
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{p.fecha_emision_cheque ?? "—"}</td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{p.numero_vale ?? "—"}</td>
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{p.fecha_pago ?? "—"}</td>
-                    </>
-                  )}
+                  <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{p.numero_cheque ?? "—"}</td>
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{p.fecha_emision_cheque ?? "—"}</td>
                   <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
                     {p.total != null ? Q(p.total) : "—"}
                   </td>

@@ -37,6 +37,12 @@ export const configuracion = pgTable("configuracion", {
   // Datos adicionales para el DPD-23 (Recibo de Gastos de Transporte)
   nombre_secretaria_unidad: text("nombre_secretaria_unidad").notNull().default("Elesinda Gabriela Rodriguez Orozco"),
   cargo_secretaria_unidad:  text("cargo_secretaria_unidad").notNull().default("Secretaria \"A\""),
+  // Identidad completa del "Jefe de la Dependencia" / Encargado de Unidad — usada
+  // como firmante en Vale de Caja Chica (Vo.Bo.) y como destinatario del SPS-75.
+  numero_empleado_encargado: text("numero_empleado_encargado").notNull().default("35985"),
+  nit_encargado_unidad:      text("nit_encargado_unidad").notNull().default("52392678"),
+  // NIT del solicitante (Caja Chica) — el nombre y número de empleado ya existían.
+  nit_solicitante: text("nit_solicitante").notNull().default(""),
   updated_at:           text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
@@ -560,11 +566,18 @@ export const nogRegistros = pgTable("nog_registros", {
 });
 
 // ─── Vale de Caja Chica ───────────────────────────────────────────────────────
+// Ciclo de vida: Caja Chica solicita (tipo + monto + justificación) → Fondo
+// Rotativo autoriza (puede ajustar el monto, topado al saldo disponible) o
+// rechaza → una vez autorizado, Fondo Rotativo asigna cheque (queda "Activo",
+// utilizable) → Caja Chica lo usa (pasajes: se le asignan pólizas; gastos
+// varios: se liga a pagos en efectivo de Fondo Rotativo/Pagos) → Liquidación.
 export const valesCajaChica = pgTable("vales_caja_chica", {
   id:                          serial("id").primaryKey(),
-  numero:                      integer("numero").notNull(),
+  numero:                      integer("numero").notNull(), // correlativo independiente por tipo
+  tipo:                        text("tipo").notNull().default("pasajes"), // "pasajes" | "gastos_varios"
   fecha:                       text("fecha").notNull(),
-  monto:                       doublePrecision("monto").notNull(),
+  monto:                       doublePrecision("monto").notNull(), // monto solicitado por Caja Chica
+  monto_autorizado:            doublePrecision("monto_autorizado"), // definido por Fondo Rotativo al autorizar
   motivo:                      text("motivo").notNull(),
   solicitante_nombre:          text("solicitante_nombre").notNull(),
   solicitante_numero_empleado: text("solicitante_numero_empleado").notNull(),
@@ -572,14 +585,36 @@ export const valesCajaChica = pgTable("vales_caja_chica", {
   jefe_nombre:                 text("jefe_nombre").notNull(),
   jefe_numero_empleado:        text("jefe_numero_empleado").notNull(),
   jefe_nit:                    text("jefe_nit").notNull(),
-  numero_cheque:               text("numero_cheque").notNull(),
-  fecha_emision:               text("fecha_emision").notNull(),
-  fecha_entregado:             text("fecha_entregado").notNull(),
-  // 'Pendiente' (recién generado, visible en Fondo Rotativo/Vales) | 'Usado' (ya
-  // se ligó a un pago en efectivo desde Fondo Rotativo/Pagos)
-  estado:                      text("estado").notNull().default("Pendiente"),
+  numero_cheque:               text("numero_cheque"),
+  destinatario_cheque:         text("destinatario_cheque"), // a nombre de quién sale el cheque
+  fecha_emision:               text("fecha_emision"),
+  fecha_entregado:             text("fecha_entregado"),
+  motivo_rechazo:              text("motivo_rechazo"),
+  // Liquidación
+  monto_liquidado:             doublePrecision("monto_liquidado"), // total realmente usado (pasajes: suma de pólizas; gastos varios: ingresado a mano)
+  numero_boleta_deposito:      text("numero_boleta_deposito"), // solo si sobró efectivo
+  monto_boleta_deposito:       doublePrecision("monto_boleta_deposito"),
+  fecha_liquidacion:           text("fecha_liquidacion"),
+  // 'Pendiente autorización' → 'Rechazado' | 'Autorizado' → 'Activo' (cheque
+  // asignado, utilizable) → 'Liquidado'
+  estado:                      text("estado").notNull().default("Pendiente autorización"),
   creado_por:                  integer("creado_por").references(() => usuarios.id),
   created_at:                  text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Póliza (Pago de Pasajes) ─────────────────────────────────────────────────
+// Consolida varios DPD-23 ya generados en un solo "Cuadro de Caja" imprimible;
+// luego se le asigna el vale de pasajes activo y se envía a liquidar.
+export const polizas = pgTable("polizas", {
+  id:          serial("id").primaryKey(),
+  numero:      integer("numero").notNull().unique(),
+  fecha:       text("fecha").notNull(),
+  vale_id:     integer("vale_id").references((): AnyPgColumn => valesCajaChica.id),
+  total:       doublePrecision("total").notNull().default(0),
+  // 'Generada' → 'Vale asignado' → 'Enviada a Liquidar' → 'Liquidada'
+  estado:      text("estado").notNull().default("Generada"),
+  creado_por:  integer("creado_por").references(() => usuarios.id),
+  created_at:  text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 // ─── Notificaciones (campanita) ───────────────────────────────────────────────
@@ -706,7 +741,7 @@ export const pasajesSolicitudes = pgTable("pasajes_solicitudes", {
   afiliacion:       text("afiliacion").notNull(),
   nombre_afiliado:  text("nombre_afiliado").notNull(),
   direccion:        text("direccion"),
-  tramo:            text("tramo").notNull(), // "Ida" | "Vuelta"
+  tramo:            text("tramo").notNull(), // "Ida" | "Vuelta" | "Ida y Vuelta"
   punto_partida:    text("punto_partida").notNull(),
   destino:          text("destino").notNull(),
   lugar_especifico: text("lugar_especifico"), // ej. "Consultorio San Marcos" — detalle impreso junto al destino
@@ -714,7 +749,8 @@ export const pasajesSolicitudes = pgTable("pasajes_solicitudes", {
   caso_concluido:   boolean("caso_concluido").notNull().default(false),
   fecha_cita:       text("fecha_cita"), // "Se le citó para el día" — solo si no es caso concluido
   observaciones:    text("observaciones"), // texto libre del solicitante (hacia dónde fue / motivo)
-  // 'Pendiente DPD-23' (esperando generar el recibo de pago) | 'Generado'
+  motivo_rechazo:   text("motivo_rechazo"),
+  // 'Pendiente DPD-23' (esperando generar el recibo de pago) | 'Generado' | 'Rechazada'
   estado:           text("estado").notNull().default("Pendiente DPD-23"),
   creado_por:       integer("creado_por").references(() => usuarios.id),
   created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
@@ -743,9 +779,10 @@ export const pasajesPagos = pgTable("pasajes_pagos", {
   valor_pasaje:     doublePrecision("valor_pasaje").notNull(),
   observaciones:    text("observaciones"),
   fecha_cita:       text("fecha_cita"),
-  poliza_no:        integer("poliza_no"),
-  cheque_no:        text("cheque_no"),
-  vale_id:          integer("vale_id").references(() => valesCajaChica.id),
+  poliza_no:        integer("poliza_no"), // legado — reemplazado por poliza_id
+  poliza_id:        integer("poliza_id").references((): AnyPgColumn => polizas.id),
+  cheque_no:        text("cheque_no"), // legado — el cheque ahora se asigna a nivel de vale
+  vale_id:          integer("vale_id").references(() => valesCajaChica.id), // legado
   creado_por:       integer("creado_por").references(() => usuarios.id),
   created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Wallet, Loader2, CheckCircle2, X, Banknote, Coins } from "lucide-react";
 import { registrarFormaPagoCheque, registrarFormaPagoEfectivo, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
-import { getValesPendientes } from "@/app/caja-chica/vale/actions";
+import { getValesGastosVariosDisponibles } from "@/lib/vale-actions";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -98,7 +98,7 @@ function FormaPagoModal({ pago, onClose, onDone }: {
   async function pickEfectivo() {
     setForma("efectivo");
     setValesLoading(true);
-    const r = await getValesPendientes();
+    const r = await getValesGastosVariosDisponibles();
     setValesLoading(false);
     setVales(r as unknown as ValePendiente[]);
   }

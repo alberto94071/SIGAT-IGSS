@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { type Rol } from "@/lib/permisos";
-import { getVales } from "./actions";
+import { getVales } from "@/lib/vale-actions";
 import ValeClient from "./ValeClient";
 
 export default async function CajaChicaValePage() {
