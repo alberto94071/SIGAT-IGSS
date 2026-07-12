@@ -41,14 +41,16 @@ export async function getOrdenesEnProceso() {
   })));
 }
 
+// El precio unitario ya no se teclea: se deriva del total ya adjudicado
+// (cruzado con las cotizaciones) entre la cantidad total, para no pedirle al
+// usuario un dato que el sistema ya conoce.
 export async function generarOrdenDeCompra(consolidacionId: number, data: {
-  precio_unitario: number; codigo_ppr: string; numero_orden: string; fecha_notificacion: string;
+  codigo_ppr: string; numero_orden: string; fecha_notificacion: string;
 }): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireCompras();
     if ("error" in check) return check;
 
-    if (!(data.precio_unitario > 0)) return { error: "Ingresa un precio unitario válido" };
     if (!data.codigo_ppr.trim()) return { error: "El Código PPR es obligatorio" };
     const numero = parseInt(data.numero_orden.trim(), 10);
     if (!data.numero_orden.trim() || Number.isNaN(numero)) return { error: "El número de orden de compra es inválido" };
@@ -63,6 +65,8 @@ export async function generarOrdenDeCompra(consolidacionId: number, data: {
 
     const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
     const total_cantidad = renglones.reduce((s, r) => s + r.cantidad, 0);
+    if (total_cantidad === 0 || con.total == null) return { error: "No se pudo calcular el precio unitario: faltan cantidad o total adjudicados" };
+    const costoUnitario = con.total / total_cantidad;
 
     await db.insert(ordenesCompra).values({
       numero, anio: year, fecha,
@@ -73,7 +77,7 @@ export async function generarOrdenDeCompra(consolidacionId: number, data: {
       proveedor_id:     con.proveedor_id ?? null,
       proveedor_nit:    con.proveedor_nit ?? null,
       proveedor_nombre: con.proveedor_nombre ?? null,
-      costo_unitario:   data.precio_unitario,
+      costo_unitario:   costoUnitario,
       total_cantidad,
       exento_iva:       con.exento_iva,
       total:            con.total ?? null,

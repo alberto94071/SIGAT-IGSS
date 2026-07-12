@@ -1,9 +1,10 @@
 "use server";
 import { db } from "@/lib/db";
 import { cotizacionesServicio, cotizacionesAnuales, cotizacionesAnualesItems, catalogoCompras } from "@/lib/schema";
-import { eq, sql, ilike, or } from "drizzle-orm";
+import { eq, sql, ilike, or, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import type { CotizacionAnual } from "./types";
+import type { CotizacionAnual, TipoCotizacionAnual } from "./types";
+import { RENGLONES_EXCEPCION } from "./types";
 
 export async function listarCotizacionesServicio() {
   return db.select().from(cotizacionesServicio).orderBy(sql`created_at DESC`);
@@ -37,6 +38,22 @@ export async function crearCotizacionServicio(data: {
   }
 }
 
+// Carga masiva desde Excel — reutiliza crearCotizacionServicio fila por fila
+// para no duplicar validaciones.
+export async function crearCotizacionesServicioBulk(rows: {
+  fecha: string; proveedor_nit: string | null; proveedor_nombre: string;
+  servicio: string; costo: number; exento_iva: boolean;
+}[]): Promise<{ ok: true; creadas: number; errores: string[] }> {
+  let creadas = 0;
+  const errores: string[] = [];
+  for (const [i, row] of rows.entries()) {
+    const res = await crearCotizacionServicio({ ...row, proveedor_id: null });
+    if ("error" in res) errores.push(`Fila ${i + 2} (${row.proveedor_nombre || "sin proveedor"}): ${res.error}`);
+    else creadas++;
+  }
+  return { ok: true, creadas, errores };
+}
+
 export async function eliminarCotizacionServicio(id: number): Promise<{ ok: true } | { error: string }> {
   try {
     const session = await auth();
@@ -57,19 +74,21 @@ export async function eliminarCotizacionServicio(id: number): Promise<{ ok: true
 
 // ─── Cotizaciones anuales por proveedor (varios insumos con precio pactado) ──
 
-export async function listarCotizacionesAnuales(): Promise<CotizacionAnual[]> {
+export async function listarCotizacionesAnuales(tipos?: TipoCotizacionAnual[]): Promise<CotizacionAnual[]> {
   const [cabeceras, items] = await Promise.all([
-    db.select().from(cotizacionesAnuales).orderBy(sql`created_at DESC`),
+    tipos && tipos.length > 0
+      ? db.select().from(cotizacionesAnuales).where(inArray(cotizacionesAnuales.tipo, tipos)).orderBy(sql`created_at DESC`)
+      : db.select().from(cotizacionesAnuales).orderBy(sql`created_at DESC`),
     db.select().from(cotizacionesAnualesItems),
   ]);
   return cabeceras.map(c => ({
     ...c,
     items: items.filter(i => i.cotizacion_anual_id === c.id),
-  }));
+  })) as CotizacionAnual[];
 }
 
 export async function crearCotizacionAnual(data: {
-  numero: string; anio: number; proveedor_id: number | null; proveedor_nit: string | null;
+  numero: string; anio: number; tipo: TipoCotizacionAnual; proveedor_id: number | null; proveedor_nit: string | null;
   proveedor_nombre: string; fecha: string;
 }): Promise<{ ok: true; id: number } | { error: string }> {
   try {
@@ -87,7 +106,7 @@ export async function crearCotizacionAnual(data: {
     if (existente) return { error: `Ya existe una cotización con el número ${numero}` };
 
     const [row] = await db.insert(cotizacionesAnuales).values({
-      numero, anio: data.anio,
+      numero, anio: data.anio, tipo: data.tipo,
       proveedor_id: data.proveedor_id, proveedor_nit: data.proveedor_nit,
       proveedor_nombre: data.proveedor_nombre.trim(), fecha: data.fecha,
       creado_por: Number(session.user.id),
@@ -123,9 +142,16 @@ export async function agregarLineaCotizacionAnual(cotizacionAnualId: number, dat
     if (!codigo) return { error: "El código de insumo es obligatorio" };
     if (!(data.precio_unitario > 0)) return { error: "Ingresa un precio unitario válido" };
 
-    const [cot] = await db.select({ id: cotizacionesAnuales.id }).from(cotizacionesAnuales)
-      .where(eq(cotizacionesAnuales.id, cotizacionAnualId)).limit(1);
+    const [cot] = await db.select({ id: cotizacionesAnuales.id, tipo: cotizacionesAnuales.tipo })
+      .from(cotizacionesAnuales).where(eq(cotizacionesAnuales.id, cotizacionAnualId)).limit(1);
     if (!cot) return { error: "No se encontró la cotización anual" };
+
+    const [catalogo] = await db.select({ nombre: catalogoCompras.nombre, renglon: catalogoCompras.renglon })
+      .from(catalogoCompras).where(eq(catalogoCompras.codigo_igss, codigo)).limit(1);
+
+    if (cot.tipo === "excepcion" && !(catalogo?.renglon != null && RENGLONES_EXCEPCION.includes(catalogo.renglon))) {
+      return { error: `Una cotización de Excepción solo puede incluir insumos de los renglones ${RENGLONES_EXCEPCION.join(", ")} (energía eléctrica, agua, telefonía fija). El insumo ${codigo} es del renglón ${catalogo?.renglon ?? "desconocido"}.` };
+    }
 
     const [dup] = await db.select({ id: cotizacionesAnualesItems.id }).from(cotizacionesAnualesItems)
       .where(sql`${cotizacionesAnualesItems.cotizacion_anual_id} = ${cotizacionAnualId} AND ${cotizacionesAnualesItems.codigo_igss} = ${codigo}`)
@@ -135,6 +161,7 @@ export async function agregarLineaCotizacionAnual(cotizacionAnualId: number, dat
     await db.insert(cotizacionesAnualesItems).values({
       cotizacion_anual_id: cotizacionAnualId,
       codigo_igss: codigo,
+      nombre: catalogo?.nombre ?? null,
       precio_unitario: data.precio_unitario,
       exento_iva: data.exento_iva,
     });
@@ -142,6 +169,44 @@ export async function agregarLineaCotizacionAnual(cotizacionAnualId: number, dat
   } catch {
     return { error: "Error al agregar la línea de precio" };
   }
+}
+
+export async function editarLineaCotizacionAnual(id: number, data: {
+  precio_unitario: number; exento_iva: boolean;
+}): Promise<{ ok: true } | { error: string }> {
+  try {
+    const session = await auth();
+    if (!session) return { error: "No autorizado" };
+    if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
+    if (!(data.precio_unitario > 0)) return { error: "Ingresa un precio unitario válido" };
+
+    const [item] = await db.select({ id: cotizacionesAnualesItems.id }).from(cotizacionesAnualesItems)
+      .where(eq(cotizacionesAnualesItems.id, id)).limit(1);
+    if (!item) return { error: "No se encontró la línea de precio" };
+
+    await db.update(cotizacionesAnualesItems)
+      .set({ precio_unitario: data.precio_unitario, exento_iva: data.exento_iva })
+      .where(eq(cotizacionesAnualesItems.id, id));
+    return { ok: true };
+  } catch {
+    return { error: "Error al editar la línea de precio" };
+  }
+}
+
+// Carga masiva de líneas de precio desde Excel — reutiliza
+// agregarLineaCotizacionAnual fila por fila (misma validación de renglón,
+// duplicados, etc.), sin frenar el lote completo por un error puntual.
+export async function agregarLineasCotizacionAnualBulk(cotizacionAnualId: number, lineas: {
+  codigo_igss: string; precio_unitario: number; exento_iva: boolean;
+}[]): Promise<{ ok: true; agregadas: number; errores: string[] }> {
+  let agregadas = 0;
+  const errores: string[] = [];
+  for (const [i, linea] of lineas.entries()) {
+    const res = await agregarLineaCotizacionAnual(cotizacionAnualId, linea);
+    if ("error" in res) errores.push(`Fila ${i + 2} (${linea.codigo_igss || "sin código"}): ${res.error}`);
+    else agregadas++;
+  }
+  return { ok: true, agregadas, errores };
 }
 
 export async function eliminarLineaCotizacionAnual(id: number): Promise<{ ok: true } | { error: string }> {
@@ -189,5 +254,5 @@ export async function buscarCotizacionAnualPorNumero(numero: string): Promise<Co
 
   const items = await db.select().from(cotizacionesAnualesItems)
     .where(eq(cotizacionesAnualesItems.cotizacion_anual_id, cabecera.id));
-  return { ...cabecera, items };
+  return { ...cabecera, items } as CotizacionAnual;
 }

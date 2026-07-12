@@ -227,8 +227,10 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
   const [duRazon, setDuRazon] = useState(c.numero_adjudicacion ?? "");
 
   const [rgNit, setRgNit] = useState(""); const [rgNombre, setRgNombre] = useState("");
-  const [rgMonto, setRgMonto] = useState(""); const [rgExento, setRgExento] = useState(false);
+  const [rgExento, setRgExento] = useState(false);
   const [rgDireccion, setRgDireccion] = useState(""); const [rgTelefono, setRgTelefono] = useState("");
+  // Precio unitario por insumo (clave = codigo_igss::subproducto), en vez de un monto combinado.
+  const [rgPrecios, setRgPrecios] = useState<Record<string, string>>({});
 
   async function pickTipo(t: TipoCompra) {
     setLoading(true); setError("");
@@ -313,9 +315,10 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
 
   async function confirmarActas() {
     if (!cotizAnualFound) return setError("Busca y selecciona una cotización anual válida");
-    setLoading(true); setError("");
+    setLoading(true); setError(""); setLimitExceeded(false);
     const res = await confirmarBajaCuantiaConCotizacionAnual(c.id, cotizAnualFound.id);
     setLoading(false);
+    if ("limitExceeded" in res) { setLimitExceeded(true); setError(res.error); return; }
     if ("error" in res) return setError(res.error);
     onDone({ estado: "Adjudicado", tipo_compra: tipoCompra, cotizacion_anual_id: cotizAnualFound.id, referencia: cotizAnualFound.numero });
   }
@@ -341,11 +344,25 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     });
   }
 
+  function rgTotalPreview(): number | null {
+    if (c.precios.length === 0) return null;
+    let bruto = 0;
+    for (const p of c.precios) {
+      const precio = parseFloat(rgPrecios[`${p.codigo_igss}::${p.subproducto}`] ?? "");
+      if (!(precio > 0)) return null;
+      bruto += p.cantidad * precio;
+    }
+    return rgExento ? bruto : bruto * 0.88;
+  }
+
   async function enviarRegularizado() {
-    const montoNum = parseFloat(rgMonto);
     if (!rgNit.trim() || !rgNombre.trim()) return setError("NIT y nombre son obligatorios");
-    if (!(montoNum > 0)) return setError("Ingresa un monto válido");
     if (!rgDireccion.trim()) return setError("La dirección del proveedor es obligatoria");
+    const items = c.precios.map(p => ({
+      codigo_igss: p.codigo_igss, subproducto: p.subproducto,
+      precio_unitario: parseFloat(rgPrecios[`${p.codigo_igss}::${p.subproducto}`] ?? ""),
+    }));
+    if (items.some(i => !(i.precio_unitario > 0))) return setError("Ingresa un precio unitario válido para cada insumo");
     // No. de Pedido, Unidad de Medida, Descripción y Cantidad ya no se piden —
     // se derivan de los SIAF/insumos consolidados.
     const noPedido = c.siaf.map(s => `${s.numero}/${s.anio}`).join(", ");
@@ -354,9 +371,9 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     const cantidad = c.precios.reduce((sum, p) => sum + (p.cantidad || 0), 0);
     setLoading(true); setError(""); setLimitExceeded(false);
     const res = await registrarRegularizado(c.id, {
-      nit: rgNit.trim(), nombre: rgNombre.trim(), monto: montoNum, exento_iva: rgExento,
+      nit: rgNit.trim(), nombre: rgNombre.trim(), exento_iva: rgExento,
       proveedor_direccion: rgDireccion.trim(), proveedor_telefono: rgTelefono.trim(),
-      no_pedido: noPedido, descripcion, unidad_medida: unidadMedida, cantidad,
+      no_pedido: noPedido, descripcion, unidad_medida: unidadMedida, cantidad, items,
     });
     setLoading(false);
     if ("limitExceeded" in res) { setLimitExceeded(true); setError(res.error); return; }
@@ -542,21 +559,46 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                 <label className="label">Dirección del proveedor</label>
                 <input className="input" value={rgDireccion} onChange={e => setRgDireccion(e.target.value)} />
               </div>
-              <div className="flex items-center gap-3">
-                <div className="relative flex-1">
-                  <label className="label flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" /> Monto</label>
-                  <input type="number" step="0.01" min="0.01" className="input" value={rgMonto} onChange={e => setRgMonto(e.target.value)} />
+              <label className="flex items-center gap-1.5 text-xs text-gray-600 whitespace-nowrap">
+                <input type="checkbox" checked={rgExento} onChange={e => setRgExento(e.target.checked)} className="w-3.5 h-3.5 accent-brand-600" />
+                Exento IVA
+              </label>
+
+              <div>
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Precio unitario por insumo</p>
+                <div className="space-y-2">
+                  {c.precios.map(p => {
+                    const key = `${p.codigo_igss}::${p.subproducto}`;
+                    return (
+                      <div key={key} className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-900 truncate">{p.nombre}</p>
+                          <p className="text-[11px] text-gray-400">
+                            {p.codigo_igss ?? "—"} · {p.cantidad.toLocaleString("es-GT")} {p.unidad_medida ?? ""}
+                          </p>
+                        </div>
+                        <input type="number" step="0.01" min="0.01" className="input w-28 text-sm"
+                          placeholder="Precio"
+                          value={rgPrecios[key] ?? ""}
+                          onChange={e => setRgPrecios(prev => ({ ...prev, [key]: e.target.value }))} />
+                      </div>
+                    );
+                  })}
                 </div>
-                <label className="flex items-center gap-1.5 text-xs text-gray-600 whitespace-nowrap mt-6">
-                  <input type="checkbox" checked={rgExento} onChange={e => setRgExento(e.target.checked)} className="w-3.5 h-3.5 accent-brand-600" />
-                  Exento IVA
-                </label>
+                {rgTotalPreview() != null && (
+                  <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 mt-2">
+                    {rgExento
+                      ? <>Exento de IVA — Total: <strong className="text-gray-900">{Q(rgTotalPreview()!)}</strong></>
+                      : <>Con IVA (se descuenta 12%) — Total: <strong className="text-gray-900">{Q(rgTotalPreview()!)}</strong></>}
+                  </p>
+                )}
               </div>
 
               <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
                 Este caso no pasa por la Junta Adjudicadora — va directo a Fondo Rotativo. El No. de Pedido y la
                 Unidad de Medida se toman del SIAF consolidado. La factura y el correlativo A-04 SIAF se capturan
                 más adelante, al recibirla, desde Fondo Rotativo/SIAF-04.
+                {tipoCompra === "Baja Cuantía" && " Cada insumo se suma contra el límite de Q25,000 por cuatrimestre."}
               </p>
             </div>
           )}

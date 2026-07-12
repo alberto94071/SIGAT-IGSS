@@ -366,10 +366,12 @@ export const cotizacionesServicio = pgTable("cotizaciones_servicio", {
 // cotización). Se usan para Baja Cuantía/Normal con insumos: en vez de armar
 // una comparación manual de oferentes, Compras solo ingresa el número de
 // cotización y el sistema cruza los precios por código de insumo.
+// tipo: 'baja_cuantia' | 'excepcion' (solo renglones 111/112/113) | 'contrato_abierto'
 export const cotizacionesAnuales = pgTable("cotizaciones_anuales", {
   id:               serial("id").primaryKey(),
   numero:           text("numero").notNull().unique(),
   anio:             integer("anio").notNull(),
+  tipo:             text("tipo").notNull().default("baja_cuantia"),
   proveedor_id:     integer("proveedor_id"),
   proveedor_nit:    text("proveedor_nit"),
   proveedor_nombre: text("proveedor_nombre").notNull(),
@@ -383,6 +385,7 @@ export const cotizacionesAnualesItems = pgTable("cotizaciones_anuales_items", {
   cotizacion_anual_id: integer("cotizacion_anual_id").notNull()
                          .references(() => cotizacionesAnuales.id, { onDelete: "cascade" }),
   codigo_igss:         text("codigo_igss").notNull(),
+  nombre:              text("nombre"), // snapshot del nombre del insumo, para mostrarlo sin join
   precio_unitario:     doublePrecision("precio_unitario").notNull(),
   exento_iva:          boolean("exento_iva").notNull().default(false),
 });
@@ -478,6 +481,12 @@ export const siafComprasItems = pgTable("siaf_compras_items", {
   unidad_medida:       text("unidad_medida"),
   cantidad_antes:      doublePrecision("cantidad_antes"),
   cantidad_solicitada: doublePrecision("cantidad_solicitada").notNull(),
+  // Precio con el que este ítem quedó adjudicado (Baja Cuantía) — snapshot al
+  // momento de adjudicar, para que el control de Q25,000 por insumo por
+  // cuatrimestre no cambie retroactivamente si luego se edita la cotización.
+  precio_unitario:     doublePrecision("precio_unitario"),
+  item_exento_iva:     boolean("item_exento_iva"),
+  monto_neto:          doublePrecision("monto_neto"),
   created_at:          text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
