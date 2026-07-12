@@ -30,11 +30,24 @@ export type ActaNegociacion = {
 
 export type CotizacionAnualItem = {
   id: number; cotizacion_anual_id: number;
-  codigo_igss: string; precio_unitario: number; exento_iva: boolean;
+  codigo_igss: string; nombre: string | null; precio_unitario: number; exento_iva: boolean;
 };
 
+export const TIPOS_COTIZACION_ANUAL = ["baja_cuantia", "excepcion", "contrato_abierto"] as const;
+export type TipoCotizacionAnual = typeof TIPOS_COTIZACION_ANUAL[number];
+
+export const TIPO_COTIZACION_ANUAL_LABEL: Record<TipoCotizacionAnual, string> = {
+  baja_cuantia: "Baja Cuantía",
+  excepcion: "Casos de Excepción",
+  contrato_abierto: "Contrato Abierto",
+};
+
+// Renglones a los que se restringe una cotización de tipo "excepcion":
+// 111 Energía eléctrica, 112 Agua, 113 Telefonía fija.
+export const RENGLONES_EXCEPCION = [111, 112, 113];
+
 export type CotizacionAnual = {
-  id: number; numero: string; anio: number;
+  id: number; numero: string; anio: number; tipo: TipoCotizacionAnual;
   proveedor_id: number | null; proveedor_nit: string | null; proveedor_nombre: string;
   fecha: string;
   items: CotizacionAnualItem[];

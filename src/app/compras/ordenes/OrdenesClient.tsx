@@ -195,22 +195,22 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
 function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
   consolidacion: ConsolidacionPendienteOrden; onClose: () => void; onGenerada: () => void;
 }) {
-  const [precioUnitario, setPrecioUnitario] = useState("");
   const [codigoPpr, setCodigoPpr] = useState("");
   const [numeroOrden, setNumeroOrden] = useState("");
   const [fechaNotificacion, setFechaNotificacion] = useState(new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const totalCantidad = c.renglones.reduce((s, r) => s + r.cantidad, 0);
+  const precioUnitarioPreview = totalCantidad > 0 && c.total != null ? c.total / totalCantidad : null;
+
   async function handleGuardar() {
-    const precio = parseFloat(precioUnitario);
-    if (!(precio > 0)) return setError("Ingresa un precio unitario válido");
     if (!codigoPpr.trim()) return setError("El Código PPR es obligatorio");
     if (!numeroOrden.trim()) return setError("El número de orden de compra es obligatorio");
     if (!fechaNotificacion) return setError("La fecha de notificación al proveedor es obligatoria");
     setSaving(true); setError("");
     const res = await generarOrdenDeCompra(c.id, {
-      precio_unitario: precio, codigo_ppr: codigoPpr.trim(),
+      codigo_ppr: codigoPpr.trim(),
       numero_orden: numeroOrden.trim(), fecha_notificacion: fechaNotificacion,
     });
     setSaving(false);
@@ -249,7 +249,10 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
 
           <div>
             <label className="label flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" /> Precio Unitario</label>
-            <input type="number" step="0.01" min="0.01" className="input" value={precioUnitario} onChange={e => setPrecioUnitario(e.target.value)} />
+            <div className="input bg-gray-50 text-gray-700 flex items-center justify-between">
+              <span>{precioUnitarioPreview != null ? Q(precioUnitarioPreview) : "—"}</span>
+              <span className="text-xs text-gray-400">Tomado de la cotización</span>
+            </div>
           </div>
           <div>
             <label className="label">Código PPR</label>

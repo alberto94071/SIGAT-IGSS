@@ -316,11 +316,13 @@ export default function ImprimirClient({
                   </div>
                 </div>
 
-                {/* Nota */}
-                <div style={{ borderTop: "1px solid #bbb", height: NOTA_H, display: "flex", alignItems: "center", padding: "0 8px", flexShrink: 0 }}>
-                  <span style={{ fontSize: "6.5pt", color: "#555", fontFamily: FONT }}>
+                {/* Nota — solo ocupa el ancho de la columna Descripción, no toda la tabla */}
+                <div style={{ borderTop: "1px solid #bbb", height: NOTA_H, display: "flex", alignItems: "center", flexShrink: 0 }}>
+                  <div style={{ width: W_COD, flexShrink: 0 }} />
+                  <span style={{ flex: 1, padding: "0 8px", fontSize: "6.5pt", color: "#555", fontFamily: FONT }}>
                     Los productos de los listados institucionales, se encuentran homologados con el catálogo general de insumos del SIGES, Presupuesto por Resultados (PpR)
                   </span>
+                  <div style={{ width: W_CANT, flexShrink: 0 }} />
                 </div>
 
                 {/* Footer: Código de Subproducto + Total con línea vertical continua */}
@@ -339,7 +341,7 @@ export default function ImprimirClient({
                       <div key={r.subproducto} style={{
                         display: "flex", height: SUBPROD_ROW_H, alignItems: "center",
                         fontSize: "8pt", fontFamily: FONT, color: C,
-                        borderTop: ri === 0 ? "none" : "1px solid #ccc",
+                        borderTop: ri === 0 ? "none" : "1px solid transparent",
                       }}>
                         <div style={{ flex: 1, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: "0 6px" }}>
                           {r.subproducto}
@@ -352,7 +354,7 @@ export default function ImprimirClient({
                     {Array.from({ length: subprodEmptyRows }).map((_, si) => (
                       <div key={`se${si}`} style={{
                         display: "flex", height: SUBPROD_ROW_H,
-                        borderTop: (esUltima ? resumenSubproductos.length + si : si) === 0 ? "none" : "1px solid #ccc",
+                        borderTop: (esUltima ? resumenSubproductos.length + si : si) === 0 ? "none" : "1px solid transparent",
                       }} />
                     ))}
                   </div>

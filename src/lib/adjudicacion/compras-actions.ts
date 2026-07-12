@@ -8,6 +8,7 @@ import { eq, and, sql, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { crearNotificacion } from "@/lib/notificaciones";
 import { TIPOS, MAX_OFERENTES, REFERENCIA_LABEL, LIMITE_POR_TIPO, type TipoCompra } from "./types";
+import { verificarLimiteInsumos, mensajeLimiteExcedido } from "./limite-baja-cuantia";
 
 async function requireCompras(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -218,7 +219,9 @@ export async function confirmarBajaCuantiaServicios(consolidacionId: number, cot
 // se pasa directo a "Adjudicado", que ya es justo el estado que
 // getActasPendientes() usa para poblar Junta Adjudicadora/Acta. Junta sigue
 // revisando/aprobando ahí, igual que hoy.
-export async function confirmarBajaCuantiaConCotizacionAnual(consolidacionId: number, cotizacionAnualId: number): Promise<{ ok: true } | { error: string }> {
+export async function confirmarBajaCuantiaConCotizacionAnual(consolidacionId: number, cotizacionAnualId: number): Promise<
+  { ok: true } | { error: string; limitExceeded?: true }
+> {
   try {
     const check = await requireCompras();
     if ("error" in check) return check;
@@ -247,14 +250,29 @@ export async function confirmarBajaCuantiaConCotizacionAnual(consolidacionId: nu
 
     const faltantes: string[] = [];
     let total = 0;
+    const itemsConPrecio: { id: number; codigo_igss: string; precio_unitario: number; exento_iva: boolean; monto_neto: number }[] = [];
     for (const item of items) {
       const linea = item.codigo_igss ? precioPorCodigo.get(item.codigo_igss) : undefined;
       if (!linea) { faltantes.push(item.codigo_igss ?? item.nombre); continue; }
       const bruto = item.cantidad_solicitada * linea.precio_unitario;
-      total += linea.exento_iva ? bruto : bruto * 0.88;
+      const montoNeto = linea.exento_iva ? bruto : bruto * 0.88;
+      total += montoNeto;
+      itemsConPrecio.push({ id: item.id, codigo_igss: item.codigo_igss!, precio_unitario: linea.precio_unitario, exento_iva: linea.exento_iva, monto_neto: montoNeto });
     }
     if (faltantes.length > 0)
       return { error: `La cotización ${cotAnual.numero} no tiene precio para: ${faltantes.join(", ")}` };
+
+    // Q25,000 por insumo por cuatrimestre — solo Baja Cuantía (Excepción no tiene límite).
+    const excedidos = await verificarLimiteInsumos(itemsConPrecio, con.fecha, consolidacionId);
+    if (excedidos.length > 0) {
+      return { error: mensajeLimiteExcedido(excedidos), limitExceeded: true as const };
+    }
+
+    for (const item of itemsConPrecio) {
+      await db.update(siafComprasItems).set({
+        precio_unitario: item.precio_unitario, item_exento_iva: item.exento_iva, monto_neto: item.monto_neto,
+      }).where(eq(siafComprasItems.id, item.id));
+    }
 
     await db.delete(oferentes).where(eq(oferentes.consolidacion_id, consolidacionId));
     // exento_iva=true porque el IVA ya se aplicó por línea al calcular `total` —
@@ -390,41 +408,79 @@ export async function enviarAJunta(consolidacionId: number, data?: { referencia?
 // A-04 SIAF (numero_a04/anio_a04) ya no se capturan aquí: se generan más
 // adelante en Fondo Rotativo/SIAF-04 (ver siaf04-actions.ts), cuando ya se
 // tiene la factura física en mano.
+//
+// El monto ya no se teclea combinado: se captura un precio_unitario por cada
+// insumo consolidado (mismo agrupado codigo_igss+subproducto que ya se
+// mostraba), y el total se calcula solo. Esto deja cada ítem valorizado en
+// siaf_compras_items (precio_unitario/monto_neto), que es lo que permite
+// controlar el límite de Q25,000 por insumo por cuatrimestre en Baja
+// Cuantía. Casos de Excepción no tiene ninguna limitante.
 export async function registrarRegularizado(consolidacionId: number, data: {
-  nit: string; nombre: string; monto: number; exento_iva: boolean;
+  nit: string; nombre: string; exento_iva: boolean;
   proveedor_direccion: string; proveedor_telefono: string;
   no_pedido: string; descripcion: string; unidad_medida: string; cantidad: number;
+  items: { codigo_igss: string | null; subproducto: string; precio_unitario: number }[];
 }): Promise<{ ok: true } | { error: string; limitExceeded?: true }> {
   try {
     const check = await requireCompras();
     if ("error" in check) return check;
 
-    const [con] = await db.select({ tipo_compra: consolidaciones.tipo_compra, regularizado: consolidaciones.regularizado })
-      .from(consolidaciones).where(eq(consolidaciones.id, consolidacionId)).limit(1);
+    const [con] = await db.select({
+      tipo_compra: consolidaciones.tipo_compra, regularizado: consolidaciones.regularizado, fecha: consolidaciones.fecha,
+    }).from(consolidaciones).where(eq(consolidaciones.id, consolidacionId)).limit(1);
     if (!con) return { error: "No se encontró la consolidación" };
     if ((con.tipo_compra !== "Baja Cuantía" && con.tipo_compra !== "Casos de Excepción") || con.regularizado !== true)
       return { error: "Esta acción solo aplica a Baja Cuantía o Casos de Excepción, en su forma Regularizado" };
 
     if (!data.nit.trim() || !data.nombre.trim()) return { error: "NIT y nombre son obligatorios" };
-    if (!(data.monto > 0)) return { error: "Ingresa un monto válido" };
     if (!data.proveedor_direccion.trim()) return { error: "La dirección del proveedor es obligatoria" };
     if (!data.no_pedido.trim()) return { error: "El No. de Pedido es obligatorio" };
     if (!data.descripcion.trim()) return { error: "La descripción del gasto es obligatoria" };
     if (!data.unidad_medida.trim()) return { error: "La unidad de medida es obligatoria" };
     if (!(data.cantidad > 0)) return { error: "Ingresa una cantidad válida" };
+    if (data.items.length === 0) return { error: "No hay insumos para valorizar" };
+    if (data.items.some(i => !(i.precio_unitario > 0))) return { error: "Ingresa un precio unitario válido para cada insumo" };
 
-    const total = data.exento_iva ? data.monto : data.monto * 0.88;
-    const limite = LIMITE_POR_TIPO[con.tipo_compra as TipoCompra];
-    if (total > limite) {
-      return {
-        error: `El total Q${total.toFixed(2)} supera el límite de Q${limite.toLocaleString("es-GT")}`,
-        limitExceeded: true as const,
-      };
+    const siafIds = (await db.select({ id: siafCompras.id }).from(siafCompras)
+      .where(eq(siafCompras.consolidacion_id, consolidacionId))).map(s => s.id);
+    const rawItems = siafIds.length > 0
+      ? await db.select().from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds))
+      : [];
+
+    let monto_bruto = 0;
+    const actualizaciones: { id: number; codigo_igss: string | null; precio_unitario: number; monto_neto: number }[] = [];
+    for (const grupo of data.items) {
+      const filas = rawItems.filter(r => r.codigo_igss === grupo.codigo_igss && r.subproducto === grupo.subproducto);
+      for (const fila of filas) {
+        const bruto = fila.cantidad_solicitada * grupo.precio_unitario;
+        monto_bruto += bruto;
+        const montoNeto = data.exento_iva ? bruto : bruto * 0.88;
+        actualizaciones.push({ id: fila.id, codigo_igss: fila.codigo_igss, precio_unitario: grupo.precio_unitario, monto_neto: montoNeto });
+      }
+    }
+    if (actualizaciones.length === 0) return { error: "No se encontraron los insumos consolidados" };
+
+    const total = data.exento_iva ? monto_bruto : monto_bruto * 0.88;
+
+    if (con.tipo_compra === "Baja Cuantía") {
+      const excedidos = await verificarLimiteInsumos(
+        actualizaciones.filter((a): a is typeof a & { codigo_igss: string } => a.codigo_igss != null)
+          .map(a => ({ codigo_igss: a.codigo_igss, monto_neto: a.monto_neto })),
+        con.fecha, consolidacionId,
+      );
+      if (excedidos.length > 0) return { error: mensajeLimiteExcedido(excedidos), limitExceeded: true as const };
+    }
+    // Casos de Excepción: sin limitante alguna, no se aplica ningún control aquí.
+
+    for (const act of actualizaciones) {
+      await db.update(siafComprasItems).set({
+        precio_unitario: act.precio_unitario, item_exento_iva: data.exento_iva, monto_neto: act.monto_neto,
+      }).where(eq(siafComprasItems.id, act.id));
     }
 
     await db.update(consolidaciones).set({
       proveedor_nit: data.nit.trim(), proveedor_nombre: data.nombre.trim(),
-      exento_iva: data.exento_iva, total, monto_bruto: data.monto,
+      exento_iva: data.exento_iva, total, monto_bruto,
       destino: "fondo_rotativo", estado: "Enviado a Fondo Rotativo",
       proveedor_direccion: data.proveedor_direccion.trim(), proveedor_telefono: data.proveedor_telefono.trim(),
       a04_no_pedido: data.no_pedido.trim(), a04_descripcion: data.descripcion.trim(),
