@@ -19,8 +19,8 @@ export default async function PolizaImprimirPage({ params }: { params: Promise<{
     <ImprimirPolizaClient
       poliza={res.poliza}
       items={res.items}
-      codigoContable={config?.codigo_contable ?? "12.10.09"}
-      nombreUnidad={config?.nombre_unidad ?? "Consultorio del Instituto en San Marcos / U.I.A.A.D.D.M. en el Municipio de Tejutla"}
+      codigoContable={config?.codigo_contable ?? "12.07.04"}
+      nombreUnidad={config?.nombre_unidad ?? "Consultorio de Tacaná, Departamento de San Marcos"}
       nombreEncargado={config?.nombre_encargado_unidad ?? "Lilia Zucely Pérez Fuentes"}
       cargoEncargado={config?.cargo_encargado_unidad ?? 'Analista "A"'}
     />

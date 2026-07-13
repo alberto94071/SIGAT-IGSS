@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
   RotateCcw, MapPin, Bus, ArrowRight, Construction,
-  ShieldCheck, ShoppingCart, Database, Calculator, Wallet,
+  ShoppingCart, Database, Calculator, Wallet,
   Archive, Library, Gavel, FileSignature, UserCog, Route
 } from "lucide-react";
 import { type Modulo, type Rol } from "@/lib/permisos";
@@ -203,8 +203,9 @@ export default async function LauncherPage() {
       <header className="shadow-lg" style={{ background: "var(--cip-barra-grad, linear-gradient(to right, #166534, #16a34a))" }}>
         <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-11 h-11 bg-white/15 rounded-xl flex items-center justify-center ring-2 ring-white/30">
-              <ShieldCheck className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center ring-2 ring-white/40 shadow-md p-1.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo-cip.png" alt="Logo CIP" className="w-full h-full object-contain" />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-white tracking-tight leading-none">CIP</h1>

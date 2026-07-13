@@ -72,15 +72,12 @@ export default function LoginClient({ fotos }: { fotos: string[] }) {
 
           {/* Marca centrada sobre la foto */}
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
-            <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 bg-white/15 backdrop-blur rounded-2xl mb-3 ring-2 ring-white/25">
-              <svg className="w-7 h-7 sm:w-8 sm:h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
+            <div className="inline-flex items-center justify-center w-28 h-28 sm:w-36 sm:h-36 bg-white/90 backdrop-blur rounded-3xl mb-3 ring-2 ring-white/40 shadow-xl p-3 sm:p-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo-cip.png" alt="Logo CIP" className="w-full h-full object-contain" />
             </div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-lg tracking-tight">CIP</h1>
-            <p className="text-white/90 text-sm mt-1 drop-shadow">Control Interno Presupuestario</p>
-            <p className="text-white/70 text-xs mt-0.5 drop-shadow">Instituto Guatemalteco de Seguridad Social</p>
+            <p className="text-white text-base sm:text-lg font-semibold mt-1 drop-shadow-lg">Control Interno Presupuestario</p>
+            <p className="text-white/80 text-xs mt-0.5 drop-shadow">Instituto Guatemalteco de Seguridad Social</p>
           </div>
 
           {/* Indicador de fotos */}

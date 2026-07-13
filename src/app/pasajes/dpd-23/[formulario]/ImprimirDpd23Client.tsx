@@ -12,6 +12,7 @@ type Pago = {
 interface Props {
   pago: Pago;
   codigoContable: string;
+  nombreUnidad: string; municipio: string;
   nombreSecretaria: string; cargoSecretaria: string;
   nombreEncargado: string; cargoEncargado: string;
 }
@@ -37,7 +38,7 @@ const B = "1.5px solid #1a1a1a";
 const C = "#000";
 
 export default function ImprimirDpd23Client({
-  pago: p, codigoContable, nombreSecretaria, cargoSecretaria, nombreEncargado, cargoEncargado,
+  pago: p, codigoContable, nombreUnidad, municipio, nombreSecretaria, cargoSecretaria, nombreEncargado, cargoEncargado,
 }: Props) {
   const router = useRouter();
   const anio = p.fecha_pago ? p.fecha_pago.slice(0, 4) : String(new Date().getFullYear());
@@ -65,7 +66,7 @@ export default function ImprimirDpd23Client({
             <div style={{ flex: 1, textAlign: "left", marginLeft: "10px" }}>
               <p style={{ margin: 0, fontSize: "10pt", fontWeight: "bold" }}>Instituto Guatemalteco de Seguridad Social</p>
               <p style={{ margin: "2px 0 0 0", fontSize: "8.5pt" }}>
-                Unidad Integral de Adscripción, Acreditación de Derechos y Despacho de Medicamentos en el Municipio de Tejutla.
+                {nombreUnidad}
               </p>
             </div>
             <div style={{ width: "60px", flexShrink: 0, textAlign: "right", fontSize: "9pt", fontWeight: "bold" }}>DPD-23</div>
@@ -124,7 +125,7 @@ export default function ImprimirDpd23Client({
             </div>
 
             <p style={{ marginTop: "22px", fontSize: "8.5pt", color: "#333" }}>
-              Tejutla, San Marcos: {fechaCorta(p.fecha_pago)}
+              {municipio}: {fechaCorta(p.fecha_pago)}
             </p>
           </div>
         </div>

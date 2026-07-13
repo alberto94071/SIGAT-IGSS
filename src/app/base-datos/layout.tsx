@@ -16,7 +16,7 @@ export default async function BaseDatosLayout({ children }: { children: React.Re
             </div>
             <div>
               <h1 className="text-xl font-bold text-white leading-none">Base de Datos Central</h1>
-              <p className="text-blue-200 text-xs mt-0.5">IGSS · Unidad 407 · Tejutla, San Marcos</p>
+              <p className="text-blue-200 text-xs mt-0.5">IGSS · Unidad 412 · Tacaná, San Marcos</p>
             </div>
           </div>
           <Link
