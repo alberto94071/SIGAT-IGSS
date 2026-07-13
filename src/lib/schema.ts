@@ -56,6 +56,8 @@ export const usuarios = pgTable("usuarios", {
   rol:            text("rol").notNull().default("operador"),
   activo:         boolean("activo").notNull().default(true),
   permisos:       text("permisos").notNull().default("{}"),
+  // Preferencias de interfaz por usuario (JSON): tema, tamaño de letra y colores.
+  preferencias_ui: text("preferencias_ui").notNull().default("{}"),
   created_at:     text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   updated_at:     text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   last_login:     text("last_login"),

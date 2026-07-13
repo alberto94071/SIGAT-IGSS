@@ -48,7 +48,8 @@ export default function DashboardShell({
             onMenuOpen={() => setOpen(true)}
           />
         </div>
-        <main className="flex-1 overflow-y-auto p-3 sm:p-6 bg-gray-50 print:p-0 print:overflow-visible print:bg-white">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6 print:p-0 print:overflow-visible print:bg-white"
+          style={{ backgroundColor: "var(--cip-fondo-main, #f9fafb)" }}>
           {children}
         </main>
       </div>
