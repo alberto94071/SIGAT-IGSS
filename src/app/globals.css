@@ -7,7 +7,8 @@
     --sidebar-width: 240px;
   }
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply text-gray-900;
+    background-color: var(--cip-fondo-main, #f9fafb);
   }
   * {
     box-sizing: border-box;
@@ -16,7 +17,11 @@
 
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    background-color: var(--cip-accent, #16a34a);
+  }
+  .btn-primary:hover {
+    filter: brightness(0.9);
   }
   .btn-secondary {
     @apply inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors;
@@ -41,10 +46,68 @@
   .badge-anulado    { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800; }
 }
 
+/* ── Tema oscuro ─────────────────────────────────────────────────────────────
+   La app se construyó con la paleta clara de Tailwind escrita directamente en
+   cada componente; en vez de tocar cientos de archivos, el tema oscuro remapea
+   aquí las utilidades más usadas. Solo aplica en pantalla — la impresión
+   siempre sale clara. */
+@media screen {
+  .dark { color-scheme: dark; }
+  .dark body { color: #e5e7eb; }
+
+  /* Superficies */
+  .dark .bg-white    { background-color: #111827 !important; }
+  .dark .bg-gray-50  { background-color: #0d1220 !important; }
+  .dark .bg-gray-100 { background-color: #1f2937 !important; }
+  .dark .bg-gray-200 { background-color: #374151 !important; }
+  .dark .hover\:bg-gray-50:hover  { background-color: #1f2937 !important; }
+  .dark .hover\:bg-gray-100:hover { background-color: #374151 !important; }
+  .dark .hover\:bg-gray-200:hover { background-color: #4b5563 !important; }
+
+  /* Tintes suaves de estado */
+  .dark .bg-brand-50  { background-color: rgba(34, 197, 94, 0.08) !important; }
+  .dark .bg-green-50  { background-color: rgba(34, 197, 94, 0.10) !important; }
+  .dark .bg-red-50    { background-color: rgba(239, 68, 68, 0.10) !important; }
+  .dark .bg-amber-50  { background-color: rgba(245, 158, 11, 0.10) !important; }
+  .dark .bg-blue-50   { background-color: rgba(59, 130, 246, 0.10) !important; }
+  .dark .bg-orange-50 { background-color: rgba(249, 115, 22, 0.10) !important; }
+  .dark .hover\:bg-brand-50:hover { background-color: rgba(34, 197, 94, 0.15) !important; }
+  .dark .hover\:bg-red-50:hover   { background-color: rgba(239, 68, 68, 0.15) !important; }
+  .dark .hover\:bg-brand-100:hover { background-color: rgba(34, 197, 94, 0.22) !important; }
+
+  /* Texto */
+  .dark .text-gray-900 { color: #f3f4f6 !important; }
+  .dark .text-gray-800 { color: #e5e7eb !important; }
+  .dark .text-gray-700 { color: #d1d5db !important; }
+  .dark .text-gray-600 { color: #b3bac4 !important; }
+  .dark .text-gray-500 { color: #9ca3af !important; }
+
+  /* Bordes y divisores */
+  .dark .border-gray-300 { border-color: #4b5563 !important; }
+  .dark .border-gray-200 { border-color: #374151 !important; }
+  .dark .border-gray-100 { border-color: #293241 !important; }
+  .dark .border-gray-50  { border-color: #293241 !important; }
+  .dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #293241 !important; }
+  .dark .divide-gray-50  > :not([hidden]) ~ :not([hidden]) { border-color: #293241 !important; }
+
+  /* Clases de componente (el @apply ya inyectó los colores claros,
+     así que hay que sobreescribirlas por su propio nombre) */
+  .dark .card          { background-color: #111827; border-color: #374151; }
+  .dark .input         { background-color: #1f2937; border-color: #4b5563; color: #f3f4f6; }
+  .dark .input::placeholder { color: #6b7280; }
+  .dark .label         { color: #9ca3af; }
+  .dark .btn-secondary { background-color: #1f2937; border-color: #4b5563; color: #d1d5db; }
+  .dark .btn-secondary:hover { background-color: #374151; }
+  .dark .table-header  { background-color: #0d1220; color: #9ca3af; }
+}
+
 @media print {
   .no-print { display: none !important; }
   .print-only { display: block !important; }
-  body { background: white; font-size: 11px; }
+  /* La impresión no hereda personalización: tamaño y colores fijos. */
+  html { font-size: 16px !important; }
+  body { background: white !important; font-size: 11px; }
+  main { background: white !important; }
   @page { margin: 1.5cm; size: letter; }
   table { page-break-inside: avoid; }
   tr { page-break-inside: avoid; }

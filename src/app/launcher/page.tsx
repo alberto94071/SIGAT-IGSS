@@ -9,6 +9,8 @@ import {
 import { type Modulo, type Rol } from "@/lib/permisos";
 import { getPermisosFrescos } from "@/lib/modulo-access";
 import LogoutButton from "./LogoutButton";
+import PersonalizacionButton from "@/components/PersonalizacionButton";
+import { getMisPreferenciasUI } from "@/lib/preferencias-actions";
 
 const MODULES = [
   {
@@ -191,12 +193,14 @@ export default async function LauncherPage() {
   const modules = MODULES.filter(m => m.permiso === null || permisos[m.permiso]);
 
   const userName = session.user.name ?? session.user.email ?? "Usuario";
+  const prefs = await getMisPreferenciasUI();
+  const cm = prefs.color_modulos; // si está definido, sobreescribe el color de cada tarjeta
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: "var(--cip-fondo, #f3f4f6)" }}>
 
       {/* ── Header ─────────────────────────────────────────────────── */}
-      <header className="bg-gradient-to-r from-green-800 to-green-600 shadow-lg">
+      <header className="shadow-lg" style={{ background: "var(--cip-barra-grad, linear-gradient(to right, #166534, #16a34a))" }}>
         <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-11 h-11 bg-white/15 rounded-xl flex items-center justify-center ring-2 ring-white/30">
@@ -209,7 +213,10 @@ export default async function LauncherPage() {
               </p>
             </div>
           </div>
-          <LogoutButton userName={userName} />
+          <div className="flex items-center gap-2">
+            <PersonalizacionButton variant="launcher" />
+            <LogoutButton userName={userName} />
+          </div>
         </div>
       </header>
 
@@ -239,14 +246,17 @@ export default async function LauncherPage() {
                   }
                 `}
               >
-                {/* Card top bar color */}
-                <div className={`h-1.5 w-full ${mod.color}`} />
+                {/* Card top bar color (personalizable) */}
+                <div className={`h-1.5 w-full ${cm ? "" : mod.color}`} style={cm ? { backgroundColor: cm } : undefined} />
 
                 {/* Card body */}
                 <div className="p-6 flex flex-col flex-1">
                   {/* Icon */}
-                  <div className={`w-14 h-14 ${mod.bgLight} ${mod.ring} ring-4 rounded-xl flex items-center justify-center mb-4`}>
-                    <Icon className={`w-7 h-7 ${mod.textColor}`} />
+                  <div
+                    className={`w-14 h-14 ${cm ? "ring-transparent" : `${mod.bgLight} ${mod.ring}`} ring-4 rounded-xl flex items-center justify-center mb-4`}
+                    style={cm ? { backgroundColor: `${cm}1f` } : undefined}
+                  >
+                    <Icon className={`w-7 h-7 ${cm ? "" : mod.textColor}`} style={cm ? { color: cm } : undefined} />
                   </div>
 
                   {/* Title + badge */}
@@ -273,8 +283,9 @@ export default async function LauncherPage() {
                         href={mod.href}
                         className={`
                           inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium
-                          ${mod.color} text-white hover:opacity-90 transition-opacity w-full justify-center
+                          ${cm ? "" : mod.color} text-white hover:opacity-90 transition-opacity w-full justify-center
                         `}
+                        style={cm ? { backgroundColor: cm } : undefined}
                       >
                         Ingresar
                         <ArrowRight className="w-4 h-4" />

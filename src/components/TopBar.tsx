@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Menu, XCircle, CheckCheck } from "lucide-react";
 import { getMisNotificaciones, marcarNotificacionLeida, marcarTodasLeidas } from "@/app/notificaciones/actions";
+import PersonalizacionButton from "./PersonalizacionButton";
 
 interface Props {
   userName:    string;
@@ -81,6 +82,7 @@ export default function TopBar({ userName, rolLabel, rolColor, onMenuOpen }: Pro
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3">
+        <PersonalizacionButton variant="topbar" />
         <div className="relative" ref={panelRef}>
           <button
             onClick={() => setOpen(p => !p)}

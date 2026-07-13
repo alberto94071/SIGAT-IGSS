@@ -60,7 +60,7 @@ export default function Sidebar({ navItems, user, moduleLabel = "Módulo", onClo
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   return (
-    <aside className="w-60 bg-gray-900 text-white flex flex-col h-full">
+    <aside className="w-60 text-white flex flex-col h-full" style={{ backgroundColor: "var(--cip-barra, #111827)" }}>
       {/* Logo / Back to CIP */}
       <div className="px-4 py-4 border-b border-gray-800">
         <div className="flex items-center gap-3 mb-3">
@@ -78,7 +78,7 @@ export default function Sidebar({ navItems, user, moduleLabel = "Módulo", onClo
         <Link
           href="/launcher"
           onClick={onClose}
-          className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+          className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
         >
           <ChevronLeft className="w-3.5 h-3.5 shrink-0" />
           <span>Módulos CIP</span>
@@ -100,9 +100,10 @@ export default function Sidebar({ navItems, user, moduleLabel = "Módulo", onClo
               className={clsx(
                 "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
                 isActive
-                  ? "bg-brand-600 text-white"
-                  : "text-gray-400 hover:bg-gray-800 hover:text-white"
+                  ? "text-white"
+                  : "text-gray-400 hover:bg-white/10 hover:text-white"
               )}
+              style={isActive ? { backgroundColor: "var(--cip-accent, #16a34a)" } : undefined}
             >
               {ICONS[item.icon]}
               {item.label}
@@ -124,7 +125,7 @@ export default function Sidebar({ navItems, user, moduleLabel = "Módulo", onClo
         </div>
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-400 hover:bg-gray-800 hover:text-white rounded-lg transition-colors"
+          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-400 hover:bg-white/10 hover:text-white rounded-lg transition-colors"
         >
           <LogOut className="w-4 h-4" />
           Cerrar sesión
