@@ -10,7 +10,7 @@ import {
 
 // OG image con URL absoluta — env vars no disponibles en build time, la imagen requiere URL fija
 const PROD_URL = "https://cip-igss.vercel.app";
-const OG_IMAGE = `${PROD_URL}/og-image.jpg`;
+const OG_IMAGE = `${PROD_URL}/og-cip.jpg`;
 
 const APP_URL = process.env.NEXT_PUBLIC_SITE_URL || PROD_URL;
 
@@ -36,8 +36,8 @@ export const metadata: Metadata = {
     images: [
       {
         url: OG_IMAGE,
-        width: 1280,
-        height: 672,
+        width: 1200,
+        height: 630,
         alt: "CIP — Control Interno Presupuestario · Instituto Guatemalteco de Seguridad Social",
       },
     ],
@@ -49,7 +49,18 @@ export const metadata: Metadata = {
     images: [OG_IMAGE],
   },
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/icons/apple-touch-icon.png",
+  },
+  applicationName: "CIP — Control Interno Presupuestario",
+  appleWebApp: {
+    capable: true,
+    title: "CIP",
+    statusBarStyle: "default",
   },
 };
 
