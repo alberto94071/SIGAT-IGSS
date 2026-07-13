@@ -44,7 +44,7 @@ export default function LoginClient({ fotos }: { fotos: string[] }) {
           src={src}
           alt=""
           aria-hidden
-          className={`absolute inset-0 w-full h-full object-cover blur-2xl scale-110 transition-opacity duration-[2000ms] ease-in-out ${i === idx ? "opacity-100" : "opacity-0"}`}
+          className={`absolute inset-0 w-full h-full object-cover blur-sm scale-105 transition-opacity duration-[2000ms] ease-in-out ${i === idx ? "opacity-100" : "opacity-0"}`}
         />
       ))}
       {fotos.length > 0 && <div className="absolute inset-0 bg-black/25" />}
