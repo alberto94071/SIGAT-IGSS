@@ -35,9 +35,22 @@ export default function LoginClient({ fotos }: { fotos: string[] }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4 sm:p-6">
+    <div className="relative min-h-screen bg-gray-200 flex items-center justify-center p-4 sm:p-6 overflow-hidden">
+      {/* Fondo: la misma foto activa, difuminada, detrás de toda la pantalla */}
+      {fotos.map((src, i) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={`bg-${src}`}
+          src={src}
+          alt=""
+          aria-hidden
+          className={`absolute inset-0 w-full h-full object-cover blur-2xl scale-110 transition-opacity duration-[2000ms] ease-in-out ${i === idx ? "opacity-100" : "opacity-0"}`}
+        />
+      ))}
+      {fotos.length > 0 && <div className="absolute inset-0 bg-black/25" />}
+
       {/* Tarjeta dividida: fotos a la izquierda, formulario blanco a la derecha */}
-      <div className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-[1.15fr_1fr] md:min-h-[560px]">
+      <div className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-[1.15fr_1fr] md:min-h-[560px]">
 
         {/* ── Panel de fotos ── */}
         <div className={`relative h-52 sm:h-64 md:h-auto overflow-hidden ${fotos.length === 0 ? "bg-gradient-to-br from-brand-600 to-brand-900" : "bg-brand-900"}`}>
