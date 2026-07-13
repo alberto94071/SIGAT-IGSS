@@ -39,7 +39,7 @@ export default function ConformidadClient({ consolidacion: c, nombreUnidad, dire
             <p style={{ fontSize: "10pt", margin: "4px 0 0 0", color: "#444" }}>{nombreUnidad}</p>
           </div>
 
-          <p style={{ fontSize: "10.5pt", margin: "0 0 20px 0" }}>Tejutla, San Marcos, {hoy}</p>
+          <p style={{ fontSize: "10.5pt", margin: "0 0 20px 0" }}>Tacaná, San Marcos, {hoy}</p>
 
           <div style={{ fontSize: "10.5pt", lineHeight: 1.7, textAlign: "justify" }}>
             <p>

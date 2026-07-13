@@ -6,10 +6,10 @@ import { sql } from "drizzle-orm";
 // ─── Configuración del sistema ────────────────────────────────────────────────
 export const configuracion = pgTable("configuracion", {
   id:                   serial("id").primaryKey(),
-  nombre_unidad:        text("nombre_unidad").notNull().default("Consultorio del Instituto en San Marcos / U.I.A.A.D.D.M. en el Municipio de Tejutla"),
-  codigo_unidad:        text("codigo_unidad").notNull().default("407"),
-  codigo_contable:      text("codigo_contable").notNull().default("12.10.09"),
-  municipio:            text("municipio").notNull().default("Tejutla, San Marcos"),
+  nombre_unidad:        text("nombre_unidad").notNull().default("Consultorio de Tacaná, Departamento de San Marcos"),
+  codigo_unidad:        text("codigo_unidad").notNull().default("412"),
+  codigo_contable:      text("codigo_contable").notNull().default("12.07.04"),
+  municipio:            text("municipio").notNull().default("Tacaná, San Marcos"),
   monto_fondo_rotativo: doublePrecision("monto_fondo_rotativo").notNull().default(15000.00),
   efectivo_caja:        doublePrecision("efectivo_caja").notNull().default(0.00),
   ejercicio_fiscal:     integer("ejercicio_fiscal").notNull().default(2026),
@@ -19,21 +19,21 @@ export const configuracion = pgTable("configuracion", {
   numero_empleado_sol:  text("numero_empleado_sol").notNull().default("34531"),
   resolucion_fondo:     text("resolucion_fondo").notNull().default("Resolución 01 SGF/2025 de fecha 02/01/2025"),
   // Datos para Forma A-01 SIAF
-  nombre_unidad_ejecutora: text("nombre_unidad_ejecutora").notNull().default("UNIDAD EJECUTORA 407 CONSULTORIO DEL INSTITUTO EN SAN MARCOS"),
-  centro_costo_nombre:     text("centro_costo_nombre").notNull().default("CENTRO DE COSTO: 121009 UNIDAD INTEGRAL DE ADSCRIPCIÓN, ACREDITACIÓN DE DERECHOS Y DESPACHO DE MEDICAMENTOS EN EL MUNICIPIO DE TEJUTLA, SAN MARCOS"),
-  direccion_unidad:        text("direccion_unidad").notNull().default("2ª. AVENIDA 4-54 ZONA 2 TEJUTLA, SAN MARCOS"),
-  justificacion_siaf:      text("justificacion_siaf").notNull().default("SERVICIOS NECESARIOS E INDISPENSABLES PARA BRINDAR ATENCIÓN A LOS PACIENTES DEL IGSS U.I.A.A.D.D.M. EN EL MUNICIPIO DE TEJUTLA."),
+  nombre_unidad_ejecutora: text("nombre_unidad_ejecutora").notNull().default("UNIDAD EJECUTORA 412 CONSULTORIO DE TACANA, DEPARTAMENTO DE SAN MARCOS"),
+  centro_costo_nombre:     text("centro_costo_nombre").notNull().default("CENTRO DE COSTO: 120704 CONSULTORIO DE TACANA, DEPARTAMENTO DE SAN MARCOS"),
+  direccion_unidad:        text("direccion_unidad").notNull().default("3ª. CALLE 6ª. AVENIDA, ZONA 4, TACANA, SAN MARCOS."),
+  justificacion_siaf:      text("justificacion_siaf").notNull().default("ANOTAR UNA JUSTIFICACION OBJETIVA Y CONCRETA, ORIENTADO A LA NECESIDAD DE LA COMPRA"),
   // Firmantes adicionales para Forma A-04 SIAF (el Encargado de Fondo Rotativo ya usa nombre_responsable)
   nombre_analista_presupuesto: text("nombre_analista_presupuesto").notNull().default("Ener Ivandrino Vásquez Barrios"),
   nombre_director:             text("nombre_director").notNull().default("Kareen Marisol Guevara Orozco"),
   // Datos adicionales para el Vale de Caja Chica
   nit_responsable:           text("nit_responsable").notNull().default("18864325"),
   nombre_dependencia_medica: text("nombre_dependencia_medica").notNull()
-    .default("Unidad Integral de Adscripción, Acreditación de Derechos y Despacho de Medicamentos, en el Municipio de Tejutla"),
+    .default("Consultorio de Tacaná, Departamento de San Marcos"),
   // Datos adicionales para la Planilla de Viático (Formulario V-L)
   nombre_encargado_unidad: text("nombre_encargado_unidad").notNull().default("Lilia Zucely Pérez Fuentes"),
   cargo_encargado_unidad:  text("cargo_encargado_unidad").notNull().default("Analista \"A\" con funciones de Encargada de Unidad"),
-  entidad_recibio_viatico: text("entidad_recibio_viatico").notNull().default("IGSS U.I.A.A.D.D.M. en el Municipio de Tejutla"),
+  entidad_recibio_viatico: text("entidad_recibio_viatico").notNull().default("IGSS Consultorio de Tacaná, San Marcos"),
   // Datos adicionales para el DPD-23 (Recibo de Gastos de Transporte)
   nombre_secretaria_unidad: text("nombre_secretaria_unidad").notNull().default("Elesinda Gabriela Rodriguez Orozco"),
   cargo_secretaria_unidad:  text("cargo_secretaria_unidad").notNull().default("Secretaria \"A\""),

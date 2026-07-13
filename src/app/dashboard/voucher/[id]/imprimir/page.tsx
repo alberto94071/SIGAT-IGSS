@@ -21,8 +21,8 @@ export default async function ImprimirVoucherPage({ params }: { params: Promise<
     <ImprimirVoucherClient
       vale={vale}
       montoEnLetras={montoEnLetras(monto)}
-      municipio={config?.municipio ?? "Tejutla, San Marcos"}
-      codigoContable={config?.codigo_contable ?? "12.10.09"}
+      municipio={config?.municipio ?? "Tacaná, San Marcos"}
+      codigoContable={config?.codigo_contable ?? "12.07.04"}
     />
   );
 }

@@ -217,7 +217,7 @@ function GenerarActaModal({ consolidacion: c, onClose, onCreado }: {
           </div>
           <div>
             <label className="label">Lugar (municipio) <span className="text-red-500 font-semibold">*</span></label>
-            <input className="input" value={lugar} onChange={e => setLugar(e.target.value)} placeholder="Ej. Tejutla" />
+            <input className="input" value={lugar} onChange={e => setLugar(e.target.value)} placeholder="Ej. Tacaná" />
             <p className="text-xs text-gray-400 mt-1">Se usará en la frase &ldquo;En el Municipio de ___, del Departamento de ___&rdquo;.</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
