@@ -11,7 +11,7 @@ export async function getInsumos() {
 }
 
 export async function crearInsumo(data: {
-  codigo_igss?: number | null;
+  codigo_igss?: string | null;
   codigo_ppr?: number | null;
   nombre: string;
   caracteristicas?: string | null;
@@ -26,7 +26,7 @@ export async function crearInsumo(data: {
 }
 
 export async function editarInsumo(id: number, data: {
-  codigo_igss?: number | null;
+  codigo_igss?: string | null;
   codigo_ppr?: number | null;
   nombre: string;
   caracteristicas?: string | null;

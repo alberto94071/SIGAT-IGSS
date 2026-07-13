@@ -1,11 +1,12 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useTransition } from "react";
 import { Plus, Search, Pencil, Trash2, X, Package } from "lucide-react";
 import { crearInsumo, editarInsumo, eliminarInsumo } from "./actions";
+import { useRouter, usePathname } from "next/navigation";
 
 type Insumo = {
   id: number;
-  codigo_igss: number | null;
+  codigo_igss: string | null;
   codigo_ppr: number | null;
   nombre: string;
   caracteristicas: string | null;
@@ -16,34 +17,93 @@ type Insumo = {
 
 const EMPTY = { codigo_igss: "", codigo_ppr: "", nombre: "", caracteristicas: "", presentacion: "", renglon: "" };
 
-export default function BaseDatosClient({ registros: init }: { registros: Insumo[] }) {
-  const [lista,         setLista]         = useState(init);
-  const [query,         setQuery]         = useState("");
-  const [filtroRenglon, setFiltroRenglon] = useState("");
+interface BaseDatosClientProps {
+  registros: Insumo[];
+  totalCount: number;
+  currentPage: number;
+  limit: number;
+  allRenglones: number[];
+  initQ: string;
+  initRenglon: string;
+}
+
+export default function BaseDatosClient({
+  registros,
+  totalCount,
+  currentPage,
+  limit,
+  allRenglones,
+  initQ,
+  initRenglon,
+}: BaseDatosClientProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [isPending, startTransition] = useTransition();
+
+  const [lista,         setLista]         = useState(registros);
+  const [query,         setQuery]         = useState(initQ);
+  const [filtroRenglon, setFiltroRenglon] = useState(initRenglon);
   const [modal,         setModal]         = useState<"crear" | "editar" | null>(null);
   const [selected,      setSelected]      = useState<Insumo | null>(null);
   const [form,          setForm]          = useState(EMPTY);
   const [loading,       setLoading]       = useState(false);
   const [error,         setError]         = useState("");
 
-  const renglones = useMemo(() =>
-    [...new Set(lista.map(r => r.renglon).filter(Boolean) as number[])].sort((a, b) => a - b),
-    [lista]
-  );
+  // Sincronizar estado local con props del servidor
+  useEffect(() => {
+    setLista(registros);
+  }, [registros]);
 
-  const filtered = useMemo(() => {
-    const q = query.toLowerCase();
-    return lista.filter(r => {
-      const matchQ = !q ||
-        r.nombre.toLowerCase().includes(q) ||
-        (r.caracteristicas ?? "").toLowerCase().includes(q) ||
-        (r.presentacion ?? "").toLowerCase().includes(q) ||
-        String(r.codigo_ppr ?? "").includes(query) ||
-        String(r.codigo_igss ?? "").includes(query);
-      const matchR = !filtroRenglon || String(r.renglon) === filtroRenglon;
-      return matchQ && matchR;
+  useEffect(() => {
+    setQuery(initQ);
+  }, [initQ]);
+
+  useEffect(() => {
+    setFiltroRenglon(initRenglon);
+  }, [initRenglon]);
+
+  // Búsqueda debounced por URL
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (query === initQ) return;
+      const params = new URLSearchParams();
+      if (query.trim()) params.set("q", query.trim());
+      if (filtroRenglon) params.set("renglon", filtroRenglon);
+      params.set("page", "1");
+      
+      startTransition(() => {
+        router.push(`${pathname}?${params.toString()}`);
+      });
+    }, 400);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [query, pathname, router, initQ, filtroRenglon]);
+
+  function handleRenglonChange(val: string) {
+    setFiltroRenglon(val);
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    if (val) params.set("renglon", val);
+    params.set("page", "1");
+    
+    startTransition(() => {
+      router.push(`${pathname}?${params.toString()}`);
     });
-  }, [lista, query, filtroRenglon]);
+  }
+
+  function navigateToPage(p: number) {
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    if (filtroRenglon) params.set("renglon", filtroRenglon);
+    params.set("page", String(p));
+    
+    startTransition(() => {
+      router.push(`${pathname}?${params.toString()}`);
+    });
+  }
+
+  const renglones = allRenglones;
+  const filtered = lista;
 
   function setF(k: string, v: string) { setForm(p => ({ ...p, [k]: v })); }
 
@@ -68,7 +128,7 @@ export default function BaseDatosClient({ registros: init }: { registros: Insumo
     if (!form.nombre.trim()) return setError("El nombre es obligatorio");
     setLoading(true);
     const data = {
-      codigo_igss:     form.codigo_igss ? Number(form.codigo_igss) : null,
+      codigo_igss:     form.codigo_igss.trim() || null,
       codigo_ppr:      form.codigo_ppr ? Number(form.codigo_ppr) : null,
       nombre:          form.nombre.trim(),
       caracteristicas: form.caracteristicas.trim() || null,
@@ -102,7 +162,11 @@ export default function BaseDatosClient({ registros: init }: { registros: Insumo
             <Package className="w-5 h-5 text-blue-600" /> Central de Insumos
           </h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            {filtered.length} de {lista.length} registros
+            {isPending ? (
+              <span className="animate-pulse text-blue-600 font-medium">Buscando...</span>
+            ) : (
+              `${totalCount.toLocaleString("es-GT")} registros`
+            )}
           </p>
         </div>
         <button onClick={openCrear} className="btn-primary">
@@ -124,7 +188,7 @@ export default function BaseDatosClient({ registros: init }: { registros: Insumo
         <select
           className="input w-44"
           value={filtroRenglon}
-          onChange={e => setFiltroRenglon(e.target.value)}
+          onChange={e => handleRenglonChange(e.target.value)}
         >
           <option value="">Todos los renglones</option>
           {renglones.map(r => (
@@ -196,6 +260,37 @@ export default function BaseDatosClient({ registros: init }: { registros: Insumo
             <div className="text-center py-12 text-gray-400 text-sm">No se encontraron insumos</div>
           )}
         </div>
+        {/* Pagination Footer */}
+        {Math.ceil(totalCount / limit) > 1 && (
+          <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50/50 py-3 px-5 text-sm select-none">
+            <p className="text-xs text-gray-500 font-medium">
+              Mostrando <span className="font-semibold text-gray-700">{(currentPage - 1) * limit + 1}</span> -{" "}
+              <span className="font-semibold text-gray-700">
+                {Math.min((currentPage - 1) * limit + limit, totalCount)}
+              </span>{" "}
+              de <span className="font-semibold text-gray-700">{totalCount.toLocaleString("es-GT")}</span> registros
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigateToPage(currentPage - 1)}
+                disabled={currentPage <= 1 || isPending}
+                className="btn-secondary py-1 px-3 text-xs disabled:opacity-50 transition-all font-medium"
+              >
+                Anterior
+              </button>
+              <span className="text-xs text-gray-600 font-medium px-2">
+                Página {currentPage} de {Math.ceil(totalCount / limit)}
+              </span>
+              <button
+                onClick={() => navigateToPage(currentPage + 1)}
+                disabled={currentPage >= Math.ceil(totalCount / limit) || isPending}
+                className="btn-secondary py-1 px-3 text-xs disabled:opacity-50 transition-all font-medium"
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal */}

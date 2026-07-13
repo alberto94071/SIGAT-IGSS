@@ -510,7 +510,7 @@ export const siafSeq = pgTable("siaf_seq", {
 // ─── Base de Datos Central — catálogo IGSS de insumos y servicios ────────────
 export const baseDatosCentral = pgTable("base_datos_central", {
   id:              serial("id").primaryKey(),
-  codigo_igss:     integer("codigo_igss"),
+  codigo_igss:     text("codigo_igss"),
   codigo_ppr:      integer("codigo_ppr"),
   nombre:          text("nombre").notNull(),
   caracteristicas: text("caracteristicas"),
