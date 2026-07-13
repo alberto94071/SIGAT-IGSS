@@ -7,15 +7,28 @@ import { useRouter, usePathname } from "next/navigation";
 type Insumo = {
   id: number;
   codigo_igss: string | null;
+  descripcion_igss: string | null;
+  codigo: string | null;
   codigo_ppr: number | null;
   nombre: string;
   caracteristicas: string | null;
   presentacion: string | null;
+  unidad_medida: string | null;
   renglon: number | null;
   activo: boolean;
 };
 
-const EMPTY = { codigo_igss: "", codigo_ppr: "", nombre: "", caracteristicas: "", presentacion: "", renglon: "" };
+const EMPTY = { 
+  codigo_igss: "", 
+  descripcion_igss: "",
+  codigo: "",
+  codigo_ppr: "", 
+  nombre: "", 
+  caracteristicas: "", 
+  presentacion: "", 
+  unidad_medida: "",
+  renglon: "" 
+};
 
 interface BaseDatosClientProps {
   registros: Insumo[];
@@ -115,10 +128,13 @@ export default function BaseDatosClient({
     setSelected(r);
     setForm({
       codigo_igss:     String(r.codigo_igss ?? ""),
+      descripcion_igss: r.descripcion_igss ?? "",
+      codigo:          r.codigo ?? "",
       codigo_ppr:      String(r.codigo_ppr ?? ""),
       nombre:          r.nombre,
       caracteristicas: r.caracteristicas ?? "",
       presentacion:    r.presentacion ?? "",
+      unidad_medida:   r.unidad_medida ?? "",
       renglon:         String(r.renglon ?? ""),
     });
     setError(""); setModal("editar");
@@ -129,10 +145,13 @@ export default function BaseDatosClient({
     setLoading(true);
     const data = {
       codigo_igss:     form.codigo_igss.trim() || null,
+      descripcion_igss: form.descripcion_igss.trim() || null,
+      codigo:          form.codigo.trim() || null,
       codigo_ppr:      form.codigo_ppr ? Number(form.codigo_ppr) : null,
       nombre:          form.nombre.trim(),
       caracteristicas: form.caracteristicas.trim() || null,
       presentacion:    form.presentacion.trim() || null,
+      unidad_medida:   form.unidad_medida.trim() || null,
       renglon:         form.renglon ? Number(form.renglon) : null,
     };
     if (modal === "crear") {
@@ -199,42 +218,55 @@ export default function BaseDatosClient({
 
       {/* Tabla */}
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[600px] relative">
           <table className="w-full text-sm">
             <thead>
-              <tr className="table-header">
-                <th className="px-4 py-3 text-left whitespace-nowrap">Cód. IGSS</th>
-                <th className="px-4 py-3 text-left whitespace-nowrap">Cód. PPR</th>
-                <th className="px-4 py-3 text-left">Nombre / Características</th>
-                <th className="px-4 py-3 text-left">Presentación</th>
-                <th className="px-4 py-3 text-center whitespace-nowrap">Renglón</th>
-                <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>
+              <tr className="table-header select-none">
+                <th className="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10 px-4 py-3 text-center whitespace-nowrap border-b border-gray-100 shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)]">Renglón</th>
+                <th className="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10 px-4 py-3 text-left whitespace-nowrap border-b border-gray-100 shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)]">Cód. IGSS</th>
+                <th className="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10 px-4 py-3 text-left border-b border-gray-100 shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)] min-w-[200px]">Descripción IGSS</th>
+                <th className="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10 px-4 py-3 text-left whitespace-nowrap border-b border-gray-100 shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)]">Código</th>
+                <th className="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10 px-4 py-3 text-left whitespace-nowrap border-b border-gray-100 shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)]">PpR</th>
+                <th className="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10 px-4 py-3 text-left border-b border-gray-100 shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)] min-w-[220px]">Descripción PpR</th>
+                <th className="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10 px-4 py-3 text-left border-b border-gray-100 shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)] min-w-[200px]">Característica PpR</th>
+                <th className="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10 px-4 py-3 text-left border-b border-gray-100 shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)] min-w-[120px]">Presentación</th>
+                <th className="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10 px-4 py-3 text-left whitespace-nowrap border-b border-gray-100 shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)]">U. Medida</th>
+                <th className="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10 px-4 py-3 text-right whitespace-nowrap border-b border-gray-100 shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)]">Acc.</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.map(r => (
                 <tr key={r.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">
-                    {r.codigo_igss ?? <span className="text-gray-300">—</span>}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">
-                    {r.codigo_ppr ?? <span className="text-gray-300">—</span>}
-                  </td>
-                  <td className="px-4 py-3 max-w-xs">
-                    <p className="font-medium text-gray-900 leading-tight">{r.nombre}</p>
-                    {r.caracteristicas && (
-                      <p className="text-xs text-gray-400 truncate mt-0.5">{r.caracteristicas}</p>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500 max-w-[180px] truncate">
-                    {r.presentacion ?? <span className="text-gray-300">—</span>}
-                  </td>
                   <td className="px-4 py-3 text-center">
                     {r.renglon ? (
                       <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
                         {r.renglon}
                       </span>
                     ) : <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">
+                    {r.codigo_igss ?? <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-600 max-w-[250px] truncate" title={r.descripcion_igss ?? ""}>
+                    {r.descripcion_igss ?? <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">
+                    {r.codigo ?? <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">
+                    {r.codigo_ppr ?? <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3 max-w-[280px]">
+                    <p className="font-medium text-gray-900 leading-tight truncate-2-lines" title={r.nombre}>{r.nombre}</p>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-400 max-w-[250px] truncate" title={r.caracteristicas ?? ""}>
+                    {r.caracteristicas ?? <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-500 max-w-[150px] truncate" title={r.presentacion ?? ""}>
+                    {r.presentacion ?? <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                    {r.unidad_medida ?? <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-1">
@@ -305,23 +337,40 @@ export default function BaseDatosClient({
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="px-5 py-4 space-y-4">
+            <div className="px-5 py-4 space-y-4 text-left">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Código IGSS</label>
-                  <input className="input" type="number" value={form.codigo_igss}
-                    onChange={e => setF("codigo_igss", e.target.value)} placeholder="Ej: 2269" />
+                  <input className="input" value={form.codigo_igss}
+                    onChange={e => setF("codigo_igss", e.target.value)} placeholder="Ej: SC-990831" />
                 </div>
                 <div>
-                  <label className="label">Código PPR</label>
-                  <input className="input" type="number" value={form.codigo_ppr}
-                    onChange={e => setF("codigo_ppr", e.target.value)} placeholder="Ej: 1941" />
+                  <label className="label">Código</label>
+                  <input className="input" value={form.codigo}
+                    onChange={e => setF("codigo", e.target.value)} placeholder="Ej: 277" />
                 </div>
               </div>
               <div>
-                <label className="label">Nombre *</label>
+                <label className="label">Descripción IGSS</label>
+                <input className="input" value={form.descripcion_igss}
+                  onChange={e => setF("descripcion_igss", e.target.value)} placeholder="Descripción general de la categoría IGSS" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Código PPR</label>
+                  <input className="input" type="number" value={form.codigo_ppr}
+                    onChange={e => setF("codigo_ppr", e.target.value)} placeholder="Ej: 58527" />
+                </div>
+                <div>
+                  <label className="label">Renglón</label>
+                  <input className="input" type="number" value={form.renglon}
+                    onChange={e => setF("renglon", e.target.value)} placeholder="Ej: 266" />
+                </div>
+              </div>
+              <div>
+                <label className="label">Nombre / Descripción PpR *</label>
                 <input className="input" value={form.nombre}
-                  onChange={e => setF("nombre", e.target.value)} placeholder="Nombre del insumo o servicio" />
+                  onChange={e => setF("nombre", e.target.value)} placeholder="Nombre del insumo o servicio (PpR)" />
               </div>
               <div>
                 <label className="label">Características</label>
@@ -333,12 +382,12 @@ export default function BaseDatosClient({
                 <div>
                   <label className="label">Presentación</label>
                   <input className="input" value={form.presentacion}
-                    onChange={e => setF("presentacion", e.target.value)} placeholder="Ej: Caja (100 unidades)" />
+                    onChange={e => setF("presentacion", e.target.value)} placeholder="Ej: Vial, Caja, Unidad" />
                 </div>
                 <div>
-                  <label className="label">Renglón</label>
-                  <input className="input" type="number" value={form.renglon}
-                    onChange={e => setF("renglon", e.target.value)} placeholder="Ej: 266" />
+                  <label className="label">Unidad de Medida</label>
+                  <input className="input" value={form.unidad_medida}
+                    onChange={e => setF("unidad_medida", e.target.value)} placeholder="Ej: 1 Unidad(es)" />
                 </div>
               </div>
             </div>

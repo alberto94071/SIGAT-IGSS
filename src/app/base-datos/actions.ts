@@ -12,10 +12,13 @@ export async function getInsumos() {
 
 export async function crearInsumo(data: {
   codigo_igss?: string | null;
+  descripcion_igss?: string | null;
+  codigo?: string | null;
   codigo_ppr?: number | null;
   nombre: string;
   caracteristicas?: string | null;
   presentacion?: string | null;
+  unidad_medida?: string | null;
   renglon?: number | null;
 }) {
   const session = await auth();
@@ -27,10 +30,13 @@ export async function crearInsumo(data: {
 
 export async function editarInsumo(id: number, data: {
   codigo_igss?: string | null;
+  descripcion_igss?: string | null;
+  codigo?: string | null;
   codigo_ppr?: number | null;
   nombre: string;
   caracteristicas?: string | null;
   presentacion?: string | null;
+  unidad_medida?: string | null;
   renglon?: number | null;
 }) {
   const session = await auth();

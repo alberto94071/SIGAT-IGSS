@@ -12,10 +12,13 @@ const db = drizzle(neonSql);
 const baseDatosCentral = pgTable("base_datos_central", {
   id:              serial("id").primaryKey(),
   codigo_igss:     text("codigo_igss"),
+  descripcion_igss: text("descripcion_igss"),
+  codigo:          text("codigo"),
   codigo_ppr:      integer("codigo_ppr"),
   nombre:          text("nombre").notNull(),
   caracteristicas: text("caracteristicas"),
   presentacion:    text("presentacion"),
+  unidad_medida:   text("unidad_medida"),
   codigo_rango:    text("codigo_rango"),
   renglon:         integer("renglon"),
   activo:          boolean("activo").notNull().default(true),
@@ -56,6 +59,8 @@ async function main() {
       }
 
       const codigo_igss = row[1] !== undefined && row[1] !== null && row[1] !== '' ? String(row[1]).trim() : null;
+      const descripcion_igss = row[2] !== undefined && row[2] !== null && row[2] !== '' ? String(row[2]).trim() : null;
+      const codigo = row[3] !== undefined && row[3] !== null && row[3] !== '' ? String(row[3]).trim() : null;
 
       let codigo_ppr = null;
       if (row[4] !== undefined && row[4] !== null && row[4] !== '') {
@@ -72,13 +77,17 @@ async function main() {
 
       const caracteristicas = row[6] !== undefined && row[6] !== null && row[6] !== '' ? String(row[6]).trim() : null;
       const presentacion = row[7] !== undefined && row[7] !== null && row[7] !== '' ? String(row[7]).trim() : null;
+      const unidad_medida = row[8] !== undefined && row[8] !== null && row[8] !== '' ? String(row[8]).trim() : null;
 
       registros.push({
         codigo_igss,
+        descripcion_igss,
+        codigo,
         codigo_ppr,
         nombre,
         caracteristicas,
         presentacion,
+        unidad_medida,
         renglon,
         activo: true
       });
@@ -105,10 +114,13 @@ async function main() {
       if (!yaExiste) {
         registros.push({
           codigo_igss,
+          descripcion_igss: null,
+          codigo: null,
           codigo_ppr: null,
           nombre,
           caracteristicas: null,
           presentacion: null,
+          unidad_medida: null,
           renglon,
           activo: true
         });
@@ -117,8 +129,11 @@ async function main() {
 
     console.log(`✓ Total registros únicos y válidos para insertar: ${registros.length}`);
 
-    console.log("🛠️ Asegurando que codigo_igss en la base de datos sea de tipo TEXT...");
+    console.log("🛠️ Asegurando que las columnas de la base de datos existan...");
     await db.execute(drizzleSql`ALTER TABLE base_datos_central ALTER COLUMN codigo_igss TYPE TEXT USING codigo_igss::text`);
+    await db.execute(drizzleSql`ALTER TABLE base_datos_central ADD COLUMN IF NOT EXISTS descripcion_igss TEXT`);
+    await db.execute(drizzleSql`ALTER TABLE base_datos_central ADD COLUMN IF NOT EXISTS codigo TEXT`);
+    await db.execute(drizzleSql`ALTER TABLE base_datos_central ADD COLUMN IF NOT EXISTS unidad_medida TEXT`);
     
     console.log("🗑️ Vaciando la tabla base_datos_central...");
     await db.execute(drizzleSql`TRUNCATE TABLE base_datos_central RESTART IDENTITY CASCADE`);

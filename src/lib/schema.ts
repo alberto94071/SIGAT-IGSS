@@ -511,10 +511,13 @@ export const siafSeq = pgTable("siaf_seq", {
 export const baseDatosCentral = pgTable("base_datos_central", {
   id:              serial("id").primaryKey(),
   codigo_igss:     text("codigo_igss"),
+  descripcion_igss: text("descripcion_igss"),
+  codigo:          text("codigo"),
   codigo_ppr:      integer("codigo_ppr"),
   nombre:          text("nombre").notNull(),
   caracteristicas: text("caracteristicas"),
   presentacion:    text("presentacion"),
+  unidad_medida:   text("unidad_medida"),
   codigo_rango:    text("codigo_rango"),
   renglon:         integer("renglon"),
   activo:          boolean("activo").notNull().default(true),
