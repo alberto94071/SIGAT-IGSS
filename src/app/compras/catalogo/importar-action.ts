@@ -5,10 +5,13 @@ import { catalogoCompras } from "@/lib/schema";
 import { celdaNumero, celdaTexto } from "@/lib/excel-utils";
 import { revalidatePath } from "next/cache";
 
-export async function importarPac2026() {
+export async function importarPac2026(formData: FormData) {
   try {
-    const filePath = "C:\\Users\\alber\\Downloads\\PAC 2026-412.xlsx";
-    const wb = XLSX.readFile(filePath);
+    const file = formData.get("file") as File;
+    if (!file) return { error: "No se proporcionó ningún archivo" };
+    
+    const arrayBuffer = await file.arrayBuffer();
+    const wb = XLSX.read(arrayBuffer, { type: 'buffer' });
     const ws = wb.Sheets[wb.SheetNames[0]];
     const data = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: null });
     

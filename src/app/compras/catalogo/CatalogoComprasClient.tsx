@@ -45,11 +45,19 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
   const [modal, setModal] = useState(false);
   const [importando, setImportando] = useState(false);
 
-  async function handleImportar() {
-    if (!confirm("¿Estás seguro de reemplazar todo el catálogo con los datos del archivo PAC 2026? Esta acción no se puede deshacer.")) return;
+  async function handleImportar(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!confirm("¿Estás seguro de reemplazar todo el catálogo con los datos del archivo seleccionado? Esta acción no se puede deshacer.")) return;
+    
     setImportando(true);
-    const res = await importarPac2026();
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await importarPac2026(formData);
     setImportando(false);
+    e.target.value = ""; // Reset input
+    
     if (res.error) alert("Error al importar: " + res.error);
     else alert("¡Catálogo importado con éxito!");
   }
@@ -102,10 +110,11 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
               onChange={e => setQuery(e.target.value)}
             />
           </div>
-          <button onClick={handleImportar} disabled={importando} className="btn-secondary shrink-0 text-brand-600 disabled:opacity-50">
+          <label className={`btn-secondary shrink-0 text-brand-600 ${importando ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
             {importando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             {importando ? "Importando..." : "Importar PAC 2026"}
-          </button>
+            <input type="file" className="hidden" accept=".xlsx, .xls" onChange={handleImportar} disabled={importando} />
+          </label>
           <button onClick={() => setModal(true)} className="btn-primary shrink-0">
             <Plus className="w-4 h-4" /> Agregar insumo
           </button>
