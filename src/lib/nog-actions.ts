@@ -17,7 +17,6 @@ export async function buscarInsumosParaNog(q: string) {
     nombre:       catalogoCompras.nombre,
     codigo_igss:  catalogoCompras.codigo_igss,
     subproducto:  catalogoCompras.subproducto,
-    unidad_medida: catalogoCompras.unidad_medida,
   }).from(catalogoCompras).where(
     and(
       eq(catalogoCompras.activo, true),
