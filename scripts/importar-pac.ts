@@ -46,7 +46,7 @@ async function main() {
 
   const rows = data.slice(1).filter(r => r.some(c => c !== null && c !== ''));
 
-  console.log(`Borrando ${catalogoCompras._.name.name} actual...`);
+  console.log(`Borrando catálogo actual...`);
   await db.delete(catalogoCompras);
 
   const batchSize = 100;
