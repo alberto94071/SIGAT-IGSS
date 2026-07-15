@@ -47,9 +47,6 @@ type InsumoComprasInput = {
   unidad_medida?: string | null;
   codigo_igss?: string | null;
   renglon?: number | null;
-  ug?: number | null;
-  cc?: number | null;
-  estructura_programatica?: string | null;
   codigo_nombre_ppr?: number | null;
   nombre_ppr?: string | null;
   codigo_presentacion_ppr?: number | null;
@@ -65,9 +62,6 @@ function toValues(data: InsumoComprasInput) {
     unidad_medida:           data.unidad_medida || null,
     codigo_igss:             data.codigo_igss || null,
     renglon:                 data.renglon ?? null,
-    ug:                      data.ug ?? null,
-    cc:                      data.cc ?? null,
-    estructura_programatica: data.estructura_programatica || null,
     codigo_nombre_ppr:       data.codigo_nombre_ppr ?? null,
     nombre_ppr:              data.nombre_ppr || null,
     codigo_presentacion_ppr: data.codigo_presentacion_ppr ?? null,

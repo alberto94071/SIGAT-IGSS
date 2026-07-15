@@ -25,9 +25,6 @@ export async function importarPac2026(formData: FormData) {
       });
     }
 
-    const idxUg = findColIndex(['UG']);
-    const idxCc = findColIndex(['C.C.', 'CC']);
-    const idxEstructura = findColIndex(['ESTRUCTURA PROGRAMATICA', 'ESTRUCTURA']);
     const idxCodigoIgss = findColIndex(['CÓDIGO IGSS', 'CODIGO IGSS']);
     const idxNombre = findColIndex(['NOMBRE GENÉRICO', 'NOMBRE GENERICO', 'NOMBRE DEL INSUMO', 'NOMBRE']);
     const idxCodigoNombrePpr = findColIndex(['CÓDIGO NOMBRE PPR', 'CODIGO NOMBRE PPR']);
@@ -48,9 +45,6 @@ export async function importarPac2026(formData: FormData) {
     const batchSize = 100;
     for (let i = 0; i < rows.length; i += batchSize) {
       const batch = rows.slice(i, i + batchSize).map(r => ({
-        ug: celdaNumero(r[idxUg]),
-        cc: celdaNumero(r[idxCc]),
-        estructura_programatica: celdaTexto(r[idxEstructura]),
         codigo_igss: celdaTexto(r[idxCodigoIgss]),
         nombre: celdaTexto(r[idxNombre]) || 'Sin nombre',
         codigo_nombre_ppr: celdaNumero(r[idxCodigoNombrePpr]),

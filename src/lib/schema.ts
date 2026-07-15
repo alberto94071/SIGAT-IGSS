@@ -229,9 +229,6 @@ export const auditLog = pgTable("audit_log", {
 export const catalogoCompras = pgTable("catalogo_compras", {
   id:                      serial("id").primaryKey(),
   // Columnas del PAC (Plan Anual de Compras)
-  ug:                      integer("ug"),
-  cc:                      integer("cc"),
-  estructura_programatica: text("estructura_programatica"),
   codigo_igss:             text("codigo_igss"),       // "SC-122080" — texto, no entero
   nombre:                  text("nombre").notNull(),
   codigo_nombre_ppr:       integer("codigo_nombre_ppr"),

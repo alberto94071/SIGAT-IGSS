@@ -6,9 +6,6 @@ import { importarPac2026 } from "./importar-action";
 
 type Insumo = {
   id: number;
-  ug: number | null;
-  cc: number | null;
-  estructura_programatica: string | null;
   codigo_igss: string | null;
   nombre: string;
   codigo_nombre_ppr: number | null;
@@ -26,7 +23,7 @@ const Q = (n: number) =>
   `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const HEADERS = [
-  "UG", "C.C.", "Estructura Programática", "Código IGSS",
+  "Código IGSS",
   "Nombre Genérico, Forma, Concentración y Presentación",
   "Código Nombre PpR", "Nombre PpR", "Código Presentación PpR",
   "Unidad de Medida", "Renglón", "Sub-Producto",
@@ -136,10 +133,7 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
             <tbody className="divide-y divide-gray-100">
               {paginated.map(i => (
                 <tr key={i.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-3 py-2 tabular-nums text-gray-600 whitespace-nowrap">{i.ug ?? "—"}</td>
-                  <td className="px-3 py-2 tabular-nums text-gray-600 whitespace-nowrap">{i.cc ?? "—"}</td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap font-mono">{i.estructura_programatica ?? "—"}</td>
-                  <td className="px-3 py-2 font-mono font-semibold text-brand-700 whitespace-nowrap">{i.codigo_igss ?? "—"}</td>
+                  <td className="px-4 py-3 font-mono text-xs font-semibold text-green-600 whitespace-nowrap">{i.codigo_igss ?? "—"}</td>
                   <td className="px-3 py-2 text-gray-900 min-w-[280px] max-w-[380px]">
                     <p className="line-clamp-2">{i.nombre}</p>
                   </td>
@@ -228,10 +222,6 @@ function AgregarInsumoModal({ onClose, onCreado }: { onClose: () => void; onCrea
   const [unidadMedida, setUnidadMedida] = useState("");
   const [codigoIgss, setCodigoIgss] = useState("");
   const [renglon, setRenglon] = useState("");
-  const [avanzado, setAvanzado] = useState(false);
-  const [ug, setUg] = useState("");
-  const [cc, setCc] = useState("");
-  const [estructura, setEstructura] = useState("");
   const [codigoNombrePpr, setCodigoNombrePpr] = useState("");
   const [nombrePpr, setNombrePpr] = useState("");
   const [codigoPresentacionPpr, setCodigoPresentacionPpr] = useState("");
@@ -253,9 +243,6 @@ function AgregarInsumoModal({ onClose, onCreado }: { onClose: () => void; onCrea
       unidad_medida: unidadMedida.trim() || null,
       codigo_igss: codigoIgss.trim() || null,
       renglon: renglon ? parseInt(renglon, 10) : null,
-      ug: ug ? parseInt(ug, 10) : null,
-      cc: cc ? parseInt(cc, 10) : null,
-      estructura_programatica: estructura.trim() || null,
       codigo_nombre_ppr: codigoNombrePpr ? parseInt(codigoNombrePpr, 10) : null,
       nombre_ppr: nombrePpr.trim() || null,
       codigo_presentacion_ppr: codigoPresentacionPpr ? parseInt(codigoPresentacionPpr, 10) : null,
@@ -312,23 +299,9 @@ function AgregarInsumoModal({ onClose, onCreado }: { onClose: () => void; onCrea
 
           {avanzado && (
             <div className="space-y-3 border-t border-gray-100 pt-3">
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="label">UG</label>
-                  <input type="number" className="input" value={ug} onChange={e => setUg(e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">C.C.</label>
-                  <input type="number" className="input" value={cc} onChange={e => setCc(e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Precio estimado</label>
-                  <input type="number" step="0.01" className="input" value={precioEstimado} onChange={e => setPrecioEstimado(e.target.value)} />
-                </div>
-              </div>
               <div>
-                <label className="label">Estructura Programática</label>
-                <input className="input font-mono" value={estructura} onChange={e => setEstructura(e.target.value)} />
+                <label className="label">Precio estimado</label>
+                <input type="number" step="0.01" className="input" value={precioEstimado} onChange={e => setPrecioEstimado(e.target.value)} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
