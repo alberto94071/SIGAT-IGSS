@@ -46,7 +46,6 @@ type InsumoComprasInput = {
   cantidad: number;
   unidad_medida?: string | null;
   codigo_igss?: string | null;
-  codigo_ppr?: string | null;
   renglon?: number | null;
   ug?: number | null;
   cc?: number | null;
@@ -65,7 +64,6 @@ function toValues(data: InsumoComprasInput) {
     cantidad:                data.cantidad,
     unidad_medida:           data.unidad_medida || null,
     codigo_igss:             data.codigo_igss || null,
-    codigo_ppr:              data.codigo_ppr || null,
     renglon:                 data.renglon ?? null,
     ug:                      data.ug ?? null,
     cc:                      data.cc ?? null,

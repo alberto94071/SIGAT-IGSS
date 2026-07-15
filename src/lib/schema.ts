@@ -243,10 +243,6 @@ export const catalogoCompras = pgTable("catalogo_compras", {
   cantidad:                doublePrecision("cantidad"),
   precio_estimado:         doublePrecision("precio_estimado"),
   monto:                   doublePrecision("monto"),
-  // Columnas legacy (compatibilidad)
-  codigo_ppr:              text("codigo_ppr"),
-  caracteristicas:         text("caracteristicas"),
-  presentacion:            text("presentacion"),
   activo:                  boolean("activo").notNull().default(true),
   created_at:              text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
@@ -475,7 +471,7 @@ export const siafCompras = pgTable("siaf_compras", {
 export const siafComprasItems = pgTable("siaf_compras_items", {
   id:                  serial("id").primaryKey(),
   solicitud_id:        integer("solicitud_id").notNull().references(() => siafCompras.id, { onDelete: "cascade" }),
-  catalogo_id:         integer("catalogo_id").references(() => catalogoCompras.id),
+  catalogo_id:         integer("catalogo_id").references(() => catalogoCompras.id, { onDelete: "set null" }),
   codigo_igss:         text("codigo_igss"),   // texto para coincidir con catalogoCompras.codigo_igss
   codigo_ppr:          text("codigo_ppr"),
   nombre:              text("nombre").notNull(),

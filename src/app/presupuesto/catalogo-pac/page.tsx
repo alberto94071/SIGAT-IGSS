@@ -6,12 +6,11 @@ import CatalogoPacClient from "./CatalogoPacClient";
 export default async function CatalogoPacPage() {
   const items = await db.select({
     id:              catalogoCompras.id,
-    codigo_ppr:      catalogoCompras.codigo_ppr,
-    codigo_igss:     catalogoCompras.codigo_igss,
-    nombre:          catalogoCompras.nombre,
-    caracteristicas: catalogoCompras.caracteristicas,
-    presentacion:    catalogoCompras.presentacion,
-    subproducto:     catalogoCompras.subproducto,
+    codigo_nombre_ppr: catalogoCompras.codigo_nombre_ppr,
+    codigo_igss:       catalogoCompras.codigo_igss,
+    nombre:            catalogoCompras.nombre,
+    unidad_medida:     catalogoCompras.unidad_medida,
+    subproducto:       catalogoCompras.subproducto,
     cantidad:        catalogoCompras.cantidad,
   }).from(catalogoCompras).orderBy(asc(catalogoCompras.nombre));
 

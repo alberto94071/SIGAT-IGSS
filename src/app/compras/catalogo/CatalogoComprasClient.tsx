@@ -227,7 +227,6 @@ function AgregarInsumoModal({ onClose, onCreado }: { onClose: () => void; onCrea
   const [cantidad, setCantidad] = useState("");
   const [unidadMedida, setUnidadMedida] = useState("");
   const [codigoIgss, setCodigoIgss] = useState("");
-  const [codigoPpr, setCodigoPpr] = useState("");
   const [renglon, setRenglon] = useState("");
   const [avanzado, setAvanzado] = useState(false);
   const [ug, setUg] = useState("");
@@ -253,7 +252,6 @@ function AgregarInsumoModal({ onClose, onCreado }: { onClose: () => void; onCrea
       cantidad: cantidadNum,
       unidad_medida: unidadMedida.trim() || null,
       codigo_igss: codigoIgss.trim() || null,
-      codigo_ppr: codigoPpr.trim() || null,
       renglon: renglon ? parseInt(renglon, 10) : null,
       ug: ug ? parseInt(ug, 10) : null,
       cc: cc ? parseInt(cc, 10) : null,
@@ -281,15 +279,9 @@ function AgregarInsumoModal({ onClose, onCreado }: { onClose: () => void; onCrea
             <label className="label">Nombre <span className="text-red-500 font-semibold">*</span></label>
             <input className="input" value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre genérico, forma, concentración y presentación" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Código IGSS</label>
-              <input className="input font-mono" value={codigoIgss} onChange={e => setCodigoIgss(e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Código PPR</label>
-              <input className="input font-mono" value={codigoPpr} onChange={e => setCodigoPpr(e.target.value)} />
-            </div>
+          <div>
+            <label className="label">Código IGSS</label>
+            <input className="input font-mono" value={codigoIgss} onChange={e => setCodigoIgss(e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

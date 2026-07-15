@@ -4,11 +4,10 @@ import { BookOpen, Search, X } from "lucide-react";
 
 type Item = {
   id: number;
-  codigo_ppr: string | null;
+  codigo_nombre_ppr: number | null;
   codigo_igss: string | null;
   nombre: string;
-  caracteristicas: string | null;
-  presentacion: string | null;
+  unidad_medida: string | null;
   subproducto: string;
   cantidad: number | null;
 };
@@ -23,9 +22,8 @@ export default function CatalogoPacClient({ items }: Props) {
     const q = query.trim().toLowerCase();
     return items.filter(r =>
       r.nombre.toLowerCase().includes(q) ||
-      (r.codigo_ppr ?? "").includes(q) ||
+      (r.codigo_nombre_ppr ? String(r.codigo_nombre_ppr) : "").includes(q) ||
       (r.codigo_igss ?? "").includes(q) ||
-      (r.caracteristicas ?? "").toLowerCase().includes(q) ||
       r.subproducto.toLowerCase().includes(q)
     );
   }, [items, query]);
@@ -71,7 +69,7 @@ export default function CatalogoPacClient({ items }: Props) {
               <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Cód. IGSS</th>
               <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Cód. PPR</th>
               <th className="px-4 py-3 text-left font-semibold">Nombre</th>
-              <th className="px-4 py-3 text-left font-semibold hidden md:table-cell">Características</th>
+              <th className="px-4 py-3 text-left font-semibold hidden md:table-cell">Unidad</th>
               <th className="px-4 py-3 text-left font-semibold hidden lg:table-cell whitespace-nowrap">Subproducto</th>
               <th className="px-4 py-3 text-right font-semibold hidden sm:table-cell whitespace-nowrap">Cantidad</th>
             </tr>
@@ -90,16 +88,13 @@ export default function CatalogoPacClient({ items }: Props) {
                     {r.codigo_igss ?? "—"}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">
-                    {r.codigo_ppr ?? "—"}
+                    {r.codigo_nombre_ppr ?? "—"}
                   </td>
                   <td className="px-4 py-3 text-gray-800">
                     <p className="font-medium max-w-xs truncate">{r.nombre}</p>
-                    {r.presentacion && (
-                      <p className="text-xs text-gray-400 truncate max-w-xs">{r.presentacion}</p>
-                    )}
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500 hidden md:table-cell max-w-xs">
-                    <span className="line-clamp-2">{r.caracteristicas ?? "—"}</span>
+                    <span className="line-clamp-2">{r.unidad_medida ?? "—"}</span>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500 hidden lg:table-cell whitespace-nowrap">
                     {r.subproducto}
