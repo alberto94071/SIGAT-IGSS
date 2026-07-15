@@ -44,29 +44,21 @@ type InsumoComprasInput = {
   nombre: string;
   subproducto: string;
   cantidad: number;
-  unidad_medida?: string | null;
   codigo_igss?: string | null;
   renglon?: number | null;
-  codigo_nombre_ppr?: number | null;
-  nombre_ppr?: string | null;
-  codigo_presentacion_ppr?: number | null;
   precio_estimado?: number | null;
 };
 
 function toValues(data: InsumoComprasInput) {
   const precio = data.precio_estimado ?? null;
   return {
-    nombre:                  data.nombre,
-    subproducto:             data.subproducto,
-    cantidad:                data.cantidad,
-    unidad_medida:           data.unidad_medida || null,
-    codigo_igss:             data.codigo_igss || null,
-    renglon:                 data.renglon ?? null,
-    codigo_nombre_ppr:       data.codigo_nombre_ppr ?? null,
-    nombre_ppr:              data.nombre_ppr || null,
-    codigo_presentacion_ppr: data.codigo_presentacion_ppr ?? null,
-    precio_estimado:         precio,
-    monto:                   precio != null ? precio * data.cantidad : null,
+    nombre:          data.nombre,
+    subproducto:     data.subproducto,
+    cantidad:        data.cantidad,
+    codigo_igss:     data.codigo_igss || null,
+    renglon:         data.renglon ?? null,
+    precio_estimado: data.precio_estimado ?? null,
+    monto:           precio != null ? precio * data.cantidad : null,
   };
 }
 

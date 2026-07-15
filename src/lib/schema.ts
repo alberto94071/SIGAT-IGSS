@@ -231,10 +231,6 @@ export const catalogoCompras = pgTable("catalogo_compras", {
   // Columnas del PAC (Plan Anual de Compras)
   codigo_igss:             text("codigo_igss"),       // "SC-122080" — texto, no entero
   nombre:                  text("nombre").notNull(),
-  codigo_nombre_ppr:       integer("codigo_nombre_ppr"),
-  nombre_ppr:              text("nombre_ppr"),
-  codigo_presentacion_ppr: integer("codigo_presentacion_ppr"),
-  unidad_medida:           text("unidad_medida"),
   renglon:                 integer("renglon"),
   subproducto:             text("subproducto").notNull(),
   cantidad:                doublePrecision("cantidad"),

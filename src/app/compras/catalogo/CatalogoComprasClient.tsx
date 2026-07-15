@@ -8,10 +8,6 @@ type Insumo = {
   id: number;
   codigo_igss: string | null;
   nombre: string;
-  codigo_nombre_ppr: number | null;
-  nombre_ppr: string | null;
-  codigo_presentacion_ppr: number | null;
-  unidad_medida: string | null;
   renglon: number | null;
   subproducto: string;
   cantidad: number | null;
@@ -23,11 +19,10 @@ const Q = (n: number) =>
   `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const HEADERS = [
-  "Código IGSS",
+  "Renglón", "Código IGSS",
   "Nombre Genérico, Forma, Concentración y Presentación",
-  "Código Nombre PpR", "Nombre PpR", "Código Presentación PpR",
-  "Unidad de Medida", "Renglón", "Sub-Producto",
-  "Cantidad", "Precio Estimado", "Monto",
+  "Sub-Producto", "Cantidad",
+  "Precio Estimado", "Monto"
 ];
 
 const PAGE_SIZES = [10, 25, 50] as const;
@@ -132,18 +127,12 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
             <tbody className="divide-y divide-gray-100">
               {paginated.map(i => (
                 <tr key={i.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-3 py-2 tabular-nums text-gray-600 whitespace-nowrap text-center">{i.renglon ?? "—"}</td>
                   <td className="px-4 py-3 font-mono text-xs font-semibold text-green-600 whitespace-nowrap">{i.codigo_igss ?? "—"}</td>
                   <td className="px-3 py-2 text-gray-900 min-w-[280px] max-w-[380px]">
                     <p className="line-clamp-2">{i.nombre}</p>
                   </td>
-                  <td className="px-3 py-2 tabular-nums text-gray-600 whitespace-nowrap">{i.codigo_nombre_ppr ?? "—"}</td>
-                  <td className="px-3 py-2 text-gray-600 min-w-[200px] max-w-[300px]">
-                    <p className="line-clamp-2">{i.nombre_ppr ?? "—"}</p>
-                  </td>
-                  <td className="px-3 py-2 tabular-nums text-gray-600 whitespace-nowrap">{i.codigo_presentacion_ppr ?? "—"}</td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{i.unidad_medida ?? "—"}</td>
-                  <td className="px-3 py-2 tabular-nums text-gray-700 whitespace-nowrap">{i.renglon ?? "—"}</td>
-                  <td className="px-3 py-2 font-mono text-gray-700 whitespace-nowrap">{i.subproducto}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap max-w-[150px] truncate" title={i.subproducto}>{i.subproducto}</td>
                   <td className="px-3 py-2 tabular-nums text-right text-gray-900 font-semibold whitespace-nowrap">
                     {i.cantidad?.toLocaleString("es-GT") ?? "—"}
                   </td>
@@ -218,13 +207,9 @@ function AgregarInsumoModal({ onClose, onCreado }: { onClose: () => void; onCrea
   const [nombre, setNombre] = useState("");
   const [subproducto, setSubproducto] = useState("");
   const [cantidad, setCantidad] = useState("");
-  const [unidadMedida, setUnidadMedida] = useState("");
   const [codigoIgss, setCodigoIgss] = useState("");
   const [renglon, setRenglon] = useState("");
   const [avanzado, setAvanzado] = useState(false);
-  const [codigoNombrePpr, setCodigoNombrePpr] = useState("");
-  const [nombrePpr, setNombrePpr] = useState("");
-  const [codigoPresentacionPpr, setCodigoPresentacionPpr] = useState("");
   const [precioEstimado, setPrecioEstimado] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -240,12 +225,8 @@ function AgregarInsumoModal({ onClose, onCreado }: { onClose: () => void; onCrea
       nombre: nombre.trim(),
       subproducto: subproducto.trim(),
       cantidad: cantidadNum,
-      unidad_medida: unidadMedida.trim() || null,
       codigo_igss: codigoIgss.trim() || null,
       renglon: renglon ? parseInt(renglon, 10) : null,
-      codigo_nombre_ppr: codigoNombrePpr ? parseInt(codigoNombrePpr, 10) : null,
-      nombre_ppr: nombrePpr.trim() || null,
-      codigo_presentacion_ppr: codigoPresentacionPpr ? parseInt(codigoPresentacionPpr, 10) : null,
       precio_estimado: precioEstimado ? parseFloat(precioEstimado) : null,
     });
     setSaving(false);
@@ -276,12 +257,6 @@ function AgregarInsumoModal({ onClose, onCreado }: { onClose: () => void; onCrea
               <input className="input font-mono" value={subproducto} onChange={e => setSubproducto(e.target.value)} placeholder="001-004-0001" />
             </div>
             <div>
-              <label className="label">Unidad de medida</label>
-              <input className="input" value={unidadMedida} onChange={e => setUnidadMedida(e.target.value)} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
               <label className="label">Cantidad autorizada <span className="text-red-500 font-semibold">*</span></label>
               <input type="number" step="0.01" min="0.01" className="input" value={cantidad} onChange={e => setCantidad(e.target.value)} />
             </div>
@@ -302,20 +277,6 @@ function AgregarInsumoModal({ onClose, onCreado }: { onClose: () => void; onCrea
               <div>
                 <label className="label">Precio estimado</label>
                 <input type="number" step="0.01" className="input" value={precioEstimado} onChange={e => setPrecioEstimado(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Código Nombre PpR</label>
-                  <input type="number" className="input" value={codigoNombrePpr} onChange={e => setCodigoNombrePpr(e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Código Presentación PpR</label>
-                  <input type="number" className="input" value={codigoPresentacionPpr} onChange={e => setCodigoPresentacionPpr(e.target.value)} />
-                </div>
-              </div>
-              <div>
-                <label className="label">Nombre PpR</label>
-                <input className="input" value={nombrePpr} onChange={e => setNombrePpr(e.target.value)} />
               </div>
             </div>
           )}

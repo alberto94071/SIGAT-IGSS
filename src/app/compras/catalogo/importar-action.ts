@@ -27,10 +27,6 @@ export async function importarPac2026(formData: FormData) {
 
     const idxCodigoIgss = findColIndex(['CÓDIGO IGSS', 'CODIGO IGSS']);
     const idxNombre = findColIndex(['NOMBRE GENÉRICO', 'NOMBRE GENERICO', 'NOMBRE DEL INSUMO', 'NOMBRE']);
-    const idxCodigoNombrePpr = findColIndex(['CÓDIGO NOMBRE PPR', 'CODIGO NOMBRE PPR']);
-    const idxNombrePpr = findColIndex(['NOMBRE PPR']);
-    const idxCodigoPresPpr = findColIndex(['CÓDIGO PRESENTACIÓN PPR', 'CODIGO PRESENTACION PPR']);
-    const idxUnidadMedida = findColIndex(['UNIDAD DE MEDIDA']);
     const idxRenglon = findColIndex(['RENGLÓN', 'RENGLON']);
     const idxSubproducto = findColIndex(['SUB-PRODUCTO', 'SUBPRODUCTO']);
     const idxCantidad = findColIndex(['CANTIDAD', 'CANTIDAD AUTORIZADA']);
@@ -47,10 +43,6 @@ export async function importarPac2026(formData: FormData) {
       const batch = rows.slice(i, i + batchSize).map(r => ({
         codigo_igss: celdaTexto(r[idxCodigoIgss]),
         nombre: celdaTexto(r[idxNombre]) || 'Sin nombre',
-        codigo_nombre_ppr: celdaNumero(r[idxCodigoNombrePpr]),
-        nombre_ppr: celdaTexto(r[idxNombrePpr]),
-        codigo_presentacion_ppr: celdaNumero(r[idxCodigoPresPpr]),
-        unidad_medida: celdaTexto(r[idxUnidadMedida]),
         renglon: celdaNumero(r[idxRenglon]),
         subproducto: celdaTexto(r[idxSubproducto]) || '000-000',
         cantidad: celdaNumero(r[idxCantidad]),

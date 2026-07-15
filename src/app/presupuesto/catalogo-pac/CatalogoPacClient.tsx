@@ -4,10 +4,8 @@ import { BookOpen, Search, X } from "lucide-react";
 
 type Item = {
   id: number;
-  codigo_nombre_ppr: number | null;
   codigo_igss: string | null;
   nombre: string;
-  unidad_medida: string | null;
   subproducto: string;
   cantidad: number | null;
 };
@@ -22,7 +20,6 @@ export default function CatalogoPacClient({ items }: Props) {
     const q = query.trim().toLowerCase();
     return items.filter(r =>
       r.nombre.toLowerCase().includes(q) ||
-      (r.codigo_nombre_ppr ? String(r.codigo_nombre_ppr) : "").includes(q) ||
       (r.codigo_igss ?? "").includes(q) ||
       r.subproducto.toLowerCase().includes(q)
     );
@@ -46,7 +43,7 @@ export default function CatalogoPacClient({ items }: Props) {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <input
           type="text"
-          placeholder="Buscar por nombre, código PPR o código IGSS…"
+          placeholder="Buscar por nombre o código IGSS…"
           value={query}
           onChange={e => setQuery(e.target.value)}
           className="w-full pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -67,9 +64,7 @@ export default function CatalogoPacClient({ items }: Props) {
           <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
             <tr>
               <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Cód. IGSS</th>
-              <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Cód. PPR</th>
               <th className="px-4 py-3 text-left font-semibold">Nombre</th>
-              <th className="px-4 py-3 text-left font-semibold hidden md:table-cell">Unidad</th>
               <th className="px-4 py-3 text-left font-semibold hidden lg:table-cell whitespace-nowrap">Subproducto</th>
               <th className="px-4 py-3 text-right font-semibold hidden sm:table-cell whitespace-nowrap">Cantidad</th>
             </tr>
@@ -87,14 +82,8 @@ export default function CatalogoPacClient({ items }: Props) {
                   <td className="px-4 py-3 font-mono text-xs font-semibold text-blue-700 whitespace-nowrap">
                     {r.codigo_igss ?? "—"}
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">
-                    {r.codigo_nombre_ppr ?? "—"}
-                  </td>
                   <td className="px-4 py-3 text-gray-800">
                     <p className="font-medium max-w-xs truncate">{r.nombre}</p>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500 hidden md:table-cell max-w-xs">
-                    <span className="line-clamp-2">{r.unidad_medida ?? "—"}</span>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500 hidden lg:table-cell whitespace-nowrap">
                     {r.subproducto}

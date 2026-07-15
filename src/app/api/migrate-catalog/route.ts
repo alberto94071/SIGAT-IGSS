@@ -17,6 +17,10 @@ export async function GET() {
     await db.execute(sql`ALTER TABLE catalogo_compras DROP COLUMN IF EXISTS ug`);
     await db.execute(sql`ALTER TABLE catalogo_compras DROP COLUMN IF EXISTS cc`);
     await db.execute(sql`ALTER TABLE catalogo_compras DROP COLUMN IF EXISTS estructura_programatica`);
+    await db.execute(sql`ALTER TABLE catalogo_compras DROP COLUMN IF EXISTS codigo_nombre_ppr`);
+    await db.execute(sql`ALTER TABLE catalogo_compras DROP COLUMN IF EXISTS nombre_ppr`);
+    await db.execute(sql`ALTER TABLE catalogo_compras DROP COLUMN IF EXISTS codigo_presentacion_ppr`);
+    await db.execute(sql`ALTER TABLE catalogo_compras DROP COLUMN IF EXISTS unidad_medida`);
 
     return NextResponse.json({ success: true, message: "Migration completed successfully" });
   } catch (error: any) {
