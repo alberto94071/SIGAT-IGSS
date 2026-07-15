@@ -221,6 +221,7 @@ function AgregarInsumoModal({ onClose, onCreado }: { onClose: () => void; onCrea
   const [unidadMedida, setUnidadMedida] = useState("");
   const [codigoIgss, setCodigoIgss] = useState("");
   const [renglon, setRenglon] = useState("");
+  const [avanzado, setAvanzado] = useState(false);
   const [codigoNombrePpr, setCodigoNombrePpr] = useState("");
   const [nombrePpr, setNombrePpr] = useState("");
   const [codigoPresentacionPpr, setCodigoPresentacionPpr] = useState("");
