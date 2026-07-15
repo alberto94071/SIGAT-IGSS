@@ -529,7 +529,7 @@ export function LineasCotizacionAnual({ cotizacion, canEdit, onChange }: {
   const [precio, setPrecio] = useState("");
   const [exento, setExento] = useState(false);
   const [insumoQuery, setInsumoQuery] = useState("");
-  const [insumoResults, setInsumoResults] = useState<{ codigo_igss: string | null; nombre: string; unidad_medida: string | null }[]>([]);
+  const [insumoResults, setInsumoResults] = useState<{ codigo_igss: string | null; nombre: string }[]>([]);
   const [insumoLoading, setInsumoLoading] = useState(false);
   const [insumoOpen, setInsumoOpen] = useState(false);
 

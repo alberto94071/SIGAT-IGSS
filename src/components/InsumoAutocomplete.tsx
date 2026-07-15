@@ -5,7 +5,7 @@ import { buscarInsumosParaNog } from "@/lib/nog-actions";
 
 type InsumoHit = {
   id: number; nombre: string; codigo_igss: string | null;
-  subproducto: string; unidad_medida: string | null;
+  subproducto: string;
 };
 
 interface Props {
