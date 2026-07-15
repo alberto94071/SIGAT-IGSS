@@ -125,15 +125,20 @@ export async function aprobarSolicitud(id: number): Promise<{ ok: true } | { err
 
       const montosPorGrupo = new Map<string, { renglon: number; subproducto: string; monto: number }>();
       for (const item of items) {
-        if (item.codigo_igss == null) continue;
+        const queryCond = item.catalogo_id 
+          ? eq(catalogoCompras.id, item.catalogo_id)
+          : (item.codigo_igss != null
+              ? and(eq(catalogoCompras.codigo_igss, item.codigo_igss), eq(catalogoCompras.subproducto, item.subproducto))
+              : eq(catalogoCompras.nombre, item.nombre));
+
         const [cat] = await db.select({ renglon: catalogoCompras.renglon, precio_estimado: catalogoCompras.precio_estimado })
           .from(catalogoCompras)
-          .where(and(eq(catalogoCompras.codigo_igss, item.codigo_igss), eq(catalogoCompras.subproducto, item.subproducto)))
+          .where(queryCond)
           .limit(1);
         if (!cat || cat.renglon == null || cat.precio_estimado == null) continue;
 
         const monto = item.cantidad_solicitada * cat.precio_estimado;
-        const key = `${cat.renglon}::${item.subproducto}`;
+        const key = `${cat.renglon}::${item.subproducto}::${item.nombre}`;
         const existente = montosPorGrupo.get(key);
         if (existente) existente.monto += monto;
         else montosPorGrupo.set(key, { renglon: cat.renglon, subproducto: item.subproducto, monto });

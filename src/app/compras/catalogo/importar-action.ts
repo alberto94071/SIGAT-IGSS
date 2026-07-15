@@ -2,8 +2,15 @@
 import * as XLSX from "xlsx";
 import { db } from "@/lib/db";
 import { catalogoCompras } from "@/lib/schema";
-import { celdaNumero, celdaTexto } from "@/lib/excel-utils";
-import { revalidatePath } from "next/cache";
+function celdaTexto(v: unknown): string {
+  return v == null ? "" : String(v).trim();
+}
+
+function celdaNumero(v: unknown): number | null {
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : parseFloat(String(v).replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}import { revalidatePath } from "next/cache";
 
 export async function importarPac2026(formData: FormData) {
   try {

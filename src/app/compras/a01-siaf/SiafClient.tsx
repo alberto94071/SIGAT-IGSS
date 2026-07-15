@@ -134,7 +134,7 @@ export default function SiafClient({
         if (q && !item.nombre.toLowerCase().includes(q) &&
             !(item.codigo_ppr ?? "").toLowerCase().includes(q) &&
             !String(item.codigo_igss ?? "").includes(query)) continue;
-        const key = `${item.codigo_igss}::${item.subproducto}`;
+        const key = item.catalogo_id ? String(item.catalogo_id) : `${item.codigo_igss}::${item.subproducto}::${item.nombre}`;
         if (!groups.has(key)) {
           groups.set(key, { key, codigo_igss: item.codigo_igss, nombre: item.nombre,
             subproducto: item.subproducto, unidad_medida: item.unidad_medida, entries: [] });
@@ -144,7 +144,7 @@ export default function SiafClient({
     }
 
     return Array.from(groups.values()).map(g => {
-      const cat = catalogo.find(c => c.codigo_igss === g.codigo_igss && c.subproducto === g.subproducto);
+      const cat = catalogo.find(c => (g.key && String(c.id) === g.key) || (c.codigo_igss === g.codigo_igss && c.subproducto === g.subproducto && c.nombre === g.nombre));
       const total_sol = g.entries.reduce((s, e) => s + e.item.cantidad_solicitada, 0);
       const autorizado = cat?.cantidad ?? 0;
       const sorted = [...g.entries].sort((a, b) => b.sol.fecha.localeCompare(a.sol.fecha));
@@ -155,7 +155,11 @@ export default function SiafClient({
 
   const renglonPorItem = useMemo(() => {
     const map = new Map<string, number | null>();
-    for (const c of catalogo) map.set(`${c.codigo_igss}::${c.subproducto}`, c.renglon);
+    for (const c of catalogo) {
+      map.set(String(c.id), c.renglon);
+      map.set(`${c.codigo_igss}::${c.subproducto}::${c.nombre}`, c.renglon);
+      if (c.codigo_igss) map.set(`${c.codigo_igss}::${c.subproducto}`, c.renglon);
+    }
     return map;
   }, [catalogo]);
 
@@ -506,7 +510,9 @@ export default function SiafClient({
                                     {s.items.map(item => {
                                       const despues = item.cantidad_antes != null
                                         ? item.cantidad_antes - item.cantidad_solicitada : null;
-                                      const renglon = renglonPorItem.get(`${item.codigo_igss}::${item.subproducto}`);
+                                      const renglon = item.catalogo_id 
+                                        ? renglonPorItem.get(String(item.catalogo_id)) 
+                                        : (renglonPorItem.get(`${item.codigo_igss}::${item.subproducto}::${item.nombre}`) ?? renglonPorItem.get(`${item.codigo_igss}::${item.subproducto}`));
                                       return (
                                         <tr key={item.id}>
                                           <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{item.codigo_igss ?? "—"}</td>
