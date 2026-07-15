@@ -1,7 +1,7 @@
 "use client";
 import { useState, useMemo, useEffect } from "react";
-import { BookOpen, Search, Plus, X, Loader2, ChevronLeft, ChevronRight, ChevronDown, Download } from "lucide-react";
-import { crearInsumoCompras } from "./actions";
+import { BookOpen, Search, Plus, X, Loader2, ChevronLeft, ChevronRight, ChevronDown, Download, Edit2, Trash2 } from "lucide-react";
+import { crearInsumoCompras, editarInsumoCompras, eliminarInsumoCompras } from "./actions";
 import { importarPac2026 } from "./importar-action";
 
 type Insumo = {
@@ -22,7 +22,7 @@ const HEADERS = [
   "Renglón", "Código IGSS",
   "Nombre Genérico, Forma, Concentración y Presentación",
   "Sub-Producto", "Cantidad",
-  "Precio Estimado", "Monto"
+  "Precio Estimado", "Monto", "Acciones"
 ];
 
 const PAGE_SIZES = [10, 25, 50] as const;
@@ -35,6 +35,7 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
   const [pageSize, setPageSize] = useState<number>(25);
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState(false);
+  const [editingInsumo, setEditingInsumo] = useState<Insumo | null>(null);
   const [importando, setImportando] = useState(false);
 
   async function handleImportar(e: React.ChangeEvent<HTMLInputElement>) {
@@ -75,8 +76,20 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
   }, [filtered, pageClamped, pageSize]);
 
   function handleCreado(nuevo: Insumo) {
-    setInsumos(p => [nuevo, ...p]);
+    if (editingInsumo) {
+      setInsumos(p => p.map(i => i.id === nuevo.id ? nuevo : i));
+    } else {
+      setInsumos(p => [nuevo, ...p]);
+    }
     setModal(false);
+    setEditingInsumo(null);
+  }
+
+  async function handleDelete(id: number) {
+    if (!confirm("¿Seguro que quieres eliminar este insumo del catálogo?")) return;
+    const res = await eliminarInsumoCompras(id);
+    if ("error" in res) return alert(res.error);
+    setInsumos(p => p.filter(i => i.id !== id));
   }
 
   return (
@@ -106,7 +119,7 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
             {importando ? "Importando..." : "Importar PAC 2026"}
             <input type="file" className="hidden" accept=".xlsx, .xls" onChange={handleImportar} disabled={importando} />
           </label>
-          <button onClick={() => setModal(true)} className="btn-primary shrink-0">
+          <button onClick={() => { setEditingInsumo(null); setModal(true); }} className="btn-primary shrink-0">
             <Plus className="w-4 h-4" /> Agregar insumo
           </button>
         </div>
@@ -141,6 +154,24 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
                   </td>
                   <td className="px-3 py-2 tabular-nums text-right font-bold text-green-700 whitespace-nowrap">
                     {i.monto != null ? Q(i.monto) : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <div className="flex justify-end gap-1">
+                      <button
+                        onClick={() => { setEditingInsumo(i); setModal(true); }}
+                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Editar insumo"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(i.id)}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Eliminar insumo"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -198,19 +229,19 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
         )}
       </div>
 
-      {modal && <AgregarInsumoModal onClose={() => setModal(false)} onCreado={handleCreado} />}
+      {modal && <InsumoModal insumo={editingInsumo} onClose={() => { setModal(false); setEditingInsumo(null); }} onCreado={handleCreado} />}
     </div>
   );
 }
 
-function AgregarInsumoModal({ onClose, onCreado }: { onClose: () => void; onCreado: (i: Insumo) => void }) {
-  const [nombre, setNombre] = useState("");
-  const [subproducto, setSubproducto] = useState("");
-  const [cantidad, setCantidad] = useState("");
-  const [codigoIgss, setCodigoIgss] = useState("");
-  const [renglon, setRenglon] = useState("");
+function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | null; onClose: () => void; onCreado: (i: Insumo) => void }) {
+  const [nombre, setNombre] = useState(insumo?.nombre || "");
+  const [subproducto, setSubproducto] = useState(insumo?.subproducto || "");
+  const [cantidad, setCantidad] = useState(insumo?.cantidad?.toString() || "");
+  const [codigoIgss, setCodigoIgss] = useState(insumo?.codigo_igss || "");
+  const [renglon, setRenglon] = useState(insumo?.renglon?.toString() || "");
   const [avanzado, setAvanzado] = useState(false);
-  const [precioEstimado, setPrecioEstimado] = useState("");
+  const [precioEstimado, setPrecioEstimado] = useState(insumo?.precio_estimado?.toString() || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -221,24 +252,36 @@ function AgregarInsumoModal({ onClose, onCreado }: { onClose: () => void; onCrea
     if (!(cantidadNum > 0)) return setError("Ingresa una cantidad válida");
 
     setSaving(true); setError("");
-    const res = await crearInsumoCompras({
+    
+    const payload = {
       nombre: nombre.trim(),
       subproducto: subproducto.trim(),
       cantidad: cantidadNum,
       codigo_igss: codigoIgss.trim() || null,
       renglon: renglon ? parseInt(renglon, 10) : null,
       precio_estimado: precioEstimado ? parseFloat(precioEstimado) : null,
-    });
+    };
+
+    const res = insumo
+      ? await editarInsumoCompras(insumo.id, payload)
+      : await crearInsumoCompras(payload);
+
     setSaving(false);
     if ("error" in res) return setError(res.error);
-    onCreado(res.insumo as unknown as Insumo);
+    
+    if (insumo) {
+      onCreado({ ...insumo, ...payload, monto: payload.precio_estimado ? payload.precio_estimado * payload.cantidad : null });
+    } else {
+      // @ts-expect-error res.insumo exists when creating
+      onCreado(res.insumo as unknown as Insumo);
+    }
   }
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
       <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-          <h2 className="font-semibold text-gray-900">Agregar insumo al catálogo</h2>
+          <h2 className="font-semibold text-gray-900">{insumo ? "Editar insumo" : "Agregar insumo al catálogo"}</h2>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X className="w-4 h-4" /></button>
         </div>
 

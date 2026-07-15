@@ -104,3 +104,16 @@ export async function toggleInsumoCompras(id: number, activo: boolean): Promise<
     return { error: "Error al cambiar estado" };
   }
 }
+
+export async function eliminarInsumoCompras(id: number): Promise<{ ok: true } | { error: string }> {
+  try {
+    await checkAuth();
+    await db.delete(catalogoCompras).where(eq(catalogoCompras.id, id));
+    return { ok: true };
+  } catch (e: any) {
+    if (e.message?.includes('violates foreign key constraint')) {
+      return { error: "No se puede eliminar porque este producto ya se usó en una orden o solicitud." };
+    }
+    return { error: "Error al eliminar el insumo" };
+  }
+}
