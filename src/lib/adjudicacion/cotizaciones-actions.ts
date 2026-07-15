@@ -231,7 +231,6 @@ export async function buscarInsumoCatalogo(q: string) {
   return db.select({
     codigo_igss:   catalogoCompras.codigo_igss,
     nombre:        catalogoCompras.nombre,
-    unidad_medida: catalogoCompras.unidad_medida,
   }).from(catalogoCompras).where(
     or(
       ilike(catalogoCompras.nombre, `%${q}%`),
