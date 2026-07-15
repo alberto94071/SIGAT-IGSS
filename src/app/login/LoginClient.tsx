@@ -67,11 +67,11 @@ export default function LoginClient({ fotos }: { fotos: string[] }) {
           ))}
           {/* Velo para que la marca se lea sobre cualquier foto */}
           {fotos.length > 0 && (
-            <div className="absolute inset-0 bg-gradient-to-t from-brand-950/80 via-brand-900/30 to-black/20" />
+            <div className="absolute inset-0 bg-gradient-to-t from-brand-950/80 via-brand-900/30 to-black/20 z-10" />
           )}
 
           {/* Marca centrada sobre la foto */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 z-20">
             <div className="inline-flex items-center justify-center w-28 h-28 sm:w-36 sm:h-36 bg-white/90 backdrop-blur rounded-3xl mb-3 ring-2 ring-white/40 shadow-xl p-3 sm:p-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo-cip.png" alt="Logo CIP" className="w-full h-full object-contain" />
@@ -82,7 +82,7 @@ export default function LoginClient({ fotos }: { fotos: string[] }) {
 
           {/* Indicador de fotos */}
           {fotos.length > 1 && (
-            <div className="absolute bottom-4 inset-x-0 flex justify-center gap-1.5">
+            <div className="absolute bottom-4 inset-x-0 flex justify-center gap-1.5 z-20">
               {fotos.map((_, i) => (
                 <button key={i} onClick={() => setIdx(i)} aria-label={`Foto ${i + 1}`}
                   className={`h-1.5 rounded-full transition-all ${i === idx ? "w-5 bg-white" : "w-1.5 bg-white/40 hover:bg-white/70"}`} />
