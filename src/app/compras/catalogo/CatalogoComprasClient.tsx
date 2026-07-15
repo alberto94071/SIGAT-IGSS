@@ -66,7 +66,6 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
       i.nombre.toLowerCase().includes(q) ||
       (i.codigo_igss ?? "").toLowerCase().includes(q) ||
       i.subproducto.toLowerCase().includes(q) ||
-      (i.estructura_programatica ?? "").includes(q) ||
       String(i.renglon ?? "").includes(q)
     );
   }, [insumos, query]);
