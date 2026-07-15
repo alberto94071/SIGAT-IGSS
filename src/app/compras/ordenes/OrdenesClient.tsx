@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { generarOrdenDeCompra, enviarOrdenAPresupuesto, type ConsolidacionPendienteOrden } from "@/lib/adjudicacion/ordenes-actions";
 import RenglonBadges from "@/components/RenglonBadges";
+import { useRouter } from "next/navigation";
 
 type OrdenGenerada = {
   id: number; numero: number; anio: number; fecha: string;
@@ -40,6 +41,7 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
   const [generarFor, setGenerarFor] = useState<ConsolidacionPendienteOrden | null>(null);
   const [enviando, setEnviando] = useState<number | null>(null);
   const [rowError, setRowError] = useState<Record<number, string>>({});
+  const router = useRouter();
 
   const q = query.toLowerCase().trim();
   const pendientesF = !q ? pendientes : pendientes.filter(c =>
@@ -57,6 +59,7 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
     setEnviando(null);
     if ("error" in res) { setRowError(p => ({ ...p, [o.id]: res.error })); return; }
     setEnProceso(p => p.filter(x => x.id !== o.id));
+    router.refresh();
   }
 
   return (
@@ -185,7 +188,7 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
         <GenerarOrdenModal
           consolidacion={generarFor}
           onClose={() => setGenerarFor(null)}
-          onGenerada={() => { setPendientes(p => p.filter(c => c.id !== generarFor.id)); setGenerarFor(null); }}
+          onGenerada={() => { setGenerarFor(null); router.refresh(); }}
         />
       )}
     </div>

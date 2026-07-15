@@ -52,35 +52,35 @@ export default function HistorialClient({ rows }: { rows: Row[] }) {
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead>
               <tr className="table-header">
-                <th className="px-4 py-3 text-left whitespace-nowrap">Referencia</th>
-                <th className="px-4 py-3 text-left whitespace-nowrap">Tipo</th>
-                <th className="px-4 py-3 text-left whitespace-nowrap">No. Acta</th>
-                <th className="px-4 py-3 text-left">Proveedor</th>
-                <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
-                <th className="px-4 py-3 text-left whitespace-nowrap">Aprobada</th>
-                <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>
+                <th className="px-3 py-2 text-left">Referencia</th>
+                <th className="px-3 py-2 text-left">Tipo</th>
+                <th className="px-3 py-2 text-left">No. Acta</th>
+                <th className="px-3 py-2 text-left">Proveedor</th>
+                <th className="px-3 py-2 text-right">Total</th>
+                <th className="px-3 py-2 text-left">Aprobada</th>
+                <th className="px-3 py-2 text-right">Acc.</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.map(({ acta, consolidacion: c }) => (
                 <tr key={acta.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">{correlativo(c)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">{c.tipo_compra ?? "—"}</span>
+                  <td className="px-3 py-2 font-mono font-bold text-gray-900 max-w-[150px] break-words">{correlativo(c)}</td>
+                  <td className="px-3 py-2">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700">{c.tipo_compra ?? "—"}</span>
                   </td>
-                  <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{acta.no_acta}</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">
+                  <td className="px-3 py-2 font-mono text-gray-700 max-w-[150px] break-words">{acta.no_acta}</td>
+                  <td className="px-3 py-2 text-xs text-gray-700 max-w-[200px] break-words">
                     <p className="font-medium">{c.proveedor_nombre ?? "—"}</p>
                     {c.proveedor_nit && <p className="text-gray-400">NIT: {c.proveedor_nit}</p>}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono font-semibold text-gray-900 whitespace-nowrap">
+                  <td className="px-3 py-2 text-right font-mono font-semibold text-gray-900 whitespace-nowrap">
                     {c.total != null ? Q(c.total) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{acta.aprobado_en ?? "—"}</td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <td className="px-3 py-2 text-gray-500 max-w-[120px] break-words">{acta.aprobado_en ?? "—"}</td>
+                  <td className="px-3 py-2 text-right">
                     <Link href={`/junta-adjudicadora/acta/${acta.id}/imprimir`}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors w-fit ml-auto">
                       <Printer className="w-3 h-3" /> Ver / Imprimir

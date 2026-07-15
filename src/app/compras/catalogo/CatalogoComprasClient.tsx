@@ -1,7 +1,8 @@
 "use client";
 import { useState, useMemo, useEffect } from "react";
-import { BookOpen, Search, Plus, X, Loader2, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
+import { BookOpen, Search, Plus, X, Loader2, ChevronLeft, ChevronRight, ChevronDown, Download } from "lucide-react";
 import { crearInsumoCompras } from "./actions";
+import { importarPac2026 } from "./importar-action";
 
 type Insumo = {
   id: number;
@@ -42,6 +43,16 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
   const [pageSize, setPageSize] = useState<number>(25);
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState(false);
+  const [importando, setImportando] = useState(false);
+
+  async function handleImportar() {
+    if (!confirm("¿Estás seguro de reemplazar todo el catálogo con los datos del archivo PAC 2026? Esta acción no se puede deshacer.")) return;
+    setImportando(true);
+    const res = await importarPac2026();
+    setImportando(false);
+    if (res.error) alert("Error al importar: " + res.error);
+    else alert("¡Catálogo importado con éxito!");
+  }
 
   const filtered = useMemo(() => {
     if (!query.trim()) return insumos;
@@ -91,18 +102,21 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
               onChange={e => setQuery(e.target.value)}
             />
           </div>
+          <button onClick={handleImportar} disabled={importando} className="btn-secondary shrink-0 text-brand-600 disabled:opacity-50">
+            {importando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {importando ? "Importando..." : "Importar PAC 2026"}
+          </button>
           <button onClick={() => setModal(true)} className="btn-primary shrink-0">
             <Plus className="w-4 h-4" /> Agregar insumo
           </button>
         </div>
       </div>
 
-      {/* Tabla */}
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-xs">
             <thead>
-              <tr className="table-header">
+              <tr className="table-header sticky top-0 bg-white z-10 shadow-sm">
                 {HEADERS.map(h => (
                   <th key={h} className="px-3 py-2.5 text-left whitespace-nowrap font-semibold">
                     {h}

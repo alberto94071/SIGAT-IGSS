@@ -282,12 +282,14 @@ export default function SiafClient({
           ? { ...s, fecha: newFecha, observaciones: newJustificacion.trim() || null, items: res.solicitud!.items as unknown as SolicitudItem[] }
           : s
       ));
+      router.refresh();
       setModal(false);
     } else {
       const res = await crearSolicitud({ fecha: newFecha, observaciones: newJustificacion.trim() || null, items: itemData });
       setSaving(false);
       if (res.error) return setModalError(res.error);
       setSolicitudes(p => [res.solicitud!, ...p] as unknown as Solicitud[]);
+      router.refresh();
       setModal(false);
     }
   }
@@ -307,12 +309,14 @@ export default function SiafClient({
     if (!confirm("¿Eliminar esta solicitud y todos sus ítems?")) return;
     await eliminarSolicitud(id);
     setSolicitudes(p => p.filter(s => s.id !== id));
+    router.refresh();
   }
 
   async function handleAprobar(id: number) {
     const res = await aprobarSolicitud(id);
     if ("error" in res) { alert(res.error); return; }
     setSolicitudes(p => p.map(s => s.id === id ? { ...s, estado: "Aprobado" } : s));
+    router.refresh();
   }
 
   function openRechazar(id: number) {
@@ -824,8 +828,8 @@ export default function SiafClient({
               </div>
 
               {/* Item builder */}
-              <div className="border border-gray-200 rounded-xl p-4 space-y-3 bg-gray-50/60">
-                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3 bg-gray-50/60 dark:bg-gray-800">
+                <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
                   Agregar insumo a la solicitud
                 </p>
 

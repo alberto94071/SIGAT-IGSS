@@ -65,8 +65,33 @@ export async function generarOrdenDeCompra(consolidacionId: number, data: {
 
     const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
     const total_cantidad = renglones.reduce((s, r) => s + r.cantidad, 0);
-    if (total_cantidad === 0 || con.total == null) return { error: "No se pudo calcular el precio unitario: faltan cantidad o total adjudicados" };
-    const costoUnitario = con.total / total_cantidad;
+    
+    let costoUnitario = 0;
+    let totalCálculo = con.total;
+
+    if (con.cotizacion_anual_id) {
+      // Cruzar precios con la cotización anual (sin distinguir subproducto, solo código IGSS)
+      const { cotizacionesAnualesItems } = await import("@/lib/schema");
+      const cotItems = await db.select().from(cotizacionesAnualesItems)
+        .where(eq(cotizacionesAnualesItems.cotizacion_anual_id, con.cotizacion_anual_id));
+      
+      let nuevoTotal = 0;
+      for (const r of renglones) {
+        if (!r.codigo_igss) continue;
+        const itemCot = cotItems.find(ci => ci.codigo_igss === r.codigo_igss);
+        if (itemCot) {
+          nuevoTotal += itemCot.precio_unitario * r.cantidad;
+        } else {
+          return { error: `No se encontró precio para el insumo ${r.codigo_igss} en la cotización vinculada.` };
+        }
+      }
+      totalCálculo = nuevoTotal;
+      // Actualizamos la consolidación con el nuevo total calculado
+      await db.update(consolidaciones).set({ total: nuevoTotal }).where(eq(consolidaciones.id, consolidacionId));
+    }
+
+    if (total_cantidad === 0 || totalCálculo == null) return { error: "No se pudo calcular el precio unitario: faltan cantidad o total adjudicados" };
+    costoUnitario = totalCálculo / total_cantidad;
 
     await db.insert(ordenesCompra).values({
       numero, anio: year, fecha,
@@ -80,7 +105,7 @@ export async function generarOrdenDeCompra(consolidacionId: number, data: {
       costo_unitario:   costoUnitario,
       total_cantidad,
       exento_iva:       con.exento_iva,
-      total:            con.total ?? null,
+      total:            totalCálculo,
       estado:           "Generada",
       codigo_ppr:                   data.codigo_ppr.trim(),
       fecha_notificacion_proveedor: data.fecha_notificacion,
