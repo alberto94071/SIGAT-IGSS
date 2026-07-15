@@ -118,6 +118,8 @@ export async function aprobarSolicitud(id: number): Promise<{ ok: true } | { err
 
     if (!sol.presupuesto_aplicado) {
       const items = await db.select({
+        catalogo_id:         siafComprasItems.catalogo_id,
+        nombre:              siafComprasItems.nombre,
         codigo_igss:         siafComprasItems.codigo_igss,
         subproducto:         siafComprasItems.subproducto,
         cantidad_solicitada: siafComprasItems.cantidad_solicitada,
