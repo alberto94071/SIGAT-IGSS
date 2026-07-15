@@ -12,9 +12,6 @@ export default async function CatalogoComprasPage() {
   const lista = await db
     .select({
       id:                      catalogoCompras.id,
-      ug:                      catalogoCompras.ug,
-      cc:                      catalogoCompras.cc,
-      estructura_programatica: catalogoCompras.estructura_programatica,
       codigo_igss:             catalogoCompras.codigo_igss,
       nombre:                  catalogoCompras.nombre,
       codigo_nombre_ppr:       catalogoCompras.codigo_nombre_ppr,
