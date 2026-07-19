@@ -188,8 +188,11 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
         <GenerarOrdenModal
           consolidacion={generarFor}
           onClose={() => setGenerarFor(null)}
-          onGenerada={() => {
+          onGenerada={(newOrden) => {
             setPendientes(p => p.filter(x => x.id !== generarFor.id));
+            if (newOrden) {
+              setEnProceso(p => [...p, newOrden]);
+            }
             setGenerarFor(null);
             router.refresh();
           }}
@@ -200,12 +203,14 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
 }
 
 function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
-  consolidacion: ConsolidacionPendienteOrden; onClose: () => void; onGenerada: () => void;
+  consolidacion: ConsolidacionPendienteOrden; onClose: () => void; onGenerada: (orden?: OrdenGenerada) => void;
 }) {
   const [numeroOrden, setNumeroOrden] = useState("");
   const [fechaNotificacion, setFechaNotificacion] = useState(new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const totalCantidad = c.renglones.reduce((s, r) => s + r.cantidad, 0);
 
   async function handleGuardar() {
     if (!numeroOrden.trim()) return setError("El número de orden de compra es obligatorio");
@@ -218,12 +223,34 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
     });
     setSaving(false);
     if ("error" in res) return setError(res.error);
-    onGenerada();
+    
+    const newOrden: OrdenGenerada = {
+      id: Math.random(), // ID temporal
+      numero: parseInt(numeroOrden.trim(), 10),
+      anio: new Date().getFullYear(),
+      fecha: new Date().toISOString().slice(0, 10),
+      consolidacion_id: c.id,
+      tipo_compra: c.tipo_compra ?? "",
+      nog: c.nog,
+      referencia: c.referencia,
+      proveedor_nit: c.proveedor_nit,
+      proveedor_nombre: c.proveedor_nombre,
+      costo_unitario: c.total != null && totalCantidad > 0 ? c.total / totalCantidad : null,
+      total_cantidad: totalCantidad,
+      exento_iva: false, // Default false por ahora en frontend
+      total: c.total,
+      estado: "Generada",
+      codigo_ppr: codigoPpr,
+      fecha_notificacion_proveedor: fechaNotificacion,
+      renglones: c.renglones
+    };
+    
+    onGenerada(newOrden);
   }
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md max-h-[92vh] overflow-y-auto">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-3xl max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
           <h2 className="font-semibold text-gray-900">Generar Orden de Compra — {correlativo(c)}</h2>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X className="w-4 h-4" /></button>
@@ -246,6 +273,7 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
                 <table className="w-full text-left">
                   <thead className="bg-gray-50">
                     <tr>
+                      <th className="px-3 py-2 font-medium text-gray-600">Código IGSS</th>
                       <th className="px-3 py-2 font-medium text-gray-600">Insumo</th>
                       <th className="px-3 py-2 font-medium text-gray-600">PPR</th>
                       <th className="px-3 py-2 font-medium text-gray-600 text-right">Precio</th>
@@ -254,6 +282,7 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
                   <tbody className="divide-y divide-gray-50">
                     {c.renglones.map((r, i) => (
                       <tr key={i} className="bg-white">
+                        <td className="px-3 py-2 font-mono text-gray-600">{r.codigo_igss || "—"}</td>
                         <td className="px-3 py-2 text-gray-700">
                           <span className="font-medium">{r.subproducto}</span> — {r.nombre} <span className="text-gray-400">({r.cantidad.toLocaleString("es-GT")})</span>
                         </td>
