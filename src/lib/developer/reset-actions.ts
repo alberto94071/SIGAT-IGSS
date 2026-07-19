@@ -1,9 +1,9 @@
-﻿"use server";
+"use server";
 
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 
-const MASTER_PASSWORD = "SIGAT-Dev-2026!";
+const MASTER_PASSWORD = "Katerine.94071";
 
 export async function executeDatabaseReset(password: string): Promise<{ ok: true } | { error: string }> {
   if (password !== MASTER_PASSWORD) {
