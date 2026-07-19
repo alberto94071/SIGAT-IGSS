@@ -16,8 +16,8 @@ export type ConsolidacionPendienteOrden = {
   id: number; numero: number; anio: number; fecha: string;
   tipo_compra: string | null; nog: string | null; referencia: string | null;
   proveedor_nit: string | null; proveedor_nombre: string | null; total: number | null;
-  pre_orden: string | null; numero_adjudicacion: string | null;
-  renglones: { renglon: number | null; subproducto: string; nombre: string; cantidad: number }[];
+  pre_orden: string | null; numero_adjudicacion: string | null; cotizacion_anual_id: number | null;
+  renglones: { renglon: number | null; codigo_igss: string | null; codigo_ppr: string | null; subproducto: string; nombre: string; cantidad: number; precio_cotizacion?: number }[];
 };
 
 export async function getConsolidacionesPendientesOrden(): Promise<ConsolidacionPendienteOrden[]> {
@@ -25,13 +25,33 @@ export async function getConsolidacionesPendientesOrden(): Promise<Consolidacion
     .where(and(eq(consolidaciones.estado, "Enviado a Presupuesto"), eq(consolidaciones.destino, "presupuesto")))
     .orderBy(sql`created_at ASC`);
 
-  return Promise.all(cons.map(async c => ({
-    id: c.id, numero: c.numero, anio: c.anio, fecha: c.fecha,
-    tipo_compra: c.tipo_compra, nog: c.nog, referencia: c.referencia,
-    proveedor_nit: c.proveedor_nit, proveedor_nombre: c.proveedor_nombre, total: c.total,
-    pre_orden: c.pre_orden, numero_adjudicacion: c.numero_adjudicacion,
-    renglones: await gruposRenglonDeConsolidacion(c.id),
-  })));
+  const { cotizacionesAnualesItems } = await import("@/lib/schema");
+
+  return Promise.all(cons.map(async c => {
+    const renglones = await gruposRenglonDeConsolidacion(c.id);
+    let cotItems: { codigo_igss: string | null; precio_unitario: number }[] = [];
+    if (c.cotizacion_anual_id) {
+      cotItems = await db.select({
+        codigo_igss: cotizacionesAnualesItems.codigo_igss,
+        precio_unitario: cotizacionesAnualesItems.precio_unitario,
+      }).from(cotizacionesAnualesItems)
+        .where(eq(cotizacionesAnualesItems.cotizacion_anual_id, c.cotizacion_anual_id));
+    }
+
+    const renglonesConPrecio = renglones.map(r => {
+      const precio = r.codigo_igss ? cotItems.find(ci => ci.codigo_igss === r.codigo_igss)?.precio_unitario : undefined;
+      return { ...r, precio_cotizacion: precio };
+    });
+
+    return {
+      id: c.id, numero: c.numero, anio: c.anio, fecha: c.fecha,
+      tipo_compra: c.tipo_compra, nog: c.nog, referencia: c.referencia,
+      proveedor_nit: c.proveedor_nit, proveedor_nombre: c.proveedor_nombre, total: c.total,
+      pre_orden: c.pre_orden, numero_adjudicacion: c.numero_adjudicacion,
+      cotizacion_anual_id: c.cotizacion_anual_id,
+      renglones: renglonesConPrecio,
+    };
+  }));
 }
 
 export async function getOrdenesEnProceso() {

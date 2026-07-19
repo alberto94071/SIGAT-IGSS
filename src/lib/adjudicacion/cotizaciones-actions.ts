@@ -255,3 +255,28 @@ export async function buscarCotizacionAnualPorNumero(numero: string): Promise<Co
     .where(eq(cotizacionesAnualesItems.cotizacion_anual_id, cabecera.id));
   return { ...cabecera, items } as CotizacionAnual;
 }
+
+// Búsqueda en tiempo real por número o nombre de proveedor
+export async function buscarCotizacionAnualPorTexto(q: string): Promise<CotizacionAnual[]> {
+  const session = await auth();
+  if (!session) return [];
+  if (!q || q.trim().length < 2) return [];
+  
+  const cabeceras = await db.select().from(cotizacionesAnuales)
+    .where(
+      or(
+        ilike(cotizacionesAnuales.numero, `%${q}%`),
+        ilike(cotizacionesAnuales.proveedor_nombre, `%${q}%`)
+      )
+    ).limit(8);
+
+  if (cabeceras.length === 0) return [];
+
+  const items = await db.select().from(cotizacionesAnualesItems)
+    .where(inArray(cotizacionesAnualesItems.cotizacion_anual_id, cabeceras.map(c => c.id)));
+
+  return cabeceras.map(c => ({
+    ...c,
+    items: items.filter(i => i.cotizacion_anual_id === c.id)
+  })) as CotizacionAnual[];
+}

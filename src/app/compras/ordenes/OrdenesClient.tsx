@@ -188,7 +188,11 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
         <GenerarOrdenModal
           consolidacion={generarFor}
           onClose={() => setGenerarFor(null)}
-          onGenerada={() => { setGenerarFor(null); router.refresh(); }}
+          onGenerada={() => {
+            setPendientes(p => p.filter(x => x.id !== generarFor.id));
+            setGenerarFor(null);
+            router.refresh();
+          }}
         />
       )}
     </div>
@@ -198,22 +202,18 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
 function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
   consolidacion: ConsolidacionPendienteOrden; onClose: () => void; onGenerada: () => void;
 }) {
-  const [codigoPpr, setCodigoPpr] = useState("");
   const [numeroOrden, setNumeroOrden] = useState("");
   const [fechaNotificacion, setFechaNotificacion] = useState(new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const totalCantidad = c.renglones.reduce((s, r) => s + r.cantidad, 0);
-  const precioUnitarioPreview = totalCantidad > 0 && c.total != null ? c.total / totalCantidad : null;
-
   async function handleGuardar() {
-    if (!codigoPpr.trim()) return setError("El Código PPR es obligatorio");
     if (!numeroOrden.trim()) return setError("El número de orden de compra es obligatorio");
     if (!fechaNotificacion) return setError("La fecha de notificación al proveedor es obligatoria");
     setSaving(true); setError("");
+    const codigoPpr = c.renglones.map(r => r.codigo_ppr).find(Boolean) || "S/PPR";
     const res = await generarOrdenDeCompra(c.id, {
-      codigo_ppr: codigoPpr.trim(),
+      codigo_ppr: codigoPpr,
       numero_orden: numeroOrden.trim(), fecha_notificacion: fechaNotificacion,
     });
     setSaving(false);
@@ -241,26 +241,37 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
               </p>
             )}
             <div className="pt-1">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Renglón del insumo</p>
-              {c.renglones.length > 0 ? c.renglones.map((r, i) => (
-                <p key={i} className="text-xs text-gray-600">
-                  {r.renglon != null ? `Renglón ${r.renglon}` : "Renglón —"} · {r.subproducto} — {r.nombre} ({r.cantidad.toLocaleString("es-GT")})
-                </p>
-              )) : <p className="text-xs text-gray-400">Sin renglón identificado</p>}
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Insumos y Precios</p>
+              <div className="overflow-hidden rounded-lg border border-gray-100 text-xs">
+                <table className="w-full text-left">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 font-medium text-gray-600">Insumo</th>
+                      <th className="px-3 py-2 font-medium text-gray-600">PPR</th>
+                      <th className="px-3 py-2 font-medium text-gray-600 text-right">Precio</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {c.renglones.map((r, i) => (
+                      <tr key={i} className="bg-white">
+                        <td className="px-3 py-2 text-gray-700">
+                          <span className="font-medium">{r.subproducto}</span> — {r.nombre} <span className="text-gray-400">({r.cantidad.toLocaleString("es-GT")})</span>
+                        </td>
+                        <td className="px-3 py-2 font-mono text-gray-600">{r.codigo_ppr || "—"}</td>
+                        <td className="px-3 py-2 text-right font-mono font-medium text-gray-700">
+                          {r.precio_cotizacion != null ? Q(r.precio_cotizacion) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                    {c.renglones.length === 0 && (
+                      <tr><td colSpan={3} className="px-3 py-4 text-center text-gray-400">Sin insumos</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
-          <div>
-            <label className="label flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" /> Precio Unitario</label>
-            <div className="input bg-gray-50 text-gray-700 flex items-center justify-between">
-              <span>{precioUnitarioPreview != null ? Q(precioUnitarioPreview) : "—"}</span>
-              <span className="text-xs text-gray-400">Tomado de la cotización</span>
-            </div>
-          </div>
-          <div>
-            <label className="label">Código PPR</label>
-            <input className="input font-mono" value={codigoPpr} onChange={e => setCodigoPpr(e.target.value)} />
-          </div>
           <div>
             <label className="label flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> Número de Orden de Compra</label>
             <input className="input font-mono" value={numeroOrden} onChange={e => setNumeroOrden(e.target.value)} />

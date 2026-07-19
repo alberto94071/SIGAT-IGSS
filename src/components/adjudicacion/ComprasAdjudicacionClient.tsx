@@ -8,6 +8,7 @@ import {
 import ConsolidacionesTable, { Q, correlativo } from "./ConsolidacionesTable";
 import OferentesEditor from "./OferentesEditor";
 import NitAutocomplete from "./NitAutocomplete";
+import CotizacionAnualAutocomplete from "./CotizacionAnualAutocomplete";
 import {
   elegirTipoCompra, guardarCompraDirectaEvento, agregarOferente, eliminarOferente,
   elegirFormaBajaCuantia, buscarCotizacionServicio, confirmarBajaCuantiaServicios,
@@ -458,16 +459,13 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
           {tipoCompra === "Baja Cuantía" && regularizado === false && subTipo === "con_insumos" && (
             <div className="space-y-4">
               <div>
-                <label className="label">Número de cotización anual</label>
-                <div className="flex gap-2">
-                  <input className="input font-mono" value={cotizAnualNumero}
-                    onChange={e => { setCotizAnualNumero(e.target.value); setCotizAnualFound(null); }}
-                    placeholder="Ej. COT-03/2026" />
-                  <button onClick={buscarCotizAnual} disabled={cotizAnualLoading || !cotizAnualNumero.trim()}
-                    className="btn-secondary shrink-0 disabled:opacity-50">
-                    {cotizAnualLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} Buscar
-                  </button>
-                </div>
+                <label className="label">Nombre de cotización anual</label>
+                <CotizacionAnualAutocomplete 
+                  onSelect={cot => {
+                    setCotizAnualFound(cot);
+                    setCotizAnualError("");
+                  }} 
+                />
                 {cotizAnualError && <p className="text-xs text-red-600 mt-1">{cotizAnualError}</p>}
               </div>
               {cotizAnualFound && (
