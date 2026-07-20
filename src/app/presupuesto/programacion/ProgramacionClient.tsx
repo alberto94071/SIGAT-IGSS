@@ -79,9 +79,9 @@ export default function ProgramacionClient({ data }: Props) {
                   </td>
                 </tr>
               ) : (
-                filteredData.map(row => (
+                filteredData.map((row, idx) => (
                   <tr
-                    key={row.renglon}
+                    key={`${row.renglon}-${row.subProducto}-${idx}`}
                     className="border-b border-gray-200 hover:bg-gray-50 transition-colors"
                   >
                     <td className="px-4 py-3 font-semibold text-gray-900">{row.renglon}</td>
