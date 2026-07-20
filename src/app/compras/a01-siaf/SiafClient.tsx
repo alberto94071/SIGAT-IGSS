@@ -922,12 +922,17 @@ export default function SiafClient({
                                 type="number"
                                 step="1"
                                 min="1"
+                                max={disponible}
                                 className="input w-28 text-right"
                                 placeholder="Cantidad"
                                 value={selQty}
                                 onChange={ev => {
                                   const next = new Map(subprodSelections);
-                                  next.set(c.id, ev.target.value);
+                                  let val = ev.target.value;
+                                  if (val && Number(val) > disponible) {
+                                    val = String(disponible);
+                                  }
+                                  next.set(c.id, val);
                                   setSubprodSelections(next);
                                 }}
                               />
