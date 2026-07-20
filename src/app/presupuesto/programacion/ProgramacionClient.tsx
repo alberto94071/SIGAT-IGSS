@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { useState, useMemo } from "react";
+import { ChevronDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { ProgramacionRow } from "@/lib/programacion-actions";
 
 interface Props {
@@ -21,11 +21,21 @@ const Q = (n: number | null) => {
 export default function ProgramacionClient({ data }: Props) {
   const [activeTab, setActiveTab] = useState(0);
   const [expandedRenglon, setExpandedRenglon] = useState<number | null>(null);
+  const [orden, setOrden] = useState<"asc" | "desc">("asc");
+  const [renglonBuscado, setRenglonBuscado] = useState("");
 
   const currentRango = RANGOS[activeTab];
-  const filteredData = data.filter(
-    row => row.renglon >= currentRango.min && row.renglon <= currentRango.max
-  );
+
+  const filteredData = useMemo(() => {
+    const enRango = data.filter(
+      row => row.renglon >= currentRango.min && row.renglon <= currentRango.max
+    );
+    const buscado = renglonBuscado.trim();
+    const porRenglon = buscado === "" ? enRango : enRango.filter(row => String(row.renglon).includes(buscado));
+    return [...porRenglon].sort((a, b) =>
+      orden === "asc" ? a.renglon - b.renglon : b.renglon - a.renglon
+    );
+  }, [data, currentRango, renglonBuscado, orden]);
 
   return (
     <div className="space-y-6">
@@ -45,6 +55,47 @@ export default function ProgramacionClient({ data }: Props) {
               Renglones {rango.label}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* ── Controles: filtro por renglón + orden ── */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-600 font-medium">Buscar renglón:</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={renglonBuscado}
+            onChange={e => setRenglonBuscado(e.target.value.replace(/\D/g, ""))}
+            placeholder="Ej. 182"
+            className="input w-32 rounded-lg"
+          />
+          {renglonBuscado !== "" && (
+            <button
+              onClick={() => setRenglonBuscado("")}
+              className="text-xs text-gray-500 hover:text-gray-700 underline"
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <label className="text-sm text-gray-600 font-medium">Orden:</label>
+          <button
+            onClick={() => setOrden(orden === "asc" ? "desc" : "asc")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            {orden === "asc" ? (
+              <>
+                <ArrowUp className="w-4 h-4" /> Ascendente
+              </>
+            ) : (
+              <>
+                <ArrowDown className="w-4 h-4" /> Descendente
+              </>
+            )}
+          </button>
         </div>
       </div>
 
