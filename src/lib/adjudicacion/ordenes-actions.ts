@@ -1,4 +1,6 @@
 "use server";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { db } from "@/lib/db";
 import { consolidaciones, ordenesCompra, siafCompras } from "@/lib/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
@@ -81,7 +83,7 @@ export async function generarOrdenDeCompra(consolidacionId: number, data: {
     if (con.estado !== "Enviado a Presupuesto") return { error: "La consolidación no está lista para generar la orden" };
 
     const year = new Date().getFullYear();
-    const fecha = new Date().toISOString().slice(0, 10);
+    const fecha = fechaGuatemala();
 
     const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
     const total_cantidad = renglones.reduce((s, r) => s + r.cantidad, 0);

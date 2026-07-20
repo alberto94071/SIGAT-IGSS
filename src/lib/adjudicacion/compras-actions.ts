@@ -1,4 +1,6 @@
 "use server";
+import { fechaHoraGuatemala } from "@/lib/date-utils";
+
 import { db } from "@/lib/db";
 import {
   consolidaciones, oferentes, cotizacionesServicio, siafCompras, siafComprasItems,
@@ -387,7 +389,7 @@ export async function enviarAJunta(consolidacionId: number, data?: { referencia?
     const referencia = data?.referencia?.trim() || con.referencia || "";
     if (label && !referencia) return { error: `El campo "${label}" es obligatorio` };
 
-    const ahora = new Date().toISOString().slice(0, 19).replace("T", " ");
+    const ahora = fechaHoraGuatemala();
     await db.update(consolidaciones).set({
       estado: "Enviado a Junta",
       enviado_a_junta_por: check.uid,

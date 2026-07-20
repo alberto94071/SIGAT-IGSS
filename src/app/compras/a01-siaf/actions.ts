@@ -1,4 +1,6 @@
 "use server";
+import { fechaGuatemala, fechaHoraGuatemala } from "@/lib/date-utils";
+
 import { db } from "@/lib/db";
 import { siafCompras, siafComprasItems, catalogoCompras, consolidaciones, presupuestoRenglones } from "@/lib/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
@@ -174,7 +176,7 @@ export async function rechazarSolicitud(id: number, motivo: string) {
 
     const session = await auth();
     const uid = session ? Number(session.user.id) : null;
-    const ahora = new Date().toISOString().slice(0, 19).replace("T", " ");
+    const ahora = fechaHoraGuatemala();
 
     await db.update(siafCompras).set({
       estado:         "Rechazado",
@@ -314,7 +316,7 @@ export async function consolidarSiaf(ids: number[], preOrden: string) {
       sql`SELECT COALESCE(MAX(numero), 0) + 1 AS next FROM consolidaciones WHERE anio = ${year}`
     );
     const numero = Number((res.rows[0] as any).next) || 1;
-    const fecha = new Date().toISOString().slice(0, 10);
+    const fecha = fechaGuatemala();
 
     const [consolidacion] = await db.insert(consolidaciones)
       .values({ numero, anio: year, fecha, pre_orden: pre, creado_por: uid })

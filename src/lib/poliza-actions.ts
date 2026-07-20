@@ -1,4 +1,6 @@
 "use server";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { db } from "@/lib/db";
 import { polizas, pasajesPagos } from "@/lib/schema";
 import { eq, desc, inArray, sql, and } from "drizzle-orm";
@@ -52,7 +54,7 @@ export async function generarPoliza(dpd23Ids: number[]): Promise<{ ok: true; num
     const numero = Number((res.rows[0] as any).next) || 1;
 
     const [poliza] = await db.insert(polizas).values({
-      numero, fecha: new Date().toISOString().slice(0, 10), total, creado_por: check.uid,
+      numero, fecha: fechaGuatemala(), total, creado_por: check.uid,
     }).returning();
 
     await db.update(pasajesPagos).set({ poliza_id: poliza.id }).where(inArray(pasajesPagos.id, dpd23Ids));

@@ -1,4 +1,6 @@
 "use client";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { useState } from "react";
 import Link from "next/link";
 import { FileText, Printer, X, Loader2, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
@@ -123,7 +125,7 @@ export default function Dpd23BandejaClient({
           onClose={() => setAceptando(null)}
           onAceptado={(formularioNo) => {
             setPendientes(prev => prev.filter(s => s.id !== aceptando.id));
-            setGenerados(prev => [{ id: formularioNo, formulario_no: formularioNo, fecha_pago: new Date().toISOString().slice(0, 10), afiliacion: aceptando.afiliacion, nombre_afiliado: aceptando.nombre_afiliado }, ...prev]);
+            setGenerados(prev => [{ id: formularioNo, formulario_no: formularioNo, fecha_pago: fechaGuatemala(), afiliacion: aceptando.afiliacion, nombre_afiliado: aceptando.nombre_afiliado }, ...prev]);
             setAceptando(null);
           }}
         />

@@ -40,10 +40,11 @@ async function main() {
     await db.execute(sql`
       UPDATE presupuesto_renglones 
       SET 
+        saldo_presupuestario = COALESCE(saldo_presupuestario, saldo_disponible),
         pre_compromiso = 0,
         compromiso = 0,
         devengado = 0,
-        saldo_disponible = presupuesto
+        saldo_disponible = COALESCE(saldo_presupuestario, saldo_disponible)
     `);
     console.log("Reset presupuesto_renglones balances to 0");
   } catch (e: any) {

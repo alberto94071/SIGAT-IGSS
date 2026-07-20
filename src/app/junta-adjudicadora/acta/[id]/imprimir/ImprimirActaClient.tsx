@@ -1,4 +1,6 @@
 "use client";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
 import { deletrearCodigo, fechaEnLetras, horaEnLetras } from "@/lib/adjudicacion/deletreo";
@@ -30,7 +32,7 @@ export default function ImprimirActaClient({
   const fechaTexto = fechaEnLetras(acta.fecha);
   const horaTexto = horaEnLetras(acta.hora);
   const actaDeletreada = deletrearCodigo(acta.no_acta);
-  const hoyTexto = fechaEnLetras(new Date().toISOString().slice(0, 10));
+  const hoyTexto = fechaEnLetras(fechaGuatemala());
 
   return (
     <>

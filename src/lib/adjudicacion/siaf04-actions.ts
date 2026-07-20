@@ -1,4 +1,6 @@
 "use server";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { db } from "@/lib/db";
 import { consolidaciones, fondoRotativoPagos } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
@@ -47,7 +49,7 @@ export async function generarSiaf04(consolidacionId: number, data: {
 
     const anioActual = new Date().getFullYear();
     const numeroA04 = await siguienteNumeroA04(anioActual);
-    const hoy = new Date().toISOString().slice(0, 10);
+    const hoy = fechaGuatemala();
 
     await db.update(consolidaciones).set({
       numero_a04: numeroA04, anio_a04: anioActual, a04_fecha: hoy,

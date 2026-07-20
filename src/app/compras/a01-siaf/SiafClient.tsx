@@ -1,4 +1,6 @@
 "use client";
+import { fechaGuatemala, fechaHoraGuatemala } from "@/lib/date-utils";
+
 import { Fragment, useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -90,7 +92,7 @@ export default function SiafClient({
   const [modal,        setModal]        = useState(false);
   const [saving,       setSaving]       = useState(false);
   const [modalError,   setModalError]   = useState("");
-  const [newFecha,         setNewFecha]         = useState(new Date().toISOString().slice(0, 10));
+  const [newFecha,         setNewFecha]         = useState(fechaGuatemala());
   const [newJustificacion, setNewJustificacion] = useState("");
   const [nextNumero,       setNextNumero]       = useState<number | null>(null);
   const [corrLoading,      setCorrLoading]      = useState(false);
@@ -205,7 +207,7 @@ export default function SiafClient({
   async function openModal() {
     setEditMode(false); setEditingSolId(null); setEditCorrLabel("");
     setModal(true); setModalItems([]); setModalError("");
-    setNewFecha(new Date().toISOString().slice(0, 10));
+    setNewFecha(fechaGuatemala());
     setNewJustificacion("");
     setItemSearch(""); setSelCodigo(null); setSelNombre(null); setSubprodSelections(new Map());
     setCorrLoading(true);
@@ -336,7 +338,7 @@ export default function SiafClient({
     const res = await rechazarSolicitud(rechazarSolId, motivo);
     setRechazarLoading(false);
     if (res.error) { setRechazarError(res.error); return; }
-    const ahora = new Date().toISOString().slice(0, 19).replace("T", " ");
+    const ahora = fechaHoraGuatemala();
     setSolicitudes(p => p.map(s => s.id === rechazarSolId
       ? { ...s, estado: "Rechazado", motivo_rechazo: motivo, rechazado_por_nombre: currentUserName ?? null, rechazado_en: ahora }
       : s));

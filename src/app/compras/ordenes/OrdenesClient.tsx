@@ -1,4 +1,6 @@
 "use client";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { useState } from "react";
 import {
   ShoppingCart, Search, X, Loader2, AlertTriangle, Hash, Calendar, Building2, DollarSign, Send,
@@ -206,7 +208,7 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
   consolidacion: ConsolidacionPendienteOrden; onClose: () => void; onGenerada: (orden?: OrdenGenerada) => void;
 }) {
   const [numeroOrden, setNumeroOrden] = useState("");
-  const [fechaNotificacion, setFechaNotificacion] = useState(new Date().toISOString().slice(0, 10));
+  const [fechaNotificacion, setFechaNotificacion] = useState(fechaGuatemala());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -228,7 +230,7 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
       id: res.ordenId,
       numero: parseInt(numeroOrden.trim(), 10),
       anio: new Date().getFullYear(),
-      fecha: new Date().toISOString().slice(0, 10),
+      fecha: fechaGuatemala(),
       consolidacion_id: c.id,
       tipo_compra: c.tipo_compra ?? "",
       nog: c.nog,

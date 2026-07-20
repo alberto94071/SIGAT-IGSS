@@ -1,4 +1,6 @@
 "use client";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { useState } from "react";
 import { Wallet, Loader2, CheckCircle2, X, Banknote, Coins } from "lucide-react";
 import { registrarFormaPagoCheque, registrarFormaPagoEfectivo, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
@@ -87,8 +89,8 @@ function FormaPagoModal({ pago, onClose, onDone }: {
 }) {
   const [forma, setForma] = useState<"cheque" | "efectivo" | null>(null);
   const [numeroCheque, setNumeroCheque] = useState("");
-  const [fechaEmisionCheque, setFechaEmisionCheque] = useState(new Date().toISOString().slice(0, 10));
-  const [fechaPago, setFechaPago] = useState(new Date().toISOString().slice(0, 10));
+  const [fechaEmisionCheque, setFechaEmisionCheque] = useState(fechaGuatemala());
+  const [fechaPago, setFechaPago] = useState(fechaGuatemala());
   const [vales, setVales] = useState<ValePendiente[]>([]);
   const [valesLoading, setValesLoading] = useState(false);
   const [valeId, setValeId] = useState<number | null>(null);

@@ -1,4 +1,6 @@
 "use client";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { useState } from "react";
 import Link from "next/link";
 import {
@@ -210,7 +212,7 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
   const [limitExceeded, setLimitExceeded] = useState(false);
 
   const [nog,         setNog]         = useState(c.nog ?? "");
-  const [fechaEvento, setFechaEvento] = useState(c.fecha_evento ?? new Date().toISOString().slice(0, 10));
+  const [fechaEvento, setFechaEvento] = useState(c.fecha_evento ?? fechaGuatemala());
   const [referencia,  setReferencia]  = useState(c.referencia ?? "");
 
   const [cotizaciones,   setCotizaciones]   = useState<CotizacionServicio[]>([]);

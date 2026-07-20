@@ -4,6 +4,8 @@ import { ordenesCompra } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
+import { presupuestoRenglones } from "@/lib/schema";
+import { and } from "drizzle-orm";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -57,6 +59,18 @@ export async function devengarYEnviarADab(ordenId: number, data: DevengarData): 
       no_devengado:           data.no_devengado.trim(),
       estado:                 "En DAB",
     }).where(eq(ordenesCompra.id, ordenId));
+
+    const renglones = await gruposRenglonDeConsolidacion(orden.consolidacion_id);
+    for (const r of renglones) {
+      await db.update(presupuestoRenglones).set({
+        compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${r.total}`,
+        devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) + ${r.total}`,
+      }).where(and(
+        eq(presupuestoRenglones.renglon, r.renglon),
+        eq(presupuestoRenglones.subproducto, r.subproducto),
+        eq(presupuestoRenglones.ejercicio_fiscal, 2026)
+      ));
+    }
 
     return { ok: true };
   } catch {

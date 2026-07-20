@@ -1,4 +1,6 @@
 "use server";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { db } from "@/lib/db";
 import { valesCajaChica, configuracion, polizas, fondoRotativoPagos, consolidaciones } from "@/lib/schema";
 import { eq, desc, sql, and, inArray } from "drizzle-orm";
@@ -54,7 +56,7 @@ export async function crearVale(data: NuevoValeData): Promise<{ vale: typeof val
 
     const [vale] = await db.insert(valesCajaChica).values({
       numero, tipo: data.tipo,
-      fecha: new Date().toISOString().slice(0, 10),
+      fecha: fechaGuatemala(),
       monto: data.monto, motivo: data.motivo.trim(),
       solicitante_nombre: config.nombre_solicitante, solicitante_numero_empleado: config.numero_empleado_sol, solicitante_nit: config.nit_solicitante,
       jefe_nombre: config.nombre_encargado_unidad, jefe_numero_empleado: config.numero_empleado_encargado, jefe_nit: config.nit_encargado_unidad,
@@ -149,7 +151,7 @@ export async function asignarChequeVale(id: number, data: { numero_cheque: strin
     await db.update(valesCajaChica).set({
       numero_cheque: data.numero_cheque.trim(),
       destinatario_cheque: data.destinatario_cheque.trim(),
-      fecha_emision: new Date().toISOString().slice(0, 10),
+      fecha_emision: fechaGuatemala(),
       estado: "Activo",
     }).where(eq(valesCajaChica.id, id));
 
@@ -206,7 +208,7 @@ export async function liquidarValePasajes(valeId: number, data: { numero_boleta_
     await db.update(valesCajaChica).set({
       estado: "Liquidado",
       monto_liquidado: totalUsado,
-      fecha_liquidacion: new Date().toISOString().slice(0, 10),
+      fecha_liquidacion: fechaGuatemala(),
       numero_boleta_deposito: data.numero_boleta_deposito?.trim() || null,
       monto_boleta_deposito: remanente > 0.009 ? data.monto_boleta_deposito : null,
     }).where(eq(valesCajaChica.id, valeId));
@@ -261,7 +263,7 @@ export async function liquidarValeGastosVarios(valeId: number, data: { numero_bo
     await db.update(valesCajaChica).set({
       estado: "Liquidado",
       monto_liquidado: totalUsado,
-      fecha_liquidacion: new Date().toISOString().slice(0, 10),
+      fecha_liquidacion: fechaGuatemala(),
       numero_boleta_deposito: data.numero_boleta_deposito?.trim() || null,
       monto_boleta_deposito: remanente > 0.009 ? data.monto_boleta_deposito : null,
     }).where(eq(valesCajaChica.id, valeId));

@@ -1,4 +1,6 @@
 "use server";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { db } from "@/lib/db";
 import { pasajesTarifario, pasajesSolicitudes, pasajesPagos, usuarios } from "@/lib/schema";
 import { eq, desc, sql } from "drizzle-orm";
@@ -110,7 +112,7 @@ export async function crearSolicitudPasaje(data: NuevaSolicitudData): Promise<{ 
 
     await db.insert(pasajesSolicitudes).values({
       numero,
-      fecha: new Date().toISOString().slice(0, 10),
+      fecha: fechaGuatemala(),
       afiliacion: afiliado.afiliacion,
       nombre_afiliado: afiliado.nombre,
       direccion: afiliado.direccion,
@@ -223,7 +225,7 @@ export async function aceptarSolicitudPasaje(solicitudId: number): Promise<{ ok:
     await db.insert(pasajesPagos).values({
       formulario_no: formularioNo,
       solicitud_id: solicitud.id,
-      fecha_pago: new Date().toISOString().slice(0, 10),
+      fecha_pago: fechaGuatemala(),
       afiliacion: afiliado.afiliacion,
       nombre_afiliado: afiliado.nombre,
       calidad: afiliado.calidad,

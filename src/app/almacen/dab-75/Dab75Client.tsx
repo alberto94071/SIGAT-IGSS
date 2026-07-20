@@ -1,4 +1,6 @@
 "use client";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -85,7 +87,7 @@ export default function Dab75Client({ requisiciones: init, canEdit }: { requisic
 function nuevoItem(): ItemRequisicion { return { codigo: "", nombre: "", cantidad_solicitada: 0 }; }
 
 function NuevaRequisicionModal({ onClose, onCreado }: { onClose: () => void; onCreado: (id: number) => void }) {
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = fechaGuatemala();
   const [noPedido, setNoPedido] = useState("");
   const [fechaEmision, setFechaEmision] = useState(hoy);
   const [claveAdmin, setClaveAdmin] = useState("");

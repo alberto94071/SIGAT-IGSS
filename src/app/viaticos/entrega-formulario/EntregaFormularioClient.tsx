@@ -1,4 +1,6 @@
 "use client";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -90,7 +92,7 @@ export default function EntregaFormularioClient({ liquidaciones: init, canEdit }
 function nuevaComision(): Comision { return { tipo: "", lugar: "" }; }
 
 function NuevaLiquidacionModal({ onClose, onCreado }: { onClose: () => void; onCreado: (id: number) => void }) {
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = fechaGuatemala();
   const [comisiones, setComisiones] = useState<Comision[]>([nuevaComision()]);
   const [dias, setDias] = useState("");
 

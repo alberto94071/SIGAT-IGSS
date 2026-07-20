@@ -1,4 +1,6 @@
 "use server";
+import { fechaHoraGuatemala } from "@/lib/date-utils";
+
 import { db } from "@/lib/db";
 import { consolidaciones, oferentes, siafCompras } from "@/lib/schema";
 import { eq, and } from "drizzle-orm";
@@ -61,7 +63,7 @@ export async function rechazarJunta(consolidacionId: number, motivo: string): Pr
     if (!con) return { error: "No se encontró la consolidación" };
     if (con.estado !== "Enviado a Junta") return { error: "Esta consolidación no está pendiente de revisión" };
 
-    const ahora = new Date().toISOString().slice(0, 19).replace("T", " ");
+    const ahora = fechaHoraGuatemala();
     await db.update(consolidaciones).set({
       estado:         "Rechazado por Junta",
       motivo_rechazo: trimmed,

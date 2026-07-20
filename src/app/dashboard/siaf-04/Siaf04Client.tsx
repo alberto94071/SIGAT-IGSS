@@ -1,4 +1,6 @@
 "use client";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, FileText, Loader2, CheckCircle2, X } from "lucide-react";
@@ -111,7 +113,7 @@ function GenerarSiafModal({ consolidacion: c, onClose, onDone }: {
   const router = useRouter();
   const [noFactura, setNoFactura] = useState("");
   const [serie, setSerie] = useState("");
-  const [fechaEmision, setFechaEmision] = useState(new Date().toISOString().slice(0, 10));
+  const [fechaEmision, setFechaEmision] = useState(fechaGuatemala());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 

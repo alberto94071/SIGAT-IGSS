@@ -1,4 +1,6 @@
 "use client";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { Fragment, useState } from "react";
 import { FileText, Plus, X, Loader2, Trash2, CheckCircle2, Layers, ChevronDown, ChevronRight, Search, Pencil, AlertTriangle } from "lucide-react";
 import {
@@ -72,7 +74,7 @@ function CotizacionesServicioTab({ cotizaciones: init, canEdit }: { cotizaciones
   const [error, setError] = useState("");
   const [removingId, setRemovingId] = useState<number | null>(null);
 
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(fechaGuatemala());
   const [nit, setNit] = useState("");
   const [nombre, setNombre] = useState("");
   const [servicio, setServicio] = useState("");
@@ -80,7 +82,7 @@ function CotizacionesServicioTab({ cotizaciones: init, canEdit }: { cotizaciones
   const [exentoIva, setExentoIva] = useState(false);
 
   function openModal() {
-    setFecha(new Date().toISOString().slice(0, 10));
+    setFecha(fechaGuatemala());
     setNit(""); setNombre(""); setServicio(""); setCosto(""); setExentoIva(false);
     setError(""); setModal(true);
   }
@@ -254,7 +256,7 @@ function ExcelUploadServicioModal({ onClose, onCreadas }: {
       const filas = await leerFilasExcel(file);
       if (filas.length === 0) { setError("El archivo no tiene filas con datos."); setUploading(false); return; }
       const rows = filas.map(cells => ({
-        fecha: celdaTexto(cells[0]) || new Date().toISOString().slice(0, 10),
+        fecha: celdaTexto(cells[0]) || fechaGuatemala(),
         proveedor_nit: celdaTexto(cells[1]) || null,
         proveedor_nombre: celdaTexto(cells[2]),
         servicio: celdaTexto(cells[3]),
@@ -323,14 +325,14 @@ function CotizacionesAnualesTab({ cotizaciones: init, canEdit }: { cotizaciones:
   const [numero, setNumero] = useState("");
   const [anio, setAnio] = useState(new Date().getFullYear());
   const [tipo, setTipo] = useState<TipoCotizacionAnual>("baja_cuantia");
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(fechaGuatemala());
   const [nit, setNit] = useState("");
   const [nombre, setNombre] = useState("");
   const [proveedorId, setProveedorId] = useState<number | null>(null);
 
   function openModal() {
     setNumero(""); setAnio(new Date().getFullYear()); setTipo("baja_cuantia");
-    setFecha(new Date().toISOString().slice(0, 10));
+    setFecha(fechaGuatemala());
     setNit(""); setNombre(""); setProveedorId(null);
     setError(""); setModal(true);
   }

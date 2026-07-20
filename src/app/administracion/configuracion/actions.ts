@@ -1,4 +1,6 @@
 "use server";
+import { fechaHoraGuatemala } from "@/lib/date-utils";
+
 import { db } from "@/lib/db";
 import { configuracion, auditLog } from "@/lib/schema";
 import { eq } from "drizzle-orm";
@@ -25,7 +27,7 @@ export async function guardarConfiguracion(data: any) {
           nombre_solicitante:   data.nombre_solicitante,
           numero_empleado_sol:  data.numero_empleado_sol,
           resolucion_fondo:     data.resolucion_fondo,
-          updated_at:           new Date().toISOString().slice(0, 19).replace("T", " "),
+          updated_at:           fechaHoraGuatemala(),
         })
         .where(eq(configuracion.id, existing.id));
     } else {

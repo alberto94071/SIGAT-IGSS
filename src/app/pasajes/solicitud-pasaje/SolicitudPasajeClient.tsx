@@ -1,4 +1,6 @@
 "use client";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Bus, Plus, X, Loader2, AlertTriangle, Printer, Search, Pencil } from "lucide-react";
@@ -215,7 +217,7 @@ function SolicitudModal({
     if ("error" in res) return setError(res.error);
 
     onCreado({
-      id: res.numero, numero: res.numero, fecha: new Date().toISOString().slice(0, 10),
+      id: res.numero, numero: res.numero, fecha: fechaGuatemala(),
       afiliacion: afiliado.afiliacion, nombre_afiliado: afiliado.nombre, tramo,
       punto_partida: puntoPartida, destino, estado: "Pendiente DPD-23", motivo_rechazo: null,
     });

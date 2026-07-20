@@ -1,4 +1,6 @@
 "use server";
+import { fechaHoraGuatemala } from "@/lib/date-utils";
+
 import { db } from "@/lib/db";
 import { actasAdjudicacion, consolidaciones, oferentes } from "@/lib/schema";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -98,7 +100,7 @@ export async function aprobarActa(actaId: number): Promise<{ ok: true } | { erro
       return { error: `El total Q${total.toFixed(2)} supera el límite de Q${limite.toLocaleString("es-GT")} para ${tipo}. Rechaza el acta para que Compras corrija el precio.` };
     }
 
-    const ahora = new Date().toISOString().slice(0, 19).replace("T", " ");
+    const ahora = fechaHoraGuatemala();
     await db.update(actasAdjudicacion).set({
       estado: "Aprobada", aprobado_por: check.uid, aprobado_en: ahora,
     }).where(eq(actasAdjudicacion.id, actaId));
@@ -145,7 +147,7 @@ export async function rechazarActa(actaId: number, motivo: string): Promise<{ ok
     if (!acta.previsualizada) return { error: "Debes previsualizar el acta antes de rechazarla" };
     if (acta.estado !== "Generada") return { error: "Esta acta ya fue procesada" };
 
-    const ahora = new Date().toISOString().slice(0, 19).replace("T", " ");
+    const ahora = fechaHoraGuatemala();
     await db.update(actasAdjudicacion).set({
       estado: "Rechazada", motivo_rechazo: trimmed, rechazado_por: check.uid, rechazado_en: ahora,
     }).where(eq(actasAdjudicacion.id, actaId));

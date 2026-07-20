@@ -1,4 +1,6 @@
 "use client";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { useState } from "react";
 import Link from "next/link";
 import { FileCheck, Printer, ChevronDown, ChevronRight, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
@@ -65,7 +67,7 @@ export default function PolizaClient({
 
     const incluidos = dpd23SinPoliza.filter(d => ids.includes(d.id));
     const total = incluidos.reduce((s, d) => s + d.valor_pasaje, 0);
-    setPolizas(prev => [{ id: res.numero, numero: res.numero, fecha: new Date().toISOString().slice(0, 10), total, estado: "Generada", vale_id: null }, ...prev]);
+    setPolizas(prev => [{ id: res.numero, numero: res.numero, fecha: fechaGuatemala(), total, estado: "Generada", vale_id: null }, ...prev]);
     setDpd23SinPoliza(prev => prev.filter(d => !ids.includes(d.id)));
     setSeleccionDpd23(new Set());
   }

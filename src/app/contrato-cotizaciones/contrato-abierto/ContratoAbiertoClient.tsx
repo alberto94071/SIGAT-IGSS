@@ -1,4 +1,6 @@
 "use client";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { Fragment, useState } from "react";
 import { FileSignature, Plus, X, Loader2, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { crearCotizacionAnual, eliminarCotizacionAnual } from "@/lib/adjudicacion/cotizaciones-actions";
@@ -21,14 +23,14 @@ export default function ContratoAbiertoClient({ contratos: init, canEdit }: Prop
 
   const [numero, setNumero] = useState("");
   const [anio, setAnio] = useState(new Date().getFullYear());
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(fechaGuatemala());
   const [nit, setNit] = useState("");
   const [nombre, setNombre] = useState("");
   const [proveedorId, setProveedorId] = useState<number | null>(null);
 
   function openModal() {
     setNumero(""); setAnio(new Date().getFullYear());
-    setFecha(new Date().toISOString().slice(0, 10));
+    setFecha(fechaGuatemala());
     setNit(""); setNombre(""); setProveedorId(null);
     setError(""); setModal(true);
   }
