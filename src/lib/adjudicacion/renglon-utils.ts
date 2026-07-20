@@ -17,7 +17,7 @@ export async function renglonLookupMap(): Promise<Map<string, number | null>> {
 
 export type GrupoRenglon = {
   renglon: number | null; codigo_igss: string | null; codigo_ppr: string | null; subproducto: string;
-  nombre: string; cantidad: number;
+  nombre: string; cantidad: number; total: number;
 };
 
 // Agrupa los insumos de los SIAF consolidados de una consolidación por
@@ -34,6 +34,7 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
     subproducto:         siafComprasItems.subproducto,
     nombre:              siafComprasItems.nombre,
     cantidad_solicitada: siafComprasItems.cantidad_solicitada,
+    precio_unitario:     siafComprasItems.precio_unitario,
   }).from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds));
 
   const grupos = new Map<string, GrupoRenglon>();
@@ -46,11 +47,16 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
       renglon = cat?.renglon ?? null;
     }
     const key = `${item.codigo_igss}::${item.subproducto}`;
+    const itemTotal = item.cantidad_solicitada * (item.precio_unitario ?? 0);
     const existente = grupos.get(key);
-    if (existente) existente.cantidad += item.cantidad_solicitada;
+    if (existente) {
+      existente.cantidad += item.cantidad_solicitada;
+      existente.total += itemTotal;
+    }
     else grupos.set(key, {
       renglon, codigo_igss: item.codigo_igss, codigo_ppr: item.codigo_ppr,
       subproducto: item.subproducto, nombre: item.nombre, cantidad: item.cantidad_solicitada,
+      total: itemTotal,
     });
   }
   return Array.from(grupos.values());
