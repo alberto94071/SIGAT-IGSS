@@ -189,7 +189,7 @@ function GenerarActaModal({ consolidacion: c, onClose, onCreado }: {
   const [error, setError] = useState("");
 
   async function handleGuardar() {
-    if (!noFormulario.trim()) return setError("El No. de Formulario es obligatorio");
+    if (!noFormulario.trim()) return setError("El No. de Folio es obligatorio");
     if (!noActa.trim()) return setError("El No. de Acta es obligatorio");
     if (!lugar.trim()) return setError("El lugar es obligatorio");
     setSaving(true); setError("");
@@ -208,7 +208,7 @@ function GenerarActaModal({ consolidacion: c, onClose, onCreado }: {
         </div>
         <div className="px-5 py-4 space-y-3">
           <div>
-            <label className="label">No. de Formulario <span className="text-red-500 font-semibold">*</span></label>
+            <label className="label">No. de Folio <span className="text-red-500 font-semibold">*</span></label>
             <input className="input font-mono" value={noFormulario} onChange={e => setNoFormulario(e.target.value)} />
           </div>
           <div>
