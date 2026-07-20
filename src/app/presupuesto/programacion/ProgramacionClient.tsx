@@ -58,14 +58,14 @@ export default function ProgramacionClient({ data }: Props) {
                 <th className="px-4 py-2 text-left font-semibold text-gray-700 min-w-48">Descripcion</th>
                 <th className="px-4 py-2 text-left font-semibold text-gray-700 w-28">Sub-Producto</th>
                 <th className="px-4 py-2 text-right font-semibold text-gray-700 w-32">Presupuestario</th>
-                <th className="px-4 py-2 text-right font-semibold text-gray-700 w-28">Sept (N)</th>
-                <th className="px-4 py-2 text-right font-semibold text-gray-700 w-28">Sept (R)</th>
-                <th className="px-4 py-2 text-right font-semibold text-gray-700 w-28">Oct (N)</th>
-                <th className="px-4 py-2 text-right font-semibold text-gray-700 w-28">Oct (R)</th>
-                <th className="px-4 py-2 text-right font-semibold text-gray-700 w-28">Nov (N)</th>
-                <th className="px-4 py-2 text-right font-semibold text-gray-700 w-28">Nov (R)</th>
-                <th className="px-4 py-2 text-right font-semibold text-gray-700 w-28">Dic (N)</th>
-                <th className="px-4 py-2 text-right font-semibold text-gray-700 w-28">Dic (R)</th>
+                <th className="px-4 py-2 text-right font-semibold text-gray-700 w-40">Septiembre Normal</th>
+                <th className="px-4 py-2 text-right font-semibold text-gray-700 w-40">Septiembre Regularizado</th>
+                <th className="px-4 py-2 text-right font-semibold text-gray-700 w-40">Octubre Normal</th>
+                <th className="px-4 py-2 text-right font-semibold text-gray-700 w-40">Octubre Regularizado</th>
+                <th className="px-4 py-2 text-right font-semibold text-gray-700 w-40">Noviembre Normal</th>
+                <th className="px-4 py-2 text-right font-semibold text-gray-700 w-40">Noviembre Regularizado</th>
+                <th className="px-4 py-2 text-right font-semibold text-gray-700 w-40">Diciembre Normal</th>
+                <th className="px-4 py-2 text-right font-semibold text-gray-700 w-40">Diciembre Regularizado</th>
                 <th className="px-4 py-2 text-right font-semibold text-gray-700 w-32">Total (N)</th>
                 <th className="px-4 py-2 text-right font-semibold text-gray-700 w-32">Total (R)</th>
                 <th className="px-4 py-2 text-right font-semibold text-gray-700 w-32">Saldo</th>
@@ -112,7 +112,9 @@ export default function ProgramacionClient({ data }: Props) {
                     <td className="px-4 py-3 text-right text-gray-600">{Q(row.diciembre_regularizado)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-gray-900">{Q(row.total_normal)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-gray-900">{Q(row.total_regularizado)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-brand-600">{Q(row.saldo)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-brand-600">
+                      {Q((row.presupuestario ?? 0) - ((row.total_normal ?? 0) + (row.total_regularizado ?? 0)))}
+                    </td>
                   </tr>
                 ))
               )}
