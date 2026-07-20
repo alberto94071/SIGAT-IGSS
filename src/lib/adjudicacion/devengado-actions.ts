@@ -41,7 +41,10 @@ export async function devengarYEnviarADab(ordenId: number, data: DevengarData): 
       if (!data[campo]?.trim()) return { error: `El campo "${label}" es obligatorio` };
     }
 
-    const [orden] = await db.select({ estado: ordenesCompra.estado }).from(ordenesCompra)
+    const [orden] = await db.select({ 
+      estado: ordenesCompra.estado,
+      consolidacion_id: ordenesCompra.consolidacion_id
+    }).from(ordenesCompra)
       .where(eq(ordenesCompra.id, ordenId)).limit(1);
     if (!orden) return { error: "No se encontró la orden" };
     if (orden.estado !== "En Devengado") return { error: "Esta orden ya fue enviada a DAB" };

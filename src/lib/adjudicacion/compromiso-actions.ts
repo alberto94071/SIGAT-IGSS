@@ -27,7 +27,10 @@ export async function comprometerYEnviarADevengado(ordenId: number, noCompromiso
     if ("error" in check) return check;
     if (!noCompromiso.trim()) return { error: "El No. de Compromiso es obligatorio" };
 
-    const [orden] = await db.select({ estado: ordenesCompra.estado }).from(ordenesCompra)
+    const [orden] = await db.select({ 
+      estado: ordenesCompra.estado, 
+      consolidacion_id: ordenesCompra.consolidacion_id 
+    }).from(ordenesCompra)
       .where(eq(ordenesCompra.id, ordenId)).limit(1);
     if (!orden) return { error: "No se encontró la orden" };
     if (orden.estado !== "En Compromiso") return { error: "Esta orden ya fue enviada a Devengado" };
