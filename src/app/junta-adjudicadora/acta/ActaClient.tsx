@@ -97,10 +97,8 @@ export default function ActaClient({ rows: init, canEdit }: Props) {
                         className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-red-100 text-red-700 hover:bg-red-200 transition-colors">
                         <XCircle className="w-3 h-3" /> Rechazada
                       </button>
-                    ) : acta.previsualizada ? (
-                      <span className="text-xs font-medium text-amber-700">Lista para aprobar</span>
                     ) : (
-                      <span className="text-xs text-gray-500">Falta previsualizar</span>
+                      <span className="text-xs font-medium text-amber-700">Lista para aprobar</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
@@ -123,7 +121,7 @@ export default function ActaClient({ rows: init, canEdit }: Props) {
                           <Printer className="w-3 h-3" /> Previsualizar / Imprimir
                         </Link>
                       )}
-                      {acta && acta.estado === "Generada" && acta.previsualizada && canEdit && (
+                      {acta && acta.estado === "Generada" && canEdit && (
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => setMotivoModal({ ...acta, motivo_rechazo: "" })}
                             className="text-xs font-medium px-2.5 py-1 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors">
