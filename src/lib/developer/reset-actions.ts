@@ -45,10 +45,11 @@ export async function executeDatabaseReset(password: string): Promise<{ ok: true
     await db.execute(sql`
       UPDATE presupuesto_renglones 
       SET 
+        saldo_presupuestario = COALESCE(saldo_presupuestario, saldo_disponible),
         pre_compromiso = 0,
         compromiso = 0,
         devengado = 0,
-        saldo_disponible = presupuesto
+        saldo_disponible = COALESCE(saldo_presupuestario, saldo_disponible)
     `);
 
     await db.execute(sql`UPDATE siaf_seq SET valor = 1`);
