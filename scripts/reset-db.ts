@@ -9,8 +9,6 @@ async function main() {
     "consolidaciones",
     "actas_adjudicacion",
     "consolidacion_precios",
-    "cotizaciones_servicio",
-    "cotizaciones_anuales",
     "oferentes",
     "ordenes_compra",
     "fondo_rotativo_pagos",
@@ -22,7 +20,6 @@ async function main() {
     "viatico_liquidaciones",
     "pasajes_solicitudes",
     "pasajes_pagos",
-    "nog_registros",
     "audit_log",
     "notificaciones",
   ];

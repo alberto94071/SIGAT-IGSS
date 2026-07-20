@@ -16,8 +16,6 @@ export async function executeDatabaseReset(password: string): Promise<{ ok: true
       "consolidaciones",
       "actas_adjudicacion",
       "consolidacion_precios",
-      "cotizaciones_servicio",
-      "cotizaciones_anuales",
       "oferentes",
       "ordenes_compra",
       "fondo_rotativo_pagos",
@@ -29,7 +27,6 @@ export async function executeDatabaseReset(password: string): Promise<{ ok: true
       "viatico_liquidaciones",
       "pasajes_solicitudes",
       "pasajes_pagos",
-      "nog_registros",
       "audit_log",
       "notificaciones",
     ];
