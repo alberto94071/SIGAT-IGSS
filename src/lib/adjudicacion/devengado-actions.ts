@@ -69,7 +69,7 @@ export async function devengarYEnviarADab(ordenId: number, data: DevengarData): 
         compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${r.total}`,
         devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) + ${r.total}`,
       }).where(and(
-        eq(presupuestoRenglones.renglon, r.renglon),
+        eq(presupuestoRenglones.renglon, r.renglon as number),
         eq(presupuestoRenglones.subproducto, r.subproducto),
         eq(presupuestoRenglones.ejercicio_fiscal, 2026)
       ));

@@ -46,7 +46,7 @@ export async function comprometerYEnviarADevengado(ordenId: number, noCompromiso
         compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) + ${r.total}`,
         saldo_disponible: sql`COALESCE(${presupuestoRenglones.saldo_disponible}, 0) - ${r.total}`
       }).where(and(
-        eq(presupuestoRenglones.renglon, r.renglon),
+        eq(presupuestoRenglones.renglon, r.renglon as number),
         eq(presupuestoRenglones.subproducto, r.subproducto),
         eq(presupuestoRenglones.ejercicio_fiscal, 2026)
       ));
