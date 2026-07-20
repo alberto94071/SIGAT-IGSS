@@ -66,7 +66,7 @@ export async function getOrdenesEnProceso() {
 // usuario un dato que el sistema ya conoce.
 export async function generarOrdenDeCompra(consolidacionId: number, data: {
   codigo_ppr: string; numero_orden: string; fecha_notificacion: string;
-}): Promise<{ ok: true } | { error: string }> {
+}): Promise<{ ok: true, ordenId: number } | { error: string }> {
   try {
     const check = await requireCompras();
     if ("error" in check) return check;
@@ -113,7 +113,7 @@ export async function generarOrdenDeCompra(consolidacionId: number, data: {
     if (total_cantidad === 0 || totalCálculo == null) return { error: "No se pudo calcular el precio unitario: faltan cantidad o total adjudicados" };
     costoUnitario = totalCálculo / total_cantidad;
 
-    await db.insert(ordenesCompra).values({
+    const [nuevaOrden] = await db.insert(ordenesCompra).values({
       numero, anio: year, fecha,
       consolidacion_id: consolidacionId,
       tipo_compra:      con.tipo_compra!,
@@ -130,7 +130,7 @@ export async function generarOrdenDeCompra(consolidacionId: number, data: {
       codigo_ppr:                   data.codigo_ppr.trim(),
       fecha_notificacion_proveedor: data.fecha_notificacion,
       creado_por:       check.uid,
-    });
+    }).returning({ id: ordenesCompra.id });
 
     await db.update(consolidaciones)
       .set({ estado: "Orden de Compra Generada" })
@@ -140,7 +140,7 @@ export async function generarOrdenDeCompra(consolidacionId: number, data: {
       .set({ estado: "Orden de Compra" })
       .where(eq(siafCompras.consolidacion_id, consolidacionId));
 
-    return { ok: true };
+    return { ok: true, ordenId: nuevaOrden.id };
   } catch {
     return { error: "Error al generar la orden de compra" };
   }

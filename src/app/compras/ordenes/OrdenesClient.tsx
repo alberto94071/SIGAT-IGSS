@@ -225,7 +225,7 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
     if ("error" in res) return setError(res.error);
     
     const newOrden: OrdenGenerada = {
-      id: Math.random(), // ID temporal
+      id: res.ordenId,
       numero: parseInt(numeroOrden.trim(), 10),
       anio: new Date().getFullYear(),
       fecha: new Date().toISOString().slice(0, 10),
