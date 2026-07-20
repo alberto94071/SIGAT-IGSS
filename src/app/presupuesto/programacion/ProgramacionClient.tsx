@@ -1,7 +1,9 @@
 "use client";
-import { useState, useMemo } from "react";
-import { ChevronDown, ArrowUp, ArrowDown } from "lucide-react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { ChevronDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import type { ProgramacionRow } from "@/lib/programacion-actions";
+
+const SCROLL_PASO = 320;
 
 interface Props {
   data: ProgramacionRow[];
@@ -36,6 +38,45 @@ export default function ProgramacionClient({ data }: Props) {
       orden === "asc" ? a.renglon - b.renglon : b.renglon - a.renglon
     );
   }, [data, currentRango, renglonBuscado, orden]);
+
+  // ── Desplazamiento horizontal: barra espejo arriba + flechas fijas + teclado ──
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const syncingScroll = useRef(false);
+  const [scrollWidth, setScrollWidth] = useState(0);
+
+  useEffect(() => {
+    const el = tableScrollRef.current;
+    if (!el) return;
+    const actualizarAncho = () => setScrollWidth(el.scrollWidth);
+    actualizarAncho();
+    const ro = new ResizeObserver(actualizarAncho);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [filteredData]);
+
+  const handleTopScroll = useCallback(() => {
+    if (syncingScroll.current) { syncingScroll.current = false; return; }
+    if (!topScrollRef.current || !tableScrollRef.current) return;
+    syncingScroll.current = true;
+    tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+  }, []);
+
+  const handleTableScroll = useCallback(() => {
+    if (syncingScroll.current) { syncingScroll.current = false; return; }
+    if (!topScrollRef.current || !tableScrollRef.current) return;
+    syncingScroll.current = true;
+    topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+  }, []);
+
+  const desplazar = useCallback((delta: number) => {
+    tableScrollRef.current?.scrollBy({ left: delta, behavior: "smooth" });
+  }, []);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "ArrowRight") { e.preventDefault(); desplazar(SCROLL_PASO); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); desplazar(-SCROLL_PASO); }
+  }, [desplazar]);
 
   return (
     <div className="space-y-6">
@@ -100,8 +141,42 @@ export default function ProgramacionClient({ data }: Props) {
       </div>
 
       {/* ── Tabla de renglones ── */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="relative bg-white rounded-lg border border-gray-200 overflow-hidden">
+        {/* Barra de desplazamiento espejo, visible arriba de la tabla */}
+        <div
+          ref={topScrollRef}
+          onScroll={handleTopScroll}
+          className="overflow-x-auto overflow-y-hidden border-b border-gray-200 bg-gray-50"
+          style={{ height: 14 }}
+        >
+          <div style={{ width: scrollWidth, height: 1 }} />
+        </div>
+
+        {/* Flechas fijas para desplazar sin bajar hasta la barra inferior */}
+        <button
+          type="button"
+          onClick={() => desplazar(-SCROLL_PASO)}
+          aria-label="Desplazar hacia la izquierda"
+          className="absolute left-2 top-1/2 z-10 flex items-center justify-center w-8 h-8 rounded-full bg-white/90 border border-gray-300 shadow-md text-gray-600 hover:bg-white hover:text-brand-700 transition-colors"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => desplazar(SCROLL_PASO)}
+          aria-label="Desplazar hacia la derecha"
+          className="absolute right-2 top-1/2 z-10 flex items-center justify-center w-8 h-8 rounded-full bg-white/90 border border-gray-300 shadow-md text-gray-600 hover:bg-white hover:text-brand-700 transition-colors"
+        >
+          <ChevronRight className="w-5 h-5" />
+        </button>
+
+        <div
+          ref={tableScrollRef}
+          onScroll={handleTableScroll}
+          onKeyDown={handleKeyDown}
+          tabIndex={0}
+          className="overflow-x-auto focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-400"
+        >
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
