@@ -35,7 +35,11 @@ export async function executeDatabaseReset(password: string): Promise<{ ok: true
     ];
 
     for (const table of tablesToTruncate) {
-      await db.execute(sql.raw(`TRUNCATE TABLE ${table} CASCADE;`));
+      try {
+        await db.execute(sql.raw(`TRUNCATE TABLE ${table} CASCADE;`));
+      } catch (err: any) {
+        console.warn(`No se pudo truncar ${table}:`, err.message);
+      }
     }
 
     await db.execute(sql`
