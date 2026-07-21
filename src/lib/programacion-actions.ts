@@ -1,10 +1,10 @@
 "use server";
 import { db } from "@/lib/db";
-import { programacionEntradas } from "@/lib/schema";
+import { programacionEntradas, presupuestoRenglones } from "@/lib/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { PRESUPUESTO_DATA } from "@/lib/presupuesto-general-data";
-import { GRUPOS, grupoDeRenglon } from "@/lib/programacion-constants";
+import { GRUPOS, grupoDeRenglon, TIPOS_MODIFICACION, type TipoModificacion } from "@/lib/programacion-constants";
 
 const EJERCICIO = 2026;
 
@@ -192,4 +192,91 @@ export async function guardarEntrada(input: GuardarEntradaInput): Promise<{ ok: 
   }
 
   return { ok: true };
+}
+
+export type GuardarModificacionInput = {
+  tipo: TipoModificacion;
+  renglon: number;
+  subProducto: string;
+  valor: number;
+};
+
+/**
+ * Reprogramación: fija el valor de una modificación (Ingru / Entre
+ * Renglones / Ampliación) para un renglón + sub-producto. No suma al valor
+ * anterior — lo reemplaza tal cual, sea que ya existiera un valor o no.
+ */
+export async function guardarModificacion(input: GuardarModificacionInput): Promise<{ ok: true } | { error: string }> {
+  const check = await requireEdit();
+  if ("error" in check) return check;
+
+  const tipoInfo = TIPOS_MODIFICACION.find(t => t.id === input.tipo);
+  if (!tipoInfo) return { error: "Tipo de modificación inválido" };
+
+  const base = PRESUPUESTO_DATA.find(r => r.renglon === input.renglon && r.subProducto === input.subProducto);
+  if (!base) return { error: "El renglón/sub-producto no existe en el catálogo presupuestario" };
+
+  const valor = input.valor || 0;
+
+  const [existente] = await db.select({ id: presupuestoRenglones.id })
+    .from(presupuestoRenglones)
+    .where(and(
+      eq(presupuestoRenglones.ejercicio_fiscal, EJERCICIO),
+      eq(presupuestoRenglones.renglon, input.renglon),
+      eq(presupuestoRenglones.subproducto, input.subProducto),
+    )).limit(1);
+
+  if (existente) {
+    await db.update(presupuestoRenglones)
+      .set({ [tipoInfo.campo]: valor })
+      .where(eq(presupuestoRenglones.id, existente.id));
+  } else {
+    await db.insert(presupuestoRenglones).values({
+      ejercicio_fiscal: EJERCICIO,
+      renglon: input.renglon,
+      subproducto: input.subProducto,
+      nombre: base.descripcion,
+      vigente: base.vigente,
+      [tipoInfo.campo]: valor,
+    });
+  }
+
+  return { ok: true };
+}
+
+export type ModificacionRow = {
+  renglon: number;
+  descripcion: string;
+  subProducto: string;
+  ingru: number;
+  entreRenglones: number;
+  ampliacion: number;
+};
+
+/** Renglones/sub-productos con alguna modificación distinta de cero (para la tabla de "ya modificados"). */
+export async function getModificaciones(): Promise<ModificacionRow[]> {
+  const filas = await db.select({
+    renglon:      presupuestoRenglones.renglon,
+    subproducto:  presupuestoRenglones.subproducto,
+    ingru:        presupuestoRenglones.modificacion_ingru,
+    entre_renglones: presupuestoRenglones.modificacion_entre_renglones,
+    ampliacion:   presupuestoRenglones.modificacion_ampliacion,
+  }).from(presupuestoRenglones).where(eq(presupuestoRenglones.ejercicio_fiscal, EJERCICIO));
+
+  const porClave = new Map(PRESUPUESTO_DATA.map(r => [`${r.renglon}|${r.subProducto}`, r]));
+
+  return filas
+    .filter(f => f.ingru !== 0 || f.entre_renglones !== 0 || f.ampliacion !== 0)
+    .map(f => {
+      const base = porClave.get(`${f.renglon}|${f.subproducto}`);
+      return {
+        renglon: f.renglon as number,
+        descripcion: base?.descripcion ?? "",
+        subProducto: f.subproducto as string,
+        ingru: f.ingru,
+        entreRenglones: f.entre_renglones,
+        ampliacion: f.ampliacion,
+      };
+    })
+    .sort((a, b) => a.renglon - b.renglon);
 }

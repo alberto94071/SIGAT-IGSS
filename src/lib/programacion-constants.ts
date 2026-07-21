@@ -13,3 +13,13 @@ export const CUATRIMESTRES = [
 export function grupoDeRenglon(renglon: number) {
   return GRUPOS.find(g => renglon >= g.min && renglon <= g.max) ?? null;
 }
+
+// Reprogramación: tipos de modificación presupuestaria. Cada uno escribe en
+// su propia columna de presupuesto_renglones (ver ejecucion-actions.ts).
+export const TIPOS_MODIFICACION = [
+  { id: "ingru",           label: "Modificación tipo Ingru",     campo: "modificacion_ingru" },
+  { id: "entre_renglones", label: "Modificación entre renglones", campo: "modificacion_entre_renglones" },
+  { id: "ampliacion",      label: "Modificación Ampliación",     campo: "modificacion_ampliacion" },
+] as const;
+
+export type TipoModificacion = typeof TIPOS_MODIFICACION[number]["id"];

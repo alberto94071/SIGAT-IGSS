@@ -29,6 +29,7 @@ export async function executeDatabaseReset(password: string): Promise<{ ok: true
       "pasajes_pagos",
       "audit_log",
       "notificaciones",
+      "programacion_entradas",
     ];
 
     for (const table of tablesToTruncate) {
@@ -40,12 +41,15 @@ export async function executeDatabaseReset(password: string): Promise<{ ok: true
     }
 
     await db.execute(sql`
-      UPDATE presupuesto_renglones 
-      SET 
+      UPDATE presupuesto_renglones
+      SET
         saldo_presupuestario = COALESCE(saldo_presupuestario, saldo_disponible),
         pre_compromiso = 0,
         compromiso = 0,
         devengado = 0,
+        modificacion_ingru = 0,
+        modificacion_entre_renglones = 0,
+        modificacion_ampliacion = 0,
         saldo_disponible = COALESCE(saldo_presupuestario, saldo_disponible)
     `);
 

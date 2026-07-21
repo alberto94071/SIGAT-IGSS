@@ -532,6 +532,12 @@ export const presupuestoRenglones = pgTable("presupuesto_renglones", {
   devengado:            doublePrecision("devengado"),
   saldo_presupuestario: doublePrecision("saldo_presupuestario"),
   saldo_disponible:     doublePrecision("saldo_disponible"),
+  // Reprogramación — modificaciones presupuestarias por tipo (ver
+  // programacion-constants.ts TIPOS_MODIFICACION). Cada una es un valor
+  // fijo por renglón + sub-producto que se sobreescribe, no se acumula.
+  modificacion_ingru:          doublePrecision("modificacion_ingru").notNull().default(0),
+  modificacion_entre_renglones: doublePrecision("modificacion_entre_renglones").notNull().default(0),
+  modificacion_ampliacion:     doublePrecision("modificacion_ampliacion").notNull().default(0),
   created_at:           text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 

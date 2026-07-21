@@ -47,7 +47,8 @@ const COLUMNAS: Columna[] = [
     kind: "group", label: "Modificaciones", color: "slate",
     sub: [
       { label: "Ingru", get: r => r.modificacionesIngru },
-      { label: "Normal", get: r => r.modificacionesNormal },
+      { label: "Entre Renglones", get: r => r.modificacionesNormal },
+      { label: "Ampliación", get: r => r.modificacionAmpliacion },
     ],
   },
   { kind: "simple", label: "Pre-Compromiso", color: "cyan", get: r => r.preCompromiso },
@@ -89,7 +90,7 @@ const COLUMNAS: Columna[] = [
   { kind: "simple", label: "Saldo", color: "gray", get: (_r, t) => t.saldo },
 ];
 
-const TOTAL_COLSPAN = 3 + COLUMNAS.reduce((n, c) => n + (c.kind === "group" ? 2 : 1), 0);
+const TOTAL_COLSPAN = 3 + COLUMNAS.reduce((n, c) => n + (c.kind === "group" ? c.sub.length : 1), 0);
 
 function calcularTotales(row: EjecucionRow): Totales {
   // Fórmulas de la pestaña EJECUCION del Excel fuente, preservadas tal cual:
@@ -278,7 +279,7 @@ export default function EjecucionClient({ data }: Props) {
                   ) : (
                     <th
                       key={col.label}
-                      colSpan={2}
+                      colSpan={col.sub.length}
                       className={`px-4 py-2 text-center font-semibold text-gray-800 border-l-2 border-gray-300 ${colores.header}`}
                     >
                       {col.label}

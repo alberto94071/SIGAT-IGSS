@@ -11,6 +11,7 @@ export type EjecucionRow = {
   nuevoVigente: number;
   modificacionesIngru: number;
   modificacionesNormal: number;
+  modificacionAmpliacion: number;
   preCompromiso: number;
   compromisoNormal: number;
   compromisoRegularizado: number;
@@ -34,6 +35,9 @@ export type EjecucionRow = {
  *   Esa tabla aún no distingue Compromiso/Devengado por tipo (Normal vs
  *   Regularizado) — el valor vivo se muestra bajo "Normal" y "Regularizado"
  *   queda en 0 hasta que exista esa distinción en el origen de los datos.
+ * - Modificaciones Ingru/Entre Renglones/Ampliación se cruzan en vivo con
+ *   las mismas columnas que escribe Reprogramación (ver programacion-actions.ts
+ *   guardarModificacion), también por renglón + sub-producto.
  */
 export async function getEjecucionData(): Promise<EjecucionRow[]> {
   const [entradas, renglonesVivos] = await Promise.all([
@@ -52,6 +56,9 @@ export async function getEjecucionData(): Promise<EjecucionRow[]> {
       pre_compromiso: presupuestoRenglones.pre_compromiso,
       compromiso:     presupuestoRenglones.compromiso,
       devengado:      presupuestoRenglones.devengado,
+      modificacion_ingru:           presupuestoRenglones.modificacion_ingru,
+      modificacion_entre_renglones: presupuestoRenglones.modificacion_entre_renglones,
+      modificacion_ampliacion:      presupuestoRenglones.modificacion_ampliacion,
     }).from(presupuestoRenglones).where(eq(presupuestoRenglones.ejercicio_fiscal, 2026)),
   ]);
 
@@ -73,6 +80,9 @@ export async function getEjecucionData(): Promise<EjecucionRow[]> {
     const vivo = vivoPorClave.get(clave);
     return {
       ...r,
+      modificacionesIngru: vivo?.modificacion_ingru ?? 0,
+      modificacionesNormal: vivo?.modificacion_entre_renglones ?? 0,
+      modificacionAmpliacion: vivo?.modificacion_ampliacion ?? 0,
       preCompromiso: vivo?.pre_compromiso ?? 0,
       compromisoNormal: vivo?.compromiso ?? 0,
       compromisoRegularizado: 0,
