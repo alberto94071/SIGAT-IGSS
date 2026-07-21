@@ -1,6 +1,6 @@
 "use client";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Calculator, Search, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calculator, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import type { PresupuestoGeneralRow } from "@/lib/presupuesto-general-actions";
 
 const SCROLL_PASO = 320;
@@ -9,35 +9,38 @@ interface Props {
   data: PresupuestoGeneralRow[];
 }
 
+const RANGOS = [
+  { label: "100 - 199", min: 100, max: 199 },
+  { label: "200 - 299", min: 200, max: 299 },
+  { label: "300 - 399", min: 300, max: 399 },
+];
+
 const Q = (n: number | null | undefined) => {
   if (n === null || n === undefined) return "—";
   return `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 export default function PresupuestoGeneralClient({ data }: Props) {
-  const [query, setQuery] = useState("");
+  const [activeTab, setActiveTab] = useState(0);
+  const [renglonBuscado, setRenglonBuscado] = useState("");
   const [orden, setOrden] = useState<"asc" | "desc">("asc");
 
+  const currentRango = RANGOS[activeTab];
+
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const porTexto = q === "" ? data : data.filter(r =>
-      r.descripcion.toLowerCase().includes(q) ||
-      String(r.renglon).includes(q) ||
-      r.subProducto.toLowerCase().includes(q)
-    );
-    return [...porTexto].sort((a, b) =>
+    const enRango = data.filter(r => r.renglon >= currentRango.min && r.renglon <= currentRango.max);
+    const buscado = renglonBuscado.trim();
+    const porRenglon = buscado === "" ? enRango : enRango.filter(r => String(r.renglon).includes(buscado));
+    return [...porRenglon].sort((a, b) =>
       orden === "asc" ? a.renglon - b.renglon : b.renglon - a.renglon
     );
-  }, [data, query, orden]);
+  }, [data, currentRango, renglonBuscado, orden]);
 
   const totales = useMemo(() => filtered.reduce((acc, r) => ({
     vigente: acc.vigente + r.vigente,
-    modificado: acc.modificado + r.modificado,
     nuevoVigente: acc.nuevoVigente + r.nuevoVigente,
-    preCompromiso: acc.preCompromiso + (r.preCompromiso ?? 0),
-    compromiso: acc.compromiso + (r.compromiso ?? 0),
     devengado: acc.devengado + (r.devengado ?? 0),
-  }), { vigente: 0, modificado: 0, nuevoVigente: 0, preCompromiso: 0, compromiso: 0, devengado: 0 }), [filtered]);
+  }), { vigente: 0, nuevoVigente: 0, devengado: 0 }), [filtered]);
 
   // ── Desplazamiento horizontal: barra espejo arriba + flechas fijas + teclado ──
   const topScrollRef = useRef<HTMLDivElement>(null);
@@ -80,25 +83,58 @@ export default function PresupuestoGeneralClient({ data }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <Calculator className="w-5 h-5" /> Presupuesto por Renglón
-          </h2>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {filtered.length.toLocaleString("es-GT")} de {data.length.toLocaleString("es-GT")} renglones
-          </p>
+      <div>
+        <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+          <Calculator className="w-5 h-5" /> Presupuesto por Renglón
+        </h2>
+        <p className="text-sm text-gray-500 mt-0.5">
+          {filtered.length.toLocaleString("es-GT")} renglones en el rango {currentRango.label}
+        </p>
+      </div>
+
+      {/* ── Pestañas por rango ── */}
+      <div className="border-b border-gray-200">
+        <div className="flex gap-0">
+          {RANGOS.map((rango, idx) => (
+            <button
+              key={idx}
+              onClick={() => setActiveTab(idx)}
+              className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === idx
+                  ? "border-brand-600 text-brand-700 bg-brand-50"
+                  : "border-transparent text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Renglones {rango.label}
+            </button>
+          ))}
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              className="input pl-9"
-              placeholder="Buscar por nombre, renglón, subproducto…"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-            />
-          </div>
+      </div>
+
+      {/* ── Controles: filtro por renglón + orden ── */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-600 font-medium">Buscar renglón:</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={renglonBuscado}
+            onChange={e => setRenglonBuscado(e.target.value.replace(/\D/g, ""))}
+            placeholder="Ej. 182"
+            className="input w-32 rounded-lg"
+          />
+          {renglonBuscado !== "" && (
+            <button
+              onClick={() => setRenglonBuscado("")}
+              className="text-xs text-gray-500 hover:text-gray-700 underline"
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <label className="text-sm text-gray-600 font-medium">Orden:</label>
           <button
             onClick={() => setOrden(orden === "asc" ? "desc" : "asc")}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -155,86 +191,62 @@ export default function PresupuestoGeneralClient({ data }: Props) {
           <table className="w-full text-xs">
             <thead>
               <tr className="table-header">
-                <th className="px-3 py-2.5 text-left whitespace-nowrap font-semibold">PG</th>
-                <th className="px-3 py-2.5 text-left whitespace-nowrap font-semibold">SPG</th>
-                <th className="px-3 py-2.5 text-left whitespace-nowrap font-semibold">PY</th>
-                <th className="px-3 py-2.5 text-left whitespace-nowrap font-semibold">ACT</th>
-                <th className="px-3 py-2.5 text-left whitespace-nowrap font-semibold">OB</th>
-                <th className="px-3 py-2.5 text-left whitespace-nowrap font-semibold">Geográfico</th>
-                <th className="px-3 py-2.5 text-left whitespace-nowrap font-semibold">Fuente</th>
-                <th className="px-3 py-2.5 text-left whitespace-nowrap font-semibold">Org</th>
-                <th className="px-3 py-2.5 text-left whitespace-nowrap font-semibold">Corr</th>
-                <th className="px-3 py-2.5 text-left whitespace-nowrap font-semibold">Fte-Ref</th>
-                <th className="px-3 py-2.5 text-left whitespace-nowrap font-semibold">Cor-Ref</th>
                 <th className="px-3 py-2.5 text-left whitespace-nowrap font-semibold">Renglón</th>
                 <th className="px-3 py-2.5 text-left whitespace-nowrap font-semibold min-w-[220px]">Descripción</th>
                 <th className="px-3 py-2.5 text-left whitespace-nowrap font-semibold">Sub-Producto</th>
                 <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Vigente</th>
-                <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Modificado</th>
+                <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Ingru</th>
+                <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Entre Renglones</th>
                 <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Nuevo Vigente</th>
                 <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Programado</th>
-                <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Pre-Compromiso</th>
-                <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Compromiso</th>
                 <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Devengado</th>
-                <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Saldo</th>
-                <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">% Ejecutado</th>
+                <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Saldo Presupuestario</th>
+                <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">% Ejecución</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtered.map((r, idx) => (
-                <tr key={`${r.renglon}-${r.subProducto}-${idx}`} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.pg}</td>
-                  <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.spg}</td>
-                  <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.py}</td>
-                  <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.act}</td>
-                  <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.ob}</td>
-                  <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.geografico}</td>
-                  <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.fuente}</td>
-                  <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.org}</td>
-                  <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.corr}</td>
-                  <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.fteRef}</td>
-                  <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.corRef}</td>
-                  <td className="px-3 py-2 tabular-nums text-gray-900 font-semibold whitespace-nowrap">{r.renglon}</td>
-                  <td className="px-3 py-2 text-gray-900 min-w-[220px] max-w-[360px]">
-                    <p className="line-clamp-2">{r.descripcion}</p>
-                  </td>
-                  <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.subProducto}</td>
-                  <td className="px-3 py-2 tabular-nums text-right text-gray-900 font-semibold whitespace-nowrap">{Q(r.vigente)}</td>
-                  <td className="px-3 py-2 tabular-nums text-right text-gray-600 whitespace-nowrap">{Q(r.modificado)}</td>
-                  <td className="px-3 py-2 tabular-nums text-right text-gray-900 font-semibold whitespace-nowrap">{Q(r.nuevoVigente)}</td>
-                  <td className="px-3 py-2 tabular-nums text-right text-gray-400 whitespace-nowrap">{Q(r.programado)}</td>
-                  <td className="px-3 py-2 tabular-nums text-right text-gray-700 whitespace-nowrap">{Q(r.preCompromiso)}</td>
-                  <td className="px-3 py-2 tabular-nums text-right text-gray-700 whitespace-nowrap">{Q(r.compromiso)}</td>
-                  <td className="px-3 py-2 tabular-nums text-right text-gray-700 whitespace-nowrap">{Q(r.devengado)}</td>
-                  <td className="px-3 py-2 tabular-nums text-right text-gray-400 whitespace-nowrap">{Q(r.saldo)}</td>
-                  <td className="px-3 py-2 tabular-nums text-right text-gray-400 whitespace-nowrap">
-                    {r.porcentajeEjecutado != null ? `${r.porcentajeEjecutado.toFixed(1)}%` : "—"}
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={11} className="px-3 py-8 text-center text-gray-400">
+                    No hay datos para este rango de renglones.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filtered.map((r, idx) => (
+                  <tr key={`${r.renglon}-${r.subProducto}-${idx}`} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-3 py-2 tabular-nums text-gray-900 font-semibold whitespace-nowrap">{r.renglon}</td>
+                    <td className="px-3 py-2 text-gray-900 min-w-[220px] max-w-[360px]">
+                      <p className="line-clamp-2">{r.descripcion}</p>
+                    </td>
+                    <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.subProducto}</td>
+                    <td className="px-3 py-2 tabular-nums text-right text-gray-900 font-semibold whitespace-nowrap">{Q(r.vigente)}</td>
+                    <td className="px-3 py-2 tabular-nums text-right text-gray-400 whitespace-nowrap">{Q(r.ingru)}</td>
+                    <td className="px-3 py-2 tabular-nums text-right text-gray-400 whitespace-nowrap">{Q(r.entreRenglones)}</td>
+                    <td className="px-3 py-2 tabular-nums text-right text-gray-900 font-semibold whitespace-nowrap">{Q(r.nuevoVigente)}</td>
+                    <td className="px-3 py-2 tabular-nums text-right text-gray-400 whitespace-nowrap">{Q(r.programado)}</td>
+                    <td className="px-3 py-2 tabular-nums text-right text-gray-700 whitespace-nowrap">{Q(r.devengado)}</td>
+                    <td className="px-3 py-2 tabular-nums text-right text-gray-400 whitespace-nowrap">{Q(r.saldoPresupuestario)}</td>
+                    <td className="px-3 py-2 tabular-nums text-right text-gray-400 whitespace-nowrap">
+                      {r.porcentajeEjecucion != null ? `${r.porcentajeEjecucion.toFixed(1)}%` : "—"}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
             {filtered.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
-                  <td colSpan={14} className="px-3 py-2.5 text-right text-gray-700 whitespace-nowrap">Total</td>
+                  <td colSpan={3} className="px-3 py-2.5 text-right text-gray-700 whitespace-nowrap">Total</td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-900 whitespace-nowrap">{Q(totales.vigente)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-gray-900 whitespace-nowrap">{Q(totales.modificado)}</td>
+                  <td colSpan={2}></td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-900 whitespace-nowrap">{Q(totales.nuevoVigente)}</td>
                   <td></td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-gray-900 whitespace-nowrap">{Q(totales.preCompromiso)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-gray-900 whitespace-nowrap">{Q(totales.compromiso)}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-900 whitespace-nowrap">{Q(totales.devengado)}</td>
                   <td colSpan={2}></td>
                 </tr>
               </tfoot>
             )}
           </table>
-          {filtered.length === 0 && (
-            <div className="text-center py-16 text-gray-400">
-              <Calculator className="w-8 h-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">No se encontraron renglones con ese criterio.</p>
-            </div>
-          )}
         </div>
       </div>
     </div>
