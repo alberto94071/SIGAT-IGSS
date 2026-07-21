@@ -535,6 +535,25 @@ export const presupuestoRenglones = pgTable("presupuesto_renglones", {
   created_at:           text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
+// ─── Programación y Reprogramación presupuestaria ────────────────────────────
+// Una fila por (renglón, sub-producto, tipo) programado dentro de un
+// cuatrimestre — mes1..mes4 son los 4 meses que componen ese cuatrimestre.
+export const programacionEntradas = pgTable("programacion_entradas", {
+  id:               serial("id").primaryKey(),
+  ejercicio_fiscal: integer("ejercicio_fiscal").notNull().default(2026),
+  cuatrimestre:     integer("cuatrimestre").notNull(),
+  renglon:          integer("renglon").notNull(),
+  subproducto:      text("subproducto").notNull(),
+  tipo:             text("tipo").notNull(),
+  mes1:             doublePrecision("mes1").notNull().default(0),
+  mes2:             doublePrecision("mes2").notNull().default(0),
+  mes3:             doublePrecision("mes3").notNull().default(0),
+  mes4:             doublePrecision("mes4").notNull().default(0),
+  creado_por:       integer("creado_por").references(() => usuarios.id),
+  created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+  updated_at:       text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
 // ─── Proveedores ──────────────────────────────────────────────────────────────
 export const proveedores = pgTable("proveedores", {
   id:          serial("id").primaryKey(),
