@@ -9,36 +9,98 @@ interface Props {
   data: EjecucionRow[];
 }
 
-// Encabezados de las columnas D..O tal como aparecen en la pestaña "EJECUCION" del
-// Excel fuente: el bloque de renglones 100-199 usa la agrupación Nuevo/Modificaciones/
-// Ejecución/Programado/Saldo Programado, mientras que 200-299 y 300-399 usan la
-// agrupación por mes (Septiembre..Diciembre) — ambos comparten las mismas 3 fórmulas
-// (Total Normal = E+G+I+K, Total Regularizado = F+H+J+L, Saldo = D-(Total N+Total R)).
-const HEADERS_BLOQUE1 = [
-  "Nuevo Vigente", "Modificaciones Ingru", "Modificaciones Normal",
-  "Ejecución Normal", "Ejecución Regularizado",
-  "Programado Normal", "Programado Regularizado",
-  "Saldo Programado Normal", "Saldo Programado Regularizado",
-  "Total Programado Normal", "Total Programado Regularizado", "Saldo Vigente",
-];
-const HEADERS_BLOQUE_MESES = [
-  "Saldo Presupuestario", "Septiembre Normal", "Septiembre Regularizado",
-  "Octubre Normal", "Octubre Regularizado",
-  "Noviembre Normal", "Noviembre Regularizado",
-  "Diciembre Normal", "Diciembre Regularizado",
-  "Total Programado Normal", "Total Programado Regularizado", "Saldo",
-];
-
 const RANGOS = [
-  { label: "100 - 199", min: 100, max: 199, headers: HEADERS_BLOQUE1 },
-  { label: "200 - 299", min: 200, max: 299, headers: HEADERS_BLOQUE_MESES },
-  { label: "300 - 399", min: 300, max: 399, headers: HEADERS_BLOQUE_MESES },
+  { label: "100 - 199", min: 100, max: 199 },
+  { label: "200 - 299", min: 200, max: 299 },
+  { label: "300 - 399", min: 300, max: 399 },
 ];
 
 const Q = (n: number | null | undefined) => {
   if (n === null || n === undefined) return "Q0.00";
   return `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
+
+type Totales = { totalNormal: number; totalRegularizado: number; saldo: number };
+
+// Colores por grupo — clases completas (no interpoladas) para que Tailwind las detecte.
+const COLOR_MAP: Record<string, { header: string; sub: string; body: string }> = {
+  slate:  { header: "bg-slate-200",  sub: "bg-slate-100",  body: "bg-slate-50" },
+  cyan:   { header: "bg-cyan-200",   sub: "bg-cyan-100",   body: "bg-cyan-50" },
+  amber:  { header: "bg-amber-200",  sub: "bg-amber-100",  body: "bg-amber-50" },
+  blue:   { header: "bg-blue-200",   sub: "bg-blue-100",   body: "bg-blue-50" },
+  violet: { header: "bg-violet-200", sub: "bg-violet-100", body: "bg-violet-50" },
+  green:  { header: "bg-green-200",  sub: "bg-green-100",  body: "bg-green-50" },
+  teal:   { header: "bg-teal-200",   sub: "bg-teal-100",   body: "bg-teal-50" },
+  gray:   { header: "bg-gray-200",   sub: "bg-gray-200",   body: "bg-gray-100" },
+};
+
+type Columna =
+  | { kind: "simple"; label: string; color: string; get: (r: EjecucionRow, t: Totales) => number }
+  | { kind: "group"; label: string; color: string; sub: { label: string; get: (r: EjecucionRow, t: Totales) => number }[] };
+
+// Estructura de columnas de la tabla de Ejecución, igual en las 3 pestañas de
+// rango de renglón. Cada grupo con Normal/Regularizado lleva dos casillas
+// unidas bajo un mismo título y su propia tonalidad de color.
+const COLUMNAS: Columna[] = [
+  { kind: "simple", label: "Nuevo Vigente", color: "slate", get: r => r.nuevoVigente },
+  {
+    kind: "group", label: "Modificaciones", color: "slate",
+    sub: [
+      { label: "Ingru", get: r => r.modificacionesIngru },
+      { label: "Normal", get: r => r.modificacionesNormal },
+    ],
+  },
+  { kind: "simple", label: "Pre-Compromiso", color: "cyan", get: r => r.preCompromiso },
+  {
+    kind: "group", label: "Compromiso", color: "amber",
+    sub: [
+      { label: "Normal", get: r => r.compromisoNormal },
+      { label: "Regularizado", get: r => r.compromisoRegularizado },
+    ],
+  },
+  {
+    kind: "group", label: "Ejecución", color: "blue",
+    sub: [
+      { label: "Normal", get: r => r.ejecucionNormal },
+      { label: "Regularizado", get: r => r.ejecucionRegularizado },
+    ],
+  },
+  {
+    kind: "group", label: "Programado", color: "violet",
+    sub: [
+      { label: "Normal", get: r => r.programadoNormal },
+      { label: "Regularizado", get: r => r.programadoRegularizado },
+    ],
+  },
+  {
+    kind: "group", label: "Saldo Programado", color: "green",
+    sub: [
+      { label: "Normal", get: r => r.saldoProgramadoNormal },
+      { label: "Regularizado", get: r => r.saldoProgramadoRegularizado },
+    ],
+  },
+  {
+    kind: "group", label: "Total Programado", color: "teal",
+    sub: [
+      { label: "Normal", get: (_r, t) => t.totalNormal },
+      { label: "Regularizado", get: (_r, t) => t.totalRegularizado },
+    ],
+  },
+  { kind: "simple", label: "Saldo", color: "gray", get: (_r, t) => t.saldo },
+];
+
+const TOTAL_COLSPAN = 3 + COLUMNAS.reduce((n, c) => n + (c.kind === "group" ? 2 : 1), 0);
+
+function calcularTotales(row: EjecucionRow): Totales {
+  // Fórmulas de la pestaña EJECUCION del Excel fuente, preservadas tal cual:
+  // Total Normal       = Modif.Ingru + Ejecución.Normal + Programado.Normal + Saldo Prog.Normal
+  // Total Regularizado = Modif.Normal + Ejecución.Regularizado + Programado.Regularizado + Saldo Prog.Regularizado
+  // Saldo               = Nuevo Vigente - (Total Normal + Total Regularizado)
+  const totalNormal = row.modificacionesIngru + row.ejecucionNormal + row.programadoNormal + row.saldoProgramadoNormal;
+  const totalRegularizado = row.modificacionesNormal + row.ejecucionRegularizado + row.programadoRegularizado + row.saldoProgramadoRegularizado;
+  const saldo = row.nuevoVigente - (totalNormal + totalRegularizado);
+  return { totalNormal, totalRegularizado, saldo };
+}
 
 export default function EjecucionClient({ data }: Props) {
   const [activeTab, setActiveTab] = useState(0);
@@ -198,36 +260,61 @@ export default function EjecucionClient({ data }: Props) {
           className="overflow-x-auto focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-400"
         >
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-2 text-left font-semibold text-gray-700 w-24">Renglon</th>
-                <th className="px-4 py-2 text-left font-semibold text-gray-700 min-w-48">Descripcion</th>
-                <th className="px-4 py-2 text-left font-semibold text-gray-700 w-28">Sub-Producto</th>
-                {currentRango.headers.map(h => (
-                  <th key={h} className="px-4 py-2 text-right font-semibold text-gray-700 w-40">{h}</th>
-                ))}
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th rowSpan={2} className="px-4 py-2 text-left font-semibold text-gray-700 w-24 align-bottom">Renglon</th>
+                <th rowSpan={2} className="px-4 py-2 text-left font-semibold text-gray-700 min-w-48 align-bottom">Descripcion</th>
+                <th rowSpan={2} className="px-4 py-2 text-left font-semibold text-gray-700 w-28 align-bottom">Sub-Producto</th>
+                {COLUMNAS.map(col => {
+                  const colores = COLOR_MAP[col.color];
+                  return col.kind === "simple" ? (
+                    <th
+                      key={col.label}
+                      rowSpan={2}
+                      className={`px-4 py-2 text-right font-semibold text-gray-800 w-36 align-bottom border-l border-white ${colores.header}`}
+                    >
+                      {col.label}
+                    </th>
+                  ) : (
+                    <th
+                      key={col.label}
+                      colSpan={2}
+                      className={`px-4 py-2 text-center font-semibold text-gray-800 border-l border-white ${colores.header}`}
+                    >
+                      {col.label}
+                    </th>
+                  );
+                })}
+              </tr>
+              <tr className="border-b border-gray-200">
+                {COLUMNAS.filter(c => c.kind === "group").flatMap(col => {
+                  const colores = COLOR_MAP[col.color];
+                  const grupo = col as Extract<Columna, { kind: "group" }>;
+                  return grupo.sub.map((s, i) => (
+                    <th
+                      key={`${col.label}-${s.label}`}
+                      className={`px-4 py-1.5 text-right font-medium text-gray-700 text-xs w-32 ${colores.sub} ${i === 0 ? "border-l border-white" : ""}`}
+                    >
+                      {s.label}
+                    </th>
+                  ));
+                })}
               </tr>
             </thead>
             <tbody>
               {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={TOTAL_COLSPAN} className="px-4 py-8 text-center text-gray-500">
                     No hay datos para este rango de renglones.
                   </td>
                 </tr>
               ) : (
                 filteredData.map((row, idx) => {
-                  // Fórmulas de la pestaña EJECUCION del Excel fuente, preservadas tal cual:
-                  // Total Programado Normal       = Modif.Ingru + Ejecución.Normal + Programado.Normal + Saldo Prog.Normal
-                  // Total Programado Regularizado = Modif.Normal + Ejecución.Regularizado + Programado.Regularizado + Saldo Prog.Regularizado
-                  // Saldo                         = Nuevo Vigente - (Total Normal + Total Regularizado)
-                  const totalNormal = row.modificacionesIngru + row.ejecucionNormal + row.programadoNormal + row.saldoProgramadoNormal;
-                  const totalRegularizado = row.modificacionesNormal + row.ejecucionRegularizado + row.programadoRegularizado + row.saldoProgramadoRegularizado;
-                  const saldo = row.nuevoVigente - (totalNormal + totalRegularizado);
+                  const totales = calcularTotales(row);
                   return (
                     <tr
                       key={`${row.renglon}-${row.subProducto}-${idx}`}
-                      className="border-b border-gray-200 hover:bg-gray-50 transition-colors"
+                      className="border-b border-gray-200 hover:bg-gray-50/70 transition-colors"
                     >
                       <td className="px-4 py-3 font-semibold text-gray-900">{row.renglon}</td>
                       <td className="px-4 py-3 text-gray-600">
@@ -246,18 +333,24 @@ export default function EjecucionClient({ data }: Props) {
                         </button>
                       </td>
                       <td className="px-4 py-3 text-gray-600">{row.subProducto}</td>
-                      <td className="px-4 py-3 text-right text-gray-600">{Q(row.nuevoVigente)}</td>
-                      <td className="px-4 py-3 text-right text-gray-600">{Q(row.modificacionesIngru)}</td>
-                      <td className="px-4 py-3 text-right text-gray-600">{Q(row.modificacionesNormal)}</td>
-                      <td className="px-4 py-3 text-right text-gray-600">{Q(row.ejecucionNormal)}</td>
-                      <td className="px-4 py-3 text-right text-gray-600">{Q(row.ejecucionRegularizado)}</td>
-                      <td className="px-4 py-3 text-right text-gray-600">{Q(row.programadoNormal)}</td>
-                      <td className="px-4 py-3 text-right text-gray-600">{Q(row.programadoRegularizado)}</td>
-                      <td className="px-4 py-3 text-right text-gray-600">{Q(row.saldoProgramadoNormal)}</td>
-                      <td className="px-4 py-3 text-right text-gray-600">{Q(row.saldoProgramadoRegularizado)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-gray-900">{Q(totalNormal)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-gray-900">{Q(totalRegularizado)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-brand-600">{Q(saldo)}</td>
+                      {COLUMNAS.flatMap(col => {
+                        const colores = COLOR_MAP[col.color];
+                        if (col.kind === "simple") {
+                          return [
+                            <td key={col.label} className={`px-4 py-3 text-right text-gray-700 font-medium ${colores.body}`}>
+                              {Q(col.get(row, totales))}
+                            </td>,
+                          ];
+                        }
+                        return col.sub.map((s, i) => (
+                          <td
+                            key={`${col.label}-${s.label}`}
+                            className={`px-4 py-3 text-right text-gray-600 ${colores.body} ${i === 0 ? "border-l border-white" : ""}`}
+                          >
+                            {Q(s.get(row, totales))}
+                          </td>
+                        ));
+                      })}
                     </tr>
                   );
                 })
