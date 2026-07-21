@@ -2,8 +2,8 @@
 import { fechaGuatemala, fechaHoraGuatemala } from "@/lib/date-utils";
 
 import { db } from "@/lib/db";
-import { siafCompras, siafComprasItems, catalogoCompras, consolidaciones, presupuestoRenglones } from "@/lib/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { siafCompras, siafComprasItems, catalogoCompras, consolidaciones, presupuestoRenglones, cotizacionesAnuales, cotizacionesAnualesItems } from "@/lib/schema";
+import { eq, and, sql, inArray, desc } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { crearNotificacion } from "@/lib/notificaciones";
 
@@ -106,12 +106,16 @@ export async function actualizarEstado(id: number, estado: string) {
 }
 
 // Al aprobar un SIAF: además de cambiar el estado, toma cada ítem, lo cruza
-// con el catálogo (mismo código IGSS + subproducto) para obtener su renglón
-// y precio estimado, multiplica cantidad × precio, y suma ese monto al
-// Pre-Compromiso del renglón/subproducto correspondiente en Presupuesto
-// General — para ir viendo un aproximado de cuánto se va comprometiendo por
-// renglón. Solo se aplica la primera vez que la solicitud queda Aprobada,
-// para no duplicar el monto si se rechaza y se vuelve a aprobar después.
+// con el catálogo (mismo código IGSS + subproducto) para obtener su renglón,
+// y calcula el precio unitario: si existe una cotización anual vigente para
+// ese código IGSS (precio pactado con el proveedor para todo el año), usa
+// ese precio (neto de IVA por línea, igual que en Adjudicación); si no hay
+// cotización anual, cae al precio estimado del catálogo. Multiplica
+// cantidad × precio y suma ese monto al Pre-Compromiso del renglón/
+// subproducto correspondiente en Presupuesto General — para ir viendo un
+// aproximado de cuánto se va comprometiendo por renglón. Solo se aplica la
+// primera vez que la solicitud queda Aprobada, para no duplicar el monto si
+// se rechaza y se vuelve a aprobar después.
 export async function aprobarSolicitud(id: number): Promise<{ ok: true } | { error: string }> {
   try {
     const [sol] = await db.select({ id: siafCompras.id, presupuesto_aplicado: siafCompras.presupuesto_aplicado })
@@ -139,9 +143,29 @@ export async function aprobarSolicitud(id: number): Promise<{ ok: true } | { err
           .from(catalogoCompras)
           .where(queryCond)
           .limit(1);
-        if (!cat || cat.renglon == null || cat.precio_estimado == null) continue;
+        if (!cat || cat.renglon == null) continue;
 
-        const monto = item.cantidad_solicitada * cat.precio_estimado;
+        let precioUnitario = cat.precio_estimado;
+        if (item.codigo_igss != null) {
+          const [cotiz] = await db.select({
+            precio_unitario: cotizacionesAnualesItems.precio_unitario,
+            exento_iva:      cotizacionesAnualesItems.exento_iva,
+          })
+            .from(cotizacionesAnualesItems)
+            .innerJoin(cotizacionesAnuales, eq(cotizacionesAnualesItems.cotizacion_anual_id, cotizacionesAnuales.id))
+            .where(and(
+              eq(cotizacionesAnualesItems.codigo_igss, item.codigo_igss),
+              eq(cotizacionesAnuales.anio, 2026),
+            ))
+            .orderBy(desc(cotizacionesAnualesItems.id))
+            .limit(1);
+          if (cotiz) {
+            precioUnitario = cotiz.exento_iva ? cotiz.precio_unitario : cotiz.precio_unitario * 0.88;
+          }
+        }
+        if (precioUnitario == null) continue;
+
+        const monto = item.cantidad_solicitada * precioUnitario;
         const key = `${cat.renglon}::${item.subproducto}::${item.nombre}`;
         const existente = montosPorGrupo.get(key);
         if (existente) existente.monto += monto;
