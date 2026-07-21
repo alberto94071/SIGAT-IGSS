@@ -271,7 +271,7 @@ export default function EjecucionClient({ data }: Props) {
                     <th
                       key={col.label}
                       rowSpan={2}
-                      className={`px-4 py-2 text-right font-semibold text-gray-800 w-36 align-bottom border-l border-white ${colores.header}`}
+                      className={`px-4 py-2 text-right font-semibold text-gray-800 w-36 align-bottom border-l-2 border-gray-300 ${colores.header}`}
                     >
                       {col.label}
                     </th>
@@ -279,21 +279,21 @@ export default function EjecucionClient({ data }: Props) {
                     <th
                       key={col.label}
                       colSpan={2}
-                      className={`px-4 py-2 text-center font-semibold text-gray-800 border-l border-white ${colores.header}`}
+                      className={`px-4 py-2 text-center font-semibold text-gray-800 border-l-2 border-gray-300 ${colores.header}`}
                     >
                       {col.label}
                     </th>
                   );
                 })}
               </tr>
-              <tr className="border-b border-gray-200">
+              <tr className="border-b-2 border-gray-300">
                 {COLUMNAS.filter(c => c.kind === "group").flatMap(col => {
                   const colores = COLOR_MAP[col.color];
                   const grupo = col as Extract<Columna, { kind: "group" }>;
                   return grupo.sub.map((s, i) => (
                     <th
                       key={`${col.label}-${s.label}`}
-                      className={`px-4 py-1.5 text-right font-medium text-gray-700 text-xs w-32 ${colores.sub} ${i === 0 ? "border-l border-white" : ""}`}
+                      className={`px-4 py-1.5 text-right font-medium text-gray-700 text-xs w-32 ${colores.sub} ${i === 0 ? "border-l-2 border-gray-300" : "border-l border-gray-200"}`}
                     >
                       {s.label}
                     </th>
@@ -337,7 +337,7 @@ export default function EjecucionClient({ data }: Props) {
                         const colores = COLOR_MAP[col.color];
                         if (col.kind === "simple") {
                           return [
-                            <td key={col.label} className={`px-4 py-3 text-right text-gray-700 font-medium ${colores.body}`}>
+                            <td key={col.label} className={`px-4 py-3 text-right text-gray-700 font-medium border-l-2 border-gray-300 ${colores.body}`}>
                               {Q(col.get(row, totales))}
                             </td>,
                           ];
@@ -345,7 +345,7 @@ export default function EjecucionClient({ data }: Props) {
                         return col.sub.map((s, i) => (
                           <td
                             key={`${col.label}-${s.label}`}
-                            className={`px-4 py-3 text-right text-gray-600 ${colores.body} ${i === 0 ? "border-l border-white" : ""}`}
+                            className={`px-4 py-3 text-right text-gray-600 ${colores.body} ${i === 0 ? "border-l-2 border-gray-300" : "border-l border-gray-200"}`}
                           >
                             {Q(s.get(row, totales))}
                           </td>

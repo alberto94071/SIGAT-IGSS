@@ -76,10 +76,28 @@
   /* Tintes suaves de estado */
   .dark .bg-brand-50  { background-color: rgba(34, 197, 94, 0.08) !important; }
   .dark .bg-green-50  { background-color: rgba(34, 197, 94, 0.10) !important; }
+  .dark .bg-green-100 { background-color: rgba(34, 197, 94, 0.18) !important; }
+  .dark .bg-green-200 { background-color: rgba(34, 197, 94, 0.28) !important; }
   .dark .bg-red-50    { background-color: rgba(239, 68, 68, 0.10) !important; }
   .dark .bg-amber-50  { background-color: rgba(245, 158, 11, 0.10) !important; }
+  .dark .bg-amber-100 { background-color: rgba(245, 158, 11, 0.18) !important; }
+  .dark .bg-amber-200 { background-color: rgba(245, 158, 11, 0.28) !important; }
   .dark .bg-blue-50   { background-color: rgba(59, 130, 246, 0.10) !important; }
+  .dark .bg-blue-100  { background-color: rgba(59, 130, 246, 0.18) !important; }
+  .dark .bg-blue-200  { background-color: rgba(59, 130, 246, 0.28) !important; }
   .dark .bg-orange-50 { background-color: rgba(249, 115, 22, 0.10) !important; }
+  .dark .bg-slate-50  { background-color: rgba(100, 116, 139, 0.10) !important; }
+  .dark .bg-slate-100 { background-color: rgba(100, 116, 139, 0.18) !important; }
+  .dark .bg-slate-200 { background-color: rgba(100, 116, 139, 0.28) !important; }
+  .dark .bg-cyan-50   { background-color: rgba(6, 182, 212, 0.10) !important; }
+  .dark .bg-cyan-100  { background-color: rgba(6, 182, 212, 0.18) !important; }
+  .dark .bg-cyan-200  { background-color: rgba(6, 182, 212, 0.28) !important; }
+  .dark .bg-violet-50  { background-color: rgba(139, 92, 246, 0.10) !important; }
+  .dark .bg-violet-100 { background-color: rgba(139, 92, 246, 0.18) !important; }
+  .dark .bg-violet-200 { background-color: rgba(139, 92, 246, 0.28) !important; }
+  .dark .bg-teal-50   { background-color: rgba(20, 184, 166, 0.10) !important; }
+  .dark .bg-teal-100  { background-color: rgba(20, 184, 166, 0.18) !important; }
+  .dark .bg-teal-200  { background-color: rgba(20, 184, 166, 0.28) !important; }
   .dark .hover\:bg-brand-50:hover { background-color: rgba(34, 197, 94, 0.15) !important; }
   .dark .hover\:bg-red-50:hover   { background-color: rgba(239, 68, 68, 0.15) !important; }
   .dark .hover\:bg-brand-100:hover { background-color: rgba(34, 197, 94, 0.22) !important; }
