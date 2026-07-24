@@ -7,7 +7,7 @@ import {
 import { eq, sql, inArray, ilike, or, and, isNotNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import type { Consolidacion, InsumoPrecio, Oferente } from "./types";
-import { renglonLookupMap, unidadMedidaLookupMap } from "./renglon-utils";
+import { renglonLookupMap, unidadMedidaLookupMap, normalizaNombre } from "./renglon-utils";
 
 // ─── Lectura ──────────────────────────────────────────────────────────────────
 
@@ -76,9 +76,11 @@ export async function getConsolidacionesConDetalles(): Promise<Consolidacion[]> 
       } else {
         // El snapshot guardado al crear el SIAF puede venir vacío si el
         // insumo no tenía unidad de medida cargada en ese momento — se usa
-        // la de Base de Datos Central (ya actualizada) como respaldo.
+        // la de Base de Datos Central (ya actualizada) como respaldo,
+        // cruzando por código + nombre (varios insumos sin código real
+        // comparten el mismo placeholder, ej. "S/C").
         const unidad_medida = item.unidad_medida?.trim()
-          || (item.codigo_igss ? unidadMedidaMap.get(item.codigo_igss) : null)
+          || unidadMedidaMap.get(`${item.codigo_igss}::${normalizaNombre(item.nombre)}`)
           || null;
         grupos.set(key, {
           codigo_igss: item.codigo_igss, subproducto: item.subproducto,

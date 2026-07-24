@@ -15,19 +15,28 @@ export async function renglonLookupMap(): Promise<Map<string, number | null>> {
   return map;
 }
 
-// Mapa codigo_igss -> unidad de medida vigente en Base de Datos Central.
-// catalogo_compras (renglón/subproducto/precio) ya no tiene columna de
-// unidad de medida — ese dato vive en base_datos_central (ficha del insumo),
-// identificado por codigo_igss. Se usa como respaldo cuando el snapshot
-// guardado en siaf_compras_items al crear la solicitud quedó vacío (insumo
-// que no tenía unidad de medida cargada en ese momento) y luego se completó
-// en Base de Datos Central.
+// Trim + minúsculas + sin tildes, para que "Energía Eléctrica" (Base de
+// Datos Central) y "Energia Electrica" (catálogo/SIAF) crucen igual.
+export function normalizaNombre(s: string): string {
+  return s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+// Mapa codigo_igss::nombre -> unidad de medida vigente en Base de Datos
+// Central. catalogo_compras (renglón/subproducto/precio) ya no tiene columna
+// de unidad de medida — ese dato vive en base_datos_central (ficha del
+// insumo). Muchos insumos sin código real comparten el mismo placeholder de
+// codigo_igss (ej. "S/C"), así que no alcanza con cruzar solo por código —
+// se agrega el nombre para desambiguar (mismo criterio que ya usa
+// SiafClient.tsx al armar sugerencias de insumo). Se usa como respaldo
+// cuando el snapshot guardado en siaf_compras_items al crear la solicitud
+// quedó vacío y luego se completó en Base de Datos Central.
 export async function unidadMedidaLookupMap(): Promise<Map<string, string | null>> {
   const rows = await db.select({
-    codigo_igss: baseDatosCentral.codigo_igss, unidad_medida: baseDatosCentral.unidad_medida,
+    codigo_igss: baseDatosCentral.codigo_igss, nombre: baseDatosCentral.nombre,
+    unidad_medida: baseDatosCentral.unidad_medida,
   }).from(baseDatosCentral).where(isNotNull(baseDatosCentral.codigo_igss));
   const map = new Map<string, string | null>();
-  for (const r of rows) if (r.codigo_igss) map.set(r.codigo_igss, r.unidad_medida);
+  for (const r of rows) if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.unidad_medida);
   return map;
 }
 
