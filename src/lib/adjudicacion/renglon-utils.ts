@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { siafCompras, siafComprasItems, catalogoCompras } from "@/lib/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { siafCompras, siafComprasItems, catalogoCompras, baseDatosCentral } from "@/lib/schema";
+import { eq, and, inArray, isNotNull } from "drizzle-orm";
 
 // Mapa completo codigo_igss::subproducto -> renglón, para anotar listas de
 // ítems ya cargadas sin hacer una consulta por ítem (mismo cruce que usa la
@@ -12,6 +12,22 @@ export async function renglonLookupMap(): Promise<Map<string, number | null>> {
   }).from(catalogoCompras);
   const map = new Map<string, number | null>();
   for (const r of rows) map.set(`${r.codigo_igss}::${r.subproducto}`, r.renglon);
+  return map;
+}
+
+// Mapa codigo_igss -> unidad de medida vigente en Base de Datos Central.
+// catalogo_compras (renglón/subproducto/precio) ya no tiene columna de
+// unidad de medida — ese dato vive en base_datos_central (ficha del insumo),
+// identificado por codigo_igss. Se usa como respaldo cuando el snapshot
+// guardado en siaf_compras_items al crear la solicitud quedó vacío (insumo
+// que no tenía unidad de medida cargada en ese momento) y luego se completó
+// en Base de Datos Central.
+export async function unidadMedidaLookupMap(): Promise<Map<string, string | null>> {
+  const rows = await db.select({
+    codigo_igss: baseDatosCentral.codigo_igss, unidad_medida: baseDatosCentral.unidad_medida,
+  }).from(baseDatosCentral).where(isNotNull(baseDatosCentral.codigo_igss));
+  const map = new Map<string, string | null>();
+  for (const r of rows) if (r.codigo_igss) map.set(r.codigo_igss, r.unidad_medida);
   return map;
 }
 
