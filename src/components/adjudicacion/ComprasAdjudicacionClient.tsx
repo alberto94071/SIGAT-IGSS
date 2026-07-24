@@ -234,6 +234,9 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
   const [rgDireccion, setRgDireccion] = useState(""); const [rgTelefono, setRgTelefono] = useState("");
   // Precio unitario por insumo (clave = codigo_igss::subproducto), en vez de un monto combinado.
   const [rgPrecios, setRgPrecios] = useState<Record<string, string>>({});
+  // Respaldo manual: si el insumo no tiene Unidad de Medida cargada ni en el
+  // catálogo ni en Base de Datos Central, se pide aquí en vez de bloquear.
+  const [rgUnidadMedida, setRgUnidadMedida] = useState("");
 
   async function pickTipo(t: TipoCompra) {
     setLoading(true); setError("");
@@ -367,9 +370,12 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     }));
     if (items.some(i => !(i.precio_unitario > 0))) return setError("Ingresa un precio unitario válido para cada insumo");
     // No. de Pedido, Unidad de Medida, Descripción y Cantidad ya no se piden —
-    // se derivan de los SIAF/insumos consolidados.
+    // se derivan de los SIAF/insumos consolidados. Si no se pudo derivar
+    // (insumo sin unidad de medida ni en el catálogo ni en Base de Datos
+    // Central), se usa el respaldo manual ingresado en el modal.
     const noPedido = c.siaf.map(s => `${s.numero}/${s.anio}`).join(", ");
-    const unidadMedida = c.precios[0]?.unidad_medida ?? "";
+    const unidadMedida = c.precios[0]?.unidad_medida?.trim() || rgUnidadMedida.trim();
+    if (!unidadMedida) return setError("La unidad de medida es obligatoria");
     const descripcion = c.precios.map(p => p.nombre).join(", ");
     const cantidad = c.precios.reduce((sum, p) => sum + (p.cantidad || 0), 0);
     setLoading(true); setError(""); setLimitExceeded(false);
@@ -593,6 +599,18 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                   </p>
                 )}
               </div>
+
+              {!c.precios[0]?.unidad_medida?.trim() && (
+                <div>
+                  <label className="label">Unidad de Medida</label>
+                  <input className="input" value={rgUnidadMedida} onChange={e => setRgUnidadMedida(e.target.value)}
+                    placeholder="Ej: Servicio, Unidad, kWh" />
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    No se encontró la unidad de medida de este insumo en el catálogo ni en Base de Datos
+                    Central — ingrésala aquí para poder continuar.
+                  </p>
+                </div>
+              )}
 
               <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
                 Este caso no pasa por la Junta Adjudicadora — va directo a Fondo Rotativo. El No. de Pedido y la
