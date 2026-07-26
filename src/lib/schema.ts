@@ -441,6 +441,9 @@ export const ordenesCompra = pgTable("ordenes_compra", {
   modelo:                       text("modelo"),
   serie:                        text("serie"),
   no_devengado:                 text("no_devengado"),
+  // Se llena al generar el DAB-60 (Almacén) — marca que la orden ya pasó por
+  // ahí, para poder listarla en Almacén/Archivo con datos históricos.
+  dab60_generado_en:            text("dab60_generado_en"),
 });
 
 // ─── Compras: solicitudes A-01 SIAF ──────────────────────────────────────────
@@ -530,6 +533,9 @@ export const presupuestoRenglones = pgTable("presupuesto_renglones", {
   pre_compromiso:       doublePrecision("pre_compromiso"),
   compromiso:           doublePrecision("compromiso"),
   devengado:            doublePrecision("devengado"),
+  // Ejecutado (Devengado) sí distingue Normal/Regularizado — Compromiso no,
+  // se queda como columna única.
+  devengado_regularizado: doublePrecision("devengado_regularizado").notNull().default(0),
   saldo_presupuestario: doublePrecision("saldo_presupuestario"),
   saldo_disponible:     doublePrecision("saldo_disponible"),
   // Reprogramación — modificaciones presupuestarias por tipo (ver

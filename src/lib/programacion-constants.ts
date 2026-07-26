@@ -14,6 +14,19 @@ export function grupoDeRenglon(renglon: number) {
   return GRUPOS.find(g => renglon >= g.min && renglon <= g.max) ?? null;
 }
 
+// Pipeline Compromiso → [Almacén/DAB-60] → Devengado: los renglones de los
+// grupos 200-299 y 300-399 son insumos que pasan por Almacén, EXCEPTO estos
+// tres (servicios, no hay nada físico que recibir en bodega) que van directo
+// de Compromiso a Devengado.
+const RENGLONES_SIN_DAB60 = [261, 266, 295];
+
+export function requiereDab60(renglon: number | null | undefined): boolean {
+  if (renglon == null) return false;
+  if (RENGLONES_SIN_DAB60.includes(renglon)) return false;
+  const grupo = grupoDeRenglon(renglon);
+  return grupo?.id === 2 || grupo?.id === 3;
+}
+
 // Reprogramación: tipos de modificación presupuestaria. Cada uno escribe en
 // su propia columna de presupuesto_renglones (ver ejecucion-actions.ts).
 export const TIPOS_MODIFICACION = [

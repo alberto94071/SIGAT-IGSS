@@ -47,6 +47,7 @@ export async function executeDatabaseReset(password: string): Promise<{ ok: true
         pre_compromiso = 0,
         compromiso = 0,
         devengado = 0,
+        devengado_regularizado = 0,
         modificacion_ingru = 0,
         modificacion_entre_renglones = 0,
         modificacion_ampliacion = 0,

@@ -1,11 +1,9 @@
 "use server";
 import { db } from "@/lib/db";
-import { ordenesCompra } from "@/lib/schema";
-import { eq, sql } from "drizzle-orm";
+import { ordenesCompra, consolidaciones, presupuestoRenglones } from "@/lib/schema";
+import { eq, sql, and } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
-import { presupuestoRenglones } from "@/lib/schema";
-import { and } from "drizzle-orm";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -21,53 +19,37 @@ export async function getOrdenesEnDevengado() {
   })));
 }
 
-export type DevengarData = {
-  fecha_ingreso_producto: string; no_factura: string; serie_factura: string;
-  fecha_emision: string; lote: string; fecha_vencimiento: string;
-  marca: string; modelo: string; serie: string; no_devengado: string;
-};
-
-export async function devengarYEnviarADab(ordenId: number, data: DevengarData): Promise<{ ok: true } | { error: string }> {
+// Devengar es un solo clic: no pide datos (la factura/lote/marca/etc. ya se
+// capturaron — opcionalmente — al pasar por Almacén/DAB-60, o ni siquiera
+// aplican si el renglón es un servicio que se saltó Almacén). Mueve el monto
+// de Compromiso a Ejecutado (Devengado), separando Normal/Regularizado según
+// cómo se adjudicó la consolidación original.
+export async function devengar(ordenId: number): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireEdit();
     if ("error" in check) return check;
 
-    for (const [campo, label] of [
-      ["fecha_ingreso_producto", "Fecha de ingreso del producto"], ["no_factura", "No. Factura"],
-      ["serie_factura", "Serie de factura"], ["fecha_emision", "Fecha de emisión"],
-      ["lote", "Lote"], ["fecha_vencimiento", "Fecha de vencimiento"],
-      ["marca", "Marca"], ["modelo", "Modelo"], ["serie", "Serie"], ["no_devengado", "No. Devengado"],
-    ] as const) {
-      if (!data[campo]?.trim()) return { error: `El campo "${label}" es obligatorio` };
-    }
-
-    const [orden] = await db.select({ 
+    const [orden] = await db.select({
       estado: ordenesCompra.estado,
-      consolidacion_id: ordenesCompra.consolidacion_id
+      consolidacion_id: ordenesCompra.consolidacion_id,
     }).from(ordenesCompra)
       .where(eq(ordenesCompra.id, ordenId)).limit(1);
     if (!orden) return { error: "No se encontró la orden" };
-    if (orden.estado !== "En Devengado") return { error: "Esta orden ya fue enviada a DAB" };
+    if (orden.estado !== "En Devengado") return { error: "Esta orden ya fue devengada" };
 
-    await db.update(ordenesCompra).set({
-      fecha_ingreso_producto: data.fecha_ingreso_producto,
-      no_factura:             data.no_factura.trim(),
-      serie_factura:          data.serie_factura.trim(),
-      fecha_emision:          data.fecha_emision,
-      lote:                   data.lote.trim(),
-      fecha_vencimiento:      data.fecha_vencimiento,
-      marca:                  data.marca.trim(),
-      modelo:                 data.modelo.trim(),
-      serie:                  data.serie.trim(),
-      no_devengado:           data.no_devengado.trim(),
-      estado:                 "En DAB",
-    }).where(eq(ordenesCompra.id, ordenId));
+    const [con] = await db.select({ regularizado: consolidaciones.regularizado })
+      .from(consolidaciones).where(eq(consolidaciones.id, orden.consolidacion_id)).limit(1);
+    const esRegularizado = con?.regularizado === true;
+
+    await db.update(ordenesCompra).set({ estado: "Completada" }).where(eq(ordenesCompra.id, ordenId));
 
     const renglones = await gruposRenglonDeConsolidacion(orden.consolidacion_id);
     for (const r of renglones) {
       await db.update(presupuestoRenglones).set({
         compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${r.total}`,
-        devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) + ${r.total}`,
+        ...(esRegularizado
+          ? { devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) + ${r.total}` }
+          : { devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) + ${r.total}` }),
       }).where(and(
         eq(presupuestoRenglones.renglon, r.renglon as number),
         eq(presupuestoRenglones.subproducto, r.subproducto),

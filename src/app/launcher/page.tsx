@@ -107,14 +107,14 @@ const MODULES = [
   {
     id: "almacen",
     title: "Almacén",
-    description: "Catálogo, formularios DAB-60 y DAB-75, y cuadrícula de existencias.",
+    description: "Catálogo, formularios DAB-60 y DAB-75, cuadrícula de existencias y archivo histórico.",
     href: "/almacen",
     icon: Archive,
     color: "bg-teal-500",
     ring: "ring-teal-200",
     textColor: "text-teal-600",
     bgLight: "bg-teal-50",
-    available: false,
+    available: true,
     permiso: "mod_almacen" as Modulo | null,
   },
   {

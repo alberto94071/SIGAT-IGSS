@@ -52,13 +52,7 @@ const COLUMNAS: Columna[] = [
     ],
   },
   { kind: "simple", label: "Pre-Compromiso", color: "cyan", get: r => r.preCompromiso },
-  {
-    kind: "group", label: "Compromiso", color: "amber",
-    sub: [
-      { label: "Normal", get: r => r.compromisoNormal },
-      { label: "Regularizado", get: r => r.compromisoRegularizado },
-    ],
-  },
+  { kind: "simple", label: "Compromiso", color: "amber", get: r => r.compromiso },
   {
     kind: "group", label: "Ejecución", color: "blue",
     sub: [

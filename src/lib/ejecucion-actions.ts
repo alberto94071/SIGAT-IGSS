@@ -13,8 +13,7 @@ export type EjecucionRow = {
   modificacionesNormal: number;
   modificacionAmpliacion: number;
   preCompromiso: number;
-  compromisoNormal: number;
-  compromisoRegularizado: number;
+  compromiso: number;
   ejecucionNormal: number;
   ejecucionRegularizado: number;
   programadoNormal: number;
@@ -29,12 +28,10 @@ export type EjecucionRow = {
  * - Saldo Programado Normal/Regularizado se cruzan en vivo con la suma de
  *   todo lo capturado en Programación y Reprogramación (programacion_entradas,
  *   los 4 meses de cada cuatrimestre) por renglón + sub-producto + tipo.
- * - Pre-Compromiso, Compromiso Normal y Ejecución Normal (= Devengado) se
- *   cruzan en vivo con presupuesto_renglones (misma tabla que ya actualizan
- *   A01-SIAF, Compromiso, Devengado y DAB-60), por renglón + sub-producto.
- *   Esa tabla aún no distingue Compromiso/Devengado por tipo (Normal vs
- *   Regularizado) — el valor vivo se muestra bajo "Normal" y "Regularizado"
- *   queda en 0 hasta que exista esa distinción en el origen de los datos.
+ * - Pre-Compromiso, Compromiso (columna única, sin distinguir Normal/
+ *   Regularizado) y Ejecución Normal/Regularizado (= Devengado) se cruzan en
+ *   vivo con presupuesto_renglones (misma tabla que ya actualizan A01-SIAF,
+ *   Compromiso y Devengado), por renglón + sub-producto.
  * - Modificaciones Ingru/Entre Renglones/Ampliación se cruzan en vivo con
  *   las mismas columnas que escribe Reprogramación (ver programacion-actions.ts
  *   guardarModificacion), también por renglón + sub-producto.
@@ -56,6 +53,7 @@ export async function getEjecucionData(): Promise<EjecucionRow[]> {
       pre_compromiso: presupuestoRenglones.pre_compromiso,
       compromiso:     presupuestoRenglones.compromiso,
       devengado:      presupuestoRenglones.devengado,
+      devengado_regularizado: presupuestoRenglones.devengado_regularizado,
       modificacion_ingru:           presupuestoRenglones.modificacion_ingru,
       modificacion_entre_renglones: presupuestoRenglones.modificacion_entre_renglones,
       modificacion_ampliacion:      presupuestoRenglones.modificacion_ampliacion,
@@ -84,10 +82,9 @@ export async function getEjecucionData(): Promise<EjecucionRow[]> {
       modificacionesNormal: vivo?.modificacion_entre_renglones ?? 0,
       modificacionAmpliacion: vivo?.modificacion_ampliacion ?? 0,
       preCompromiso: vivo?.pre_compromiso ?? 0,
-      compromisoNormal: vivo?.compromiso ?? 0,
-      compromisoRegularizado: 0,
+      compromiso: vivo?.compromiso ?? 0,
       ejecucionNormal: vivo?.devengado ?? 0,
-      ejecucionRegularizado: 0,
+      ejecucionRegularizado: vivo?.devengado_regularizado ?? 0,
       saldoProgramadoNormal: saldo?.normal ?? 0,
       saldoProgramadoRegularizado: saldo?.regularizado ?? 0,
     };

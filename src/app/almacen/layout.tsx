@@ -7,6 +7,7 @@ const ALMACEN_NAV = [
   { href: "/almacen/dab-60",     label: "DAB-60",     icon: "FileText"   },
   { href: "/almacen/dab-75",     label: "DAB-75",     icon: "FileText"   },
   { href: "/almacen/cuadricula", label: "Cuadrícula", icon: "LayoutGrid" },
+  { href: "/almacen/archivo",    label: "Archivo",    icon: "Archive"    },
 ] as const;
 
 export default async function AlmacenLayout({ children }: { children: React.ReactNode }) {

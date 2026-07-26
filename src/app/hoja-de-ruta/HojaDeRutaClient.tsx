@@ -165,22 +165,27 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
                       <Paso icon={Calculator} titulo={`Presupuesto/Compromiso — No. ${h.orden.no_compromiso}`} />
                     )}
 
-                    {/* Paso: Presupuesto/Devengado */}
-                    {h.orden?.no_devengado && (
-                      <Paso icon={Calculator} titulo={`Presupuesto/Devengado — No. ${h.orden.no_devengado}`}>
+                    {/* Paso: Almacén/DAB-60 — solo si esta orden realmente pasó por ahí
+                        (insumo del grupo 200/300, salvo servicios 261/266/295).
+                        Los datos de factura/lote/marca/etc. son opcionales. */}
+                    {h.orden?.dab60_generado_en && (
+                      <Paso icon={Archive} titulo={`Almacén/DAB-60 — ${h.orden.dab60_generado_en}`}>
                         <p className="text-xs text-gray-500">
-                          Factura {h.orden.serie_factura}-{h.orden.no_factura} · Emisión {h.orden.fecha_emision}
+                          Factura {h.orden.serie_factura ?? "—"}-{h.orden.no_factura ?? "—"} · Emisión {h.orden.fecha_emision ?? "—"}
                           {h.orden.fecha_ingreso_producto && <> · Ingreso: {h.orden.fecha_ingreso_producto}</>}
                         </p>
                         <p className="text-xs text-gray-500">
-                          Lote {h.orden.lote} · Vence {h.orden.fecha_vencimiento} · {h.orden.marca} {h.orden.modelo} · Serie {h.orden.serie}
+                          Lote {h.orden.lote ?? "—"} · Vence {h.orden.fecha_vencimiento ?? "—"} · {h.orden.marca ?? "—"} {h.orden.modelo ?? ""} · Serie {h.orden.serie ?? "—"}
                         </p>
                       </Paso>
                     )}
 
-                    {/* Paso: Almacén/DAB-60 */}
+                    {/* Paso: Presupuesto/Devengado — Completada (mueve Compromiso a
+                        Ejecutado; ocurre para toda orden, haya pasado o no por DAB-60) */}
                     {h.orden?.estado === "Completada" && (
-                      <Paso icon={Archive} titulo="Almacén/DAB-60 — Completada" />
+                      <Paso icon={Calculator} titulo="Presupuesto/Devengado — Completada">
+                        {h.orden.no_devengado && <p className="text-xs text-gray-500">No. Devengado: {h.orden.no_devengado}</p>}
+                      </Paso>
                     )}
 
                     {/* Cada cambio de ruta del lado de Fondo Rotativo es su propio paso. */}

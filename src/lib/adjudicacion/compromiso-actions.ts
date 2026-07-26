@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
 import { presupuestoRenglones } from "@/lib/schema";
 import { and } from "drizzle-orm";
+import { requiereDab60 } from "@/lib/programacion-constants";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -35,11 +36,17 @@ export async function comprometerYEnviarADevengado(ordenId: number, noCompromiso
     if (!orden) return { error: "No se encontró la orden" };
     if (orden.estado !== "En Compromiso") return { error: "Esta orden ya fue enviada a Devengado" };
 
+    const renglones = await gruposRenglonDeConsolidacion(orden.consolidacion_id);
+
+    // Insumos (renglones 200-299/300-399, salvo servicios 261/266/295) pasan
+    // primero por Almacén/DAB-60; el resto va directo a Devengado.
+    const necesitaDab60 = renglones.some(r => requiereDab60(r.renglon));
+    const siguienteEstado = necesitaDab60 ? "Pendiente DAB-60" : "En Devengado";
+
     await db.update(ordenesCompra).set({
-      no_compromiso: noCompromiso.trim(), estado: "En Devengado",
+      no_compromiso: noCompromiso.trim(), estado: siguienteEstado,
     }).where(eq(ordenesCompra.id, ordenId));
 
-    const renglones = await gruposRenglonDeConsolidacion(orden.consolidacion_id);
     for (const r of renglones) {
       await db.update(presupuestoRenglones).set({
         pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) - ${r.total}`,
