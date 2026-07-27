@@ -10,7 +10,7 @@ type Vale = {
   solicitante_nombre: string; solicitante_numero_empleado: string; solicitante_nit: string;
   jefe_nombre: string; jefe_numero_empleado: string; jefe_nit: string;
 };
-type Saldo = { monto_fondo_rotativo: number; saldo_disponible: number };
+type Saldo = { monto_fondo_rotativo: number; saldo_disponible: number; efectivo_en_caja: number };
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const TIPO_LABEL: Record<string, string> = { pasajes: "Pago de Pasajes", gastos_varios: "Gastos Varios" };
@@ -38,6 +38,7 @@ export default function ValesClient({
       <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-800 flex items-center justify-between flex-wrap gap-2">
         <span>Fondo Rotativo total: <strong>{Q(saldo.monto_fondo_rotativo)}</strong></span>
         <span>Saldo disponible: <strong>{Q(saldoActual)}</strong></span>
+        <span>Efectivo en Caja Chica: <strong>{Q(saldo.efectivo_en_caja)}</strong></span>
       </div>
 
       <div>

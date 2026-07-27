@@ -23,11 +23,42 @@ async function getConfig() {
 
 // ─── Saldo del Fondo Rotativo ─────────────────────────────────────────────────
 export async function getSaldoFondoRotativo() {
-  const config = await getConfig();
+  const [config, efectivoEnCaja] = await Promise.all([getConfig(), getEfectivoEnCaja()]);
   return {
     monto_fondo_rotativo: config?.monto_fondo_rotativo ?? 0,
     saldo_disponible: config?.efectivo_caja ?? 0,
+    efectivo_en_caja: efectivoEnCaja,
   };
+}
+
+// Efectivo que Caja Chica tiene físicamente en mano en este momento — distinto
+// del techo de Fondo Rotativo (configuracion.efectivo_caja). Es la suma, por
+// cada vale "Activo" (cheque ya cobrado), de lo cobrado menos lo ya entregado
+// en pagos/pólizas ligados a ese vale. No es una columna: se calcula al vuelo
+// para que nunca se desincronice de los vales/pagos/pólizas reales.
+export async function getEfectivoEnCaja(): Promise<number> {
+  const activos = await db.select({ id: valesCajaChica.id, monto: valesCajaChica.monto, monto_autorizado: valesCajaChica.monto_autorizado })
+    .from(valesCajaChica).where(eq(valesCajaChica.estado, "Activo"));
+  if (activos.length === 0) return 0;
+
+  const activoIds = activos.map(v => v.id);
+  const [polizaRows, pagoRows] = await Promise.all([
+    db.select({ vale_id: polizas.vale_id, total: polizas.total }).from(polizas).where(inArray(polizas.vale_id, activoIds)),
+    db.select({ vale_id: fondoRotativoPagos.vale_id, total: consolidaciones.total })
+      .from(fondoRotativoPagos)
+      .innerJoin(consolidaciones, eq(fondoRotativoPagos.consolidacion_id, consolidaciones.id))
+      .where(inArray(fondoRotativoPagos.vale_id, activoIds)),
+  ]);
+
+  const usadoPorVale = new Map<number, number>();
+  for (const r of polizaRows) if (r.vale_id != null) usadoPorVale.set(r.vale_id, (usadoPorVale.get(r.vale_id) ?? 0) + r.total);
+  for (const r of pagoRows) if (r.vale_id != null) usadoPorVale.set(r.vale_id, (usadoPorVale.get(r.vale_id) ?? 0) + (r.total ?? 0));
+
+  return activos.reduce((sum, v) => {
+    const monto = v.monto_autorizado ?? v.monto;
+    const usado = usadoPorVale.get(v.id) ?? 0;
+    return sum + Math.max(0, monto - usado);
+  }, 0);
 }
 
 // ─── Creación del vale (Caja Chica) ───────────────────────────────────────────
