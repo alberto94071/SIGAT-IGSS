@@ -2,7 +2,7 @@
 import { fechaGuatemala } from "@/lib/date-utils";
 
 import { db } from "@/lib/db";
-import { polizas, pasajesPagos } from "@/lib/schema";
+import { polizas, pasajesPagos, friFondoRotativo } from "@/lib/schema";
 import { eq, desc, inArray, sql, and } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { getValeActivo } from "@/lib/vale-actions";
@@ -15,7 +15,17 @@ async function requireEdit(): Promise<{ error: string } | { uid: number }> {
 }
 
 export async function listarPolizas() {
-  return db.select().from(polizas).orderBy(desc(polizas.numero));
+  const rows = await db.select().from(polizas).orderBy(desc(polizas.numero));
+  const friIds = rows.map(p => p.fri_id).filter((v): v is number => v != null);
+  const fris = friIds.length > 0
+    ? await db.select({ id: friFondoRotativo.id, numero: friFondoRotativo.numero, anio: friFondoRotativo.anio })
+        .from(friFondoRotativo).where(inArray(friFondoRotativo.id, friIds))
+    : [];
+  const friMap = new Map(fris.map(f => [f.id, f]));
+  return rows.map(p => {
+    const fri = p.fri_id != null ? friMap.get(p.fri_id) : undefined;
+    return { ...p, fri_numero: fri?.numero ?? null, fri_anio: fri?.anio ?? null };
+  });
 }
 
 export async function getPolizaConDetalle(id: number) {

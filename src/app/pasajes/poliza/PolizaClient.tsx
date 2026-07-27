@@ -12,6 +12,7 @@ type Dpd23 = {
 };
 type Poliza = {
   id: number; numero: number; fecha: string; total: number; estado: string; vale_id: number | null;
+  fri_numero?: number | null; fri_anio?: number | null;
 };
 type Vale = { id: number; numero: number; monto: number; monto_autorizado: number | null; estado: string } | null;
 type Item = { formulario_no: number; nombre_afiliado: string; destino: string; valor_pasaje: number; calidad: string | null };
@@ -214,6 +215,12 @@ export default function PolizaClient({
                         }`}>
                           {p.estado}
                         </span>
+                        {p.fri_numero != null && (
+                          <Link href={`/dashboard/fri/${p.fri_numero}?anio=${p.fri_anio}`}
+                            className="block text-[11px] text-brand-600 hover:underline mt-0.5">
+                            FRI {p.fri_numero}/{p.fri_anio}
+                          </Link>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">{Q(p.total)}</td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">

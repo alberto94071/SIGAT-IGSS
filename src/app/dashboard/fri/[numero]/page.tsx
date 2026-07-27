@@ -24,7 +24,8 @@ export default async function FriImprimirPage({ params, searchParams }: Props) {
   return (
     <ImprimirFriClient
       fri={res.fri}
-      items={res.items}
+      pagos={res.pagos}
+      polizas={res.polizas}
       nombreUnidad={config?.nombre_unidad ?? "Consultorio de Tacaná, Departamento de San Marcos"}
       nombreEncargado={config?.nombre_encargado_unidad ?? "Lilia Zucely Pérez Fuentes"}
       cargoEncargado={config?.cargo_encargado_unidad ?? 'Analista "A"'}

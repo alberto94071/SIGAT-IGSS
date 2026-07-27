@@ -22,6 +22,9 @@ async function main() {
   await sql`ALTER TABLE fondo_rotativo_pagos ADD COLUMN IF NOT EXISTS fri_id INTEGER REFERENCES fri_fondo_rotativo(id)`;
   console.log("✓ Columna fondo_rotativo_pagos.fri_id");
 
+  await sql`ALTER TABLE polizas ADD COLUMN IF NOT EXISTS fri_id INTEGER REFERENCES fri_fondo_rotativo(id)`;
+  console.log("✓ Columna polizas.fri_id");
+
   console.log("\n¡Listo!");
 }
 

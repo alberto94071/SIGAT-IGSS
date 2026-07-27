@@ -665,6 +665,10 @@ export const polizas = pgTable("polizas", {
   total:       doublePrecision("total").notNull().default(0),
   // 'Generada' → 'Vale asignado' → 'Enviada a Liquidar' → 'Liquidada'
   estado:      text("estado").notNull().default("Generada"),
+  // Se puede agrupar en un FRI (Pago/FRI) para reportar el gasto y pedir el
+  // reintegro, sin que eso cambie ni interrumpa su propio ciclo de
+  // liquidación — son cosas independientes.
+  fri_id:      integer("fri_id").references(() => friFondoRotativo.id),
   creado_por:  integer("creado_por").references(() => usuarios.id),
   created_at:  text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });

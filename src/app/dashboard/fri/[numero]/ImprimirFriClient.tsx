@@ -1,23 +1,43 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
-import type { Fri } from "@/lib/fri-actions";
+import type { Fri, PolizaFri } from "@/lib/fri-actions";
 import type { PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 
 interface Props {
   fri: Fri;
-  items: PagoFondoRotativo[];
+  pagos: PagoFondoRotativo[];
+  polizas: PolizaFri[];
   nombreUnidad: string;
   nombreEncargado: string; cargoEncargado: string;
 }
 
 const Q = (n: number) => n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+type Fila = { key: string; origen: string; referencia: string; detalle: string; total: number };
+function filasDe(pagos: PagoFondoRotativo[], polizas: PolizaFri[]): Fila[] {
+  return [
+    ...pagos.map(p => ({
+      key: `pago:${p.id}`, origen: "Gastos Varios",
+      referencia: p.numero_a04 != null ? `A-04 ${p.numero_a04}/${p.anio_a04}` : "—",
+      detalle: `${p.destinatario_nombre ?? "—"} · ${p.forma_pago === "cheque" ? `Cheque ${p.numero_cheque ?? ""}` : `Vale ${p.numero_vale ?? ""}`} · Factura ${p.serie_factura}-${p.no_factura}`,
+      total: p.total ?? 0,
+    })),
+    ...polizas.map(p => ({
+      key: `poliza:${p.id}`, origen: "Pasajes",
+      referencia: `Póliza ${p.numero}`,
+      detalle: `Cuadro de Caja del ${p.fecha}`,
+      total: p.total,
+    })),
+  ];
+}
+
 const FONT = "Arial, Helvetica, sans-serif";
 const C = "#000";
 
-export default function ImprimirFriClient({ fri, items, nombreUnidad, nombreEncargado, cargoEncargado }: Props) {
+export default function ImprimirFriClient({ fri, pagos, polizas, nombreUnidad, nombreEncargado, cargoEncargado }: Props) {
   const router = useRouter();
+  const filas = filasDe(pagos, polizas);
 
   return (
     <>
@@ -51,37 +71,27 @@ export default function ImprimirFriClient({ fri, items, nombreUnidad, nombreEnca
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "8.5pt" }}>
             <thead>
               <tr>
-                <th style={{ border: "1px solid #999", padding: "4px 6px", background: "#f1f5f9" }}>No. A-04 SIAF</th>
-                <th style={{ border: "1px solid #999", padding: "4px 6px", background: "#f1f5f9" }}>Destinatario</th>
-                <th style={{ border: "1px solid #999", padding: "4px 6px", background: "#f1f5f9" }}>Forma de pago</th>
-                <th style={{ border: "1px solid #999", padding: "4px 6px", background: "#f1f5f9" }}>Factura</th>
-                <th style={{ border: "1px solid #999", padding: "4px 6px", background: "#f1f5f9" }}>Fecha emisión</th>
+                <th style={{ border: "1px solid #999", padding: "4px 6px", background: "#f1f5f9" }}>Origen</th>
+                <th style={{ border: "1px solid #999", padding: "4px 6px", background: "#f1f5f9" }}>Referencia</th>
+                <th style={{ border: "1px solid #999", padding: "4px 6px", background: "#f1f5f9" }}>Detalle</th>
                 <th style={{ border: "1px solid #999", padding: "4px 6px", background: "#f1f5f9" }}>Valor Q.</th>
               </tr>
             </thead>
             <tbody>
-              {items.map(i => (
-                <tr key={i.id}>
-                  <td style={{ border: "1px solid #999", padding: "4px 6px", textAlign: "center" }}>
-                    {i.numero_a04 != null ? `${i.numero_a04}/${i.anio_a04}` : "—"}
-                  </td>
-                  <td style={{ border: "1px solid #999", padding: "4px 6px" }}>{i.destinatario_nombre ?? "—"}</td>
-                  <td style={{ border: "1px solid #999", padding: "4px 6px", textAlign: "center" }}>
-                    {i.forma_pago === "cheque" ? `Cheque ${i.numero_cheque ?? ""}` : `Vale ${i.numero_vale ?? ""}`}
-                  </td>
-                  <td style={{ border: "1px solid #999", padding: "4px 6px", textAlign: "center" }}>
-                    {i.serie_factura}-{i.no_factura}
-                  </td>
-                  <td style={{ border: "1px solid #999", padding: "4px 6px", textAlign: "center" }}>{i.fecha_emision_factura}</td>
+              {filas.map(f => (
+                <tr key={f.key}>
+                  <td style={{ border: "1px solid #999", padding: "4px 6px" }}>{f.origen}</td>
+                  <td style={{ border: "1px solid #999", padding: "4px 6px", textAlign: "center" }}>{f.referencia}</td>
+                  <td style={{ border: "1px solid #999", padding: "4px 6px" }}>{f.detalle}</td>
                   <td style={{ border: "1px solid #999", padding: "4px 6px", textAlign: "right", fontFamily: "monospace" }}>
-                    Q {i.total != null ? Q(i.total) : "—"}
+                    Q {Q(f.total)}
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={5} style={{ border: "1px solid #999", padding: "5px 6px", textAlign: "right", fontWeight: "bold" }}>TOTAL A REINTEGRAR</td>
+                <td colSpan={3} style={{ border: "1px solid #999", padding: "5px 6px", textAlign: "right", fontWeight: "bold" }}>TOTAL A REINTEGRAR</td>
                 <td style={{ border: "1px solid #999", padding: "5px 6px", textAlign: "right", fontWeight: "bold", fontFamily: "monospace" }}>Q {Q(fri.total)}</td>
               </tr>
             </tfoot>

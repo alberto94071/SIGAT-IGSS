@@ -4,27 +4,49 @@ import { fechaGuatemala } from "@/lib/date-utils";
 import { useState } from "react";
 import Link from "next/link";
 import { Wallet, Printer, ChevronDown, ChevronRight, Loader2, AlertTriangle, CheckCircle2, X } from "lucide-react";
-import { conformarFri, marcarFriReintegrado, getFriConDetalle, type Fri } from "@/lib/fri-actions";
+import { conformarFri, marcarFriReintegrado, getFriConDetalle, type Fri, type PolizaFri, type FriItemInput } from "@/lib/fri-actions";
 import type { PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+type Row = { key: string; item: FriItemInput; origen: string; referencia: string; detalle: string; total: number };
+
+function pagoARow(p: PagoFondoRotativo): Row {
+  return {
+    key: `pago:${p.id}`, item: { tipo: "pago", id: p.id }, origen: "Gastos Varios",
+    referencia: p.numero_a04 != null ? `A-04 ${p.numero_a04}/${p.anio_a04}` : "—",
+    detalle: `${p.destinatario_nombre ?? "—"} · ${p.forma_pago === "cheque" ? `Cheque ${p.numero_cheque ?? ""}` : `Vale ${p.numero_vale ?? ""}`}`,
+    total: p.total ?? 0,
+  };
+}
+function polizaARow(p: PolizaFri): Row {
+  return {
+    key: `poliza:${p.id}`, item: { tipo: "poliza", id: p.id }, origen: "Pasajes",
+    referencia: `Póliza ${p.numero}`,
+    detalle: `Cuadro de Caja del ${p.fecha} · ${p.estado}`,
+    total: p.total,
+  };
+}
+
 export default function FriClient({
-  pendientes: init, fris: initFris,
-}: { pendientes: PagoFondoRotativo[]; fris: Fri[] }) {
-  const [pendientes, setPendientes] = useState(init);
+  pendientesPagos: initPagos, pendientesPolizas: initPolizas, fris: initFris,
+}: { pendientesPagos: PagoFondoRotativo[]; pendientesPolizas: PolizaFri[]; fris: Fri[] }) {
+  const [pendientesPagos, setPendientesPagos] = useState(initPagos);
+  const [pendientesPolizas, setPendientesPolizas] = useState(initPolizas);
   const [fris, setFris] = useState(initFris);
-  const [seleccion, setSeleccion] = useState<Set<number>>(new Set());
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
   const [conformando, setConformando] = useState(false);
   const [errorConformar, setErrorConformar] = useState("");
   const [expandido, setExpandido] = useState<number | null>(null);
-  const [detalle, setDetalle] = useState<Record<number, PagoFondoRotativo[]>>({});
+  const [detalle, setDetalle] = useState<Record<number, { pagos: PagoFondoRotativo[]; polizas: PolizaFri[] }>>({});
   const [reintegrarFor, setReintegrarFor] = useState<Fri | null>(null);
 
-  function toggle(id: number) {
+  const filas: Row[] = [...pendientesPagos.map(pagoARow), ...pendientesPolizas.map(polizaARow)];
+
+  function toggle(key: string) {
     setSeleccion(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      next.has(key) ? next.delete(key) : next.add(key);
       return next;
     });
   }
@@ -34,24 +56,27 @@ export default function FriClient({
     setExpandido(id);
     if (!detalle[id]) {
       const res = await getFriConDetalle(id);
-      if (res) setDetalle(prev => ({ ...prev, [id]: res.items }));
+      if (res) setDetalle(prev => ({ ...prev, [id]: { pagos: res.pagos, polizas: res.polizas } }));
     }
   }
 
   async function handleConformar() {
     if (seleccion.size === 0) return;
     setConformando(true); setErrorConformar("");
-    const ids = Array.from(seleccion);
-    const res = await conformarFri(ids);
+    const items = filas.filter(f => seleccion.has(f.key)).map(f => f.item);
+    const res = await conformarFri(items);
     setConformando(false);
     if ("error" in res) return setErrorConformar(res.error);
 
     setFris(prev => [res.fri, ...prev]);
-    setPendientes(prev => prev.filter(p => !ids.includes(p.id)));
+    const pagoIds = new Set(items.filter(i => i.tipo === "pago").map(i => i.id));
+    const polizaIds = new Set(items.filter(i => i.tipo === "poliza").map(i => i.id));
+    setPendientesPagos(prev => prev.filter(p => !pagoIds.has(p.id)));
+    setPendientesPolizas(prev => prev.filter(p => !polizaIds.has(p.id)));
     setSeleccion(new Set());
   }
 
-  const totalSeleccion = pendientes.filter(p => seleccion.has(p.id)).reduce((s, p) => s + (p.total ?? 0), 0);
+  const totalSeleccion = filas.filter(f => seleccion.has(f.key)).reduce((s, f) => s + f.total, 0);
 
   return (
     <div className="space-y-6">
@@ -60,13 +85,15 @@ export default function FriClient({
           <Wallet className="w-5 h-5" /> Pago/FRI
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Pagos de renglones 100-199 ya realizados (cheque o vale) — agrúpalos en un FRI para pedir el reintegro a Fondo Rotativo.
+          Gastos ya realizados (renglones 100-199 pagados por cheque/vale, y pólizas de pasajes) — agrúpalos en un
+          FRI para reportar en qué se gastó y pedir el reintegro a Fondo Rotativo. Conformar un FRI no cambia el
+          camino normal de liquidación de las pólizas.
         </p>
       </div>
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-gray-700">Pagos sin FRI conformado</h2>
+          <h2 className="text-sm font-semibold text-gray-700">Pendientes de conformar FRI</h2>
           {seleccion.size > 0 && (
             <button onClick={handleConformar} disabled={conformando}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50">
@@ -85,38 +112,28 @@ export default function FriClient({
               <thead>
                 <tr className="table-header">
                   <th className="px-4 py-3 w-8"></th>
-                  <th className="px-4 py-3 text-left whitespace-nowrap">No. A-04 SIAF</th>
-                  <th className="px-4 py-3 text-left">Destinatario</th>
-                  <th className="px-4 py-3 text-left whitespace-nowrap">Forma de pago</th>
-                  <th className="px-4 py-3 text-left whitespace-nowrap">Factura</th>
+                  <th className="px-4 py-3 text-left whitespace-nowrap">Origen</th>
+                  <th className="px-4 py-3 text-left whitespace-nowrap">Referencia</th>
+                  <th className="px-4 py-3 text-left">Detalle</th>
                   <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {pendientes.map(p => (
-                  <tr key={p.id} className={`hover:bg-gray-50 ${seleccion.has(p.id) ? "bg-brand-50" : ""}`}>
+                {filas.map(f => (
+                  <tr key={f.key} className={`hover:bg-gray-50 ${seleccion.has(f.key) ? "bg-brand-50" : ""}`}>
                     <td className="px-4 py-3">
-                      <input type="checkbox" checked={seleccion.has(p.id)} onChange={() => toggle(p.id)} className="w-4 h-4 accent-brand-600" />
+                      <input type="checkbox" checked={seleccion.has(f.key)} onChange={() => toggle(f.key)} className="w-4 h-4 accent-brand-600" />
                     </td>
-                    <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
-                      {p.numero_a04 != null ? `${p.numero_a04}/${p.anio_a04}` : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-gray-700">{p.destinatario_nombre ?? "—"}</td>
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                      {p.forma_pago === "cheque" ? `Cheque ${p.numero_cheque ?? ""}` : `Vale ${p.numero_vale ?? ""}`}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
-                      {p.serie_factura}-{p.no_factura} · {p.fecha_emision_factura}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
-                      {p.total != null ? Q(p.total) : "—"}
-                    </td>
+                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{f.origen}</td>
+                    <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">{f.referencia}</td>
+                    <td className="px-4 py-3 text-xs text-gray-600">{f.detalle}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">{Q(f.total)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {pendientes.length === 0 && (
-              <div className="text-center py-10 text-gray-400 text-sm">No hay pagos pendientes de conformar en un FRI.</div>
+            {filas.length === 0 && (
+              <div className="text-center py-10 text-gray-400 text-sm">No hay pagos ni pólizas pendientes de conformar en un FRI.</div>
             )}
           </div>
         </div>
@@ -180,21 +197,19 @@ export default function FriClient({
                             <table className="w-full text-xs">
                               <thead>
                                 <tr className="text-gray-500">
-                                  <th className="text-left py-1">A-04 SIAF</th>
-                                  <th className="text-left py-1">Destinatario</th>
-                                  <th className="text-left py-1">Forma de pago</th>
-                                  <th className="text-left py-1">Factura</th>
+                                  <th className="text-left py-1">Origen</th>
+                                  <th className="text-left py-1">Referencia</th>
+                                  <th className="text-left py-1">Detalle</th>
                                   <th className="text-right py-1">Total</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {detalle[f.id].map(i => (
-                                  <tr key={i.id} className="border-t border-gray-200">
-                                    <td className="py-1.5 font-mono">{i.numero_a04 != null ? `${i.numero_a04}/${i.anio_a04}` : "—"}</td>
-                                    <td className="py-1.5">{i.destinatario_nombre ?? "—"}</td>
-                                    <td className="py-1.5">{i.forma_pago === "cheque" ? `Cheque ${i.numero_cheque ?? ""}` : `Vale ${i.numero_vale ?? ""}`}</td>
-                                    <td className="py-1.5">{i.serie_factura}-{i.no_factura}</td>
-                                    <td className="py-1.5 text-right font-mono">{i.total != null ? Q(i.total) : "—"}</td>
+                                {[...detalle[f.id].pagos.map(pagoARow), ...detalle[f.id].polizas.map(polizaARow)].map(r => (
+                                  <tr key={r.key} className="border-t border-gray-200">
+                                    <td className="py-1.5">{r.origen}</td>
+                                    <td className="py-1.5 font-mono">{r.referencia}</td>
+                                    <td className="py-1.5">{r.detalle}</td>
+                                    <td className="py-1.5 text-right font-mono">{Q(r.total)}</td>
                                   </tr>
                                 ))}
                               </tbody>

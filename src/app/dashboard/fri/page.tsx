@@ -1,10 +1,11 @@
-import { getPagosPendientesFri, getFrisConformados } from "@/lib/fri-actions";
+import { getPagosPendientesFri, getPolizasPendientesFri, getFrisConformados } from "@/lib/fri-actions";
 import FriClient from "./FriClient";
 
 export default async function FriPage() {
-  const [pendientes, fris] = await Promise.all([
+  const [pendientesPagos, pendientesPolizas, fris] = await Promise.all([
     getPagosPendientesFri(),
+    getPolizasPendientesFri(),
     getFrisConformados(),
   ]);
-  return <FriClient pendientes={pendientes} fris={fris} />;
+  return <FriClient pendientesPagos={pendientesPagos} pendientesPolizas={pendientesPolizas} fris={fris} />;
 }
