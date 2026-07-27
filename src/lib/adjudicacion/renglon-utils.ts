@@ -66,59 +66,6 @@ export async function guardarPprSeleccion(consolidacionId: number, seleccion: { 
   }
 }
 
-// ─── PPR (presentación) por código base ──────────────────────────────────────
-// Un mismo código IGSS base ("1941") puede tener varias presentaciones/PPR
-// registradas en Base de Datos Central (galón, litro, unidad...), cada una con
-// su propio codigo_ppr. El código IGSS completo es código + PPR.
-export type PprOpcion = {
-  codigo: string; codigo_igss: string | null; codigo_ppr: number | null;
-  nombre: string; caracteristicas: string | null; presentacion: string | null; unidad_medida: string | null;
-};
-
-// Trae, para cada código base de la lista, todas sus presentaciones/PPR
-// registradas en Base de Datos Central — para poblar el selector de PPR al
-// generar la Orden de Compra o el SIAF-04.
-export async function getPprsPorCodigos(codigos: (string | null)[]): Promise<Record<string, PprOpcion[]>> {
-  const limpios = [...new Set(codigos.filter((c): c is string => !!c))];
-  if (limpios.length === 0) return {};
-  const rows = await db.select({
-    codigo:          baseDatosCentral.codigo,
-    codigo_igss:     baseDatosCentral.codigo_igss,
-    codigo_ppr:      baseDatosCentral.codigo_ppr,
-    nombre:          baseDatosCentral.nombre,
-    caracteristicas: baseDatosCentral.caracteristicas,
-    presentacion:    baseDatosCentral.presentacion,
-    unidad_medida:   baseDatosCentral.unidad_medida,
-  }).from(baseDatosCentral).where(inArray(baseDatosCentral.codigo, limpios)).orderBy(baseDatosCentral.codigo_ppr);
-
-  const out: Record<string, PprOpcion[]> = {};
-  for (const r of rows) {
-    if (!r.codigo) continue;
-    (out[r.codigo] ??= []).push(r as PprOpcion);
-  }
-  return out;
-}
-
-// Persiste la presentación/PPR elegida por el usuario para cada renglón de una
-// consolidación — se guarda en siaf_compras_items.codigo_ppr (todos los ítems
-// que comparten codigo_igss::subproducto dentro de esa consolidación), para
-// que quede disponible en la Orden de Compra, el SIAF-04 y su impresión.
-export async function guardarPprSeleccion(consolidacionId: number, seleccion: { codigo_igss: string; subproducto: string; codigo_ppr: string }[]): Promise<void> {
-  if (seleccion.length === 0) return;
-  const siafIds = (await db.select({ id: siafCompras.id }).from(siafCompras)
-    .where(eq(siafCompras.consolidacion_id, consolidacionId))).map(s => s.id);
-  if (siafIds.length === 0) return;
-
-  for (const s of seleccion) {
-    await db.update(siafComprasItems).set({ codigo_ppr: s.codigo_ppr })
-      .where(and(
-        inArray(siafComprasItems.solicitud_id, siafIds),
-        eq(siafComprasItems.codigo_igss, s.codigo_igss),
-        eq(siafComprasItems.subproducto, s.subproducto),
-      ));
-  }
-}
-
 // Mapa completo codigo_igss::subproducto -> renglón, para anotar listas de
 // ítems ya cargadas sin hacer una consulta por ítem (mismo cruce que usa la
 // automatización de pre-compromiso, pero en un solo query).
