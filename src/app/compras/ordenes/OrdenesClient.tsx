@@ -1,11 +1,12 @@
 "use client";
 import { fechaGuatemala } from "@/lib/date-utils";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ShoppingCart, Search, X, Loader2, AlertTriangle, Hash, Calendar, Building2, DollarSign, Send,
 } from "lucide-react";
-import { generarOrdenDeCompra, enviarOrdenAPresupuesto, type ConsolidacionPendienteOrden } from "@/lib/adjudicacion/ordenes-actions";
+import { generarOrdenDeCompra, enviarOrdenAPresupuesto, getPprsParaRenglones, type ConsolidacionPendienteOrden } from "@/lib/adjudicacion/ordenes-actions";
+import type { PprOpcion } from "@/lib/adjudicacion/renglon-utils";
 import RenglonBadges from "@/components/RenglonBadges";
 import { useRouter } from "next/navigation";
 
@@ -139,7 +140,7 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
               <thead>
                 <tr className="table-header">
                   <th className="px-4 py-3 text-left whitespace-nowrap">Orden</th>
-                  <th className="px-4 py-3 text-left whitespace-nowrap">Código PPR</th>
+                  <th className="px-4 py-3 text-left whitespace-nowrap">Código IGSS completo</th>
                   <th className="px-4 py-3 text-left">Proveedor</th>
                   <th className="px-4 py-3 text-right whitespace-nowrap">P. Unitario</th>
                   <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
@@ -209,23 +210,50 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
 }) {
   const [numeroOrden, setNumeroOrden] = useState("");
   const [fechaNotificacion, setFechaNotificacion] = useState(fechaGuatemala());
+  const [pprsPorCodigo, setPprsPorCodigo] = useState<Record<string, PprOpcion[]>>({});
+  const [pprsLoading, setPprsLoading] = useState(true);
+  const [seleccion, setSeleccion] = useState<Record<string, number>>({}); // key `codigo_igss::subproducto` -> codigo_ppr
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const totalCantidad = c.renglones.reduce((s, r) => s + r.cantidad, 0);
 
+  useEffect(() => {
+    let vivo = true;
+    setPprsLoading(true);
+    getPprsParaRenglones(c.renglones.map(r => r.codigo_igss)).then(res => {
+      if (vivo) { setPprsPorCodigo(res); setPprsLoading(false); }
+    });
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [c.id]);
+
+  function keyDe(r: { codigo_igss: string | null; subproducto: string }) {
+    return `${r.codigo_igss}::${r.subproducto}`;
+  }
+
   async function handleGuardar() {
     if (!numeroOrden.trim()) return setError("El número de orden de compra es obligatorio");
     if (!fechaNotificacion) return setError("La fecha de notificación al proveedor es obligatoria");
+
+    const seleccionPpr: { codigo_igss: string; subproducto: string; codigo_ppr: string }[] = [];
+    for (const r of c.renglones) {
+      const opciones = r.codigo_igss ? pprsPorCodigo[r.codigo_igss] : undefined;
+      if (!opciones?.length) continue;
+      const elegido = seleccion[keyDe(r)];
+      if (!elegido) return setError(`Selecciona el PPR/presentación de "${r.nombre}"`);
+      seleccionPpr.push({ codigo_igss: r.codigo_igss!, subproducto: r.subproducto, codigo_ppr: String(elegido) });
+    }
+
     setSaving(true); setError("");
-    const codigoPpr = c.renglones.map(r => r.codigo_ppr).find(Boolean) || "S/PPR";
     const res = await generarOrdenDeCompra(c.id, {
-      codigo_ppr: codigoPpr,
+      seleccionPpr,
       numero_orden: numeroOrden.trim(), fecha_notificacion: fechaNotificacion,
     });
     setSaving(false);
     if ("error" in res) return setError(res.error);
-    
+
+    const codigoPpr = [...new Set(seleccionPpr.map(s => `${s.codigo_igss}-${s.codigo_ppr}`))].join(", ") || null;
     const newOrden: OrdenGenerada = {
       id: res.ordenId,
       numero: parseInt(numeroOrden.trim(), 10),
@@ -244,9 +272,9 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
       estado: "Generada",
       codigo_ppr: codigoPpr,
       fecha_notificacion_proveedor: fechaNotificacion,
-      renglones: c.renglones
+      renglones: c.renglones.map(r => ({ ...r, codigo_ppr: seleccion[keyDe(r)] != null ? String(seleccion[keyDe(r)]) : r.codigo_ppr })),
     };
-    
+
     onGenerada(newOrden);
   }
 
@@ -270,32 +298,55 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
               </p>
             )}
             <div className="pt-1">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Insumos y Precios</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Insumos, PPR y Precios</p>
               <div className="overflow-hidden rounded-lg border border-gray-100 text-xs">
                 <table className="w-full text-left">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-3 py-2 font-medium text-gray-600">Código IGSS</th>
                       <th className="px-3 py-2 font-medium text-gray-600">Insumo</th>
-                      <th className="px-3 py-2 font-medium text-gray-600">PPR</th>
+                      <th className="px-3 py-2 font-medium text-gray-600">PPR / Presentación</th>
                       <th className="px-3 py-2 font-medium text-gray-600 text-right">Precio</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {c.renglones.map((r, i) => (
-                      <tr key={i} className="bg-white">
-                        <td className="px-3 py-2 font-mono text-gray-600">{r.codigo_igss || "—"}</td>
-                        <td className="px-3 py-2 text-gray-700">
-                          <span className="font-medium">{r.subproducto}</span> — {r.nombre} <span className="text-gray-400">({r.cantidad.toLocaleString("es-GT")})</span>
-                        </td>
-                        <td className="px-3 py-2 font-mono text-gray-600">{r.codigo_ppr || "—"}</td>
-                        <td className="px-3 py-2 text-right font-mono font-medium text-gray-700">
-                          {r.precio_cotizacion != null ? Q(r.precio_cotizacion) : "—"}
-                        </td>
-                      </tr>
-                    ))}
+                    {c.renglones.map((r, i) => {
+                      const opciones = r.codigo_igss ? pprsPorCodigo[r.codigo_igss] : undefined;
+                      const key = keyDe(r);
+                      const elegido = seleccion[key];
+                      return (
+                        <tr key={i} className="bg-white align-top">
+                          <td className="px-3 py-2 font-mono text-gray-600">
+                            {elegido ? `${r.codigo_igss}-${elegido}` : (r.codigo_igss || "—")}
+                          </td>
+                          <td className="px-3 py-2 text-gray-700">
+                            <span className="font-medium">{r.subproducto}</span> — {r.nombre} <span className="text-gray-400">({r.cantidad.toLocaleString("es-GT")})</span>
+                          </td>
+                          <td className="px-3 py-2">
+                            {pprsLoading ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />
+                            ) : opciones?.length ? (
+                              <select className="input py-1 text-xs" value={elegido ?? ""}
+                                onChange={e => setSeleccion(p => ({ ...p, [key]: Number(e.target.value) }))}>
+                                <option value="">Elige presentación…</option>
+                                {opciones.map(o => (
+                                  <option key={o.codigo_ppr ?? ""} value={o.codigo_ppr ?? ""}>
+                                    {o.codigo_ppr} — {o.nombre}{o.caracteristicas ? ` (${o.caracteristicas})` : ""}{o.presentacion ? ` · ${o.presentacion}` : ""}{o.unidad_medida ? ` · ${o.unidad_medida}` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="text-gray-400">Sin presentaciones en Base de Datos Central</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono font-medium text-gray-700">
+                            {r.precio_cotizacion != null ? Q(r.precio_cotizacion) : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {c.renglones.length === 0 && (
-                      <tr><td colSpan={3} className="px-3 py-4 text-center text-gray-400">Sin insumos</td></tr>
+                      <tr><td colSpan={4} className="px-3 py-4 text-center text-gray-400">Sin insumos</td></tr>
                     )}
                   </tbody>
                 </table>

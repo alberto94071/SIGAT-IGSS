@@ -1,7 +1,7 @@
 "use server";
 import { db } from "@/lib/db";
 import { catalogoCompras, baseDatosCentral } from "@/lib/schema";
-import { eq, or, ilike, sql } from "drizzle-orm";
+import { eq, or, and, ilike, isNotNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 
 async function checkAuth() {
@@ -10,31 +10,44 @@ async function checkAuth() {
   return s;
 }
 
-// Busca en la Base de Datos Central
-export async function buscarCatalogoGeneral(q: string) {
+export type InsumoCentralAgrupado = {
+  codigo: string; nombre: string; descripcion_igss: string | null; renglon: number | null;
+};
+
+// Busca en la Base de Datos Central, agrupado por código base (sin distinguir
+// PPR/presentación todavía) — así el catálogo de la unidad solo registra QUÉ
+// insumo compra, y la presentación se decide después, al generar la Orden de
+// Compra o el SIAF-04, cuando ya se sabe qué puede entregar el proveedor.
+export async function buscarInsumosCentral(q: string): Promise<InsumoCentralAgrupado[]> {
   if (!q || q.trim().length < 2) return [];
   try {
     const results = await db
       .select({
-        codigo_igss:     baseDatosCentral.codigo_igss,
-        codigo_ppr:      sql<string | null>`${baseDatosCentral.codigo_ppr}::text`,
-        nombre:          baseDatosCentral.nombre,
-        caracteristicas: baseDatosCentral.caracteristicas,
-        presentacion:    baseDatosCentral.presentacion,
-        unidad_medida:   sql<null>`null`,
+        codigo:           baseDatosCentral.codigo,
+        nombre:           baseDatosCentral.nombre,
+        descripcion_igss: baseDatosCentral.descripcion_igss,
+        renglon:          baseDatosCentral.renglon,
       })
       .from(baseDatosCentral)
       .where(
-        or(
-          ilike(baseDatosCentral.nombre, `%${q}%`),
-          ilike(baseDatosCentral.caracteristicas, `%${q}%`),
-          sql`${baseDatosCentral.codigo_ppr}::text ILIKE ${'%' + q + '%'}`,
-          sql`${baseDatosCentral.codigo_igss}::text ILIKE ${'%' + q + '%'}`,
-          ilike(baseDatosCentral.codigo_rango, `%${q}%`),
+        and(
+          isNotNull(baseDatosCentral.codigo),
+          or(
+            ilike(baseDatosCentral.nombre, `%${q}%`),
+            ilike(baseDatosCentral.descripcion_igss, `%${q}%`),
+            ilike(baseDatosCentral.caracteristicas, `%${q}%`),
+            ilike(baseDatosCentral.codigo, `%${q}%`),
+          ),
         )
       )
-      .limit(10);
-    return results;
+      .limit(60);
+
+    const porCodigo = new Map<string, InsumoCentralAgrupado>();
+    for (const r of results) {
+      if (!r.codigo || porCodigo.has(r.codigo)) continue;
+      porCodigo.set(r.codigo, { codigo: r.codigo, nombre: r.nombre, descripcion_igss: r.descripcion_igss, renglon: r.renglon });
+    }
+    return Array.from(porCodigo.values()).slice(0, 10);
   } catch {
     return [];
   }
@@ -62,6 +75,15 @@ function toValues(data: InsumoComprasInput) {
   };
 }
 
+// El insumo debe existir en Base de Datos Central — si no está ahí, no existe
+// para efectos de compras. Se valida también aquí, no solo en la UI, por si
+// alguna vez se llama esta acción con un código inventado.
+async function validarCodigoCentral(codigo: string): Promise<string | null> {
+  const [existe] = await db.select({ codigo: baseDatosCentral.codigo }).from(baseDatosCentral)
+    .where(eq(baseDatosCentral.codigo, codigo)).limit(1);
+  return existe ? null : `El código "${codigo}" no existe en Base de Datos Central`;
+}
+
 export async function crearInsumoCompras(data: InsumoComprasInput): Promise<
   { insumo: typeof catalogoCompras.$inferSelect } | { error: string }
 > {
@@ -70,6 +92,9 @@ export async function crearInsumoCompras(data: InsumoComprasInput): Promise<
     if (!data.nombre.trim()) return { error: "El nombre es obligatorio" };
     if (!data.subproducto.trim()) return { error: "El subproducto es obligatorio" };
     if (!(data.cantidad > 0)) return { error: "Ingresa una cantidad válida" };
+    if (!data.codigo_igss?.trim()) return { error: "Debes elegir el insumo desde Base de Datos Central" };
+    const errCodigo = await validarCodigoCentral(data.codigo_igss.trim());
+    if (errCodigo) return { error: errCodigo };
 
     const [row] = await db.insert(catalogoCompras).values({
       ...toValues(data),
@@ -87,6 +112,10 @@ export async function editarInsumoCompras(id: number, data: InsumoComprasInput):
     if (!data.nombre.trim()) return { error: "El nombre es obligatorio" };
     if (!data.subproducto.trim()) return { error: "El subproducto es obligatorio" };
     if (!(data.cantidad > 0)) return { error: "Ingresa una cantidad válida" };
+    if (data.codigo_igss?.trim()) {
+      const errCodigo = await validarCodigoCentral(data.codigo_igss.trim());
+      if (errCodigo) return { error: errCodigo };
+    }
 
     await db.update(catalogoCompras).set(toValues(data)).where(eq(catalogoCompras.id, id));
     return { ok: true };

@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { consolidaciones, ordenesCompra, siafCompras } from "@/lib/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { gruposRenglonDeConsolidacion } from "./renglon-utils";
+import { gruposRenglonDeConsolidacion, getPprsPorCodigos, guardarPprSeleccion, type PprOpcion } from "./renglon-utils";
 
 async function requireCompras(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -56,6 +56,12 @@ export async function getConsolidacionesPendientesOrden(): Promise<Consolidacion
   }));
 }
 
+// PPR/presentación disponible por cada código IGSS base de la lista — para
+// poblar el selector al generar la Orden de Compra o el SIAF-04.
+export async function getPprsParaRenglones(codigos: (string | null)[]): Promise<Record<string, PprOpcion[]>> {
+  return getPprsPorCodigos(codigos.filter((c): c is string => !!c));
+}
+
 export async function getOrdenesEnProceso() {
   const ordenes = await db.select().from(ordenesCompra).where(eq(ordenesCompra.estado, "Generada")).orderBy(sql`created_at ASC`);
   return Promise.all(ordenes.map(async o => ({
@@ -67,13 +73,13 @@ export async function getOrdenesEnProceso() {
 // (cruzado con las cotizaciones) entre la cantidad total, para no pedirle al
 // usuario un dato que el sistema ya conoce.
 export async function generarOrdenDeCompra(consolidacionId: number, data: {
-  codigo_ppr: string; numero_orden: string; fecha_notificacion: string;
+  seleccionPpr: { codigo_igss: string; subproducto: string; codigo_ppr: string }[];
+  numero_orden: string; fecha_notificacion: string;
 }): Promise<{ ok: true, ordenId: number } | { error: string }> {
   try {
     const check = await requireCompras();
     if ("error" in check) return check;
 
-    if (!data.codigo_ppr.trim()) return { error: "El Código PPR es obligatorio" };
     const numero = parseInt(data.numero_orden.trim(), 10);
     if (!data.numero_orden.trim() || Number.isNaN(numero)) return { error: "El número de orden de compra es inválido" };
     if (!data.fecha_notificacion) return { error: "La fecha de notificación al proveedor es obligatoria" };
@@ -87,6 +93,17 @@ export async function generarOrdenDeCompra(consolidacionId: number, data: {
 
     const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
     const total_cantidad = renglones.reduce((s, r) => s + r.cantidad, 0);
+
+    // Todo renglón con presentaciones registradas en Base de Datos Central
+    // debe traer su PPR elegido antes de generar la orden.
+    const pprDisponibles = await getPprsPorCodigos(renglones.map(r => r.codigo_igss));
+    for (const r of renglones) {
+      if (!r.codigo_igss || !pprDisponibles[r.codigo_igss]?.length) continue;
+      const elegido = data.seleccionPpr.find(s => s.codigo_igss === r.codigo_igss && s.subproducto === r.subproducto);
+      if (!elegido?.codigo_ppr) return { error: `Selecciona el PPR/presentación de "${r.nombre}" antes de generar la orden` };
+    }
+
+    await guardarPprSeleccion(consolidacionId, data.seleccionPpr);
     
     let costoUnitario = 0;
     let totalCálculo = con.total;
@@ -115,6 +132,12 @@ export async function generarOrdenDeCompra(consolidacionId: number, data: {
     if (total_cantidad === 0 || totalCálculo == null) return { error: "No se pudo calcular el precio unitario: faltan cantidad o total adjudicados" };
     costoUnitario = totalCálculo / total_cantidad;
 
+    // Código IGSS completo (código + PPR) por cada renglón, para mostrarlo en
+    // la lista de órdenes generadas.
+    const codigoIgssCompleto = [...new Set(
+      data.seleccionPpr.filter(s => s.codigo_ppr).map(s => `${s.codigo_igss}-${s.codigo_ppr}`)
+    )].join(", ") || null;
+
     const [nuevaOrden] = await db.insert(ordenesCompra).values({
       numero, anio: year, fecha,
       consolidacion_id: consolidacionId,
@@ -129,7 +152,7 @@ export async function generarOrdenDeCompra(consolidacionId: number, data: {
       exento_iva:       con.exento_iva,
       total:            totalCálculo,
       estado:           "Generada",
-      codigo_ppr:                   data.codigo_ppr.trim(),
+      codigo_ppr:                   codigoIgssCompleto,
       fecha_notificacion_proveedor: data.fecha_notificacion,
       creado_por:       check.uid,
     }).returning({ id: ordenesCompra.id });

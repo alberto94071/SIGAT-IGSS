@@ -2,8 +2,8 @@
 import { fechaGuatemala } from "@/lib/date-utils";
 
 import { useState } from "react";
-import { Wallet, Loader2, CheckCircle2, X, Banknote, Coins } from "lucide-react";
-import { registrarFormaPagoCheque, registrarFormaPagoEfectivo, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import { Wallet, Loader2, CheckCircle2, X, Banknote, Coins, Undo2 } from "lucide-react";
+import { registrarFormaPagoCheque, registrarFormaPagoEfectivo, devolverPagoASiaf04, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 import { getValesGastosVariosDisponibles } from "@/lib/vale-actions";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -15,6 +15,17 @@ interface Props { pagos: PagoFondoRotativo[]; }
 export default function PagosClient({ pagos: init }: Props) {
   const [pagos, setPagos] = useState(init);
   const [modalFor, setModalFor] = useState<PagoFondoRotativo | null>(null);
+  const [devolviendo, setDevolviendo] = useState<number | null>(null);
+  const [rowError, setRowError] = useState<Record<number, string>>({});
+
+  async function handleDevolver(p: PagoFondoRotativo) {
+    if (!confirm(`¿Devolver el A-04 SIAF ${p.numero_a04 ?? ""}/${p.anio_a04 ?? ""} a Fondo Rotativo/SIAF-04? Se borrarán los datos de factura ingresados y tendrás que volver a generarlo.`)) return;
+    setDevolviendo(p.id); setRowError(prev => ({ ...prev, [p.id]: "" }));
+    const res = await devolverPagoASiaf04(p.id);
+    setDevolviendo(null);
+    if ("error" in res) { setRowError(prev => ({ ...prev, [p.id]: res.error })); return; }
+    setPagos(prev => prev.filter(x => x.id !== p.id));
+  }
 
   if (pagos.length === 0) {
     return (
@@ -61,10 +72,19 @@ export default function PagosClient({ pagos: init }: Props) {
                     {p.total != null ? Q(p.total) : "—"}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <button onClick={() => setModalFor(p)}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors ml-auto">
-                      <Wallet className="w-3 h-3" /> Agregar forma de pago
-                    </button>
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="flex justify-end gap-1.5">
+                        <button onClick={() => handleDevolver(p)} disabled={devolviendo === p.id}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors">
+                          {devolviendo === p.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Undo2 className="w-3 h-3" />} Devolver
+                        </button>
+                        <button onClick={() => setModalFor(p)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors">
+                          <Wallet className="w-3 h-3" /> Agregar forma de pago
+                        </button>
+                      </div>
+                      {rowError[p.id] && <p className="text-[10px] text-red-600 max-w-[200px] text-right">{rowError[p.id]}</p>}
+                    </div>
                   </td>
                 </tr>
               ))}
