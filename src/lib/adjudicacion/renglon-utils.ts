@@ -1,19 +1,28 @@
 import { db } from "@/lib/db";
 import { siafCompras, siafComprasItems, catalogoCompras, baseDatosCentral } from "@/lib/schema";
-import { eq, and, inArray, isNotNull } from "drizzle-orm";
+import { eq, and, or, inArray, isNotNull } from "drizzle-orm";
 
 // ─── PPR (presentación) por código base ──────────────────────────────────────
-// Un mismo código IGSS base ("1941") puede tener varias presentaciones/PPR
-// registradas en Base de Datos Central (galón, litro, unidad...), cada una con
-// su propio codigo_ppr. El código IGSS completo es código + PPR.
+// Un mismo insumo puede tener varias presentaciones/PPR registradas en Base de
+// Datos Central (galón, litro, unidad...), cada una con su propio codigo_ppr.
+// El campo que las agrupa no es siempre el mismo: para algunos insumos (ej.
+// combustible) el "código" (base_datos_central.codigo) es el que se repite
+// entre presentaciones; para otros (ej. medicamentos, cargados antes de que
+// existiera este selector) lo que ya venía guardado como codigo_igss en
+// catalogo_compras/siaf_compras_items es en realidad el valor compartido de
+// base_datos_central.codigo_igss, no de .codigo. Por eso se busca por ambos
+// campos a la vez.
 export type PprOpcion = {
-  codigo: string; codigo_igss: string | null; codigo_ppr: number | null;
+  codigo: string | null; codigo_igss: string | null; codigo_ppr: number | null;
   nombre: string; caracteristicas: string | null; presentacion: string | null; unidad_medida: string | null;
 };
 
-// Trae, para cada código base de la lista, todas sus presentaciones/PPR
-// registradas en Base de Datos Central — para poblar el selector de PPR al
-// generar la Orden de Compra o el SIAF-04.
+// Trae, para cada código de la lista (el que haya quedado guardado como
+// codigo_igss del renglón), todas sus presentaciones/PPR registradas en Base
+// de Datos Central — para poblar el selector de PPR al generar la Orden de
+// Compra o el SIAF-04. El resultado queda indexado por el código de entrada,
+// para poder cruzarlo directo con el renglón sin importar cuál de los dos
+// campos haya sido el que coincidió.
 export async function getPprsPorCodigos(codigos: (string | null)[]): Promise<Record<string, PprOpcion[]>> {
   const limpios = [...new Set(codigos.filter((c): c is string => !!c))];
   if (limpios.length === 0) return {};
@@ -25,12 +34,14 @@ export async function getPprsPorCodigos(codigos: (string | null)[]): Promise<Rec
     caracteristicas: baseDatosCentral.caracteristicas,
     presentacion:    baseDatosCentral.presentacion,
     unidad_medida:   baseDatosCentral.unidad_medida,
-  }).from(baseDatosCentral).where(inArray(baseDatosCentral.codigo, limpios)).orderBy(baseDatosCentral.codigo_ppr);
+  }).from(baseDatosCentral)
+    .where(or(inArray(baseDatosCentral.codigo, limpios), inArray(baseDatosCentral.codigo_igss, limpios)))
+    .orderBy(baseDatosCentral.codigo_ppr);
 
   const out: Record<string, PprOpcion[]> = {};
-  for (const r of rows) {
-    if (!r.codigo) continue;
-    (out[r.codigo] ??= []).push(r as PprOpcion);
+  for (const entrada of limpios) {
+    const opciones = rows.filter(r => r.codigo === entrada || r.codigo_igss === entrada);
+    if (opciones.length > 0) out[entrada] = opciones as PprOpcion[];
   }
   return out;
 }
