@@ -19,7 +19,7 @@ const ESTADO_COLOR: Record<string, string> = {
   "Rechazado": "bg-red-100 text-red-700",
 };
 
-export default function ValeClient({ vales: init, canEdit }: { vales: Vale[]; canEdit: boolean }) {
+export default function ValeClient({ vales: init, efectivoEnCaja, canEdit }: { vales: Vale[]; efectivoEnCaja: number; canEdit: boolean }) {
   const [vales, setVales] = useState(init);
   const [modal, setModal] = useState(false);
 
@@ -38,6 +38,11 @@ export default function ValeClient({ vales: init, canEdit }: { vales: Vale[]; ca
             <Plus className="w-4 h-4" /> Nuevo Vale
           </button>
         )}
+      </div>
+
+      <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-800">
+        Efectivo actualmente en Caja Chica: <strong>{Q(efectivoEnCaja)}</strong>
+        <span className="block text-xs text-brand-700/80 mt-0.5">Lo ya cobrado de vales activos, menos lo ya entregado. No es el techo de Fondo Rotativo.</span>
       </div>
 
       <div className="card overflow-hidden">
