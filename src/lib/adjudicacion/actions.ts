@@ -25,12 +25,13 @@ export async function getConsolidacionesConDetalles(): Promise<Consolidacion[]> 
   }).from(siafCompras).where(isNotNull(siafCompras.consolidacion_id));
 
   const siafIds = siaf.map(s => s.id);
-  let items: { solicitud_id: number; codigo_igss: string | null; subproducto: string;
+  let items: { solicitud_id: number; codigo_igss: string | null; codigo_ppr: string | null; subproducto: string;
     nombre: string; unidad_medida: string | null; cantidad_solicitada: number }[] = [];
   if (siafIds.length > 0) {
     items = await db.select({
       solicitud_id:        siafComprasItems.solicitud_id,
       codigo_igss:         siafComprasItems.codigo_igss,
+      codigo_ppr:          siafComprasItems.codigo_ppr,
       subproducto:         siafComprasItems.subproducto,
       nombre:              siafComprasItems.nombre,
       unidad_medida:       siafComprasItems.unidad_medida,
@@ -83,7 +84,7 @@ export async function getConsolidacionesConDetalles(): Promise<Consolidacion[]> 
           || unidadMedidaMap.get(`${item.codigo_igss}::${normalizaNombre(item.nombre)}`)
           || null;
         grupos.set(key, {
-          codigo_igss: item.codigo_igss, subproducto: item.subproducto,
+          codigo_igss: item.codigo_igss, codigo_ppr: item.codigo_ppr, subproducto: item.subproducto,
           nombre: item.nombre, unidad_medida,
           cantidad: item.cantidad_solicitada, precio_unitario: null,
           renglon: renglonMap.get(key) ?? null,
@@ -180,6 +181,7 @@ export async function getPendientesPorDestino(destino: "fondo_rotativo" | "presu
     ? await db.select({
         solicitud_id: siafComprasItems.solicitud_id,
         codigo_igss:  siafComprasItems.codigo_igss,
+        codigo_ppr:   siafComprasItems.codigo_ppr,
         subproducto:  siafComprasItems.subproducto,
         nombre:       siafComprasItems.nombre,
         unidad_medida: siafComprasItems.unidad_medida,
@@ -205,7 +207,7 @@ export async function getPendientesPorDestino(destino: "fondo_rotativo" | "presu
       if (ex) { ex.cantidad += item.cantidad_solicitada; }
       else {
         grupos.set(key, {
-          codigo_igss: item.codigo_igss, subproducto: item.subproducto,
+          codigo_igss: item.codigo_igss, codigo_ppr: item.codigo_ppr, subproducto: item.subproducto,
           nombre: item.nombre, unidad_medida: item.unidad_medida,
           cantidad: item.cantidad_solicitada, precio_unitario: null,
           renglon: renglonMap.get(key) ?? null,

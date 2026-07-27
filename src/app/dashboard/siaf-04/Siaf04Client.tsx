@@ -1,10 +1,12 @@
 "use client";
 import { fechaGuatemala } from "@/lib/date-utils";
 
-import { Fragment, useState } from "react";
+import { Fragment, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, FileText, Loader2, CheckCircle2, X } from "lucide-react";
 import { generarSiaf04 } from "@/lib/adjudicacion/siaf04-actions";
+import { getPprsParaRenglones } from "@/lib/adjudicacion/ordenes-actions";
+import type { PprOpcion } from "@/lib/adjudicacion/renglon-utils";
 import type { Consolidacion } from "@/lib/adjudicacion/types";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -114,16 +116,44 @@ function GenerarSiafModal({ consolidacion: c, onClose, onDone }: {
   const [noFactura, setNoFactura] = useState("");
   const [serie, setSerie] = useState("");
   const [fechaEmision, setFechaEmision] = useState(fechaGuatemala());
+  const [pprsPorCodigo, setPprsPorCodigo] = useState<Record<string, PprOpcion[]>>({});
+  const [pprsLoading, setPprsLoading] = useState(true);
+  const [seleccion, setSeleccion] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    let vivo = true;
+    setPprsLoading(true);
+    getPprsParaRenglones(c.precios.map(r => r.codigo_igss)).then(res => {
+      if (vivo) { setPprsPorCodigo(res); setPprsLoading(false); }
+    });
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [c.id]);
+
+  function keyDe(r: { codigo_igss: string | null; subproducto: string }) {
+    return `${r.codigo_igss}::${r.subproducto}`;
+  }
 
   async function handleGenerar() {
     if (!noFactura.trim() || !serie.trim() || !fechaEmision) {
       setError("No. de Factura, Serie y Fecha de Emisión son obligatorios");
       return;
     }
+    const seleccionPpr: { codigo_igss: string; subproducto: string; codigo_ppr: string }[] = [];
+    for (const r of c.precios) {
+      const opciones = r.codigo_igss ? pprsPorCodigo[r.codigo_igss] : undefined;
+      if (!opciones?.length) continue;
+      const elegido = seleccion[keyDe(r)];
+      if (!elegido) { setError(`Selecciona el PPR/presentación de "${r.nombre}"`); return; }
+      seleccionPpr.push({ codigo_igss: r.codigo_igss!, subproducto: r.subproducto, codigo_ppr: String(elegido) });
+    }
+
     setLoading(true); setError("");
-    const res = await generarSiaf04(c.id, { no_factura: noFactura.trim(), serie_factura: serie.trim(), fecha_emision: fechaEmision });
+    const res = await generarSiaf04(c.id, {
+      no_factura: noFactura.trim(), serie_factura: serie.trim(), fecha_emision: fechaEmision, seleccionPpr,
+    });
     setLoading(false);
     if ("error" in res) { setError(res.error); return; }
     onDone();
@@ -132,8 +162,8 @@ function GenerarSiafModal({ consolidacion: c, onClose, onDone }: {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
           <div>
             <h2 className="font-semibold text-gray-900 flex items-center gap-2">
               <FileText className="w-4 h-4 text-brand-600" /> Generar SIAF-04
@@ -157,6 +187,42 @@ function GenerarSiafModal({ consolidacion: c, onClose, onDone }: {
             <label className="label">Fecha de Emisión</label>
             <input type="date" className="input" value={fechaEmision} onChange={e => setFechaEmision(e.target.value)} />
           </div>
+
+          <div>
+            <p className="label mb-1.5">PPR / Presentación por insumo</p>
+            <div className="space-y-2">
+              {c.precios.map((r, i) => {
+                const opciones = r.codigo_igss ? pprsPorCodigo[r.codigo_igss] : undefined;
+                const key = keyDe(r);
+                const elegido = seleccion[key];
+                return (
+                  <div key={i} className="rounded-lg border border-gray-200 px-3 py-2 text-xs space-y-1">
+                    <p className="text-gray-700">
+                      <span className="font-mono text-gray-500">{elegido ? `${r.codigo_igss}-${elegido}` : (r.codigo_igss || "—")}</span>
+                      {" — "}<span className="font-medium">{r.nombre}</span> <span className="text-gray-400">({r.cantidad.toLocaleString("es-GT")})</span>
+                    </p>
+                    {pprsLoading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />
+                    ) : opciones?.length ? (
+                      <select className="input py-1 text-xs" value={elegido ?? ""}
+                        onChange={e => setSeleccion(p => ({ ...p, [key]: Number(e.target.value) }))}>
+                        <option value="">Elige presentación…</option>
+                        {opciones.map(o => (
+                          <option key={o.codigo_ppr ?? ""} value={o.codigo_ppr ?? ""}>
+                            {o.codigo_ppr} — {o.nombre}{o.caracteristicas ? ` (${o.caracteristicas})` : ""}{o.presentacion ? ` · ${o.presentacion}` : ""}{o.unidad_medida ? ` · ${o.unidad_medida}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-gray-400">Sin presentaciones en Base de Datos Central</span>
+                    )}
+                  </div>
+                );
+              })}
+              {c.precios.length === 0 && <p className="text-gray-400 text-xs">Sin insumos</p>}
+            </div>
+          </div>
+
           {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">

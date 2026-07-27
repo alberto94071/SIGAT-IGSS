@@ -108,6 +108,33 @@ export async function registrarFormaPagoCheque(id: number, data: {
   }
 }
 
+// Por si se ingresaron mal los datos del SIAF-04 (factura, serie, fecha):
+// deshace lo que hizo generarSiaf04 y regresa la consolidación a Fondo
+// Rotativo/SIAF-04 para volver a generarlo. La Hoja de Ruta ya se actualiza
+// sola porque sus pasos de SIAF-04 y Pago dependen de que numero_a04 y este
+// registro de pago existan — al limpiarlos, esos pasos dejan de mostrarse.
+export async function devolverPagoASiaf04(id: number): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireCompras();
+    if ("error" in check) return check;
+
+    const [pago] = await db.select().from(fondoRotativoPagos).where(eq(fondoRotativoPagos.id, id)).limit(1);
+    if (!pago) return { error: "No se encontró el registro" };
+    if (pago.estado !== "Pendiente forma de pago") return { error: "Este registro ya no está pendiente de forma de pago" };
+
+    await db.update(consolidaciones).set({
+      numero_a04: null, anio_a04: null, a04_fecha: null,
+      a04_dte_numero: null, a04_dte_serie: null, a04_dte_fecha: null,
+    }).where(eq(consolidaciones.id, pago.consolidacion_id));
+
+    await db.delete(fondoRotativoPagos).where(eq(fondoRotativoPagos.id, id));
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al devolver a SIAF-04" };
+  }
+}
+
 // El pago en efectivo se liga al vale de "gastos varios" activo (con cheque ya
 // asignado en Fondo Rotativo/Vales) generado en Caja Chica/Vale. Un mismo vale
 // puede financiar varios pagos en efectivo antes de liquidarse, así que aquí

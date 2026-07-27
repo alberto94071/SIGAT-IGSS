@@ -1,7 +1,7 @@
 "use client";
 import { useState, useMemo, useEffect } from "react";
-import { BookOpen, Search, Plus, X, Loader2, ChevronLeft, ChevronRight, ChevronDown, Download, Edit2, Trash2 } from "lucide-react";
-import { crearInsumoCompras, editarInsumoCompras, eliminarInsumoCompras } from "./actions";
+import { BookOpen, Search, Plus, X, Loader2, ChevronLeft, ChevronRight, ChevronDown, Download, Edit2, Trash2, CheckCircle2 } from "lucide-react";
+import { crearInsumoCompras, editarInsumoCompras, eliminarInsumoCompras, buscarInsumosCentral, type InsumoCentralAgrupado } from "./actions";
 import { importarPac2026 } from "./importar-action";
 
 type Insumo = {
@@ -245,14 +245,39 @@ function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | null; onC
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // Solo se puede elegir un insumo que ya exista en Base de Datos Central —
+  // si no está ahí, es que no existe. Con un insumo ya elegido (nuevo o al
+  // editar uno existente) se puede "Cambiar insumo" para volver a buscar.
+  const [buscando, setBuscando] = useState(!insumo);
+  const [query, setQuery] = useState("");
+  const [resultados, setResultados] = useState<InsumoCentralAgrupado[]>([]);
+  const [buscandoLoading, setBuscandoLoading] = useState(false);
+
+  useEffect(() => {
+    if (!buscando || query.trim().length < 2) { setResultados([]); return; }
+    let vivo = true;
+    setBuscandoLoading(true);
+    const t = setTimeout(() => {
+      buscarInsumosCentral(query).then(r => { if (vivo) { setResultados(r); setBuscandoLoading(false); } });
+    }, 300);
+    return () => { vivo = false; clearTimeout(t); };
+  }, [query, buscando]);
+
+  function elegirInsumo(r: InsumoCentralAgrupado) {
+    setNombre(r.descripcion_igss || r.nombre);
+    setCodigoIgss(r.codigo);
+    setRenglon(r.renglon != null ? String(r.renglon) : "");
+    setBuscando(false); setQuery(""); setResultados([]);
+  }
+
   async function handleGuardar() {
     const cantidadNum = parseFloat(cantidad);
-    if (!nombre.trim()) return setError("El nombre es obligatorio");
+    if (!codigoIgss.trim()) return setError("Elige el insumo desde Base de Datos Central");
     if (!subproducto.trim()) return setError("El subproducto es obligatorio");
     if (!(cantidadNum > 0)) return setError("Ingresa una cantidad válida");
 
     setSaving(true); setError("");
-    
+
     const payload = {
       nombre: nombre.trim(),
       subproducto: subproducto.trim(),
@@ -268,7 +293,7 @@ function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | null; onC
 
     setSaving(false);
     if ("error" in res) return setError(res.error);
-    
+
     if (insumo) {
       onCreado({ ...insumo, ...payload, monto: payload.precio_estimado ? payload.precio_estimado * payload.cantidad : null });
     } else {
@@ -287,12 +312,46 @@ function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | null; onC
 
         <div className="px-5 py-4 space-y-3">
           <div>
-            <label className="label">Nombre <span className="text-red-500 font-semibold">*</span></label>
-            <input className="input" value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre genérico, forma, concentración y presentación" />
-          </div>
-          <div>
-            <label className="label">Código IGSS</label>
-            <input className="input font-mono" value={codigoIgss} onChange={e => setCodigoIgss(e.target.value)} />
+            <label className="label">Insumo (Base de Datos Central) <span className="text-red-500 font-semibold">*</span></label>
+            {buscando ? (
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input className="input pl-9" autoFocus value={query} onChange={e => setQuery(e.target.value)}
+                    placeholder="Busca por nombre, código o característica…" />
+                </div>
+                {buscandoLoading && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
+                {!buscandoLoading && query.trim().length >= 2 && resultados.length === 0 && (
+                  <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                    No existe en Base de Datos Central. Si es un insumo nuevo, primero regístralo ahí.
+                  </p>
+                )}
+                {resultados.length > 0 && (
+                  <div className="border border-gray-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto divide-y divide-gray-100">
+                    {resultados.map(r => (
+                      <button key={r.codigo} type="button" onClick={() => elegirInsumo(r)}
+                        className="w-full text-left px-3 py-2 hover:bg-brand-50 transition-colors">
+                        <p className="text-sm text-gray-900">{r.descripcion_igss || r.nombre}</p>
+                        <p className="text-xs text-gray-400 font-mono">Código {r.codigo}{r.renglon != null ? ` · Renglón ${r.renglon}` : ""}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {codigoIgss && (
+                  <button type="button" onClick={() => setBuscando(false)} className="text-xs text-gray-500 hover:text-gray-700">Cancelar búsqueda</button>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-start justify-between gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-sm text-gray-900 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" /> {nombre}
+                  </p>
+                  <p className="text-xs text-gray-400 font-mono">Código {codigoIgss}{renglon ? ` · Renglón ${renglon}` : ""}</p>
+                </div>
+                <button type="button" onClick={() => setBuscando(true)} className="text-xs font-medium text-brand-600 hover:text-brand-700 shrink-0">Cambiar</button>
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
