@@ -155,6 +155,22 @@ export const pagos = pgTable("pagos", {
 // Una sola tabla para las 3 pantallas — se diferencian por `forma_pago`/`estado`,
 // igual que ya se hace en otras partes de la app (BandejaDestino por destino/estado).
 // estado: 'Pendiente forma de pago' | 'Enviado a Bancos' | 'Enviado a Libro Caja Chica'
+// FRI — Formulario de Reintegro Interno. Agrupa varios pagos de renglones
+// 100-199 (que no pasan por Bancos ni Caja Chica/Vale, ver fondo_rotativo_pagos
+// más abajo) bajo un correlativo único, para llevarlo físicamente al
+// departamento de Fondo Rotativo y pedir el reintegro de esa plata. Al
+// marcarse "Reintegrado" se acredita configuracion.efectivo_caja por el total.
+export const friFondoRotativo = pgTable("fri_fondo_rotativo", {
+  id:              serial("id").primaryKey(),
+  numero:          integer("numero").notNull(),
+  anio:            integer("anio").notNull(),
+  total:           doublePrecision("total").notNull(),
+  estado:          text("estado").notNull().default("Generado"), // 'Generado' → 'Reintegrado'
+  fecha_reintegro: text("fecha_reintegro"),
+  creado_por:      integer("creado_por").references(() => usuarios.id),
+  created_at:      text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
 export const fondoRotativoPagos = pgTable("fondo_rotativo_pagos", {
   id:                    serial("id").primaryKey(),
   consolidacion_id:      integer("consolidacion_id").notNull().unique()
@@ -169,9 +185,11 @@ export const fondoRotativoPagos = pgTable("fondo_rotativo_pagos", {
   fecha_pago:            text("fecha_pago"),
   numero_vale:           text("numero_vale"),
   vale_id:               integer("vale_id").references((): AnyPgColumn => valesCajaChica.id),
-  // 'Pendiente forma de pago' → (cheque) 'Enviado a Bancos'
-  //                          → (efectivo) 'Enviado a Liquidación' → 'Liquidado'
+  // 'Pendiente forma de pago' → (cheque, renglón 200/300) 'Enviado a Bancos'
+  //                          → (efectivo, renglón 200/300) 'Enviado a Liquidación' → 'Liquidado'
+  //                          → (renglón 100-199, cheque o efectivo) 'Pendiente FRI' → 'En FRI' → 'Reintegrado'
   estado:                text("estado").notNull().default("Pendiente forma de pago"),
+  fri_id:                integer("fri_id").references(() => friFondoRotativo.id),
   creado_por:            integer("creado_por").references(() => usuarios.id),
   created_at:            text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });

@@ -195,12 +195,12 @@ function FormaPagoModal({ pago, onClose, onDone }: {
           <button onClick={onClose} className="btn-secondary">Cancelar</button>
           {forma === "cheque" && (
             <button onClick={handleConfirmar} disabled={loading || !numeroCheque.trim() || !fechaEmisionCheque} className="btn-primary disabled:opacity-50">
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />} Enviar a Bancos
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />} Confirmar pago
             </button>
           )}
           {forma === "efectivo" && (
             <button onClick={handleConfirmar} disabled={loading || !valeId || !fechaPago} className="btn-primary disabled:opacity-50">
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />} Enviar a Liquidación
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />} Confirmar pago
             </button>
           )}
         </div>

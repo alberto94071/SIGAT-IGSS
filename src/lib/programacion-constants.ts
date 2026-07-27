@@ -27,6 +27,13 @@ export function requiereDab60(renglon: number | null | undefined): boolean {
   return grupo?.id === 2 || grupo?.id === 3;
 }
 
+// Fondo Rotativo/Pagos: los renglones 100-199 no pasan por Bancos ni Caja
+// Chica/Vale — se agrupan en Pago/FRI (Formulario de Reintegro Interno).
+export function esGrupo100(renglon: number | null | undefined): boolean {
+  if (renglon == null) return false;
+  return grupoDeRenglon(renglon)?.id === 1;
+}
+
 // Reprogramación: tipos de modificación presupuestaria. Cada uno escribe en
 // su propia columna de presupuesto_renglones (ver ejecucion-actions.ts).
 export const TIPOS_MODIFICACION = [

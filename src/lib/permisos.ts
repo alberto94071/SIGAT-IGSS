@@ -104,6 +104,7 @@ export const NAV_ITEMS = [
   { href: "/dashboard/siaf-04",            label: "SIAF-04",            icon: "FileText",  permiso: null },
   { href: "/dashboard/vales",              label: "Vales",               icon: "Ticket",    permiso: null },
   { href: "/dashboard/pagos",              label: "Pagos",               icon: "Wallet",    permiso: null },
+  { href: "/dashboard/fri",                label: "Pago/FRI",            icon: "Receipt",   permiso: null },
   { href: "/dashboard/bancos",             label: "Bancos",              icon: "Landmark",  permiso: null },
   { href: "/dashboard/voucher",            label: "Voucher",             icon: "Receipt",   permiso: null },
   { href: "/dashboard/libro-conciliacion", label: "Libro Conciliación",  icon: "Scale",     permiso: null },

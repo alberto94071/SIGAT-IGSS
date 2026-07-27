@@ -1,8 +1,17 @@
 "use server";
 import { db } from "@/lib/db";
-import { fondoRotativoPagos, consolidaciones, valesCajaChica } from "@/lib/schema";
+import { fondoRotativoPagos, consolidaciones, valesCajaChica, friFondoRotativo } from "@/lib/schema";
 import { eq, inArray, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
+import { gruposRenglonDeConsolidacion } from "./renglon-utils";
+import { esGrupo100 } from "@/lib/programacion-constants";
+
+// true si TODOS los renglones de la consolidación de este pago son 100-199 —
+// esos van a Pago/FRI en vez de Bancos/Caja Chica-Vale.
+async function esPagoGrupo100(consolidacionId: number): Promise<boolean> {
+  const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
+  return renglones.length > 0 && renglones.every(r => esGrupo100(r.renglon));
+}
 
 async function requireCompras(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -20,28 +29,36 @@ export type PagoFondoRotativo = {
   estado: string;
   numero_a04: number | null; anio_a04: number | null;
   total: number | null; tipo_compra: string | null;
+  fri_id: number | null; fri_numero: number | null; fri_anio: number | null;
 };
 
 export async function conDetalle(rows: (typeof fondoRotativoPagos.$inferSelect)[]): Promise<PagoFondoRotativo[]> {
   if (rows.length === 0) return [];
   const consIds = rows.map(r => r.consolidacion_id);
   const valeIds = rows.map(r => r.vale_id).filter((v): v is number => v != null);
-  const [cons, vales] = await Promise.all([
+  const friIds = rows.map(r => r.fri_id).filter((v): v is number => v != null);
+  const [cons, vales, fris] = await Promise.all([
     db.select().from(consolidaciones).where(inArray(consolidaciones.id, consIds)),
     valeIds.length > 0
       ? db.select().from(valesCajaChica).where(inArray(valesCajaChica.id, valeIds))
       : Promise.resolve([]),
+    friIds.length > 0
+      ? db.select().from(friFondoRotativo).where(inArray(friFondoRotativo.id, friIds))
+      : Promise.resolve([]),
   ]);
   const consMap = new Map(cons.map(c => [c.id, c]));
   const valeMap = new Map(vales.map(v => [v.id, v]));
+  const friMap = new Map(fris.map(f => [f.id, f]));
   return rows.map(r => {
     const c = consMap.get(r.consolidacion_id);
     const vale = r.vale_id != null ? valeMap.get(r.vale_id) : undefined;
+    const fri = r.fri_id != null ? friMap.get(r.fri_id) : undefined;
     return {
       ...r,
       numero_a04: c?.numero_a04 ?? null, anio_a04: c?.anio_a04 ?? null,
       total: c?.total ?? null, tipo_compra: c?.tipo_compra ?? null,
       vale_solicitante_nombre: vale?.solicitante_nombre ?? null,
+      fri_numero: fri?.numero ?? null, fri_anio: fri?.anio ?? null,
     };
   });
 }
@@ -77,11 +94,13 @@ export async function registrarFormaPagoCheque(id: number, data: {
     if (!pago) return { error: "No se encontró el registro" };
     if (pago.estado !== "Pendiente forma de pago") return { error: "Este registro ya tiene forma de pago asignada" };
 
+    const esGrupo100 = await esPagoGrupo100(pago.consolidacion_id);
+
     await db.update(fondoRotativoPagos).set({
       forma_pago: "cheque",
       numero_cheque: data.numero_cheque.trim(),
       fecha_emision_cheque: data.fecha_emision_cheque,
-      estado: "Enviado a Bancos",
+      estado: esGrupo100 ? "Pendiente FRI" : "Enviado a Bancos",
     }).where(eq(fondoRotativoPagos.id, id));
     return { ok: true };
   } catch {
@@ -111,12 +130,14 @@ export async function registrarFormaPagoEfectivo(id: number, data: {
     if (!vale) return { error: "No se encontró el vale seleccionado" };
     if (vale.tipo !== "gastos_varios" || vale.estado !== "Activo") return { error: "Ese vale no está activo" };
 
+    const esGrupo100 = await esPagoGrupo100(pago.consolidacion_id);
+
     await db.update(fondoRotativoPagos).set({
       forma_pago: "efectivo",
       fecha_pago: data.fecha_pago,
       numero_vale: String(vale.numero).padStart(7, "0"),
       vale_id: vale.id,
-      estado: "Enviado a Liquidación",
+      estado: esGrupo100 ? "Pendiente FRI" : "Enviado a Liquidación",
     }).where(eq(fondoRotativoPagos.id, id));
 
     return { ok: true };

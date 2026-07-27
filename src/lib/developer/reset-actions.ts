@@ -18,6 +18,7 @@ export async function executeDatabaseReset(password: string): Promise<{ ok: true
       "consolidacion_precios",
       "oferentes",
       "ordenes_compra",
+      "fri_fondo_rotativo",
       "fondo_rotativo_pagos",
       "movimientos_banco",
       "caja_chica",
@@ -55,6 +56,10 @@ export async function executeDatabaseReset(password: string): Promise<{ ok: true
     `);
 
     await db.execute(sql`UPDATE siaf_seq SET valor = 1`);
+
+    // El saldo en caja del Fondo Rotativo vuelve al monto total una vez que
+    // se borran vales, pagos y FRIs pendientes de reintegro.
+    await db.execute(sql`UPDATE configuracion SET efectivo_caja = monto_fondo_rotativo`);
 
     return { ok: true };
   } catch (e: any) {

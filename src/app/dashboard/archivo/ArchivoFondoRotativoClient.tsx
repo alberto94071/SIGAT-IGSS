@@ -11,6 +11,9 @@ const ESTADO_STYLE: Record<string, string> = {
   "Enviado a Bancos":        "bg-blue-100 text-blue-700",
   "Enviado a Liquidación":   "bg-amber-100 text-amber-700",
   "Liquidado":               "bg-green-100 text-green-700",
+  "Pendiente FRI":           "bg-amber-100 text-amber-700",
+  "En FRI":                  "bg-blue-100 text-blue-700",
+  "Reintegrado":             "bg-green-100 text-green-700",
 };
 
 interface Props { pagos: PagoFondoRotativo[]; }
@@ -69,6 +72,12 @@ export default function ArchivoFondoRotativoClient({ pagos }: Props) {
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ESTADO_STYLE[p.estado] ?? "bg-gray-100 text-gray-600"}`}>
                       {p.estado}
                     </span>
+                    {p.fri_numero != null && (
+                      <Link href={`/dashboard/fri/${p.fri_numero}?anio=${p.fri_anio}`}
+                        className="block text-[11px] text-brand-600 hover:underline mt-0.5">
+                        FRI {p.fri_numero}/{p.fri_anio}
+                      </Link>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
                     {p.total != null ? Q(p.total) : "—"}
