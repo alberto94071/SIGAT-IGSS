@@ -1,21 +1,11 @@
 "use client";
 import { fechaGuatemala } from "@/lib/date-utils";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
 import { deletrearCodigo, fechaEnLetras, horaEnLetras } from "@/lib/adjudicacion/deletreo";
-
-// Tamaño Carta (8½"×11") — la hoja en pantalla se dimensiona en mm reales
-// (1mm = 96/25.4 px, conversión exacta de CSS) para poder medir si el
-// contenido cabe en una sola página antes de imprimir. Si no cabe, el cierre
-// (firmas) se pasa a una segunda hoja en vez de desbordar una sola hoja
-// gigante.
-const PAGE_WIDTH_MM = 215.9;
-const PAGE_HEIGHT_MM = 279.4;
-const PAGE_MARGIN_MM = 12;
-const MM_TO_PX = 96 / 25.4;
-const CONTENT_HEIGHT_PX = (PAGE_HEIGHT_MM - PAGE_MARGIN_MM * 2) * MM_TO_PX;
+import PrintPages from "@/components/print-pages/PrintPages";
 
 type Acta = {
   id: number; no_formulario: string; no_acta: string; lugar: string; fecha: string; hora: string;
@@ -142,12 +132,7 @@ export default function ImprimirActaClient({
     </>
   );
 
-  const measureRef = useRef<HTMLDivElement>(null);
-  const [dosHojas, setDosHojas] = useState(false);
-
-  useLayoutEffect(() => {
-    if (measureRef.current) setDosHojas(measureRef.current.scrollHeight > CONTENT_HEIGHT_PX);
-  }, [oferentes.length, c.razon_adjudicacion, c.referencia, direccionUnidad]);
+  const [paginas, setPaginas] = useState(1);
 
   return (
     <>
@@ -157,7 +142,7 @@ export default function ImprimirActaClient({
         </button>
         <span className="text-gray-300">|</span>
         <span className="text-sm font-semibold text-gray-700">
-          Acta {acta.no_acta} · {dosHojas ? "2 hojas" : "1 hoja"} tamaño Carta
+          Acta {acta.no_acta} · {paginas} {paginas === 1 ? "hoja" : "hojas"} tamaño Carta
         </span>
         <button onClick={() => window.print()}
           className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700">
@@ -165,45 +150,7 @@ export default function ImprimirActaClient({
         </button>
       </div>
 
-      {/* Medidor invisible: renderiza todo el contenido junto, sin cortar,
-          para saber si cabe en una sola hoja antes de decidir el layout real. */}
-      <div ref={measureRef} style={{ position: "absolute", top: 0, left: "-9999px", width: `${PAGE_WIDTH_MM - PAGE_MARGIN_MM * 2}mm`, visibility: "hidden" }}>
-        <div className="acta-body">{cuerpo}{cierre}</div>
-      </div>
-
-      <div id="print-wrapper">
-        <div className="acta-page">
-          <div className="acta-body">
-            {cuerpo}
-            {!dosHojas && cierre}
-          </div>
-        </div>
-        {dosHojas && (
-          <div className="acta-page">
-            <div className="acta-body">{cierre}</div>
-          </div>
-        )}
-      </div>
-
-      <style>{`
-        #print-wrapper {
-          background: #94a3b8; display: flex; flex-direction: column; align-items: center; gap: 24px;
-          padding: 40px 20px; min-height: 100vh; margin-top: 52px; box-sizing: border-box;
-        }
-        .acta-page {
-          background: white; width: ${PAGE_WIDTH_MM}mm; min-height: ${PAGE_HEIGHT_MM}mm;
-          box-shadow: 0 4px 32px rgba(0,0,0,0.22);
-          padding: ${PAGE_MARGIN_MM}mm; box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; color: #000;
-        }
-        .no-print { display: block; }
-        @media print {
-          @page { size: letter portrait; margin: ${PAGE_MARGIN_MM}mm; }
-          .no-print { display: none !important; }
-          #print-wrapper { background: white !important; padding: 0 !important; margin: 0 !important; min-height: 0 !important; gap: 0 !important; display: block !important; }
-          .acta-page { width: 100% !important; min-height: 0 !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; page-break-after: always; }
-          .acta-page:last-child { page-break-after: auto; }
-        }
-      `}</style>
+      <PrintPages sections={[cuerpo, cierre]} pageSize="letter" marginMm={12} onPageCount={setPaginas} />
     </>
   );
 }
