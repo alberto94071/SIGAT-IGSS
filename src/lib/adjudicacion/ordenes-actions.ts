@@ -27,23 +27,15 @@ export async function getConsolidacionesPendientesOrden(): Promise<Consolidacion
     .where(and(eq(consolidaciones.estado, "Enviado a Presupuesto"), eq(consolidaciones.destino, "presupuesto")))
     .orderBy(sql`created_at ASC`);
 
-  const { cotizacionesAnualesItems } = await import("@/lib/schema");
-
   return Promise.all(cons.map(async c => {
     const renglones = await gruposRenglonDeConsolidacion(c.id);
-    let cotItems: { codigo_igss: string | null; precio_unitario: number }[] = [];
-    if (c.cotizacion_anual_id) {
-      cotItems = await db.select({
-        codigo_igss: cotizacionesAnualesItems.codigo_igss,
-        precio_unitario: cotizacionesAnualesItems.precio_unitario,
-      }).from(cotizacionesAnualesItems)
-        .where(eq(cotizacionesAnualesItems.cotizacion_anual_id, c.cotizacion_anual_id));
-    }
-
-    const renglonesConPrecio = renglones.map(r => {
-      const precio = r.codigo_igss ? cotItems.find(ci => ci.codigo_igss === r.codigo_igss)?.precio_unitario : undefined;
-      return { ...r, precio_cotizacion: precio };
-    });
+    // El precio unitario por renglón ya viene cargado en siaf_compras_items
+    // (Regularizado, Baja Cuantía/cotización anual, o el oferente ganador de
+    // Junta — ver aprobarActa) y gruposRenglonDeConsolidacion ya lo suma en
+    // `total`. Se deriva de ahí en vez de volver a cruzar por separado.
+    const renglonesConPrecio = renglones.map(r => ({
+      ...r, precio_cotizacion: r.cantidad > 0 && r.total > 0 ? r.total / r.cantidad : undefined,
+    }));
 
     return {
       id: c.id, numero: c.numero, anio: c.anio, fecha: c.fecha,

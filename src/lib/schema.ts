@@ -287,6 +287,10 @@ export const consolidaciones = pgTable("consolidaciones", {
   proveedor_nombre: text("proveedor_nombre"),
   pre_orden:           text("pre_orden").unique(),
   numero_adjudicacion: text("numero_adjudicacion").unique(),
+  // Justificación/razón de por qué se adjudica a este proveedor — separado de
+  // numero_adjudicacion (que es el código corto único usado en el correlativo
+  // ADJ-XXX). Antes se guardaban ambas cosas mezcladas en numero_adjudicacion.
+  razon_adjudicacion:  text("razon_adjudicacion"),
   destino:             text("destino"),
   regularizado:        boolean("regularizado"),
   creado_por:       integer("creado_por"),
@@ -413,6 +417,24 @@ export const oferentes = pgTable("oferentes", {
   orden:                  integer("orden").notNull().default(0),
   creado_por:             integer("creado_por").references(() => usuarios.id),
   created_at:             text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Precio por insumo cotizado por cada oferente ────────────────────────────
+// Antes cada oferente solo tenía un costo total (oferentes.costo), sin
+// desglose por insumo — al elegirse el ganador no había forma de saber cuánto
+// costaba cada insumo por separado (rompía el selector de PPR/precio en
+// Compras/Órdenes). Cada oferente ahora cotiza precio unitario por cada
+// insumo de la consolidación; oferentes.costo se sigue calculando y
+// guardando (cantidad × precio de cada línea) para no tocar las pantallas que
+// ya comparan/muestran el costo total. Al aprobarse el Acta, las líneas del
+// oferente ganador se copian a siaf_compras_items.precio_unitario (ver
+// aprobarActa en actas-adjudicacion-actions.ts).
+export const oferentePrecios = pgTable("oferente_precios", {
+  id:              serial("id").primaryKey(),
+  oferente_id:     integer("oferente_id").notNull().references(() => oferentes.id, { onDelete: "cascade" }),
+  codigo_igss:     text("codigo_igss"),
+  subproducto:     text("subproducto").notNull(),
+  precio_unitario: doublePrecision("precio_unitario").notNull(),
 });
 
 // ─── Acta de Negociación — plantilla fija por año ────────────────────────────

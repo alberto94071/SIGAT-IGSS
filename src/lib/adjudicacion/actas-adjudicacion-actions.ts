@@ -2,7 +2,7 @@
 import { fechaHoraGuatemala } from "@/lib/date-utils";
 
 import { db } from "@/lib/db";
-import { actasAdjudicacion, consolidaciones, oferentes } from "@/lib/schema";
+import { actasAdjudicacion, consolidaciones, oferentes, oferentePrecios, siafCompras, siafComprasItems } from "@/lib/schema";
 import { eq, inArray, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { crearNotificacion } from "@/lib/notificaciones";
@@ -98,6 +98,28 @@ export async function aprobarActa(actaId: number): Promise<{ ok: true } | { erro
     const limite = LIMITE_POR_TIPO[tipo];
     if (total > limite) {
       return { error: `El total Q${total.toFixed(2)} supera el límite de Q${limite.toLocaleString("es-GT")} para ${tipo}. Rechaza el acta para que Compras corrija el precio.` };
+    }
+
+    // Copiar el precio por insumo del oferente ganador a siaf_compras_items —
+    // es lo que después usa Compras/Órdenes para mostrar el precio al elegir
+    // PPR/presentación (ver getConsolidacionesPendientesOrden).
+    const precios = await db.select().from(oferentePrecios).where(eq(oferentePrecios.oferente_id, ganador.id));
+    if (precios.length > 0) {
+      const siafIds = (await db.select({ id: siafCompras.id }).from(siafCompras)
+        .where(eq(siafCompras.consolidacion_id, acta.consolidacion_id))).map(s => s.id);
+      const rawItems = siafIds.length > 0
+        ? await db.select().from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds))
+        : [];
+      for (const linea of precios) {
+        const filas = rawItems.filter(r => r.codigo_igss === linea.codigo_igss && r.subproducto === linea.subproducto);
+        for (const fila of filas) {
+          const bruto = fila.cantidad_solicitada * linea.precio_unitario;
+          const montoNeto = ganador.exento_iva ? bruto : bruto * 0.88;
+          await db.update(siafComprasItems).set({
+            precio_unitario: linea.precio_unitario, item_exento_iva: ganador.exento_iva, monto_neto: montoNeto,
+          }).where(eq(siafComprasItems.id, fila.id));
+        }
+      }
     }
 
     const ahora = fechaHoraGuatemala();

@@ -58,6 +58,7 @@ export type Consolidacion = {
   id: number; numero: number; anio: number; fecha: string;
   pre_orden: string | null;
   numero_adjudicacion: string | null;
+  razon_adjudicacion: string | null;
   tipo_compra: string | null;
   estado: string;
   nog: string | null;

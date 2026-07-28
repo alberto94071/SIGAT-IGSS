@@ -15,14 +15,16 @@ async function requireJunta(): Promise<{ error: string } | { uid: number }> {
 }
 
 export async function adjudicarJunta(consolidacionId: number, data: {
-  oferenteId: number; numero_adjudicacion: string;
+  oferenteId: number; numero_adjudicacion: string; razon_adjudicacion: string;
 }): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireJunta();
     if ("error" in check) return check;
 
     const numAdj = data.numero_adjudicacion.trim();
-    if (!numAdj) return { error: "La razón de adjudicación es obligatoria" };
+    const razon = data.razon_adjudicacion.trim();
+    if (!numAdj) return { error: "El número de adjudicación es obligatorio" };
+    if (!razon) return { error: "La razón de adjudicación es obligatoria" };
 
     const [con] = await db.select().from(consolidaciones).where(eq(consolidaciones.id, consolidacionId)).limit(1);
     if (!con) return { error: "No se encontró la consolidación" };
@@ -39,6 +41,7 @@ export async function adjudicarJunta(consolidacionId: number, data: {
       proveedor_nit:        ofrt.nit,
       proveedor_nombre:     ofrt.nombre,
       numero_adjudicacion:  numAdj,
+      razon_adjudicacion:   razon,
     }).where(eq(consolidaciones.id, consolidacionId));
 
     await db.update(siafCompras)

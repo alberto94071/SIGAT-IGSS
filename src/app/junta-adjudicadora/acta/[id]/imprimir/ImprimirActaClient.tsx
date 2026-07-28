@@ -10,7 +10,7 @@ type Acta = {
 };
 type Consolidacion = {
   id: number; numero: number; anio: number; tipo_compra: string | null;
-  numero_adjudicacion: string | null; pre_orden: string | null;
+  numero_adjudicacion: string | null; razon_adjudicacion: string | null; pre_orden: string | null;
   cotizacion_anual_id: number | null; referencia: string | null;
 };
 type Oferente = { id: number; nit: string; nombre: string; costo: number; exento_iva: boolean };
@@ -112,7 +112,7 @@ export default function ImprimirActaClient({
               <span style={{ background: "#fde68a" }}>{c.referencia || "—"}</span>.</>
             ) : (
               <><strong>TERCERO:</strong> Razonamiento de la adjudicación:{" "}
-              <span style={{ background: "#fde68a" }}>{c.numero_adjudicacion || "—"}</span>.</>
+              <span style={{ background: "#fde68a" }}>{c.razon_adjudicacion || "—"}</span>.</>
             )}
           </p>
 

@@ -3,7 +3,7 @@ import { fechaHoraGuatemala } from "@/lib/date-utils";
 
 import { db } from "@/lib/db";
 import {
-  consolidaciones, oferentes, cotizacionesServicio, siafCompras, siafComprasItems,
+  consolidaciones, oferentes, oferentePrecios, cotizacionesServicio, siafCompras, siafComprasItems,
   cotizacionesAnuales, cotizacionesAnualesItems,
 } from "@/lib/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
@@ -11,6 +11,7 @@ import { auth } from "@/lib/auth";
 import { crearNotificacion } from "@/lib/notificaciones";
 import { TIPOS, MAX_OFERENTES, REFERENCIA_LABEL, LIMITE_POR_TIPO, type TipoCompra } from "./types";
 import { verificarLimiteInsumos, mensajeLimiteExcedido } from "./limite-baja-cuantia";
+import { gruposRenglonDeConsolidacion } from "./renglon-utils";
 
 async function requireCompras(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -105,25 +106,43 @@ export async function guardarCompraDirectaEvento(consolidacionId: number, data: 
 }
 
 export async function agregarOferente(consolidacionId: number, data: {
-  proveedor_id: number | null; nit: string; nombre: string; costo: number; exento_iva: boolean;
+  proveedor_id: number | null; nit: string; nombre: string; exento_iva: boolean;
+  items: { codigo_igss: string | null; subproducto: string; precio_unitario: number }[];
 }): Promise<{ oferente: typeof oferentes.$inferSelect } | { error: string }> {
   try {
     const check = await requireCompras();
     if ("error" in check) return check;
     if (!data.nit.trim() || !data.nombre.trim()) return { error: "NIT y nombre son obligatorios" };
-    if (!(data.costo > 0)) return { error: "Ingresa un costo válido" };
+    if (data.items.length === 0) return { error: "No hay insumos para cotizar" };
+    if (data.items.some(i => !(i.precio_unitario > 0))) return { error: "Ingresa un precio unitario válido para cada insumo" };
 
     const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(oferentes)
       .where(eq(oferentes.consolidacion_id, consolidacionId));
     if (count >= MAX_OFERENTES) return { error: `Ya hay ${MAX_OFERENTES} oferentes registrados (máximo permitido)` };
 
+    // El costo total se calcula (cantidad × precio de cada insumo) en vez de
+    // pedirlo directo — así se guarda el mismo total de siempre en
+    // oferentes.costo para las pantallas de comparación/Acta, pero ahora con
+    // el desglose por insumo respaldándolo en oferente_precios.
+    const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
+    let costo = 0;
+    for (const item of data.items) {
+      const renglon = renglones.find(r => r.codigo_igss === item.codigo_igss && r.subproducto === item.subproducto);
+      if (!renglon) return { error: "Uno de los insumos no pertenece a esta consolidación" };
+      costo += renglon.cantidad * item.precio_unitario;
+    }
+
     const [nuevo] = await db.insert(oferentes).values({
       consolidacion_id: consolidacionId,
       proveedor_id: data.proveedor_id,
       nit: data.nit.trim(), nombre: data.nombre.trim(),
-      costo: data.costo, exento_iva: data.exento_iva,
+      costo, exento_iva: data.exento_iva,
       orden: count, creado_por: check.uid,
     }).returning();
+
+    await db.insert(oferentePrecios).values(data.items.map(i => ({
+      oferente_id: nuevo.id, codigo_igss: i.codigo_igss, subproducto: i.subproducto, precio_unitario: i.precio_unitario,
+    })));
 
     return { oferente: nuevo };
   } catch {
@@ -317,7 +336,9 @@ export async function confirmarBajaCuantiaConCotizacionAnual(consolidacionId: nu
 // registrarRegularizado / enviarAJunta.
 export async function adjudicarDirecto(consolidacionId: number, data: {
   proveedor_id: number | null; nit: string; nombre: string;
-  costo: number; exento_iva: boolean; referencia: string; razon: string;
+  exento_iva: boolean; referencia: string;
+  numero_adjudicacion: string; razon_adjudicacion: string;
+  items: { codigo_igss: string | null; subproducto: string; precio_unitario: number }[];
 }): Promise<{ ok: true } | { error: string; limitExceeded?: true }> {
   try {
     const check = await requireCompras();
@@ -330,12 +351,21 @@ export async function adjudicarDirecto(consolidacionId: number, data: {
     if (tipo !== "Contrato Abierto") return { error: "Esta acción solo aplica a Contrato Abierto" };
 
     if (!data.nit.trim() || !data.nombre.trim()) return { error: "NIT y nombre son obligatorios" };
-    if (!(data.costo > 0)) return { error: "Ingresa un costo de factura válido" };
-    if (!data.razon.trim()) return { error: "La razón de adjudicación es obligatoria" };
+    if (!data.numero_adjudicacion.trim()) return { error: "El número de adjudicación es obligatorio" };
+    if (!data.razon_adjudicacion.trim()) return { error: "La razón de adjudicación es obligatoria" };
+    if (data.items.length === 0) return { error: "No hay insumos para valorizar" };
+    if (data.items.some(i => !(i.precio_unitario > 0))) return { error: "Ingresa un precio unitario válido para cada insumo" };
     const label = REFERENCIA_LABEL[tipo];
     if (label && !data.referencia.trim()) return { error: `El campo "${label}" es obligatorio` };
 
-    const total = data.exento_iva ? data.costo : data.costo * 0.88;
+    const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
+    let bruto = 0;
+    for (const item of data.items) {
+      const renglon = renglones.find(r => r.codigo_igss === item.codigo_igss && r.subproducto === item.subproducto);
+      if (!renglon) return { error: "Uno de los insumos no pertenece a esta consolidación" };
+      bruto += renglon.cantidad * item.precio_unitario;
+    }
+    const total = data.exento_iva ? bruto : bruto * 0.88;
     const limite = LIMITE_POR_TIPO[tipo];
     if (total > limite) {
       return {
@@ -344,18 +374,35 @@ export async function adjudicarDirecto(consolidacionId: number, data: {
       };
     }
 
+    const siafIds = (await db.select({ id: siafCompras.id }).from(siafCompras)
+      .where(eq(siafCompras.consolidacion_id, consolidacionId))).map(s => s.id);
+    const rawItems = siafIds.length > 0
+      ? await db.select().from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds))
+      : [];
+    for (const grupo of data.items) {
+      const filas = rawItems.filter(r => r.codigo_igss === grupo.codigo_igss && r.subproducto === grupo.subproducto);
+      for (const fila of filas) {
+        const filaBruto = fila.cantidad_solicitada * grupo.precio_unitario;
+        const montoNeto = data.exento_iva ? filaBruto : filaBruto * 0.88;
+        await db.update(siafComprasItems).set({
+          precio_unitario: grupo.precio_unitario, item_exento_iva: data.exento_iva, monto_neto: montoNeto,
+        }).where(eq(siafComprasItems.id, fila.id));
+      }
+    }
+
     await db.delete(oferentes).where(eq(oferentes.consolidacion_id, consolidacionId));
     await db.insert(oferentes).values({
       consolidacion_id: consolidacionId,
       proveedor_id: data.proveedor_id,
       nit: data.nit.trim(), nombre: data.nombre.trim(),
-      costo: data.costo, exento_iva: data.exento_iva,
+      costo: bruto, exento_iva: data.exento_iva,
       orden: 0, creado_por: check.uid,
     });
 
     await db.update(consolidaciones).set({
       referencia: label ? data.referencia.trim() : con.referencia,
-      numero_adjudicacion: data.razon.trim(),
+      numero_adjudicacion: data.numero_adjudicacion.trim(),
+      razon_adjudicacion: data.razon_adjudicacion.trim(),
       proveedor_id: data.proveedor_id,
       proveedor_nit: data.nit.trim(), proveedor_nombre: data.nombre.trim(),
       exento_iva: data.exento_iva, total,
