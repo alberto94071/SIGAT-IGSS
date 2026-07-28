@@ -1,12 +1,14 @@
 "use server";
+import { fechaGuatemala } from "@/lib/date-utils";
 import { db } from "@/lib/db";
-import { programacionEntradas, presupuestoRenglones } from "@/lib/schema";
+import { programacionEntradas, presupuestoRenglones, reprogramaciones } from "@/lib/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { PRESUPUESTO_DATA } from "@/lib/presupuesto-general-data";
 import { GRUPOS, grupoDeRenglon, TIPOS_MODIFICACION, type TipoModificacion } from "@/lib/programacion-constants";
+import { getDisponible, EJERCICIO_FISCAL } from "@/lib/presupuesto-disponible";
 
-const EJERCICIO = 2026;
+const EJERCICIO = EJERCICIO_FISCAL;
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -279,4 +281,114 @@ export async function getModificaciones(): Promise<ModificacionRow[]> {
       };
     })
     .sort((a, b) => a.renglon - b.renglon);
+}
+
+export type SubproductoConDisponible = SubproductoDisponible & { disponible: number };
+
+/** Sub-productos de un renglón con su presupuesto realmente disponible (programado + modificaciones − ya usado). */
+export async function getSubproductosConDisponible(renglon: number): Promise<SubproductoConDisponible[]> {
+  const subs = await getSubproductosDeRenglon(renglon);
+  return Promise.all(subs.map(async s => {
+    const { disponible } = await getDisponible(renglon, s.subProducto);
+    return { ...s, disponible };
+  }));
+}
+
+export type TransferenciaInput = {
+  renglonOrigen: number;
+  subProductoOrigen: string;
+  renglonDestino: number;
+  subProductoDestino: string;
+  monto: number;
+  motivo?: string;
+};
+
+async function sumarModificacionEntreRenglones(renglon: number, subProducto: string, delta: number): Promise<void> {
+  const [existente] = await db.select({ id: presupuestoRenglones.id })
+    .from(presupuestoRenglones)
+    .where(and(
+      eq(presupuestoRenglones.ejercicio_fiscal, EJERCICIO),
+      eq(presupuestoRenglones.renglon, renglon),
+      eq(presupuestoRenglones.subproducto, subProducto),
+    )).limit(1);
+
+  if (existente) {
+    await db.update(presupuestoRenglones).set({
+      modificacion_entre_renglones: sql`COALESCE(${presupuestoRenglones.modificacion_entre_renglones}, 0) + ${delta}`,
+    }).where(eq(presupuestoRenglones.id, existente.id));
+  } else {
+    const base = PRESUPUESTO_DATA.find(r => r.renglon === renglon && r.subProducto === subProducto);
+    await db.insert(presupuestoRenglones).values({
+      ejercicio_fiscal: EJERCICIO,
+      renglon, subproducto: subProducto,
+      nombre: base?.descripcion ?? "",
+      vigente: base?.vigente ?? null,
+      modificacion_entre_renglones: delta,
+    });
+  }
+}
+
+/**
+ * Reprogramación por transferencia real: quita `monto` del presupuesto
+ * disponible del renglón/sub-producto de origen y lo suma al de destino.
+ * Valida que el origen tenga saldo disponible suficiente antes de mover
+ * nada (nunca deja el origen en negativo), y deja un registro de auditoría
+ * en `reprogramaciones`.
+ */
+export async function transferirPresupuesto(input: TransferenciaInput): Promise<{ ok: true } | { error: string }> {
+  const check = await requireEdit();
+  if ("error" in check) return check;
+
+  const { renglonOrigen, subProductoOrigen, renglonDestino, subProductoDestino, motivo } = input;
+  const monto = input.monto || 0;
+  if (!(monto > 0)) return { error: "Ingresa un monto válido" };
+  if (renglonOrigen === renglonDestino && subProductoOrigen === subProductoDestino) {
+    return { error: "El origen y el destino no pueden ser el mismo renglón/sub-producto" };
+  }
+
+  const baseOrigen = PRESUPUESTO_DATA.find(r => r.renglon === renglonOrigen && r.subProducto === subProductoOrigen);
+  if (!baseOrigen) return { error: "El renglón/sub-producto de origen no existe en el catálogo presupuestario" };
+  const baseDestino = PRESUPUESTO_DATA.find(r => r.renglon === renglonDestino && r.subProducto === subProductoDestino);
+  if (!baseDestino) return { error: "El renglón/sub-producto de destino no existe en el catálogo presupuestario" };
+
+  const { disponible } = await getDisponible(renglonOrigen, subProductoOrigen);
+  if (monto > disponible + 0.01) {
+    return {
+      error: `El origen (renglón ${renglonOrigen} / ${subProductoOrigen}) solo tiene Q${disponible.toLocaleString("es-GT", { minimumFractionDigits: 2 })} disponibles para transferir`,
+    };
+  }
+
+  await sumarModificacionEntreRenglones(renglonOrigen, subProductoOrigen, -monto);
+  await sumarModificacionEntreRenglones(renglonDestino, subProductoDestino, monto);
+
+  await db.insert(reprogramaciones).values({
+    ejercicio_fiscal: EJERCICIO,
+    fecha: fechaGuatemala(),
+    renglon_origen: renglonOrigen, subproducto_origen: subProductoOrigen,
+    renglon_destino: renglonDestino, subproducto_destino: subProductoDestino,
+    monto, motivo: motivo?.trim() || null,
+    creado_por: check.uid,
+  });
+
+  return { ok: true };
+}
+
+export type TransferenciaRow = {
+  id: number; fecha: string;
+  renglonOrigen: number; subProductoOrigen: string;
+  renglonDestino: number; subProductoDestino: string;
+  monto: number; motivo: string | null;
+};
+
+/** Historial de transferencias registradas en el ejercicio fiscal actual (más recientes primero). */
+export async function getTransferencias(): Promise<TransferenciaRow[]> {
+  const filas = await db.select().from(reprogramaciones)
+    .where(eq(reprogramaciones.ejercicio_fiscal, EJERCICIO))
+    .orderBy(sql`id DESC`);
+  return filas.map(f => ({
+    id: f.id, fecha: f.fecha,
+    renglonOrigen: f.renglon_origen, subProductoOrigen: f.subproducto_origen,
+    renglonDestino: f.renglon_destino, subProductoDestino: f.subproducto_destino,
+    monto: f.monto, motivo: f.motivo,
+  }));
 }

@@ -1,5 +1,5 @@
 import {
-  pgTable, serial, integer, text, doublePrecision, boolean, type AnyPgColumn
+  pgTable, serial, integer, text, doublePrecision, boolean, uniqueIndex, type AnyPgColumn
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -256,7 +256,14 @@ export const catalogoCompras = pgTable("catalogo_compras", {
   monto:                   doublePrecision("monto"),
   activo:                  boolean("activo").notNull().default(true),
   created_at:              text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
-});
+}, table => ({
+  // Un mismo insumo (codigo_igss) no puede aparecer dos veces bajo el mismo
+  // sub-producto con renglón distinto — el control de presupuesto por
+  // renglón+sub-producto (ver presupuesto-disponible.ts) confía en que esta
+  // combinación resuelve siempre al mismo renglón. Postgres no choca por
+  // NULL (varios insumos sin código real pueden compartir subproducto).
+  codigoSubproductoUnico: uniqueIndex("catalogo_compras_codigo_subproducto_idx").on(table.codigo_igss, table.subproducto),
+}));
 
 // ─── Catálogo de subproductos (controlado por superadmin) ────────────────────
 export const catalogoSubproductos = pgTable("catalogo_subproductos", {
@@ -580,7 +587,11 @@ export const presupuestoRenglones = pgTable("presupuesto_renglones", {
   saldo_disponible:     doublePrecision("saldo_disponible"),
   // Reprogramación — modificaciones presupuestarias por tipo (ver
   // programacion-constants.ts TIPOS_MODIFICACION). Cada una es un valor
-  // fijo por renglón + sub-producto que se sobreescribe, no se acumula.
+  // fijo por renglón + sub-producto que se sobreescribe, no se acumula —
+  // EXCEPTO modificacion_entre_renglones, que desde la transferencia real
+  // (ver reprogramaciones abajo y transferirPresupuesto en
+  // programacion-actions.ts) se acumula sumando/restando cada movimiento
+  // (+destino/-origen), para que dos transferencias sucesivas no se pisen.
   modificacion_ingru:          doublePrecision("modificacion_ingru").notNull().default(0),
   modificacion_entre_renglones: doublePrecision("modificacion_entre_renglones").notNull().default(0),
   modificacion_ampliacion:     doublePrecision("modificacion_ampliacion").notNull().default(0),
@@ -604,6 +615,27 @@ export const programacionEntradas = pgTable("programacion_entradas", {
   creado_por:       integer("creado_por").references(() => usuarios.id),
   created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   updated_at:       text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Reprogramación: transferencias reales entre renglón/sub-producto ───────
+// A diferencia de los otros tipos de modificación (Ingru, Ampliación, que son
+// un valor libre por renglón+sub-producto sin contrapartida), una
+// transferencia SIEMPRE mueve dinero de un origen a un destino: valida que el
+// origen tenga saldo disponible, resta del origen y suma al destino en
+// presupuesto_renglones.modificacion_entre_renglones, y deja aquí el registro
+// de auditoría (quién, cuándo, de dónde a dónde, cuánto).
+export const reprogramaciones = pgTable("reprogramaciones", {
+  id:                   serial("id").primaryKey(),
+  ejercicio_fiscal:     integer("ejercicio_fiscal").notNull().default(2026),
+  fecha:                text("fecha").notNull(),
+  renglon_origen:       integer("renglon_origen").notNull(),
+  subproducto_origen:   text("subproducto_origen").notNull(),
+  renglon_destino:      integer("renglon_destino").notNull(),
+  subproducto_destino:  text("subproducto_destino").notNull(),
+  monto:                doublePrecision("monto").notNull(),
+  motivo:               text("motivo"),
+  creado_por:           integer("creado_por").references(() => usuarios.id),
+  created_at:           text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 // ─── Proveedores ──────────────────────────────────────────────────────────────

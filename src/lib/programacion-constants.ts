@@ -34,12 +34,14 @@ export function esGrupo100(renglon: number | null | undefined): boolean {
   return grupoDeRenglon(renglon)?.id === 1;
 }
 
-// Reprogramación: tipos de modificación presupuestaria. Cada uno escribe en
-// su propia columna de presupuesto_renglones (ver ejecucion-actions.ts).
+// Reprogramación: tipos de modificación presupuestaria de valor libre (sin
+// contrapartida) — cada uno escribe en su propia columna de
+// presupuesto_renglones (ver ejecucion-actions.ts). La transferencia real
+// entre renglón/sub-producto (con origen, destino y validación de saldo) es
+// un flujo aparte — ver transferirPresupuesto en programacion-actions.ts.
 export const TIPOS_MODIFICACION = [
-  { id: "ingru",           label: "Modificación tipo Ingru",     campo: "modificacion_ingru" },
-  { id: "entre_renglones", label: "Modificación entre renglones", campo: "modificacion_entre_renglones" },
-  { id: "ampliacion",      label: "Modificación Ampliación",     campo: "modificacion_ampliacion" },
+  { id: "ingru",      label: "Modificación tipo Ingru", campo: "modificacion_ingru" },
+  { id: "ampliacion", label: "Modificación Ampliación", campo: "modificacion_ampliacion" },
 ] as const;
 
 export type TipoModificacion = typeof TIPOS_MODIFICACION[number]["id"];
