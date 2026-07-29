@@ -14,6 +14,11 @@ const SIZES: Record<PageSize, { width: number; height: number }> = {
   a4: { width: 210, height: 297 },
 };
 const MM_TO_PX = 96 / 25.4;
+// Referencia estable: un `= []` inline como default de parámetro se recrea en
+// cada invocación del componente (incluso en renders propios sin cambios del
+// padre), lo que rompe las deps del useLayoutEffect de abajo y provoca un
+// loop infinito de setState (React #185) en callers que omiten headerSections.
+const NO_HEADER_SECTIONS: React.ReactNode[] = [];
 
 interface Props {
   sections: React.ReactNode[];
@@ -26,7 +31,7 @@ interface Props {
   onPageCount?: (n: number) => void;
 }
 
-export default function PrintPages({ sections, headerSections = [], pageSize = "letter", landscape = false, marginMm = 12, onPageCount }: Props) {
+export default function PrintPages({ sections, headerSections = NO_HEADER_SECTIONS, pageSize = "letter", landscape = false, marginMm = 12, onPageCount }: Props) {
   const base = SIZES[pageSize];
   const widthMm = landscape ? base.height : base.width;
   const heightMm = landscape ? base.width : base.height;
