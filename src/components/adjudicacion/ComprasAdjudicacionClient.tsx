@@ -225,9 +225,11 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
   const [cotizAnualError,   setCotizAnualError]   = useState("");
 
   const [duNit, setDuNit] = useState(""); const [duNombre, setDuNombre] = useState("");
-  const [duCosto, setDuCosto] = useState(""); const [duExento, setDuExento] = useState(false);
+  const [duPrecios, setDuPrecios] = useState<Record<string, string>>({});
+  const [duExento, setDuExento] = useState(false);
   const [duProveedorId, setDuProveedorId] = useState<number | null>(null);
-  const [duRazon, setDuRazon] = useState(c.numero_adjudicacion ?? "");
+  const [duNumeroAdjudicacion, setDuNumeroAdjudicacion] = useState(c.numero_adjudicacion ?? "");
+  const [duRazon, setDuRazon] = useState(c.razon_adjudicacion ?? "");
 
   const [rgNit, setRgNit] = useState(""); const [rgNombre, setRgNombre] = useState("");
   const [rgExento, setRgExento] = useState(false);
@@ -258,7 +260,10 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     if ("error" in res) return setError(res.error);
   }
 
-  async function handleAddOferente(data: { proveedor_id: number | null; nit: string; nombre: string; costo: number; exento_iva: boolean }) {
+  async function handleAddOferente(data: {
+    proveedor_id: number | null; nit: string; nombre: string; exento_iva: boolean;
+    items: { codigo_igss: string | null; subproducto: string; precio_unitario: number }[];
+  }) {
     const res = await agregarOferente(c.id, data);
     if ("error" in res) { setError(res.error!); return; }
     if (res.oferente) setOferentes(p => [...p, res.oferente as unknown as Oferente]);
@@ -329,24 +334,42 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     onDone({ estado: "Adjudicado", tipo_compra: tipoCompra, cotizacion_anual_id: cotizAnualFound.id, referencia: cotizAnualFound.numero });
   }
 
+  function duTotalPreview(): number | null {
+    if (c.precios.length === 0) return null;
+    let bruto = 0;
+    for (const p of c.precios) {
+      const precio = parseFloat(duPrecios[`${p.codigo_igss}::${p.subproducto}`] ?? "");
+      if (!(precio > 0)) return null;
+      bruto += p.cantidad * precio;
+    }
+    return duExento ? bruto : bruto * 0.88;
+  }
+
   async function handleAdjudicarDirecto() {
-    const costoNum = parseFloat(duCosto);
     if (!duNit.trim() || !duNombre.trim()) return setError("NIT y nombre son obligatorios");
-    if (!(costoNum > 0)) return setError("Ingresa un costo de factura válido");
+    if (!duNumeroAdjudicacion.trim()) return setError("El número de adjudicación es obligatorio");
     if (!duRazon.trim()) return setError("La razón de adjudicación es obligatoria");
+    const items = c.precios.map(p => ({
+      codigo_igss: p.codigo_igss, subproducto: p.subproducto,
+      precio_unitario: parseFloat(duPrecios[`${p.codigo_igss}::${p.subproducto}`] ?? ""),
+    }));
+    if (items.some(i => !(i.precio_unitario > 0))) return setError("Ingresa un precio unitario válido para cada insumo");
     setLoading(true); setError(""); setLimitExceeded(false);
     const res = await adjudicarDirecto(c.id, {
       proveedor_id: duProveedorId, nit: duNit.trim(), nombre: duNombre.trim(),
-      costo: costoNum, exento_iva: duExento, referencia, razon: duRazon.trim(),
+      exento_iva: duExento, referencia,
+      numero_adjudicacion: duNumeroAdjudicacion.trim(), razon_adjudicacion: duRazon.trim(),
+      items,
     });
     setLoading(false);
     if ("limitExceeded" in res) { setLimitExceeded(true); setError(res.error); return; }
     if ("error" in res) return setError(res.error);
     onDone({
       estado: "Enviado a Presupuesto", destino: "presupuesto",
-      tipo_compra: tipoCompra, referencia, numero_adjudicacion: duRazon.trim(),
+      tipo_compra: tipoCompra, referencia,
+      numero_adjudicacion: duNumeroAdjudicacion.trim(), razon_adjudicacion: duRazon.trim(),
       proveedor_nit: duNit.trim(), proveedor_nombre: duNombre.trim(),
-      exento_iva: duExento, total: duExento ? costoNum : costoNum * 0.88,
+      exento_iva: duExento, total: duTotalPreview() ?? c.total,
     });
   }
 
@@ -445,7 +468,7 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
               <div>
                 <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Oferentes</p>
                 <OferentesEditor oferentes={oferentes} maxOferentes={MAX_OFERENTES} editable
-                  onAdd={handleAddOferente} onRemove={handleRemoveOferente} />
+                  renglones={c.precios} onAdd={handleAddOferente} onRemove={handleRemoveOferente} />
               </div>
             </div>
           )}
@@ -501,7 +524,7 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
               <div>
                 <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Oferentes</p>
                 <OferentesEditor oferentes={oferentes} maxOferentes={MAX_OFERENTES} editable
-                  onAdd={handleAddOferente} onRemove={handleRemoveOferente} />
+                  renglones={c.precios} onAdd={handleAddOferente} onRemove={handleRemoveOferente} />
               </div>
             </div>
           )}
@@ -647,23 +670,46 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                 <label className="label">Nombre del proveedor</label>
                 <input className="input" value={duNombre} onChange={e => setDuNombre(e.target.value)} />
               </div>
-              <div className="flex items-center gap-3">
-                <div className="relative flex-1">
-                  <label className="label flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" /> Costo de factura</label>
-                  <input type="number" step="0.01" min="0.01" className="input" value={duCosto} onChange={e => setDuCosto(e.target.value)} />
-                </div>
-                <label className="flex items-center gap-1.5 text-xs text-gray-600 whitespace-nowrap mt-6">
-                  <input type="checkbox" checked={duExento} onChange={e => setDuExento(e.target.checked)} className="w-3.5 h-3.5 accent-brand-600" />
-                  Exento IVA
-                </label>
-              </div>
-              {duCosto && parseFloat(duCosto) > 0 && (
-                <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
-                  {duExento
-                    ? <>Exento de IVA — saldo a pagar: <strong className="text-gray-900">{Q(parseFloat(duCosto))}</strong></>
-                    : <>IVA (12%): <strong>{Q(parseFloat(duCosto) * 0.12)}</strong> · Saldo a pagar sin IVA: <strong className="text-gray-900">{Q(parseFloat(duCosto) * 0.88)}</strong></>}
+              <label className="flex items-center gap-1.5 text-xs text-gray-600 whitespace-nowrap">
+                <input type="checkbox" checked={duExento} onChange={e => setDuExento(e.target.checked)} className="w-3.5 h-3.5 accent-brand-600" />
+                Exento IVA
+              </label>
+              <div>
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <DollarSign className="w-3.5 h-3.5" /> Precio unitario por insumo
                 </p>
-              )}
+                <div className="space-y-2">
+                  {c.precios.map(p => {
+                    const key = `${p.codigo_igss}::${p.subproducto}`;
+                    return (
+                      <div key={key} className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-900 truncate">{p.nombre}</p>
+                          <p className="text-[11px] text-gray-400">
+                            {p.codigo_igss ?? "—"} · {p.cantidad.toLocaleString("es-GT")} {p.unidad_medida ?? ""}
+                          </p>
+                        </div>
+                        <input type="number" step="0.01" min="0.01" className="input w-28 text-sm"
+                          placeholder="Precio"
+                          value={duPrecios[key] ?? ""}
+                          onChange={e => setDuPrecios(prev => ({ ...prev, [key]: e.target.value }))} />
+                      </div>
+                    );
+                  })}
+                </div>
+                {duTotalPreview() != null && (
+                  <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 mt-2">
+                    {duExento
+                      ? <>Exento de IVA — Total: <strong className="text-gray-900">{Q(duTotalPreview()!)}</strong></>
+                      : <>Con IVA (se descuenta 12%) — Total: <strong className="text-gray-900">{Q(duTotalPreview()!)}</strong></>}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="label flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> Número de Adjudicación</label>
+                <input className="input font-mono" value={duNumeroAdjudicacion} onChange={e => setDuNumeroAdjudicacion(e.target.value)}
+                  placeholder="Código corto único…" />
+              </div>
               <div>
                 <label className="label">Razón de adjudicación</label>
                 <textarea className="input" rows={2} value={duRazon} onChange={e => setDuRazon(e.target.value)}

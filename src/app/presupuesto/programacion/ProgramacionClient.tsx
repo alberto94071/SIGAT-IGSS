@@ -1,11 +1,13 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { ArrowLeft, CheckCircle2, ClipboardList, RefreshCw } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardList, RefreshCw, ArrowRightLeft } from "lucide-react";
 import { CUATRIMESTRES, TIPOS_MODIFICACION, type TipoModificacion } from "@/lib/programacion-constants";
 import {
-  buscarRenglones, getSubproductosDeRenglon, getGrupos, getProgramadoDelGrupo,
+  buscarRenglones, getSubproductosDeRenglon, getSubproductosConDisponible, getGrupos, getProgramadoDelGrupo,
   getEntradas, guardarEntrada, guardarModificacion, getModificaciones,
-  type SubproductoDisponible, type GrupoConTotales, type ProgramacionEntrada, type ModificacionRow,
+  transferirPresupuesto, getTransferencias,
+  type SubproductoDisponible, type SubproductoConDisponible, type GrupoConTotales,
+  type ProgramacionEntrada, type ModificacionRow, type TransferenciaRow,
 } from "@/lib/programacion-actions";
 
 const Q = (n: number) =>
@@ -39,7 +41,7 @@ type FilaModificacion = {
 
 export default function ProgramacionClient() {
   const [modo, setModo] = useState<Modo | null>(null);
-  const [tipoModificacion, setTipoModificacion] = useState<TipoModificacion | null>(null);
+  const [tipoModificacion, setTipoModificacion] = useState<TipoModificacion | "transferencia" | null>(null);
   const [cuatrimestre, setCuatrimestre] = useState<number | null>(null);
 
   const [grupos, setGrupos] = useState<GrupoConTotales[]>([]);
@@ -60,7 +62,7 @@ export default function ProgramacionClient() {
   }, []);
 
   useEffect(() => {
-    if (modo === "reprogramacion" && tipoModificacion !== null) recargarModificaciones();
+    if (modo === "reprogramacion" && tipoModificacion !== null && tipoModificacion !== "transferencia") recargarModificaciones();
   }, [modo, tipoModificacion, recargarModificaciones]);
 
   const recargarCuatrimestre = useCallback((c: number, gruposActuales: GrupoConTotales[]) => {
@@ -156,7 +158,7 @@ export default function ProgramacionClient() {
   };
 
   const guardarFilaModificacion = async (idx: number) => {
-    if (renglonSeleccionado === null || !tipoModificacion) return;
+    if (renglonSeleccionado === null || !tipoModificacion || tipoModificacion === "transferencia") return;
     const fila = filasModificacion[idx];
     actualizarFilaModificacion(idx, { guardando: true, error: null, ok: false });
     const res = await guardarModificacion({
@@ -228,9 +230,22 @@ export default function ProgramacionClient() {
               <div className="font-bold text-gray-900">{t.label}</div>
             </button>
           ))}
+          <button
+            onClick={() => setTipoModificacion("transferencia")}
+            className="bg-white border-2 border-gray-200 hover:border-amber-500 rounded-xl p-5 text-left shadow-sm transition-colors"
+          >
+            <ArrowRightLeft className="w-5 h-5 text-amber-600 mb-2" />
+            <div className="font-bold text-gray-900">Transferencia entre renglón/sub-producto</div>
+            <p className="text-xs text-gray-500 mt-1">Quita presupuesto disponible de un renglón/sub-producto y se lo asigna a otro.</p>
+          </button>
         </div>
       </div>
     );
+  }
+
+  // ── Reprogramación · Transferencia real (no pasa por "elegir cuatrimestre": mueve presupuesto del año completo) ──
+  if (modo === "reprogramacion" && tipoModificacion === "transferencia") {
+    return <TransferenciaView onVolver={() => setTipoModificacion(null)} />;
   }
 
   // ── Paso: elegir cuatrimestre (ambos modos) ──
@@ -607,6 +622,214 @@ export default function ProgramacionClient() {
                       <td className="px-3 py-2 text-right text-gray-600">{Q(m.ingru)}</td>
                       <td className="px-3 py-2 text-right text-gray-600">{Q(m.entreRenglones)}</td>
                       <td className="px-3 py-2 text-right text-gray-600">{Q(m.ampliacion)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type SeleccionRenglon = { renglon: number; subProducto: string; descripcion: string; disponible: number };
+
+// Buscador de renglón + selector de sub-producto (con su presupuesto
+// disponible), reutilizado para elegir tanto el origen como el destino de
+// una transferencia.
+function RenglonSubproductoPicker({ label, value, onChange }: {
+  label: string;
+  value: SeleccionRenglon | null;
+  onChange: (v: SeleccionRenglon | null) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [sugerencias, setSugerencias] = useState<SubproductoDisponible[]>([]);
+  const [renglonSel, setRenglonSel] = useState<number | null>(null);
+  const [subs, setSubs] = useState<SubproductoConDisponible[]>([]);
+
+  useEffect(() => {
+    if (query.trim() === "") { setSugerencias([]); return; }
+    const t = setTimeout(() => {
+      buscarRenglones(query).then(rows => {
+        const unicos = Array.from(new Map(rows.map(r => [r.renglon, r])).values());
+        setSugerencias(unicos);
+      });
+    }, 200);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  function elegirRenglon(renglon: number) {
+    setRenglonSel(renglon);
+    setQuery(""); setSugerencias([]);
+    onChange(null);
+    getSubproductosConDisponible(renglon).then(setSubs);
+  }
+
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-semibold text-gray-700">{label}</label>
+      <div className="relative">
+        <input
+          type="text" inputMode="numeric"
+          value={query}
+          onChange={e => setQuery(e.target.value.replace(/\D/g, ""))}
+          placeholder="Buscar renglón… ej. 182"
+          className="input w-full rounded-lg"
+        />
+        {sugerencias.length > 0 && (
+          <div className="absolute z-20 bg-white border border-gray-200 rounded-lg shadow-lg mt-1 w-full max-h-64 overflow-y-auto">
+            {sugerencias.map(s => (
+              <button
+                key={s.renglon}
+                onClick={() => elegirRenglon(s.renglon)}
+                className="block w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b border-gray-100 last:border-0"
+              >
+                <span className="font-semibold text-gray-900">{s.renglon}</span>
+                <span className="text-gray-500"> — {s.descripcion}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {renglonSel !== null && (
+        <select
+          className="input w-full rounded-lg text-sm"
+          value={value?.subProducto ?? ""}
+          onChange={e => {
+            const s = subs.find(s => s.subProducto === e.target.value);
+            if (s) onChange({ renglon: renglonSel, subProducto: s.subProducto, descripcion: s.descripcion, disponible: s.disponible });
+            else onChange(null);
+          }}
+        >
+          <option value="">Elige sub-producto…</option>
+          {subs.map(s => (
+            <option key={s.subProducto} value={s.subProducto}>
+              {s.subProducto} — {s.descripcion} (disponible: {Q(s.disponible)})
+            </option>
+          ))}
+        </select>
+      )}
+      {value && (
+        <p className="text-xs text-gray-500">
+          Renglón <strong>{value.renglon}</strong> / <span className="font-mono">{value.subProducto}</span> — disponible:{" "}
+          <strong className={value.disponible > 0 ? "text-green-700" : "text-red-600"}>{Q(value.disponible)}</strong>
+        </p>
+      )}
+    </div>
+  );
+}
+
+function TransferenciaView({ onVolver }: { onVolver: () => void }) {
+  const [origen, setOrigen] = useState<SeleccionRenglon | null>(null);
+  const [destino, setDestino] = useState<SeleccionRenglon | null>(null);
+  const [monto, setMonto] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
+  const [ok, setOk] = useState(false);
+  const [historial, setHistorial] = useState<TransferenciaRow[]>([]);
+
+  const recargarHistorial = useCallback(() => { getTransferencias().then(setHistorial); }, []);
+  useEffect(() => { recargarHistorial(); }, [recargarHistorial]);
+
+  async function confirmar() {
+    if (!origen || !destino) return setError("Elige el renglón/sub-producto de origen y de destino");
+    const montoNum = Number(monto) || 0;
+    if (!(montoNum > 0)) return setError("Ingresa un monto válido");
+    setGuardando(true); setError(""); setOk(false);
+    const res = await transferirPresupuesto({
+      renglonOrigen: origen.renglon, subProductoOrigen: origen.subProducto,
+      renglonDestino: destino.renglon, subProductoDestino: destino.subProducto,
+      monto: montoNum, motivo: motivo.trim() || undefined,
+    });
+    setGuardando(false);
+    if ("error" in res) { setError(res.error); return; }
+    setOk(true);
+    setOrigen(null); setDestino(null); setMonto(""); setMotivo("");
+    recargarHistorial();
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <button onClick={onVolver} className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 mb-1">
+          <ArrowLeft className="w-4 h-4" /> Volver
+        </button>
+        <h1 className="text-xl font-bold text-gray-900">Transferencia entre renglón/sub-producto</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Quita presupuesto disponible del origen y se lo asigna al destino. No se puede transferir más de lo disponible en el origen.
+        </p>
+      </div>
+
+      <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <RenglonSubproductoPicker label="Origen (de dónde se quita)" value={origen} onChange={setOrigen} />
+          <RenglonSubproductoPicker label="Destino (a dónde se asigna)" value={destino} onChange={setDestino} />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm font-semibold text-gray-700 block mb-1">Monto a transferir</label>
+            <input
+              type="number" min={0} step="0.01"
+              value={monto} onChange={e => setMonto(e.target.value)}
+              placeholder="0.00"
+              className="input w-full rounded-lg"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-gray-700 block mb-1">Motivo (opcional)</label>
+            <input
+              type="text" value={motivo} onChange={e => setMotivo(e.target.value)}
+              placeholder="Ej. faltante para completar compra de rayos X"
+              className="input w-full rounded-lg"
+            />
+          </div>
+        </div>
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        {ok && (
+          <div className="flex items-center gap-1.5 text-green-700 text-sm">
+            <CheckCircle2 className="w-4 h-4" /> Transferencia registrada.
+          </div>
+        )}
+
+        <button
+          onClick={confirmar}
+          disabled={guardando || !origen || !destino}
+          className="btn-primary rounded-lg disabled:opacity-50"
+        >
+          {guardando ? "Transfiriendo…" : "Transferir"}
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        <h2 className="text-lg font-bold text-gray-900">Transferencias registradas</h2>
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Fecha</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Origen</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Destino</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-700">Monto</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historial.length === 0 ? (
+                  <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400">Aún no hay transferencias registradas.</td></tr>
+                ) : (
+                  historial.map(t => (
+                    <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{t.fecha}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-gray-700">{t.renglonOrigen} / {t.subProductoOrigen}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-gray-700">{t.renglonDestino} / {t.subProductoDestino}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-gray-900">{Q(t.monto)}</td>
+                      <td className="px-3 py-2 text-gray-600 max-w-[240px] truncate">{t.motivo ?? "—"}</td>
                     </tr>
                   ))
                 )}

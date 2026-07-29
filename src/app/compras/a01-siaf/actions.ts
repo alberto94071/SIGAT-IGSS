@@ -6,6 +6,24 @@ import { siafCompras, siafComprasItems, catalogoCompras, consolidaciones, presup
 import { eq, and, sql, inArray, desc } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { crearNotificacion } from "@/lib/notificaciones";
+import { verificarPresupuestoDisponible, mensajePresupuestoExcedido } from "@/lib/presupuesto-disponible";
+
+// Todo ítem de un SIAF debe existir en el PAC (Catálogo de Compras) — si el
+// catalogo_id que mandó el cliente ya no existe o fue desactivado, no se
+// puede ni crear ni editar la solicitud con ese ítem.
+async function validarItemsEnPac(items: { catalogo_id: number }[]): Promise<string | null> {
+  const ids = [...new Set(items.map(i => i.catalogo_id))];
+  if (ids.length === 0) return null;
+  const rows = await db.select({ id: catalogoCompras.id, activo: catalogoCompras.activo })
+    .from(catalogoCompras).where(inArray(catalogoCompras.id, ids));
+  const encontrados = new Map(rows.map(r => [r.id, r.activo]));
+  const faltantes = ids.filter(id => !encontrados.has(id));
+  const inactivos = ids.filter(id => encontrados.get(id) === false);
+  if (faltantes.length > 0 || inactivos.length > 0) {
+    return "Uno o más insumos ya no existen en el PAC (Catálogo de Compras) o fueron desactivados. Verifica el catálogo antes de continuar.";
+  }
+  return null;
+}
 
 export async function getNextSiafNumeroCompras(): Promise<number> {
   const year = new Date().getFullYear();
@@ -29,6 +47,9 @@ export async function crearSolicitud(data: {
   }[];
 }) {
   try {
+    const errPac = await validarItemsEnPac(data.items);
+    if (errPac) return { error: errPac };
+
     const session = await auth();
     const uid = session ? Number(session.user.id) : null;
     const year = new Date().getFullYear();
@@ -132,8 +153,10 @@ export async function aprobarSolicitud(id: number): Promise<{ ok: true } | { err
       }).from(siafComprasItems).where(eq(siafComprasItems.solicitud_id, id));
 
       const montosPorGrupo = new Map<string, { renglon: number; subproducto: string; monto: number }>();
+      const sinCatalogo: string[] = [];
+      const sinPrecio: string[] = [];
       for (const item of items) {
-        const queryCond = item.catalogo_id 
+        const queryCond = item.catalogo_id
           ? eq(catalogoCompras.id, item.catalogo_id)
           : (item.codigo_igss != null
               ? and(eq(catalogoCompras.codigo_igss, item.codigo_igss), eq(catalogoCompras.subproducto, item.subproducto))
@@ -143,7 +166,9 @@ export async function aprobarSolicitud(id: number): Promise<{ ok: true } | { err
           .from(catalogoCompras)
           .where(queryCond)
           .limit(1);
-        if (!cat || cat.renglon == null) continue;
+        // No puede aprobarse (ni reservar presupuesto) un ítem que ya no
+        // existe en el PAC o que no tiene renglón asignado ahí.
+        if (!cat || cat.renglon == null) { sinCatalogo.push(item.nombre); continue; }
 
         let precioUnitario = cat.precio_estimado;
         if (item.codigo_igss != null) {
@@ -163,13 +188,29 @@ export async function aprobarSolicitud(id: number): Promise<{ ok: true } | { err
             precioUnitario = cotiz.exento_iva ? cotiz.precio_unitario : cotiz.precio_unitario * 0.88;
           }
         }
-        if (precioUnitario == null) continue;
+        // Sin precio no se puede calcular el monto a reservar contra
+        // presupuesto — tampoco se puede dejar pasar en silencio.
+        if (precioUnitario == null) { sinPrecio.push(item.nombre); continue; }
 
         const monto = item.cantidad_solicitada * precioUnitario;
         const key = `${cat.renglon}::${item.subproducto}::${item.nombre}`;
         const existente = montosPorGrupo.get(key);
         if (existente) existente.monto += monto;
         else montosPorGrupo.set(key, { renglon: cat.renglon, subproducto: item.subproducto, monto });
+      }
+
+      if (sinCatalogo.length > 0) {
+        return { error: `Estos insumos ya no existen en el PAC (Catálogo de Compras): ${sinCatalogo.join(", ")}. Corrígelos antes de aprobar.` };
+      }
+      if (sinPrecio.length > 0) {
+        return { error: `Estos insumos no tienen precio estimado en el PAC, no se puede calcular cuánto reservar de presupuesto: ${sinPrecio.join(", ")}.` };
+      }
+
+      const excedidos = await verificarPresupuestoDisponible(
+        Array.from(montosPorGrupo.values()).map(g => ({ renglon: g.renglon, subproducto: g.subproducto, monto: g.monto }))
+      );
+      if (excedidos.length > 0) {
+        return { error: await mensajePresupuestoExcedido(excedidos) };
       }
 
       for (const { renglon, subproducto, monto } of montosPorGrupo.values()) {
@@ -250,6 +291,9 @@ export async function editarSolicitud(id: number, data: {
   }[];
 }) {
   try {
+    const errPac = await validarItemsEnPac(data.items);
+    if (errPac) return { error: errPac };
+
     // Primero eliminar los ítems existentes para que no afecten el recálculo
     await db.delete(siafComprasItems).where(eq(siafComprasItems.solicitud_id, id));
 

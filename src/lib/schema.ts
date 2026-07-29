@@ -1,5 +1,5 @@
 import {
-  pgTable, serial, integer, text, doublePrecision, boolean, type AnyPgColumn
+  pgTable, serial, integer, text, doublePrecision, boolean, uniqueIndex, type AnyPgColumn
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -256,7 +256,14 @@ export const catalogoCompras = pgTable("catalogo_compras", {
   monto:                   doublePrecision("monto"),
   activo:                  boolean("activo").notNull().default(true),
   created_at:              text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
-});
+}, table => ({
+  // Un mismo insumo (codigo_igss) no puede aparecer dos veces bajo el mismo
+  // sub-producto con renglón distinto — el control de presupuesto por
+  // renglón+sub-producto (ver presupuesto-disponible.ts) confía en que esta
+  // combinación resuelve siempre al mismo renglón. Postgres no choca por
+  // NULL (varios insumos sin código real pueden compartir subproducto).
+  codigoSubproductoUnico: uniqueIndex("catalogo_compras_codigo_subproducto_idx").on(table.codigo_igss, table.subproducto),
+}));
 
 // ─── Catálogo de subproductos (controlado por superadmin) ────────────────────
 export const catalogoSubproductos = pgTable("catalogo_subproductos", {
@@ -287,6 +294,10 @@ export const consolidaciones = pgTable("consolidaciones", {
   proveedor_nombre: text("proveedor_nombre"),
   pre_orden:           text("pre_orden").unique(),
   numero_adjudicacion: text("numero_adjudicacion").unique(),
+  // Justificación/razón de por qué se adjudica a este proveedor — separado de
+  // numero_adjudicacion (que es el código corto único usado en el correlativo
+  // ADJ-XXX). Antes se guardaban ambas cosas mezcladas en numero_adjudicacion.
+  razon_adjudicacion:  text("razon_adjudicacion"),
   destino:             text("destino"),
   regularizado:        boolean("regularizado"),
   creado_por:       integer("creado_por"),
@@ -413,6 +424,24 @@ export const oferentes = pgTable("oferentes", {
   orden:                  integer("orden").notNull().default(0),
   creado_por:             integer("creado_por").references(() => usuarios.id),
   created_at:             text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Precio por insumo cotizado por cada oferente ────────────────────────────
+// Antes cada oferente solo tenía un costo total (oferentes.costo), sin
+// desglose por insumo — al elegirse el ganador no había forma de saber cuánto
+// costaba cada insumo por separado (rompía el selector de PPR/precio en
+// Compras/Órdenes). Cada oferente ahora cotiza precio unitario por cada
+// insumo de la consolidación; oferentes.costo se sigue calculando y
+// guardando (cantidad × precio de cada línea) para no tocar las pantallas que
+// ya comparan/muestran el costo total. Al aprobarse el Acta, las líneas del
+// oferente ganador se copian a siaf_compras_items.precio_unitario (ver
+// aprobarActa en actas-adjudicacion-actions.ts).
+export const oferentePrecios = pgTable("oferente_precios", {
+  id:              serial("id").primaryKey(),
+  oferente_id:     integer("oferente_id").notNull().references(() => oferentes.id, { onDelete: "cascade" }),
+  codigo_igss:     text("codigo_igss"),
+  subproducto:     text("subproducto").notNull(),
+  precio_unitario: doublePrecision("precio_unitario").notNull(),
 });
 
 // ─── Acta de Negociación — plantilla fija por año ────────────────────────────
@@ -558,7 +587,11 @@ export const presupuestoRenglones = pgTable("presupuesto_renglones", {
   saldo_disponible:     doublePrecision("saldo_disponible"),
   // Reprogramación — modificaciones presupuestarias por tipo (ver
   // programacion-constants.ts TIPOS_MODIFICACION). Cada una es un valor
-  // fijo por renglón + sub-producto que se sobreescribe, no se acumula.
+  // fijo por renglón + sub-producto que se sobreescribe, no se acumula —
+  // EXCEPTO modificacion_entre_renglones, que desde la transferencia real
+  // (ver reprogramaciones abajo y transferirPresupuesto en
+  // programacion-actions.ts) se acumula sumando/restando cada movimiento
+  // (+destino/-origen), para que dos transferencias sucesivas no se pisen.
   modificacion_ingru:          doublePrecision("modificacion_ingru").notNull().default(0),
   modificacion_entre_renglones: doublePrecision("modificacion_entre_renglones").notNull().default(0),
   modificacion_ampliacion:     doublePrecision("modificacion_ampliacion").notNull().default(0),
@@ -582,6 +615,27 @@ export const programacionEntradas = pgTable("programacion_entradas", {
   creado_por:       integer("creado_por").references(() => usuarios.id),
   created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   updated_at:       text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Reprogramación: transferencias reales entre renglón/sub-producto ───────
+// A diferencia de los otros tipos de modificación (Ingru, Ampliación, que son
+// un valor libre por renglón+sub-producto sin contrapartida), una
+// transferencia SIEMPRE mueve dinero de un origen a un destino: valida que el
+// origen tenga saldo disponible, resta del origen y suma al destino en
+// presupuesto_renglones.modificacion_entre_renglones, y deja aquí el registro
+// de auditoría (quién, cuándo, de dónde a dónde, cuánto).
+export const reprogramaciones = pgTable("reprogramaciones", {
+  id:                   serial("id").primaryKey(),
+  ejercicio_fiscal:     integer("ejercicio_fiscal").notNull().default(2026),
+  fecha:                text("fecha").notNull(),
+  renglon_origen:       integer("renglon_origen").notNull(),
+  subproducto_origen:   text("subproducto_origen").notNull(),
+  renglon_destino:      integer("renglon_destino").notNull(),
+  subproducto_destino:  text("subproducto_destino").notNull(),
+  monto:                doublePrecision("monto").notNull(),
+  motivo:               text("motivo"),
+  creado_por:           integer("creado_por").references(() => usuarios.id),
+  created_at:           text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 // ─── Proveedores ──────────────────────────────────────────────────────────────

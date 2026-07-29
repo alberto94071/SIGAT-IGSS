@@ -79,6 +79,7 @@ function RevisarModal({ consolidacion: c, onClose, onDone }: {
 }) {
   const [ganadorId, setGanadorId] = useState<number | null>(c.oferente_ganador_id);
   const [numAdj,    setNumAdj]    = useState(c.numero_adjudicacion ?? "");
+  const [razon,     setRazon]     = useState(c.razon_adjudicacion ?? "");
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState("");
   const [rechazarModal, setRechazarModal] = useState(false);
@@ -86,14 +87,16 @@ function RevisarModal({ consolidacion: c, onClose, onDone }: {
 
   async function handleAdjudicar() {
     if (!ganadorId) return setError("Selecciona al oferente ganador");
-    if (!numAdj.trim()) return setError("La razón de adjudicación es obligatoria");
+    if (!numAdj.trim()) return setError("El número de adjudicación es obligatorio");
+    if (!razon.trim()) return setError("La razón de adjudicación es obligatoria");
     setLoading(true); setError("");
-    const res = await adjudicarJunta(c.id, { oferenteId: ganadorId, numero_adjudicacion: numAdj.trim() });
+    const res = await adjudicarJunta(c.id, { oferenteId: ganadorId, numero_adjudicacion: numAdj.trim(), razon_adjudicacion: razon.trim() });
     setLoading(false);
     if ("error" in res) return setError(res.error);
     const ganador = c.oferentes.find(o => o.id === ganadorId);
     onDone({
-      estado: "Adjudicado", oferente_ganador_id: ganadorId, numero_adjudicacion: numAdj.trim(),
+      estado: "Adjudicado", oferente_ganador_id: ganadorId,
+      numero_adjudicacion: numAdj.trim(), razon_adjudicacion: razon.trim(),
       proveedor_id: ganador?.proveedor_id ?? null, proveedor_nit: ganador?.nit ?? null, proveedor_nombre: ganador?.nombre ?? null,
     });
   }
@@ -131,9 +134,14 @@ function RevisarModal({ consolidacion: c, onClose, onDone }: {
                   selectable selectedId={ganadorId} onSelect={setGanadorId} />
               </div>
               <div>
-                <label className="label flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> Razón de Adjudicación</label>
-                <input className="input" value={numAdj}
-                  onChange={e => setNumAdj(e.target.value)} placeholder="Justificación de por qué se adjudica a este oferente…" />
+                <label className="label flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> Número de Adjudicación</label>
+                <input className="input font-mono" value={numAdj}
+                  onChange={e => setNumAdj(e.target.value)} placeholder="Código corto único…" />
+              </div>
+              <div>
+                <label className="label">Razón de Adjudicación</label>
+                <textarea className="input" rows={2} value={razon}
+                  onChange={e => setRazon(e.target.value)} placeholder="Justificación de por qué se adjudica a este oferente…" />
               </div>
               {error && (
                 <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -148,7 +156,7 @@ function RevisarModal({ consolidacion: c, onClose, onDone }: {
               </button>
               <div className="flex gap-2">
                 <button onClick={onClose} className="btn-secondary">Cancelar</button>
-                <button onClick={handleAdjudicar} disabled={loading || !ganadorId || !numAdj.trim()} className="btn-primary disabled:opacity-50">
+                <button onClick={handleAdjudicar} disabled={loading || !ganadorId || !numAdj.trim() || !razon.trim()} className="btn-primary disabled:opacity-50">
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Gavel className="w-4 h-4" />} Adjudicar
                 </button>
               </div>
