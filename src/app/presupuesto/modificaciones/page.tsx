@@ -1,10 +1,5 @@
-import EnDesarrollo from "@/components/EnDesarrollo";
+import ModificacionesClient from "./ModificacionesClient";
 
 export default function ModificacionesPage() {
-  return (
-    <EnDesarrollo
-      title="Modificaciones"
-      description="Próximamente podrás registrar ampliaciones o disminuciones presupuestarias."
-    />
-  );
+  return <ModificacionesClient />;
 }
