@@ -21,7 +21,9 @@ export function resumenEstado(h: HojaDeRuta): { texto: string; tono: Tono } {
     const ref = `${h.orden.numero}/${h.orden.anio}`;
     if (h.orden.estado === "Generada") return { texto: `Orden ${ref} generada — esperando enviar a Presupuesto en Compras/Órdenes`, tono: "blue" };
     if (h.orden.estado === "En Compromiso") return { texto: `Orden ${ref} en Presupuesto/Compromiso — esperando comprometer`, tono: "amber" };
+    if (h.orden.estado === "Compromiso Solicitado") return { texto: `Orden ${ref} con Compromiso registrado — esperando aprobación de Presupuesto`, tono: "amber" };
     if (h.orden.estado === "En Devengado") return { texto: `Orden ${ref} en Presupuesto/Devengado — esperando devengar`, tono: "amber" };
+    if (h.orden.estado === "Devengado Solicitado") return { texto: `Orden ${ref} con Devengado registrado — esperando aprobación de Presupuesto`, tono: "amber" };
     if (h.orden.estado === "Pendiente DAB-60") return { texto: `Orden ${ref} esperando ingresar en Almacén/DAB-60`, tono: "amber" };
     if (h.orden.estado === "Completada") return { texto: `Orden ${ref} devengada — proceso completado`, tono: "green" };
     return { texto: `Orden de Compra generada (${ref})`, tono: "green" };

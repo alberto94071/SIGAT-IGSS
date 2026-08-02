@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { ordenesCompra, consolidaciones, presupuestoRenglones } from "@/lib/schema";
 import { eq, sql, and } from "drizzle-orm";
 import { auth } from "@/lib/auth";
+import { requireModuloAccessAction } from "@/lib/modulo-access";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
@@ -14,6 +15,14 @@ async function requireEdit(): Promise<{ error: string } | { uid: number }> {
 
 export async function getOrdenesEnDevengado() {
   const ordenes = await db.select().from(ordenesCompra).where(eq(ordenesCompra.estado, "En Devengado")).orderBy(sql`created_at ASC`);
+  return Promise.all(ordenes.map(async o => ({
+    ...o, renglones: await gruposRenglonDeConsolidacion(o.consolidacion_id),
+  })));
+}
+
+/** Órdenes con No. de Devengado ya registrado, esperando que Presupuesto lo apruebe. */
+export async function getOrdenesDevengadoSolicitado() {
+  const ordenes = await db.select().from(ordenesCompra).where(eq(ordenesCompra.estado, "Devengado Solicitado")).orderBy(sql`created_at ASC`);
   return Promise.all(ordenes.map(async o => ({
     ...o, renglones: await gruposRenglonDeConsolidacion(o.consolidacion_id),
   })));
@@ -33,14 +42,13 @@ export async function getOrdenesEnviadasADaf() {
 
 export type DevengarInput = { no_devengado: string; fecha_envio_daf: string };
 
-// Devengar mueve el monto de Compromiso a Ejecutado (Devengado, separando
-// Normal/Regularizado según cómo se adjudicó la consolidación original) y
-// registra el No. de Devengado + Fecha de envío a la DAF de una vez — el
-// pipeline entero termina aquí, la DAF es otra división a la que se le
-// remite el expediente para trámite de pago, no algo que este sistema siga
-// tramitando. Deja estado_devengado en "Enviado"; el seguimiento posterior
-// (Rechazado/Pagado) se hace con actualizarEstadoDevengado.
-export async function devengar(ordenId: number, input: DevengarInput): Promise<{ ok: true } | { error: string }> {
+/**
+ * Registra el No. de Devengado + fecha de envío a la DAF y deja la orden
+ * "Devengado Solicitado" — todavía NO mueve Compromiso a Ejecutado ni
+ * arranca el seguimiento con la DAF. Eso solo pasa al aprobar (ver
+ * aprobarDevengado), que requiere acceso al módulo de Presupuesto.
+ */
+export async function registrarDevengado(ordenId: number, input: DevengarInput): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireEdit();
     if ("error" in check) return check;
@@ -50,13 +58,41 @@ export async function devengar(ordenId: number, input: DevengarInput): Promise<{
     if (!no_devengado) return { error: "Ingresa el No. de Devengado" };
     if (!fecha_envio_daf) return { error: "Ingresa la fecha de envío a la DAF" };
 
+    const [orden] = await db.select({ estado: ordenesCompra.estado }).from(ordenesCompra)
+      .where(eq(ordenesCompra.id, ordenId)).limit(1);
+    if (!orden) return { error: "No se encontró la orden" };
+    if (orden.estado !== "En Devengado") return { error: "Esta orden ya fue devengada" };
+
+    await db.update(ordenesCompra).set({
+      estado: "Devengado Solicitado", no_devengado, fecha_envio_daf,
+    }).where(eq(ordenesCompra.id, ordenId));
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al registrar el devengado" };
+  }
+}
+
+/**
+ * Aprueba el Devengado — solo quien tenga acceso a mod_presupuesto. Recién
+ * aquí se mueve el monto de Compromiso a Ejecutado (Devengado, separando
+ * Normal/Regularizado según cómo se adjudicó la consolidación original), la
+ * orden queda "Completada" y arranca el seguimiento con la DAF (División de
+ * Administración Financiera) — estado_devengado "Enviado", que de ahí puede
+ * pasar a "Rechazado" o "Pagado" con actualizarEstadoDevengado.
+ */
+export async function aprobarDevengado(ordenId: number): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireModuloAccessAction("mod_presupuesto");
+    if ("error" in check) return check;
+
     const [orden] = await db.select({
       estado: ordenesCompra.estado,
       consolidacion_id: ordenesCompra.consolidacion_id,
     }).from(ordenesCompra)
       .where(eq(ordenesCompra.id, ordenId)).limit(1);
     if (!orden) return { error: "No se encontró la orden" };
-    if (orden.estado !== "En Devengado") return { error: "Esta orden ya fue devengada" };
+    if (orden.estado !== "Devengado Solicitado") return { error: "Esta orden no está pendiente de aprobación de Devengado" };
 
     const [con] = await db.select({ regularizado: consolidaciones.regularizado })
       .from(consolidaciones).where(eq(consolidaciones.id, orden.consolidacion_id)).limit(1);
@@ -64,7 +100,6 @@ export async function devengar(ordenId: number, input: DevengarInput): Promise<{
 
     await db.update(ordenesCompra).set({
       estado: "Completada",
-      no_devengado, fecha_envio_daf,
       estado_devengado: "Enviado",
     }).where(eq(ordenesCompra.id, ordenId));
 
@@ -84,7 +119,28 @@ export async function devengar(ordenId: number, input: DevengarInput): Promise<{
 
     return { ok: true };
   } catch {
-    return { error: "Error al registrar el devengado" };
+    return { error: "Error al aprobar el devengado" };
+  }
+}
+
+/** Rechaza el Devengado mientras siga "Devengado Solicitado" — regresa a "En Devengado" para corregir. Solo quien tenga acceso a mod_presupuesto. */
+export async function rechazarDevengado(ordenId: number): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireModuloAccessAction("mod_presupuesto");
+    if ("error" in check) return check;
+
+    const [orden] = await db.select({ estado: ordenesCompra.estado }).from(ordenesCompra)
+      .where(eq(ordenesCompra.id, ordenId)).limit(1);
+    if (!orden) return { error: "No se encontró la orden" };
+    if (orden.estado !== "Devengado Solicitado") return { error: "Esta orden no está pendiente de aprobación de Devengado" };
+
+    await db.update(ordenesCompra).set({
+      estado: "En Devengado", no_devengado: null, fecha_envio_daf: null,
+    }).where(eq(ordenesCompra.id, ordenId));
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al rechazar el devengado" };
   }
 }
 

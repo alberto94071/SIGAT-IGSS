@@ -1,7 +1,10 @@
-import { getOrdenesEnCompromiso } from "@/lib/adjudicacion/compromiso-actions";
+import { getOrdenesEnCompromiso, getOrdenesCompromisoSolicitado } from "@/lib/adjudicacion/compromiso-actions";
 import CompromisoClient from "./CompromisoClient";
 
 export default async function CompromisoPage() {
-  const ordenes = await getOrdenesEnCompromiso();
-  return <CompromisoClient ordenes={ordenes} />;
+  const [ordenes, solicitadas] = await Promise.all([
+    getOrdenesEnCompromiso(),
+    getOrdenesCompromisoSolicitado(),
+  ]);
+  return <CompromisoClient ordenes={ordenes} solicitadas={solicitadas} />;
 }

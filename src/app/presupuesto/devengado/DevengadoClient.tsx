@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
-import { FileCheck, Loader2, X, Send } from "lucide-react";
-import { devengar, actualizarEstadoDevengado, type EstadoDevengado } from "@/lib/adjudicacion/devengado-actions";
+import { FileCheck, Loader2, X, Send, CheckCircle, XCircle } from "lucide-react";
+import { registrarDevengado, aprobarDevengado, rechazarDevengado, actualizarEstadoDevengado, type EstadoDevengado } from "@/lib/adjudicacion/devengado-actions";
 import { fechaGuatemala } from "@/lib/date-utils";
 import RenglonBadges from "@/components/RenglonBadges";
 
@@ -16,15 +16,30 @@ type Orden = {
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export default function DevengadoClient({ ordenes: init, enviadas: initEnviadas }: { ordenes: Orden[]; enviadas: Orden[] }) {
+export default function DevengadoClient({ ordenes: init, solicitadas: initSolicitadas, enviadas: initEnviadas }: { ordenes: Orden[]; solicitadas: Orden[]; enviadas: Orden[] }) {
   const [ordenes, setOrdenes] = useState(init);
+  const [solicitadas, setSolicitadas] = useState(initSolicitadas);
   const [enviadas, setEnviadas] = useState(initEnviadas);
   const [devengarFor, setDevengarFor] = useState<Orden | null>(null);
+  const [acciones, setAcciones] = useState<Record<number, { cargando: boolean; error: string | null }>>({});
 
-  function onDevengado(orden: Orden) {
+  function onRegistrado(orden: Orden) {
     setOrdenes(p => p.filter(x => x.id !== orden.id));
-    setEnviadas(p => [{ ...orden, estado_devengado: "Enviado" }, ...p]);
+    setSolicitadas(p => [...p, orden]);
   }
+
+  const ejecutarAccion = async (id: number, accion: (id: number) => Promise<{ ok: true } | { error: string }>, alAprobar?: (o: Orden) => void) => {
+    setAcciones(prev => ({ ...prev, [id]: { cargando: true, error: null } }));
+    const res = await accion(id);
+    if ("error" in res) {
+      setAcciones(prev => ({ ...prev, [id]: { cargando: false, error: res.error } }));
+    } else {
+      setAcciones(prev => ({ ...prev, [id]: { cargando: false, error: null } }));
+      const orden = solicitadas.find(o => o.id === id);
+      setSolicitadas(prev => prev.filter(o => o.id !== id));
+      if (orden && alAprobar) alAprobar(orden);
+    }
+  };
 
   function onEstadoActualizado(id: number, estado: EstadoDevengado, fechaPago: string | null) {
     setEnviadas(p => p.map(x => x.id === id ? { ...x, estado_devengado: estado, fecha_pago: fechaPago } : x));
@@ -86,6 +101,77 @@ export default function DevengadoClient({ ordenes: init, enviadas: initEnviadas 
       </div>
 
       <div>
+        <h2 className="text-lg font-bold text-gray-900">Pendientes de aprobación de Devengado</h2>
+        <p className="text-sm text-gray-500 mt-0.5">
+          {solicitadas.length} orden(es) con No. de Devengado registrado, esperando aprobación de Presupuesto. Mientras no se apruebe, no se refleja en Ejecución ni se envía a la DAF.
+        </p>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="table-header">
+                <th className="px-4 py-3 text-left whitespace-nowrap">Orden</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">No. Devengado</th>
+                <th className="px-4 py-3 text-left">Proveedor</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {solicitadas.map(o => {
+                const a = acciones[o.id];
+                return (
+                  <tr key={o.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
+                      OC-{String(o.numero).padStart(3, "0")}/{o.anio}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{o.no_devengado ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-gray-900">{o.proveedor_nombre ?? "—"}</p>
+                      {o.proveedor_nit && <p className="text-xs text-gray-400">NIT: {o.proveedor_nit}</p>}
+                      <RenglonBadges renglones={o.renglones} />
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
+                      {o.total != null ? Q(o.total) : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => ejecutarAccion(o.id, aprobarDevengado, (ord) => setEnviadas(p => [{ ...ord, estado_devengado: "Enviado" }, ...p]))}
+                          disabled={a?.cargando}
+                          title="Aprobar"
+                          className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-50"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => ejecutarAccion(o.id, rechazarDevengado)}
+                          disabled={a?.cargando}
+                          title="Rechazar"
+                          className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[180px]">{a.error}</p>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {solicitadas.length === 0 && (
+            <div className="text-center py-16 text-gray-400">
+              <FileCheck className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">No hay devengados pendientes de aprobación.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div>
         <h2 className="text-lg font-bold text-gray-900">Seguimiento de pago (DAF)</h2>
         <p className="text-sm text-gray-500 mt-0.5">Expedientes ya devengados y remitidos a la División de Administración Financiera</p>
       </div>
@@ -118,7 +204,7 @@ export default function DevengadoClient({ ordenes: init, enviadas: initEnviadas 
       </div>
 
       {devengarFor && (
-        <DevengarModal orden={devengarFor} onClose={() => setDevengarFor(null)} onDone={onDevengado} />
+        <DevengarModal orden={devengarFor} onClose={() => setDevengarFor(null)} onDone={onRegistrado} />
       )}
     </div>
   );
@@ -132,7 +218,7 @@ function DevengarModal({ orden: o, onClose, onDone }: { orden: Orden; onClose: (
 
   async function guardar() {
     setSaving(true); setError("");
-    const res = await devengar(o.id, { no_devengado: noDevengado, fecha_envio_daf: fechaEnvioDaf });
+    const res = await registrarDevengado(o.id, { no_devengado: noDevengado, fecha_envio_daf: fechaEnvioDaf });
     setSaving(false);
     if ("error" in res) { setError(res.error); return; }
     onDone({ ...o, no_devengado: noDevengado, fecha_envio_daf: fechaEnvioDaf });
@@ -166,7 +252,7 @@ function DevengarModal({ orden: o, onClose, onDone }: { orden: Orden; onClose: (
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</button>
           <button onClick={guardar} disabled={saving}
             className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 disabled:opacity-50">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileCheck className="w-4 h-4" />} Devengar
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileCheck className="w-4 h-4" />} Registrar Devengado
           </button>
         </div>
       </div>
