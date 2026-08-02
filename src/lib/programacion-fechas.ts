@@ -69,3 +69,13 @@ export function ventanaAprobacionReprogramacionAbierta(fecha: string): boolean {
 export function ventanaAprobacionModificacionAbierta(fecha: string): boolean {
   return estaEnRangoDiasDelMes(fecha, 15, 20);
 }
+
+// ¿El mes `indiceMes` (1..4, mes1..mes4) del cuatrimestre ya terminó,
+// respecto a `fecha`? No se puede asignar/reprogramar dinero para un mes
+// que ya pasó — mes1..mes4 de C1 son enero-abril, de C2 mayo-agosto, de C3
+// septiembre-diciembre.
+export function mesDelCuatrimestreYaPaso(cuatrimestre: number, indiceMes: number, fecha: string): boolean {
+  const mesCalendario = (cuatrimestre - 1) * 4 + indiceMes;
+  const { mes } = anioMes(fecha);
+  return mesCalendario < mes;
+}

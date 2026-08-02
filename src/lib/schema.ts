@@ -619,6 +619,27 @@ export const presupuestoRenglones = pgTable("presupuesto_renglones", {
   created_at:           text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
+// ─── Reprogramación por lote ──────────────────────────────────────────────
+// Agrupa varias filas de programacionEntradas en una sola solicitud, para
+// aprobar/rechazar todas juntas de una sola vez (ver programacion-actions.ts:
+// guardarEntrada adjunta cada fila reprogramada al lote Borrador abierto del
+// cuatrimestre — se va armando renglón por renglón, sin pasar por
+// aprobación todavía; solicitarLote lo pasa a Solicitado junto con todas
+// sus filas; aprobarLote/rechazarLote deciden sobre el lote completo —
+// rechazar lo regresa entero a Borrador (no lo mata), para poder corregir
+// la fila mala y volver a solicitar sin perder las demás). Programación (la
+// asignación inicial de un cuatrimestre) no usa lotes — sigue siendo
+// fila por fila, ver programacionEntradas.origen.
+export const reprogramacionLotes = pgTable("reprogramacion_lotes", {
+  id:               serial("id").primaryKey(),
+  ejercicio_fiscal: integer("ejercicio_fiscal").notNull().default(2026),
+  cuatrimestre:     integer("cuatrimestre").notNull(),
+  estado:           text("estado").notNull().default("Borrador"),
+  creado_por:       integer("creado_por").references(() => usuarios.id),
+  created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+  updated_at:       text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
 // ─── Programación y Reprogramación presupuestaria ────────────────────────────
 // Una fila por (renglón, sub-producto, tipo) programado dentro de un
 // cuatrimestre — mes1..mes4 son los 4 meses que componen ese cuatrimestre.
@@ -633,15 +654,21 @@ export const programacionEntradas = pgTable("programacion_entradas", {
   mes2:             doublePrecision("mes2").notNull().default(0),
   mes3:             doublePrecision("mes3").notNull().default(0),
   mes4:             doublePrecision("mes4").notNull().default(0),
-  // Solicitado -> Aprobado (automático por fecha, ver dias-habiles.ts) o
-  // Rechazado. Mientras Solicitado se puede editar/rechazar/eliminar; una
-  // vez Aprobado queda bloqueada hasta que una Reprogramación posterior la
-  // vuelva a poner en Solicitado.
+  // Programación: Solicitado -> Aprobado (automático por fecha, ver
+  // dias-habiles.ts) o Rechazado, fila por fila. Reprogramación: Borrador
+  // (se está armando dentro de un lote, ver reprogramacionLotes) ->
+  // Solicitado (todo el lote junto) -> Aprobado, o de vuelta a Borrador si
+  // se rechaza el lote. Mientras Solicitado (Programación) o Borrador
+  // (Reprogramación) se puede editar/eliminar; una vez Aprobado queda
+  // bloqueada hasta que una Reprogramación posterior la vuelva a tomar.
   estado:           text("estado").notNull().default("Solicitado"),
   // De qué modo (guardarEntrada) quedó la solicitud actualmente pendiente/
   // vigente: "programacion" o "reprogramacion" — cada una tiene su propia
   // ventana de aprobación (ver aprobarEntrada en programacion-actions.ts).
   origen:           text("origen").notNull().default("programacion"),
+  // Lote de Reprogramación al que pertenece esta fila mientras esté
+  // Borrador/Solicitado por esa vía — null para filas de Programación.
+  lote_id:          integer("lote_id").references(() => reprogramacionLotes.id),
   creado_por:       integer("creado_por").references(() => usuarios.id),
   created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   updated_at:       text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
