@@ -653,9 +653,9 @@ export const programacionCompromisos = pgTable("programacion_compromisos", {
 // A diferencia de los otros tipos de modificación (Ingru, Ampliación, que son
 // un valor libre por renglón+sub-producto sin contrapartida), una
 // transferencia SIEMPRE mueve dinero de un origen a un destino: valida que el
-// origen tenga saldo disponible, resta del origen y suma al destino en
-// presupuesto_renglones.modificacion_entre_renglones, y deja aquí el registro
-// de auditoría (quién, cuándo, de dónde a dónde, cuánto).
+// origen tenga saldo disponible. Queda "Solicitado" sin mover nada; solo al
+// aprobar (quien tenga acceso a mod_presupuesto) se resta del origen y se
+// suma al destino en presupuesto_renglones.modificacion_entre_renglones.
 export const reprogramaciones = pgTable("reprogramaciones", {
   id:                   serial("id").primaryKey(),
   ejercicio_fiscal:     integer("ejercicio_fiscal").notNull().default(2026),
@@ -666,8 +666,28 @@ export const reprogramaciones = pgTable("reprogramaciones", {
   subproducto_destino:  text("subproducto_destino").notNull(),
   monto:                doublePrecision("monto").notNull(),
   motivo:               text("motivo"),
+  estado:               text("estado").notNull().default("Solicitado"),
   creado_por:           integer("creado_por").references(() => usuarios.id),
   created_at:           text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+  updated_at:           text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Modificaciones Ingru / Ampliación (valor libre, sin contrapartida) ─────
+// Una fila "pendiente" por (renglón, sub-producto, tipo): mientras
+// "Solicitado" no toca presupuesto_renglones. Al aprobar, reemplaza el valor
+// de presupuesto_renglones.modificacion_ingru/modificacion_ampliacion
+// correspondiente (no se acumula — ver guardarModificacion).
+export const modificacionesPresupuestarias = pgTable("modificaciones_presupuestarias", {
+  id:                   serial("id").primaryKey(),
+  ejercicio_fiscal:     integer("ejercicio_fiscal").notNull().default(2026),
+  tipo:                 text("tipo").notNull(),
+  renglon:              integer("renglon").notNull(),
+  subproducto:          text("subproducto").notNull(),
+  valor:                doublePrecision("valor").notNull().default(0),
+  estado:               text("estado").notNull().default("Solicitado"),
+  creado_por:           integer("creado_por").references(() => usuarios.id),
+  created_at:           text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+  updated_at:           text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 // ─── Proveedores ──────────────────────────────────────────────────────────────

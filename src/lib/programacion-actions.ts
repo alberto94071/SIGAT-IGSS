@@ -1,9 +1,10 @@
 "use server";
 import { fechaGuatemala } from "@/lib/date-utils";
 import { db } from "@/lib/db";
-import { programacionEntradas, presupuestoRenglones, reprogramaciones } from "@/lib/schema";
+import { programacionEntradas, presupuestoRenglones, reprogramaciones, modificacionesPresupuestarias } from "@/lib/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
+import { requireModuloAccessAction } from "@/lib/modulo-access";
 import { PRESUPUESTO_DATA } from "@/lib/presupuesto-general-data";
 import { GRUPOS, grupoDeRenglon, TIPOS_MODIFICACION, type TipoModificacion } from "@/lib/programacion-constants";
 import { getDisponible, EJERCICIO_FISCAL } from "@/lib/presupuesto-disponible";
@@ -93,33 +94,9 @@ export type ProgramacionEntrada = {
   estado: string;
 };
 
-// Aprobación automática por fecha: no hay cron en este proyecto, así que
-// cada vez que se listan entradas se revisan las que siguen "Solicitado" y
-// se aprueban las que ya cumplieron su fecha de aprobación automática (ver
-// programacion-fechas.ts). Efecto equivalente a un job diario, sin infraestructura extra.
-async function aprobarSolicitudesVencidas(cuatrimestre: number): Promise<void> {
-  const hoy = fechaGuatemala();
-  const pendientes = await db.select({ id: programacionEntradas.id, updated_at: programacionEntradas.updated_at })
-    .from(programacionEntradas).where(and(
-      eq(programacionEntradas.ejercicio_fiscal, EJERCICIO),
-      eq(programacionEntradas.cuatrimestre, cuatrimestre),
-      eq(programacionEntradas.estado, "Solicitado"),
-    ));
-
-  for (const p of pendientes) {
-    const fechaBase = p.updated_at ?? hoy;
-    const anio = Number(fechaBase.slice(0, 4));
-    const mes = Number(fechaBase.slice(5, 7));
-    if (hoy >= fechaAprobacionAutomatica(anio, mes)) {
-      await db.update(programacionEntradas).set({ estado: "Aprobado" }).where(eq(programacionEntradas.id, p.id));
-    }
-  }
-}
-
 /** Entradas ya guardadas para un cuatrimestre (para la tabla de "ya programados"). */
 export async function getEntradas(cuatrimestre: number): Promise<ProgramacionEntrada[]> {
   await procesarCierreCuatrimestres();
-  await aprobarSolicitudesVencidas(cuatrimestre);
 
   const filas = await db.select().from(programacionEntradas).where(and(
     eq(programacionEntradas.ejercicio_fiscal, EJERCICIO),
@@ -248,9 +225,39 @@ export async function guardarEntrada(input: GuardarEntradaInput): Promise<{ ok: 
   return { ok: true };
 }
 
-/** Rechaza una entrada de Programación/Reprogramación mientras siga "Solicitado". */
+// Ventana en que se puede aprobar/rechazar una entrada, según el mes en que
+// se creó/editó por última vez (mismo cálculo que antes hacía la aprobación
+// automática — ver fechaAprobacionAutomatica en programacion-fechas.ts):
+// abre ese día y queda abierta indefinidamente después (no hay fecha límite
+// para que Presupuesto la revise).
+function ventanaAprobacionAbierta(updatedAt: string | null): boolean {
+  const hoy = fechaGuatemala();
+  const fechaBase = updatedAt ?? hoy;
+  const anio = Number(fechaBase.slice(0, 4));
+  const mes = Number(fechaBase.slice(5, 7));
+  return hoy >= fechaAprobacionAutomatica(anio, mes);
+}
+
+/** Aprueba una entrada de Programación/Reprogramación — solo quien tenga acceso a mod_presupuesto, y solo dentro de su ventana de aprobación. */
+export async function aprobarEntrada(id: number): Promise<{ ok: true } | { error: string }> {
+  const check = await requireModuloAccessAction("mod_presupuesto");
+  if ("error" in check) return check;
+
+  const [fila] = await db.select({ estado: programacionEntradas.estado, updated_at: programacionEntradas.updated_at })
+    .from(programacionEntradas).where(eq(programacionEntradas.id, id)).limit(1);
+  if (!fila) return { error: "No existe esa entrada" };
+  if (fila.estado !== "Solicitado") return { error: "Esta entrada ya no está pendiente de aprobación" };
+  if (!ventanaAprobacionAbierta(fila.updated_at)) {
+    return { error: "Todavía no se puede aprobar esta entrada — espera a que abra su ventana de aprobación." };
+  }
+
+  await db.update(programacionEntradas).set({ estado: "Aprobado" }).where(eq(programacionEntradas.id, id));
+  return { ok: true };
+}
+
+/** Rechaza una entrada de Programación/Reprogramación mientras siga "Solicitado" — solo quien tenga acceso a mod_presupuesto. */
 export async function rechazarEntrada(id: number): Promise<{ ok: true } | { error: string }> {
-  const check = await requireEdit();
+  const check = await requireModuloAccessAction("mod_presupuesto");
   if ("error" in check) return check;
 
   const [fila] = await db.select({ estado: programacionEntradas.estado })
@@ -289,9 +296,10 @@ export type GuardarModificacionInput = {
 };
 
 /**
- * Reprogramación: fija el valor de una modificación (Ingru / Entre
- * Renglones / Ampliación) para un renglón + sub-producto. No suma al valor
- * anterior — lo reemplaza tal cual, sea que ya existiera un valor o no.
+ * Reprogramación: registra la SOLICITUD de una modificación (Ingru /
+ * Ampliación) para un renglón + sub-producto — queda "Solicitado" y NO
+ * toca presupuesto_renglones todavía; eso solo pasa al aprobar (ver
+ * aprobarModificacion). No suma al valor anterior — lo reemplaza tal cual.
  */
 export async function guardarModificacion(input: GuardarModificacionInput): Promise<{ ok: true } | { error: string }> {
   const check = await requireEdit();
@@ -313,67 +321,120 @@ export async function guardarModificacion(input: GuardarModificacionInput): Prom
 
   const valor = input.valor || 0;
 
-  const [existente] = await db.select({ id: presupuestoRenglones.id })
-    .from(presupuestoRenglones)
+  const [existente] = await db.select({ id: modificacionesPresupuestarias.id })
+    .from(modificacionesPresupuestarias)
     .where(and(
-      eq(presupuestoRenglones.ejercicio_fiscal, EJERCICIO),
-      eq(presupuestoRenglones.renglon, input.renglon),
-      eq(presupuestoRenglones.subproducto, input.subProducto),
+      eq(modificacionesPresupuestarias.ejercicio_fiscal, EJERCICIO),
+      eq(modificacionesPresupuestarias.tipo, input.tipo),
+      eq(modificacionesPresupuestarias.renglon, input.renglon),
+      eq(modificacionesPresupuestarias.subproducto, input.subProducto),
     )).limit(1);
 
   if (existente) {
-    await db.update(presupuestoRenglones)
-      .set({ [tipoInfo.campo]: valor })
-      .where(eq(presupuestoRenglones.id, existente.id));
+    await db.update(modificacionesPresupuestarias).set({
+      valor, estado: "Solicitado",
+      updated_at: sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`,
+    }).where(eq(modificacionesPresupuestarias.id, existente.id));
   } else {
-    await db.insert(presupuestoRenglones).values({
+    await db.insert(modificacionesPresupuestarias).values({
       ejercicio_fiscal: EJERCICIO,
-      renglon: input.renglon,
-      subproducto: input.subProducto,
-      nombre: base.descripcion,
-      vigente: base.vigente,
-      [tipoInfo.campo]: valor,
+      tipo: input.tipo, renglon: input.renglon, subproducto: input.subProducto,
+      valor, estado: "Solicitado", creado_por: check.uid,
     });
   }
 
   return { ok: true };
 }
 
+/** Aprueba una modificación Ingru/Ampliación — solo quien tenga acceso a mod_presupuesto. Recién aquí se refleja en presupuesto_renglones. */
+export async function aprobarModificacion(id: number): Promise<{ ok: true } | { error: string }> {
+  const check = await requireModuloAccessAction("mod_presupuesto");
+  if ("error" in check) return check;
+
+  const [fila] = await db.select().from(modificacionesPresupuestarias)
+    .where(eq(modificacionesPresupuestarias.id, id)).limit(1);
+  if (!fila) return { error: "No existe esa modificación" };
+  if (fila.estado !== "Solicitado") return { error: "Esta modificación ya no está pendiente de aprobación" };
+
+  const tipoInfo = TIPOS_MODIFICACION.find(t => t.id === fila.tipo);
+  if (!tipoInfo) return { error: "Tipo de modificación inválido" };
+
+  const [existente] = await db.select({ id: presupuestoRenglones.id })
+    .from(presupuestoRenglones)
+    .where(and(
+      eq(presupuestoRenglones.ejercicio_fiscal, EJERCICIO),
+      eq(presupuestoRenglones.renglon, fila.renglon),
+      eq(presupuestoRenglones.subproducto, fila.subproducto),
+    )).limit(1);
+
+  if (existente) {
+    await db.update(presupuestoRenglones)
+      .set({ [tipoInfo.campo]: fila.valor })
+      .where(eq(presupuestoRenglones.id, existente.id));
+  } else {
+    const base = PRESUPUESTO_DATA.find(r => r.renglon === fila.renglon && r.subProducto === fila.subproducto);
+    await db.insert(presupuestoRenglones).values({
+      ejercicio_fiscal: EJERCICIO,
+      renglon: fila.renglon,
+      subproducto: fila.subproducto,
+      nombre: base?.descripcion ?? "",
+      vigente: base?.vigente ?? null,
+      [tipoInfo.campo]: fila.valor,
+    });
+  }
+
+  await db.update(modificacionesPresupuestarias).set({ estado: "Aprobado" }).where(eq(modificacionesPresupuestarias.id, id));
+  return { ok: true };
+}
+
+/** Rechaza una modificación Ingru/Ampliación mientras siga "Solicitado" — solo quien tenga acceso a mod_presupuesto. */
+export async function rechazarModificacion(id: number): Promise<{ ok: true } | { error: string }> {
+  const check = await requireModuloAccessAction("mod_presupuesto");
+  if ("error" in check) return check;
+
+  const [fila] = await db.select({ estado: modificacionesPresupuestarias.estado })
+    .from(modificacionesPresupuestarias).where(eq(modificacionesPresupuestarias.id, id)).limit(1);
+  if (!fila) return { error: "No existe esa modificación" };
+  if (fila.estado !== "Solicitado") return { error: "Ya no se puede rechazar: dejó de estar Solicitada" };
+
+  await db.update(modificacionesPresupuestarias).set({
+    estado: "Rechazado",
+    updated_at: sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`,
+  }).where(eq(modificacionesPresupuestarias.id, id));
+
+  return { ok: true };
+}
+
 export type ModificacionRow = {
+  id: number;
   renglon: number;
   descripcion: string;
   subProducto: string;
-  ingru: number;
-  entreRenglones: number;
-  ampliacion: number;
+  tipo: TipoModificacion;
+  valor: number;
+  estado: string;
 };
 
-/** Renglones/sub-productos con alguna modificación distinta de cero (para la tabla de "ya modificados"). */
+/** Modificaciones Ingru/Ampliación registradas (Solicitado/Aprobado/Rechazado), para la tabla de "ya modificados". */
 export async function getModificaciones(): Promise<ModificacionRow[]> {
-  const filas = await db.select({
-    renglon:      presupuestoRenglones.renglon,
-    subproducto:  presupuestoRenglones.subproducto,
-    ingru:        presupuestoRenglones.modificacion_ingru,
-    entre_renglones: presupuestoRenglones.modificacion_entre_renglones,
-    ampliacion:   presupuestoRenglones.modificacion_ampliacion,
-  }).from(presupuestoRenglones).where(eq(presupuestoRenglones.ejercicio_fiscal, EJERCICIO));
+  const filas = await db.select().from(modificacionesPresupuestarias)
+    .where(eq(modificacionesPresupuestarias.ejercicio_fiscal, EJERCICIO))
+    .orderBy(sql`id DESC`);
 
   const porClave = new Map(PRESUPUESTO_DATA.map(r => [`${r.renglon}|${r.subProducto}`, r]));
 
-  return filas
-    .filter(f => f.ingru !== 0 || f.entre_renglones !== 0 || f.ampliacion !== 0)
-    .map(f => {
-      const base = porClave.get(`${f.renglon}|${f.subproducto}`);
-      return {
-        renglon: f.renglon as number,
-        descripcion: base?.descripcion ?? "",
-        subProducto: f.subproducto as string,
-        ingru: f.ingru,
-        entreRenglones: f.entre_renglones,
-        ampliacion: f.ampliacion,
-      };
-    })
-    .sort((a, b) => a.renglon - b.renglon);
+  return filas.map(f => {
+    const base = porClave.get(`${f.renglon}|${f.subproducto}`);
+    return {
+      id: f.id,
+      renglon: f.renglon,
+      descripcion: base?.descripcion ?? "",
+      subProducto: f.subproducto,
+      tipo: f.tipo as TipoModificacion,
+      valor: f.valor,
+      estado: f.estado,
+    };
+  });
 }
 
 export type SubproductoConDisponible = SubproductoDisponible & { disponible: number };
@@ -422,11 +483,12 @@ async function sumarModificacionEntreRenglones(renglon: number, subProducto: str
 }
 
 /**
- * Reprogramación por transferencia real: quita `monto` del presupuesto
- * disponible del renglón/sub-producto de origen y lo suma al de destino.
- * Valida que el origen tenga saldo disponible suficiente antes de mover
- * nada (nunca deja el origen en negativo), y deja un registro de auditoría
- * en `reprogramaciones`.
+ * Reprogramación por transferencia real: registra la SOLICITUD de mover
+ * `monto` del renglón/sub-producto de origen al de destino. Valida que el
+ * origen tenga saldo disponible suficiente para no comprometer más de lo
+ * que hay, pero NO mueve nada todavía — queda "Solicitado" en
+ * `reprogramaciones`; el movimiento real a presupuesto_renglones ocurre
+ * solo al aprobar (ver aprobarTransferencia).
  */
 export async function transferirPresupuesto(input: TransferenciaInput): Promise<{ ok: true } | { error: string }> {
   const check = await requireEdit();
@@ -456,17 +518,60 @@ export async function transferirPresupuesto(input: TransferenciaInput): Promise<
     };
   }
 
-  await sumarModificacionEntreRenglones(renglonOrigen, subProductoOrigen, -monto);
-  await sumarModificacionEntreRenglones(renglonDestino, subProductoDestino, monto);
-
   await db.insert(reprogramaciones).values({
     ejercicio_fiscal: EJERCICIO,
     fecha: fechaGuatemala(),
     renglon_origen: renglonOrigen, subproducto_origen: subProductoOrigen,
     renglon_destino: renglonDestino, subproducto_destino: subProductoDestino,
     monto, motivo: motivo?.trim() || null,
+    estado: "Solicitado",
     creado_por: check.uid,
   });
+
+  return { ok: true };
+}
+
+/**
+ * Aprueba una transferencia — solo quien tenga acceso a mod_presupuesto.
+ * Vuelve a validar que el origen siga teniendo saldo disponible suficiente
+ * (pudo cambiar desde que se solicitó) antes de mover el dinero.
+ */
+export async function aprobarTransferencia(id: number): Promise<{ ok: true } | { error: string }> {
+  const check = await requireModuloAccessAction("mod_presupuesto");
+  if ("error" in check) return check;
+
+  const [fila] = await db.select().from(reprogramaciones).where(eq(reprogramaciones.id, id)).limit(1);
+  if (!fila) return { error: "No existe esa transferencia" };
+  if (fila.estado !== "Solicitado") return { error: "Esta transferencia ya no está pendiente de aprobación" };
+
+  const { disponible } = await getDisponible(fila.renglon_origen, fila.subproducto_origen);
+  if (fila.monto > disponible + 0.01) {
+    return {
+      error: `El origen (renglón ${fila.renglon_origen} / ${fila.subproducto_origen}) ya no tiene suficiente disponible (Q${disponible.toLocaleString("es-GT", { minimumFractionDigits: 2 })}) para aprobar esta transferencia`,
+    };
+  }
+
+  await sumarModificacionEntreRenglones(fila.renglon_origen, fila.subproducto_origen, -fila.monto);
+  await sumarModificacionEntreRenglones(fila.renglon_destino, fila.subproducto_destino, fila.monto);
+
+  await db.update(reprogramaciones).set({ estado: "Aprobado" }).where(eq(reprogramaciones.id, id));
+  return { ok: true };
+}
+
+/** Rechaza una transferencia mientras siga "Solicitado" — solo quien tenga acceso a mod_presupuesto. */
+export async function rechazarTransferencia(id: number): Promise<{ ok: true } | { error: string }> {
+  const check = await requireModuloAccessAction("mod_presupuesto");
+  if ("error" in check) return check;
+
+  const [fila] = await db.select({ estado: reprogramaciones.estado })
+    .from(reprogramaciones).where(eq(reprogramaciones.id, id)).limit(1);
+  if (!fila) return { error: "No existe esa transferencia" };
+  if (fila.estado !== "Solicitado") return { error: "Ya no se puede rechazar: dejó de estar Solicitada" };
+
+  await db.update(reprogramaciones).set({
+    estado: "Rechazado",
+    updated_at: sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`,
+  }).where(eq(reprogramaciones.id, id));
 
   return { ok: true };
 }
@@ -476,6 +581,7 @@ export type TransferenciaRow = {
   renglonOrigen: number; subProductoOrigen: string;
   renglonDestino: number; subProductoDestino: string;
   monto: number; motivo: string | null;
+  estado: string;
 };
 
 /** Historial de transferencias registradas en el ejercicio fiscal actual (más recientes primero). */
@@ -488,5 +594,6 @@ export async function getTransferencias(): Promise<TransferenciaRow[]> {
     renglonOrigen: f.renglon_origen, subProductoOrigen: f.subproducto_origen,
     renglonDestino: f.renglon_destino, subProductoDestino: f.subproducto_destino,
     monto: f.monto, motivo: f.motivo,
+    estado: f.estado,
   }));
 }

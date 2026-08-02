@@ -1,15 +1,28 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, ArrowRightLeft, Printer } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CheckCircle, XCircle, ArrowRightLeft, Printer } from "lucide-react";
 import { CUATRIMESTRES, TIPOS_MODIFICACION, type TipoModificacion } from "@/lib/programacion-constants";
 import {
   buscarRenglones, getSubproductosDeRenglon, getSubproductosConDisponible,
-  guardarModificacion, getModificaciones,
-  transferirPresupuesto, getTransferencias,
+  guardarModificacion, getModificaciones, aprobarModificacion, rechazarModificacion,
+  transferirPresupuesto, getTransferencias, aprobarTransferencia, rechazarTransferencia,
   type SubproductoDisponible, type SubproductoConDisponible,
   type ModificacionRow, type TransferenciaRow,
 } from "@/lib/programacion-actions";
+
+function badgeEstado(estado: string) {
+  const clases: Record<string, string> = {
+    Solicitado: "bg-amber-100 text-amber-700",
+    Aprobado: "bg-green-100 text-green-700",
+    Rechazado: "bg-red-100 text-red-700",
+  };
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${clases[estado] ?? "bg-gray-100 text-gray-700"}`}>
+      {estado}
+    </span>
+  );
+}
 
 const Q = (n: number) =>
   `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -35,9 +48,22 @@ export default function ModificacionesClient() {
   const [renglonSeleccionado, setRenglonSeleccionado] = useState<number | null>(null);
   const [filasModificacion, setFilasModificacion] = useState<FilaModificacion[]>([]);
 
+  const [accionesModificacion, setAccionesModificacion] = useState<Record<number, { cargando: boolean; error: string | null }>>({});
+
   const recargarModificaciones = useCallback(() => {
     getModificaciones().then(setModificaciones);
   }, []);
+
+  const ejecutarAccionModificacion = async (id: number, accion: (id: number) => Promise<{ ok: true } | { error: string }>) => {
+    setAccionesModificacion(prev => ({ ...prev, [id]: { cargando: true, error: null } }));
+    const res = await accion(id);
+    if ("error" in res) {
+      setAccionesModificacion(prev => ({ ...prev, [id]: { cargando: false, error: res.error } }));
+    } else {
+      setAccionesModificacion(prev => ({ ...prev, [id]: { cargando: false, error: null } }));
+      recargarModificaciones();
+    }
+  };
 
   useEffect(() => {
     if (tipoModificacion !== null && tipoModificacion !== "transferencia") recargarModificaciones();
@@ -276,9 +302,9 @@ export default function ModificacionesClient() {
         </div>
       )}
 
-      {/* ── Tabla de renglones ya modificados ── */}
+      {/* ── Tabla de renglones ya modificados (solo del tipo actual) ── */}
       <div className="space-y-2">
-        <h2 className="text-lg font-bold text-gray-900">Modificaciones registradas</h2>
+        <h2 className="text-lg font-bold text-gray-900">{tipoModificacionInfo!.label} registradas</h2>
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -287,29 +313,55 @@ export default function ModificacionesClient() {
                   <th className="px-3 py-2 text-left font-semibold text-gray-700">Renglón</th>
                   <th className="px-3 py-2 text-left font-semibold text-gray-700">Descripción</th>
                   <th className="px-3 py-2 text-left font-semibold text-gray-700">Sub-Producto</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-700">Ingru</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-700">Entre Renglones</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-700">Ampliación</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-700">Valor</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Estado</th>
+                  <th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
-                {modificaciones.length === 0 ? (
+                {modificaciones.filter(m => m.tipo === tipoModificacion).length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-3 py-8 text-center text-gray-400">
-                      Aún no hay modificaciones registradas.
+                      Aún no hay {tipoModificacionInfo!.label.toLowerCase()} registradas.
                     </td>
                   </tr>
                 ) : (
-                  modificaciones.map(m => (
-                    <tr key={`${m.renglon}-${m.subProducto}`} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="px-3 py-2 font-semibold text-gray-900">{m.renglon}</td>
-                      <td className="px-3 py-2 text-gray-700 max-w-[220px] truncate">{m.descripcion}</td>
-                      <td className="px-3 py-2 font-mono text-xs text-gray-600">{m.subProducto}</td>
-                      <td className="px-3 py-2 text-right text-gray-600">{Q(m.ingru)}</td>
-                      <td className="px-3 py-2 text-right text-gray-600">{Q(m.entreRenglones)}</td>
-                      <td className="px-3 py-2 text-right text-gray-600">{Q(m.ampliacion)}</td>
-                    </tr>
-                  ))
+                  modificaciones.filter(m => m.tipo === tipoModificacion).map(m => {
+                    const a = accionesModificacion[m.id];
+                    const esSolicitado = m.estado === "Solicitado";
+                    return (
+                      <tr key={m.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="px-3 py-2 font-semibold text-gray-900">{m.renglon}</td>
+                        <td className="px-3 py-2 text-gray-700 max-w-[220px] truncate">{m.descripcion}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-600">{m.subProducto}</td>
+                        <td className="px-3 py-2 text-right text-gray-600">{Q(m.valor)}</td>
+                        <td className="px-3 py-2">{badgeEstado(m.estado)}</td>
+                        <td className="px-3 py-2">
+                          {esSolicitado && (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => ejecutarAccionModificacion(m.id, aprobarModificacion)}
+                                disabled={a?.cargando}
+                                title="Aprobar"
+                                className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-50"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => ejecutarAccionModificacion(m.id, rechazarModificacion)}
+                                disabled={a?.cargando}
+                                title="Rechazar"
+                                className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50"
+                              >
+                                <XCircle className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+                          {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[180px]">{a.error}</p>}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -416,9 +468,21 @@ function TransferenciaView({ onVolver }: { onVolver: () => void }) {
   const [error, setError] = useState("");
   const [ok, setOk] = useState(false);
   const [historial, setHistorial] = useState<TransferenciaRow[]>([]);
+  const [accionesTransferencia, setAccionesTransferencia] = useState<Record<number, { cargando: boolean; error: string | null }>>({});
 
   const recargarHistorial = useCallback(() => { getTransferencias().then(setHistorial); }, []);
   useEffect(() => { recargarHistorial(); }, [recargarHistorial]);
+
+  const ejecutarAccionTransferencia = async (id: number, accion: (id: number) => Promise<{ ok: true } | { error: string }>) => {
+    setAccionesTransferencia(prev => ({ ...prev, [id]: { cargando: true, error: null } }));
+    const res = await accion(id);
+    if ("error" in res) {
+      setAccionesTransferencia(prev => ({ ...prev, [id]: { cargando: false, error: res.error } }));
+    } else {
+      setAccionesTransferencia(prev => ({ ...prev, [id]: { cargando: false, error: null } }));
+      recargarHistorial();
+    }
+  };
 
   async function confirmar() {
     if (!origen || !destino) return setError("Elige el renglón/sub-producto de origen y de destino");
@@ -503,21 +567,51 @@ function TransferenciaView({ onVolver }: { onVolver: () => void }) {
                   <th className="px-3 py-2 text-left font-semibold text-gray-700">Destino</th>
                   <th className="px-3 py-2 text-right font-semibold text-gray-700">Monto</th>
                   <th className="px-3 py-2 text-left font-semibold text-gray-700">Motivo</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Estado</th>
+                  <th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
                 {historial.length === 0 ? (
-                  <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400">Aún no hay transferencias registradas.</td></tr>
+                  <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">Aún no hay transferencias registradas.</td></tr>
                 ) : (
-                  historial.map(t => (
-                    <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{t.fecha}</td>
-                      <td className="px-3 py-2 font-mono text-xs text-gray-700">{t.renglonOrigen} / {t.subProductoOrigen}</td>
-                      <td className="px-3 py-2 font-mono text-xs text-gray-700">{t.renglonDestino} / {t.subProductoDestino}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-gray-900">{Q(t.monto)}</td>
-                      <td className="px-3 py-2 text-gray-600 max-w-[240px] truncate">{t.motivo ?? "—"}</td>
-                    </tr>
-                  ))
+                  historial.map(t => {
+                    const a = accionesTransferencia[t.id];
+                    const esSolicitado = t.estado === "Solicitado";
+                    return (
+                      <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{t.fecha}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-700">{t.renglonOrigen} / {t.subProductoOrigen}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-700">{t.renglonDestino} / {t.subProductoDestino}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-gray-900">{Q(t.monto)}</td>
+                        <td className="px-3 py-2 text-gray-600 max-w-[240px] truncate">{t.motivo ?? "—"}</td>
+                        <td className="px-3 py-2">{badgeEstado(t.estado)}</td>
+                        <td className="px-3 py-2">
+                          {esSolicitado && (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => ejecutarAccionTransferencia(t.id, aprobarTransferencia)}
+                                disabled={a?.cargando}
+                                title="Aprobar"
+                                className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-50"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => ejecutarAccionTransferencia(t.id, rechazarTransferencia)}
+                                disabled={a?.cargando}
+                                title="Rechazar"
+                                className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50"
+                              >
+                                <XCircle className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+                          {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[180px]">{a.error}</p>}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

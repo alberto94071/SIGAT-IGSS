@@ -17,7 +17,7 @@ interface Props {
 const Q = (n: number) => n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const FONT = "Arial, Helvetica, sans-serif";
 const C = "#000";
-const COLS_MOD = ["10%", "20%", "20%", "16.66%", "16.66%", "16.68%"];
+const COLS_MOD = ["10%", "24%", "22%", "22%", "22%"];
 const COLS_TRA = ["10%", "18%", "18%", "18%", "18%", "18%"];
 
 function ColGroup({ cols }: { cols: string[] }) {
@@ -51,9 +51,8 @@ export default function ImprimirModificacionesClient({
             <th style={{ border: "1px solid #999", padding: "4px 3px", background: "#f1f5f9" }}>Renglón</th>
             <th style={{ border: "1px solid #999", padding: "4px 3px", background: "#f1f5f9" }}>Descripción</th>
             <th style={{ border: "1px solid #999", padding: "4px 3px", background: "#f1f5f9" }}>Sub-Producto</th>
-            <th style={{ border: "1px solid #999", padding: "4px 3px", background: "#f1f5f9" }}>Ingru</th>
-            <th style={{ border: "1px solid #999", padding: "4px 3px", background: "#f1f5f9" }}>Entre Renglones</th>
-            <th style={{ border: "1px solid #999", padding: "4px 3px", background: "#f1f5f9" }}>Ampliación</th>
+            <th style={{ border: "1px solid #999", padding: "4px 3px", background: "#f1f5f9" }}>Tipo</th>
+            <th style={{ border: "1px solid #999", padding: "4px 3px", background: "#f1f5f9" }}>Valor</th>
           </tr>
         </thead>
       </table>
@@ -68,9 +67,8 @@ export default function ImprimirModificacionesClient({
           <td style={{ border: "1px solid #999", padding: "3px" }}>{m.renglon}</td>
           <td style={{ border: "1px solid #999", padding: "3px" }}>{m.descripcion}</td>
           <td style={{ border: "1px solid #999", padding: "3px", fontFamily: "monospace" }}>{m.subProducto}</td>
-          <td style={{ border: "1px solid #999", padding: "3px", textAlign: "right", fontFamily: "monospace" }}>{Q(m.ingru)}</td>
-          <td style={{ border: "1px solid #999", padding: "3px", textAlign: "right", fontFamily: "monospace" }}>{Q(m.entreRenglones)}</td>
-          <td style={{ border: "1px solid #999", padding: "3px", textAlign: "right", fontFamily: "monospace" }}>{Q(m.ampliacion)}</td>
+          <td style={{ border: "1px solid #999", padding: "3px" }}>{m.tipo === "ingru" ? "Ingru" : "Ampliación"}</td>
+          <td style={{ border: "1px solid #999", padding: "3px", textAlign: "right", fontFamily: "monospace" }}>{Q(m.valor)}</td>
         </tr>
       </tbody>
     </table>

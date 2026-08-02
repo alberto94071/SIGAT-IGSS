@@ -1,11 +1,11 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, ClipboardList, RefreshCw, XCircle, Trash2, Printer } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CheckCircle, ClipboardList, RefreshCw, XCircle, Trash2, Printer } from "lucide-react";
 import { CUATRIMESTRES } from "@/lib/programacion-constants";
 import {
   buscarRenglones, getSubproductosDeRenglon, getGrupos, getProgramadoDelGrupo,
-  getEntradas, guardarEntrada, rechazarEntrada, eliminarEntrada,
+  getEntradas, guardarEntrada, aprobarEntrada, rechazarEntrada, eliminarEntrada,
   type SubproductoDisponible, type GrupoConTotales,
   type ProgramacionEntrada,
 } from "@/lib/programacion-actions";
@@ -119,6 +119,19 @@ export default function ProgramacionClient() {
     } else {
       actualizarFila(idx, { guardando: false, ok: true, error: null });
       recargarCuatrimestre(cuatrimestre, grupos);
+    }
+  };
+
+  const [accionesEntrada, setAccionesEntrada] = useState<Record<number, { cargando: boolean; error: string | null }>>({});
+
+  const ejecutarAccionEntrada = async (id: number, accion: (id: number) => Promise<{ ok: true } | { error: string }>) => {
+    setAccionesEntrada(prev => ({ ...prev, [id]: { cargando: true, error: null } }));
+    const res = await accion(id);
+    if ("error" in res) {
+      setAccionesEntrada(prev => ({ ...prev, [id]: { cargando: false, error: res.error } }));
+    } else {
+      setAccionesEntrada(prev => ({ ...prev, [id]: { cargando: false, error: null } }));
+      if (cuatrimestre !== null) recargarCuatrimestre(cuatrimestre, grupos);
     }
   };
 
@@ -384,30 +397,66 @@ export default function ProgramacionClient() {
                     <th key={m} className="px-3 py-2 text-right font-semibold text-gray-700">{m}</th>
                   ))}
                   <th className="px-3 py-2 text-right font-semibold text-gray-700">Total</th>
+                  <th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
                 {entradas.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-3 py-8 text-center text-gray-400">
+                    <td colSpan={11} className="px-3 py-8 text-center text-gray-400">
                       Aún no hay nada programado en este cuatrimestre.
                     </td>
                   </tr>
                 ) : (
-                  entradas.map(e => (
-                    <tr key={e.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="px-3 py-2 font-semibold text-gray-900">{e.renglon}</td>
-                      <td className="px-3 py-2 text-gray-700 max-w-[220px] truncate">{e.descripcion}</td>
-                      <td className="px-3 py-2 font-mono text-xs text-gray-600">{e.subProducto}</td>
-                      <td className="px-3 py-2 text-gray-600 capitalize">{e.tipo}</td>
-                      <td className="px-3 py-2">{badgeEstado(e.estado)}</td>
-                      <td className="px-3 py-2 text-right text-gray-600">{Q(e.mes1)}</td>
-                      <td className="px-3 py-2 text-right text-gray-600">{Q(e.mes2)}</td>
-                      <td className="px-3 py-2 text-right text-gray-600">{Q(e.mes3)}</td>
-                      <td className="px-3 py-2 text-right text-gray-600">{Q(e.mes4)}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-gray-900">{Q(e.total)}</td>
-                    </tr>
-                  ))
+                  entradas.map(e => {
+                    const a = accionesEntrada[e.id];
+                    const esSolicitado = e.estado === "Solicitado";
+                    return (
+                      <tr key={e.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="px-3 py-2 font-semibold text-gray-900">{e.renglon}</td>
+                        <td className="px-3 py-2 text-gray-700 max-w-[220px] truncate">{e.descripcion}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-600">{e.subProducto}</td>
+                        <td className="px-3 py-2 text-gray-600 capitalize">{e.tipo}</td>
+                        <td className="px-3 py-2">{badgeEstado(e.estado)}</td>
+                        <td className="px-3 py-2 text-right text-gray-600">{Q(e.mes1)}</td>
+                        <td className="px-3 py-2 text-right text-gray-600">{Q(e.mes2)}</td>
+                        <td className="px-3 py-2 text-right text-gray-600">{Q(e.mes3)}</td>
+                        <td className="px-3 py-2 text-right text-gray-600">{Q(e.mes4)}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-gray-900">{Q(e.total)}</td>
+                        <td className="px-3 py-2">
+                          {esSolicitado && (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => ejecutarAccionEntrada(e.id, aprobarEntrada)}
+                                disabled={a?.cargando}
+                                title="Aprobar"
+                                className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-50"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => ejecutarAccionEntrada(e.id, rechazarEntrada)}
+                                disabled={a?.cargando}
+                                title="Rechazar"
+                                className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50"
+                              >
+                                <XCircle className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => ejecutarAccionEntrada(e.id, eliminarEntrada)}
+                                disabled={a?.cargando}
+                                title="Eliminar"
+                                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+                          {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[180px]">{a.error}</p>}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -420,7 +469,7 @@ export default function ProgramacionClient() {
 
 type BorradorReprogramacion = {
   mes1: string; mes2: string; mes3: string; mes4: string;
-  guardando: boolean; accion: "rechazar" | "eliminar" | null;
+  guardando: boolean; accion: "aprobar" | "rechazar" | "eliminar" | null;
   error: string | null; ok: boolean;
 };
 
@@ -488,6 +537,13 @@ function ReprogramacionView({ cuatrimestre, cuatrimestreLabel, entradas, onVolve
       actualizarBorrador(e.id, { guardando: false, ok: true, error: null });
       onRecargar();
     }
+  };
+
+  const aprobarFila = async (e: ProgramacionEntrada) => {
+    actualizarBorrador(e.id, { accion: "aprobar", error: null, ok: false });
+    const res = await aprobarEntrada(e.id);
+    if ("error" in res) actualizarBorrador(e.id, { accion: null, error: res.error });
+    else onRecargar();
   };
 
   const rechazarFila = async (e: ProgramacionEntrada) => {
@@ -611,6 +667,14 @@ function ReprogramacionView({ cuatrimestre, cuatrimestreLabel, entradas, onVolve
                           </button>
                           {esSolicitado && (
                             <>
+                              <button
+                                onClick={() => aprobarFila(e)}
+                                disabled={b.accion !== null}
+                                title="Aprobar"
+                                className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-50"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                              </button>
                               <button
                                 onClick={() => rechazarFila(e)}
                                 disabled={b.accion !== null}

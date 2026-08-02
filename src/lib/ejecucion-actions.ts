@@ -1,7 +1,7 @@
 "use server";
 import { db } from "@/lib/db";
 import { programacionEntradas, presupuestoRenglones } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { EJECUCION_DATA } from "@/lib/ejecucion-data";
 import { fechaGuatemala } from "@/lib/date-utils";
 import { cuatrimestreDeFecha } from "@/lib/programacion-constants";
@@ -29,13 +29,14 @@ export type EjecucionRow = {
  *
  * - Programado Normal/Regularizado es lo capturado en programacion_entradas
  *   para el CUATRIMESTRE VIGENTE (según la fecha de hoy), por renglón +
- *   sub-producto + tipo.
+ *   sub-producto + tipo — solo entradas ya Aprobadas (mientras están
+ *   Solicitado/Rechazado/Caducado no cuentan aquí).
  * - Saldo Programado Normal/Regularizado se cruza en vivo con la suma de
  *   TODOS los cuatrimestres capturados en Programación y Reprogramación
  *   (programacion_entradas, los 4 meses de cada uno) por renglón +
- *   sub-producto + tipo — se deja igual que antes a propósito, ver
- *   calcularTotales() en EjecucionClient.tsx (fórmula preservada del Excel
- *   fuente del cliente).
+ *   sub-producto + tipo, también solo Aprobadas — se deja igual que antes
+ *   a propósito, ver calcularTotales() en EjecucionClient.tsx (fórmula
+ *   preservada del Excel fuente del cliente).
  * - Pre-Compromiso, Compromiso (columna única, sin distinguir Normal/
  *   Regularizado) y Ejecución Normal/Regularizado (= Devengado) se cruzan en
  *   vivo con presupuesto_renglones (misma tabla que ya actualizan A01-SIAF,
@@ -57,7 +58,10 @@ export async function getEjecucionData(): Promise<EjecucionRow[]> {
       mes2:        programacionEntradas.mes2,
       mes3:        programacionEntradas.mes3,
       mes4:        programacionEntradas.mes4,
-    }).from(programacionEntradas).where(eq(programacionEntradas.ejercicio_fiscal, 2026)),
+    }).from(programacionEntradas).where(and(
+      eq(programacionEntradas.ejercicio_fiscal, 2026),
+      eq(programacionEntradas.estado, "Aprobado"),
+    )),
     db.select({
       renglon:        presupuestoRenglones.renglon,
       subproducto:    presupuestoRenglones.subproducto,

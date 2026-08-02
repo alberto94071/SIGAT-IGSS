@@ -17,8 +17,8 @@ export default async function ImprimirModificacionesPage() {
 
   return (
     <ImprimirModificacionesClient
-      modificaciones={modificaciones}
-      transferencias={transferencias}
+      modificaciones={modificaciones.filter(m => m.estado === "Aprobado")}
+      transferencias={transferencias.filter(t => t.estado === "Aprobado")}
       nombreUnidad={config?.nombre_unidad ?? ""}
       nombreEncargado={config?.nombre_encargado_unidad ?? ""}
       cargoEncargado={config?.cargo_encargado_unidad ?? ""}
