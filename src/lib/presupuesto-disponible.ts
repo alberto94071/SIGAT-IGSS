@@ -28,6 +28,7 @@ export async function getDisponible(renglon: number, subproducto: string): Promi
     eq(programacionEntradas.ejercicio_fiscal, EJERCICIO_FISCAL),
     eq(programacionEntradas.renglon, renglon),
     eq(programacionEntradas.subproducto, subproducto),
+    sql`${programacionEntradas.estado} != 'Caducado'`,
   ));
   const programado = Number(entradasRow?.total ?? 0);
 

@@ -379,6 +379,7 @@ export default function ProgramacionClient() {
                   <th className="px-3 py-2 text-left font-semibold text-gray-700">Descripción</th>
                   <th className="px-3 py-2 text-left font-semibold text-gray-700">Sub-Producto</th>
                   <th className="px-3 py-2 text-left font-semibold text-gray-700">Tipo</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Estado</th>
                   {cuatrimestreInfo!.meses.map(m => (
                     <th key={m} className="px-3 py-2 text-right font-semibold text-gray-700">{m}</th>
                   ))}
@@ -388,7 +389,7 @@ export default function ProgramacionClient() {
               <tbody>
                 {entradas.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-3 py-8 text-center text-gray-400">
+                    <td colSpan={10} className="px-3 py-8 text-center text-gray-400">
                       Aún no hay nada programado en este cuatrimestre.
                     </td>
                   </tr>
@@ -399,6 +400,7 @@ export default function ProgramacionClient() {
                       <td className="px-3 py-2 text-gray-700 max-w-[220px] truncate">{e.descripcion}</td>
                       <td className="px-3 py-2 font-mono text-xs text-gray-600">{e.subProducto}</td>
                       <td className="px-3 py-2 text-gray-600 capitalize">{e.tipo}</td>
+                      <td className="px-3 py-2">{badgeEstado(e.estado)}</td>
                       <td className="px-3 py-2 text-right text-gray-600">{Q(e.mes1)}</td>
                       <td className="px-3 py-2 text-right text-gray-600">{Q(e.mes2)}</td>
                       <td className="px-3 py-2 text-right text-gray-600">{Q(e.mes3)}</td>

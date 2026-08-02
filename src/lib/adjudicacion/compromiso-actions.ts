@@ -4,9 +4,10 @@ import { ordenesCompra } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
-import { presupuestoRenglones } from "@/lib/schema";
+import { presupuestoRenglones, programacionEntradas, programacionCompromisos } from "@/lib/schema";
 import { and } from "drizzle-orm";
-import { requiereDab60 } from "@/lib/programacion-constants";
+import { requiereDab60, cuatrimestreDeFecha } from "@/lib/programacion-constants";
+import { fechaGuatemala } from "@/lib/date-utils";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -47,6 +48,8 @@ export async function comprometerYEnviarADevengado(ordenId: number, noCompromiso
       no_compromiso: noCompromiso.trim(), estado: siguienteEstado,
     }).where(eq(ordenesCompra.id, ordenId));
 
+    const cuatrimestreActual = cuatrimestreDeFecha(fechaGuatemala());
+
     for (const r of renglones) {
       await db.update(presupuestoRenglones).set({
         pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) - ${r.total}`,
@@ -57,6 +60,29 @@ export async function comprometerYEnviarADevengado(ordenId: number, noCompromiso
         eq(presupuestoRenglones.subproducto, r.subproducto),
         eq(presupuestoRenglones.ejercicio_fiscal, 2026)
       ));
+
+      // Ledger para la caducidad de cuatrimestre (ver cierre-cuatrimestre.ts):
+      // el Compromiso solo aplica a Órdenes de Compra (Normal), nunca a Fondo
+      // Rotativo. Si no hay una entrada de Programación vigente para este
+      // renglón/sub-producto en el cuatrimestre actual, no hay nada que
+      // registrar (no se podrá trasladar, que es lo correcto).
+      const [entrada] = await db.select({ id: programacionEntradas.id })
+        .from(programacionEntradas).where(and(
+          eq(programacionEntradas.ejercicio_fiscal, 2026),
+          eq(programacionEntradas.cuatrimestre, cuatrimestreActual),
+          eq(programacionEntradas.renglon, r.renglon as number),
+          eq(programacionEntradas.subproducto, r.subproducto),
+          eq(programacionEntradas.tipo, "normal"),
+        )).limit(1);
+
+      if (entrada) {
+        await db.insert(programacionCompromisos).values({
+          programacion_entrada_id: entrada.id,
+          orden_id: ordenId,
+          no_compromiso: noCompromiso.trim(),
+          monto: r.total,
+        });
+      }
     }
 
     return { ok: true };

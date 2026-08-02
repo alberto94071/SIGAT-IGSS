@@ -43,6 +43,9 @@ export const configuracion = pgTable("configuracion", {
   nit_encargado_unidad:      text("nit_encargado_unidad").notNull().default("52392678"),
   // NIT del solicitante (Caja Chica) — el nombre y número de empleado ya existían.
   nit_solicitante: text("nit_solicitante").notNull().default(""),
+  // Marca el último cuatrimestre ya cerrado (formato "2026-1") para la
+  // caducidad de saldo programado — ver cierre-cuatrimestre.ts.
+  ultimo_cuatrimestre_cerrado: text("ultimo_cuatrimestre_cerrado"),
   updated_at:           text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
@@ -625,6 +628,19 @@ export const programacionEntradas = pgTable("programacion_entradas", {
   creado_por:       integer("creado_por").references(() => usuarios.id),
   created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   updated_at:       text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// Ledger de qué compromiso consumió qué parte de una entrada de
+// Programación — necesario para la caducidad de cuatrimestre: al cerrar
+// uno, solo se traslada al siguiente el monto que aparece aquí (ver
+// cierre-cuatrimestre.ts); todo lo demás se marca "Caducado".
+export const programacionCompromisos = pgTable("programacion_compromisos", {
+  id:                       serial("id").primaryKey(),
+  programacion_entrada_id:  integer("programacion_entrada_id").notNull().references(() => programacionEntradas.id),
+  orden_id:                 integer("orden_id").notNull(),
+  no_compromiso:            text("no_compromiso").notNull(),
+  monto:                    doublePrecision("monto").notNull(),
+  created_at:               text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 // ─── Reprogramación: transferencias reales entre renglón/sub-producto ───────

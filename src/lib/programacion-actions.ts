@@ -12,6 +12,7 @@ import {
   mesCreacionProgramacionLabel, mesesReprogramacionLabel, fechaAprobacionAutomatica,
   ventanaIngruAbierta, ventanaTransferenciaAbierta, ventanaAmpliacionAbierta,
 } from "@/lib/programacion-fechas";
+import { procesarCierreCuatrimestres } from "@/lib/cierre-cuatrimestre";
 
 const EJERCICIO = EJERCICIO_FISCAL;
 
@@ -70,6 +71,7 @@ export async function getProgramadoDelGrupo(cuatrimestre: number, grupoId: numbe
   }).from(programacionEntradas).where(and(
     eq(programacionEntradas.ejercicio_fiscal, EJERCICIO),
     eq(programacionEntradas.cuatrimestre, cuatrimestre),
+    sql`${programacionEntradas.estado} != 'Caducado'`,
   ));
   return filas
     .filter(f => f.renglon >= grupo.min && f.renglon <= grupo.max)
@@ -116,6 +118,7 @@ async function aprobarSolicitudesVencidas(cuatrimestre: number): Promise<void> {
 
 /** Entradas ya guardadas para un cuatrimestre (para la tabla de "ya programados"). */
 export async function getEntradas(cuatrimestre: number): Promise<ProgramacionEntrada[]> {
+  await procesarCierreCuatrimestres();
   await aprobarSolicitudesVencidas(cuatrimestre);
 
   const filas = await db.select().from(programacionEntradas).where(and(
