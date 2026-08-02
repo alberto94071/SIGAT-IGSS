@@ -299,7 +299,8 @@ export type GuardarModificacionInput = {
  * Reprogramación: registra la SOLICITUD de una modificación (Ingru /
  * Ampliación) para un renglón + sub-producto — queda "Solicitado" y NO
  * toca presupuesto_renglones todavía; eso solo pasa al aprobar (ver
- * aprobarModificacion). No suma al valor anterior — lo reemplaza tal cual.
+ * aprobarModificacion), que SUMA este valor al acumulado del año (puede
+ * ser negativo para registrar que se le quitó presupuesto a ese renglón).
  */
 export async function guardarModificacion(input: GuardarModificacionInput): Promise<{ ok: true } | { error: string }> {
   const check = await requireEdit();
@@ -346,7 +347,12 @@ export async function guardarModificacion(input: GuardarModificacionInput): Prom
   return { ok: true };
 }
 
-/** Aprueba una modificación Ingru/Ampliación — solo quien tenga acceso a mod_presupuesto. Recién aquí se refleja en presupuesto_renglones. */
+/**
+ * Aprueba una modificación Ingru/Ampliación — solo quien tenga acceso a
+ * mod_presupuesto. Recién aquí se refleja en presupuesto_renglones, SUMANDO
+ * (o restando, si el valor aprobado es negativo) al acumulado del año —
+ * igual que ya hace modificacion_entre_renglones vía transferirPresupuesto.
+ */
 export async function aprobarModificacion(id: number): Promise<{ ok: true } | { error: string }> {
   const check = await requireModuloAccessAction("mod_presupuesto");
   if ("error" in check) return check;
@@ -369,7 +375,7 @@ export async function aprobarModificacion(id: number): Promise<{ ok: true } | { 
 
   if (existente) {
     await db.update(presupuestoRenglones)
-      .set({ [tipoInfo.campo]: fila.valor })
+      .set({ [tipoInfo.campo]: sql`COALESCE(${presupuestoRenglones[tipoInfo.campo]}, 0) + ${fila.valor}` })
       .where(eq(presupuestoRenglones.id, existente.id));
   } else {
     const base = PRESUPUESTO_DATA.find(r => r.renglon === fila.renglon && r.subProducto === fila.subproducto);

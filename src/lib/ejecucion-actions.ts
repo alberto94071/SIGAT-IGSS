@@ -11,9 +11,6 @@ export type EjecucionRow = {
   descripcion: string;
   subProducto: string;
   vigente: number;
-  modificacionesIngru: number;
-  modificacionesNormal: number;
-  modificacionAmpliacion: number;
   disponible: number;
   preCompromiso: number;
   compromiso: number;
@@ -32,9 +29,10 @@ export type EjecucionRow = {
  * cliente (ver conversación) para cada columna, por renglón + sub-producto:
  *
  * - Vigente: presupuesto base del año, fijo (catálogo, EJECUCION_DATA).
- * - Modificaciones Ingru/Entre Renglones/Ampliación: en vivo desde
- *   presupuesto_renglones (mismas columnas que escribe Reprogramación).
- * - Disponible = Vigente + las 3 Modificaciones. Solo cambia cuando se
+ * - Disponible = Vigente + las 3 Modificaciones (Ingru, Entre Renglones,
+ *   Ampliación) acumuladas del año en presupuesto_renglones — mismas
+ *   columnas que escribe Reprogramación, pero el desglose ya no se muestra
+ *   aquí, se ve en /presupuesto/general. Disponible solo cambia cuando se
  *   aprueba una modificación.
  * - Pre-Compromiso, Compromiso, Ejecución Normal/Regularizado (=Devengado):
  *   en vivo desde presupuesto_renglones, igual que antes.
@@ -113,10 +111,9 @@ export async function getEjecucionData(): Promise<EjecucionRow[]> {
     const programado = programadoPorClave.get(clave) ?? { normal: 0, regularizado: 0 };
     const acumulado = acumuladoPorClave.get(clave) ?? 0;
 
-    const modificacionesIngru = vivo?.modificacion_ingru ?? 0;
-    const modificacionesNormal = vivo?.modificacion_entre_renglones ?? 0;
-    const modificacionAmpliacion = vivo?.modificacion_ampliacion ?? 0;
-    const disponible = r.nuevoVigente + modificacionesIngru + modificacionesNormal + modificacionAmpliacion;
+    const modificaciones =
+      (vivo?.modificacion_ingru ?? 0) + (vivo?.modificacion_entre_renglones ?? 0) + (vivo?.modificacion_ampliacion ?? 0);
+    const disponible = r.nuevoVigente + modificaciones;
 
     const ejecucionNormal = vivo?.devengado ?? 0;
     const ejecucionRegularizado = vivo?.devengado_regularizado ?? 0;
@@ -126,9 +123,6 @@ export async function getEjecucionData(): Promise<EjecucionRow[]> {
       descripcion: r.descripcion,
       subProducto: r.subProducto,
       vigente: r.nuevoVigente,
-      modificacionesIngru,
-      modificacionesNormal,
-      modificacionAmpliacion,
       disponible,
       preCompromiso: vivo?.pre_compromiso ?? 0,
       compromiso: vivo?.compromiso ?? 0,

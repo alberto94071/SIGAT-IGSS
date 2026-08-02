@@ -12,6 +12,7 @@ export type PresupuestoGeneralRow = {
   vigente: number;
   ingru: number | null;
   entreRenglones: number | null;
+  ampliacion: number | null;
   nuevoVigente: number;
   programado: number | null;
   devengado: number | null;
@@ -25,11 +26,12 @@ export type PresupuestoGeneralRow = {
  * Ejecución (que es por cuatrimestre), esta pantalla es el RESUMEN
  * HISTÓRICO ACUMULADO de todo el año, en vivo:
  *
- * - Ingru / Entre Renglones: valor vivo de presupuesto_renglones (mismas
- *   columnas que Ejecución) — Entre Renglones ya es en sí un acumulado neto
- *   (+destino/-origen de cada transferencia aprobada).
- * - Nuevo Vigente = Vigente + Ingru + Entre Renglones + Ampliación (esta
- *   última no tiene columna propia aquí, igual que antes, pero sí se suma).
+ * - Ingru / Entre Renglones / Ampliación: valor vivo y acumulado del año en
+ *   presupuesto_renglones — las 3 se suman/restan con cada modificación
+ *   aprobada (ver aprobarModificacion y transferirPresupuesto en
+ *   programacion-actions.ts), nunca se sobreescriben. Antes se mostraban en
+ *   /presupuesto/ejecucion; ahora viven solo aquí, como resumen del año.
+ * - Nuevo Vigente = Vigente + Ingru + Entre Renglones + Ampliación.
  * - Programado = suma de TODO lo Aprobado en Programación/Reprogramación en
  *   TODOS los cuatrimestres del año (no solo el vigente).
  * - Devengado = Devengado Normal + Devengado Regularizado (combinados, sin
@@ -96,6 +98,7 @@ export async function getPresupuestoGeneralData(): Promise<PresupuestoGeneralRow
       ...r,
       ingru,
       entreRenglones,
+      ampliacion,
       nuevoVigente,
       programado,
       devengado,

@@ -600,12 +600,13 @@ export const presupuestoRenglones = pgTable("presupuesto_renglones", {
   saldo_presupuestario: doublePrecision("saldo_presupuestario"),
   saldo_disponible:     doublePrecision("saldo_disponible"),
   // Reprogramación — modificaciones presupuestarias por tipo (ver
-  // programacion-constants.ts TIPOS_MODIFICACION). Cada una es un valor
-  // fijo por renglón + sub-producto que se sobreescribe, no se acumula —
-  // EXCEPTO modificacion_entre_renglones, que desde la transferencia real
-  // (ver reprogramaciones abajo y transferirPresupuesto en
-  // programacion-actions.ts) se acumula sumando/restando cada movimiento
-  // (+destino/-origen), para que dos transferencias sucesivas no se pisen.
+  // programacion-constants.ts TIPOS_MODIFICACION). Las 3 se acumulan
+  // sumando/restando cada movimiento aprobado a lo largo del año, nunca se
+  // sobreescriben: modificacion_ingru/modificacion_ampliacion vía
+  // aprobarModificacion (el valor aprobado puede ser negativo, para
+  // registrar que se le quitó presupuesto a ese renglón); modificacion_
+  // entre_renglones vía transferirPresupuesto (+destino/-origen). Se
+  // muestran en /presupuesto/general (resumen del año), no en Ejecución.
   modificacion_ingru:          doublePrecision("modificacion_ingru").notNull().default(0),
   modificacion_entre_renglones: doublePrecision("modificacion_entre_renglones").notNull().default(0),
   modificacion_ampliacion:     doublePrecision("modificacion_ampliacion").notNull().default(0),

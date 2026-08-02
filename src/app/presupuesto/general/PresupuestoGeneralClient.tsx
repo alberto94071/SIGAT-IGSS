@@ -241,6 +241,7 @@ export default function PresupuestoGeneralClient({ data }: Props) {
                 <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Vigente</th>
                 <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Ingru</th>
                 <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Entre Renglones</th>
+                <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Ampliación</th>
                 <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Nuevo Vigente</th>
                 <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Programado</th>
                 <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Devengado</th>
@@ -252,7 +253,7 @@ export default function PresupuestoGeneralClient({ data }: Props) {
             <tbody className="divide-y divide-gray-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-3 py-8 text-center text-gray-400">
+                  <td colSpan={13} className="px-3 py-8 text-center text-gray-400">
                     No hay datos para este rango de renglones.
                   </td>
                 </tr>
@@ -267,6 +268,7 @@ export default function PresupuestoGeneralClient({ data }: Props) {
                     <td className="px-3 py-2 tabular-nums text-right text-gray-900 font-semibold whitespace-nowrap">{Q(r.vigente)}</td>
                     <td className="px-3 py-2 tabular-nums text-right text-gray-400 whitespace-nowrap">{Q(r.ingru)}</td>
                     <td className="px-3 py-2 tabular-nums text-right text-gray-400 whitespace-nowrap">{Q(r.entreRenglones)}</td>
+                    <td className="px-3 py-2 tabular-nums text-right text-gray-400 whitespace-nowrap">{Q(r.ampliacion)}</td>
                     <td className="px-3 py-2 tabular-nums text-right text-gray-900 font-semibold whitespace-nowrap">{Q(r.nuevoVigente)}</td>
                     <td className="px-3 py-2 tabular-nums text-right text-gray-400 whitespace-nowrap">{Q(r.programado)}</td>
                     <td className="px-3 py-2 tabular-nums text-right text-gray-700 whitespace-nowrap">{Q(r.devengado)}</td>
@@ -284,7 +286,7 @@ export default function PresupuestoGeneralClient({ data }: Props) {
                 <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
                   <td colSpan={3} className="px-3 py-2.5 text-right text-gray-700 whitespace-nowrap">Total</td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-900 whitespace-nowrap">{Q(totales.vigente)}</td>
-                  <td colSpan={2}></td>
+                  <td colSpan={3}></td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-900 whitespace-nowrap">{Q(totales.nuevoVigente)}</td>
                   <td></td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-900 whitespace-nowrap">{Q(totales.devengado)}</td>

@@ -43,14 +43,6 @@ type Columna =
 // (ejecucion-actions.ts), que es donde se calculan.
 const COLUMNAS: Columna[] = [
   { kind: "simple", label: "Vigente", color: "slate", get: r => r.vigente },
-  {
-    kind: "group", label: "Modificaciones", color: "slate",
-    sub: [
-      { label: "Ingru", get: r => r.modificacionesIngru },
-      { label: "Entre Renglones", get: r => r.modificacionesNormal },
-      { label: "Ampliación", get: r => r.modificacionAmpliacion },
-    ],
-  },
   { kind: "simple", label: "Disponible", color: "slate", get: r => r.disponible },
   { kind: "simple", label: "Pre-Compromiso", color: "cyan", get: r => r.preCompromiso },
   { kind: "simple", label: "Compromiso", color: "amber", get: r => r.compromiso },
