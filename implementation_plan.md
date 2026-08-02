@@ -169,39 +169,35 @@ Devengado". Split propuesto (calcado de A-01 SIAF):
   `"Completada"`, y **ahí** arranca el seguimiento DAF (`estado_devengado =
   "Enviado"`) que ya se construyó en la Fase 5.
 
-**Fase 12 — Pago de Fondo Rotativo (SIAF-04): función nueva, no solo un botón.**
-Confirmado que hoy la columna "Regularizado" de Ejecución **nunca se llena**
-para Fondo Rotativo real (ese flujo se salta Compromiso/Devengado
-completo). Hay que construir:
-- Nuevo paso de aprobación sobre el SIAF-04/consolidación (antes o después
-  de "Agregar forma de pago" — falta confirmar el orden exacto, ver
-  pregunta abajo).
-- Al aprobar: calcular el monto por renglón/sub-producto de la
-  consolidación (mismo helper `gruposRenglonDeConsolidacion` que ya usan
-  Compromiso/Devengado) y sumarlo a `presupuestoRenglones.
-  devengado_regularizado`.
-- Si el gate operativo aplica igual que en Compromiso/Devengado, el pago no
-  podría proceder a Bancos/Caja Chica hasta que Presupuesto apruebe.
+**Fase 12 — Pago de Fondo Rotativo (SIAF-04): sin gate de Presupuesto.**
+Confirmado por el cliente: Fondo Rotativo **no pasa por aprobación de
+Presupuesto** — se refleja con lo que el propio Fondo Rotativo ya
+aprueba/hace/paga/gasta dentro de su propio módulo. No hay que construir
+ningún botón ni rol nuevo aquí; solo enganchar el reflejo contable al
+evento que ya existe y que representa "se pagó/gastó de verdad":
+`registrarFormaPagoCheque` y `registrarFormaPagoEfectivo`
+(`fondo-rotativo-pagos-actions.ts`) — ahí es donde Fondo Rotativo decide y
+ejecuta la forma de pago (emite cheque o asigna vale). En ese momento:
+calcular el monto por renglón/subproducto de la consolidación (mismo
+`gruposRenglonDeConsolidacion` que ya usan Compromiso/Devengado) y sumarlo
+a `presupuestoRenglones.devengado_regularizado` (las consolidaciones de
+Fondo Rotativo son siempre `regularizado = true` por definición, no hace
+falta chequear la bandera como en `devengar()`).
 
-## 4. Preguntas que todavía faltan (para el cliente, vía Alberto)
+## 4. Confirmado por el cliente (respuestas a P1-P3)
 
-**P1.** Programación y Reprogramación: ¿la aprobación es de verdad "6to día
-hábil" uniforme para ambas (más simple que lo que ya construí), o seguía
-siendo lo original — Programación aprueba 6to hábil de enero / 1er hábil de
-mayo / 1er hábil de septiembre (según a qué cuatrimestre corresponda), y
-Reprogramación aprueba 6to hábil del mes en que se creó? Alberto resumió la
-respuesta del cliente y quiero confirmar que no se perdió este detalle.
+- **P1 — Programación/Reprogramación**: la fecha sigue siendo distinta por
+  cuatrimestre (lo que ya está construido en Fase 3: Programación 6to hábil
+  de enero / 1er hábil de mayo / 1er hábil de septiembre; Reprogramación
+  6to hábil del mes de creación). Solo cambia el mecanismo — de automático
+  a botón manual — no las fechas.
+- **P2 — Pago de Fondo Rotativo**: no hay aprobación de Presupuesto; ver
+  Fase 12 arriba.
+- **P3 — Rechazo**: regresa un nivel (igual que `rechazarSolicitud` en A-01
+  SIAF) — tanto para Compromiso como para Devengado.
 
-**P2.** Pago de Fondo Rotativo (SIAF-04): ¿la aprobación de Presupuesto va
-ANTES de elegir forma de pago (cheque/efectivo) — o sea, no se puede ni
-generar el cheque/vale hasta que Presupuesto apruebe — o va DESPUÉS (se
-paga primero operativamente, y luego Presupuesto aprueba para que se
-refleje en Ejecución)? Esto cambia en qué pantalla exacta va el botón de
-aprobar.
-
-**P3.** Cuando Presupuesto **rechaza** un Compromiso o un Devengado, ¿la
-orden regresa al paso anterior para corregir el número (como ya hace A-01
-SIAF), o hay otra acción esperada?
+Ya no quedan preguntas abiertas para el cliente. Se procede a implementar
+Fases 8, 10, 11 y 12.
 
 ## 5. Verificación (para cada fase)
 
