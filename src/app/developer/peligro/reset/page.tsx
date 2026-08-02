@@ -1,8 +1,10 @@
 ﻿"use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { executeDatabaseReset } from "@/lib/developer/reset-actions";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { exportarBackup } from "@/lib/developer/backup-actions";
+import { AlertTriangle, Loader2, DownloadCloud, CheckCircle2, History } from "lucide-react";
 
 export default function DeveloperResetPage() {
   const [password, setPassword] = useState("");
@@ -10,14 +12,40 @@ export default function DeveloperResetPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "success", text: string } | null>(null);
 
+  const [descargando, setDescargando] = useState(false);
+  const [respaldoDescargado, setRespaldoDescargado] = useState(false);
+  const [omitidas, setOmitidas] = useState<string[]>([]);
+  const [errorRespaldo, setErrorRespaldo] = useState("");
+
+  async function handleDescargarRespaldo() {
+    setDescargando(true);
+    setErrorRespaldo("");
+    const res = await exportarBackup(password);
+    setDescargando(false);
+    if ("error" in res) { setErrorRespaldo(res.error); return; }
+
+    const blob = new Blob([JSON.stringify(res.data)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const marca = res.data.generado_en.replace(/[:.]/g, "-");
+    a.href = url;
+    a.download = `sigat-igss-respaldo-${marca}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setRespaldoDescargado(true);
+    setOmitidas(res.data.omitidas);
+  }
+
   async function handleReset() {
     if (!confirm("ADVERTENCIA: Vas a eliminar todos los registros transaccionales de la base de datos (SIAFs, consolidaciones, cotizaciones, órdenes, etc) y a restablecer saldos a cero. ¿ESTÁS COMPLETAMENTE SEGURO?")) return;
-    
+
     setLoading(true);
     setMessage(null);
     const result = await executeDatabaseReset(password);
     setLoading(false);
-    
+
     if ("error" in result) {
       setMessage({ type: "error", text: result.error });
     } else {
@@ -60,21 +88,57 @@ export default function DeveloperResetPage() {
           Estás a punto de ejecutar un comando de truncado en cascada. Se eliminarán permanentemente todas las transacciones generadas en la base de datos de producción.
         </p>
 
+        <div className="mb-6 p-4 rounded-lg border border-gray-800 bg-gray-950/60">
+          <p className="text-xs text-gray-400 mb-3">
+            Antes de reiniciar, descarga un respaldo completo del sistema (todas las tablas, no solo lo que se va a borrar). Si algún día necesitas regresar a este punto exacto, ese mismo archivo se carga en{" "}
+            <Link href="/developer/peligro/restaurar" className="text-red-400 underline">Restaurar respaldo</Link>.
+          </p>
+          <button
+            onClick={handleDescargarRespaldo}
+            disabled={descargando || !password}
+            className="w-full bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-100 font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
+          >
+            {descargando ? <Loader2 className="w-4 h-4 animate-spin" /> : <DownloadCloud className="w-4 h-4" />}
+            Descargar respaldo completo (.json)
+          </button>
+          {respaldoDescargado && (
+            <>
+              <p className="flex items-center gap-1.5 text-emerald-400 text-xs mt-2">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Respaldo descargado. Guárdalo en un lugar seguro.
+              </p>
+              {omitidas.length > 0 && (
+                <p className="text-amber-400 text-xs mt-1">
+                  Nota: {omitidas.join(", ")} no {omitidas.length === 1 ? "existe" : "existen"} todavía en esta base de datos — se omitieron.
+                </p>
+              )}
+            </>
+          )}
+          {errorRespaldo && <p className="text-red-400 text-xs mt-2">{errorRespaldo}</p>}
+        </div>
+
         {message && (
           <div className={`p-4 rounded-lg mb-6 text-sm ${message.type === "error" ? "bg-red-950 border border-red-900 text-red-200" : "bg-emerald-950 border border-emerald-900 text-emerald-200"}`}>
             {message.text}
           </div>
         )}
 
-        <button 
+        <button
           onClick={handleReset}
-          disabled={loading}
+          disabled={loading || !respaldoDescargado}
+          title={!respaldoDescargado ? "Primero descarga un respaldo completo" : undefined}
           className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-3 rounded-lg transition-colors shadow-[0_0_15px_rgba(220,38,38,0.3)] hover:shadow-[0_0_25px_rgba(220,38,38,0.5)] flex items-center justify-center gap-2"
         >
           {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <AlertTriangle className="w-5 h-5" />}
           EJECUTAR REINICIO TOTAL
         </button>
-        <button onClick={() => setUnlocked(false)} className="w-full mt-4 text-xs text-gray-500 hover:text-gray-300">
+        {!respaldoDescargado && (
+          <p className="text-center text-xs text-gray-500 mt-2">Descarga el respaldo primero para poder reiniciar.</p>
+        )}
+
+        <Link href="/developer/peligro/restaurar" className="w-full mt-4 text-xs text-gray-500 hover:text-gray-300 flex items-center justify-center gap-1.5">
+          <History className="w-3.5 h-3.5" /> Restaurar desde un respaldo anterior
+        </Link>
+        <button onClick={() => setUnlocked(false)} className="w-full mt-3 text-xs text-gray-500 hover:text-gray-300">
           ← Volver y bloquear
         </button>
       </div>

@@ -2,8 +2,7 @@
 
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
-
-const MASTER_PASSWORD = "Katerine.94071";
+import { MASTER_PASSWORD } from "./master-password";
 
 export async function executeDatabaseReset(password: string): Promise<{ ok: true } | { error: string }> {
   if (password !== MASTER_PASSWORD) {
@@ -31,6 +30,8 @@ export async function executeDatabaseReset(password: string): Promise<{ ok: true
       "audit_log",
       "notificaciones",
       "programacion_entradas",
+      "reprogramaciones",
+      "modificaciones_presupuestarias",
     ];
 
     for (const table of tablesToTruncate) {
