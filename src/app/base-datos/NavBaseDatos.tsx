@@ -14,7 +14,7 @@ export default function NavBaseDatos() {
   const pathname = usePathname();
 
   return (
-    <div className="max-w-7xl mx-auto px-6">
+    <div className="w-full px-6">
       <nav className="flex gap-1 pb-0 pt-1">
         {TABS.map(({ label, href, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");

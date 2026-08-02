@@ -9,7 +9,7 @@ export default async function BaseDatosLayout({ children }: { children: React.Re
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
       <header className="bg-gradient-to-r from-blue-700 to-blue-500 shadow-lg">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="w-full px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/15 rounded-xl flex items-center justify-center ring-2 ring-white/30">
               <Database className="w-5 h-5 text-white" />
@@ -29,7 +29,7 @@ export default async function BaseDatosLayout({ children }: { children: React.Re
         <NavBaseDatos />
       </header>
 
-      <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-6">
+      <main className="flex-1 w-full px-6 py-6">
         {children}
       </main>
 

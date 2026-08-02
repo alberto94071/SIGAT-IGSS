@@ -191,6 +191,11 @@ export default async function LauncherPage() {
   const rol = session.user.rol as Rol;
   const permisos = await getPermisosFrescos(Number(session.user.id), rol);
   const modules = MODULES.filter(m => m.permiso === null || permisos[m.permiso]);
+  // Solo el Super Administrador tiene todos los módulos disponibles a la
+  // vez — para él (y solo para él) la cuadrícula usa más ancho y 4 columnas
+  // por fila, para no tener que bajar tanto. El resto de roles, al no tener
+  // todos los módulos, se queda con la cuadrícula de siempre.
+  const esSuperAdmin = rol === "superadmin";
 
   const userName = session.user.name ?? session.user.email ?? "Usuario";
   const prefs = await getMisPreferenciasUI();
@@ -201,7 +206,7 @@ export default async function LauncherPage() {
 
       {/* ── Header ─────────────────────────────────────────────────── */}
       <header className="shadow-lg" style={{ background: "var(--cip-barra-grad, linear-gradient(to right, #166534, #16a34a))" }}>
-        <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+        <div className={`${esSuperAdmin ? "max-w-[1600px]" : "max-w-6xl"} mx-auto px-6 py-5 flex items-center justify-between`}>
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center ring-2 ring-white/40 shadow-md p-1.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -223,7 +228,7 @@ export default async function LauncherPage() {
 
       {/* ── Subheader ───────────────────────────────────────────────── */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-6xl mx-auto px-6 py-4">
+        <div className={`${esSuperAdmin ? "max-w-[1600px]" : "max-w-6xl"} mx-auto px-6 py-4`}>
           <p className="text-sm text-gray-500">
             Selecciona el módulo al que deseas acceder
           </p>
@@ -231,8 +236,8 @@ export default async function LauncherPage() {
       </div>
 
       {/* ── Module grid ─────────────────────────────────────────────── */}
-      <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-10">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <main className={`flex-1 ${esSuperAdmin ? "max-w-[1600px]" : "max-w-6xl"} mx-auto w-full px-6 py-10`}>
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${esSuperAdmin ? "lg:grid-cols-4 gap-5" : "lg:grid-cols-3 gap-6"}`}>
           {modules.map((mod) => {
             const Icon = mod.icon;
             return (
