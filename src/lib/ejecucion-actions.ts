@@ -10,10 +10,11 @@ export type EjecucionRow = {
   renglon: number;
   descripcion: string;
   subProducto: string;
-  nuevoVigente: number;
+  vigente: number;
   modificacionesIngru: number;
   modificacionesNormal: number;
   modificacionAmpliacion: number;
+  disponible: number;
   preCompromiso: number;
   compromiso: number;
   ejecucionNormal: number;
@@ -22,28 +23,35 @@ export type EjecucionRow = {
   programadoRegularizado: number;
   saldoProgramadoNormal: number;
   saldoProgramadoRegularizado: number;
+  totalProgramado: number;
+  saldo: number;
 };
 
 /**
- * Carga los datos de ejecución presupuestaria.
+ * Carga los datos de ejecución presupuestaria. Lógica confirmada con el
+ * cliente (ver conversación) para cada columna, por renglón + sub-producto:
  *
- * - Programado Normal/Regularizado es lo capturado en programacion_entradas
- *   para el CUATRIMESTRE VIGENTE (según la fecha de hoy), por renglón +
- *   sub-producto + tipo — solo entradas ya Aprobadas (mientras están
- *   Solicitado/Rechazado/Caducado no cuentan aquí).
- * - Saldo Programado Normal/Regularizado se cruza en vivo con la suma de
- *   TODOS los cuatrimestres capturados en Programación y Reprogramación
- *   (programacion_entradas, los 4 meses de cada uno) por renglón +
- *   sub-producto + tipo, también solo Aprobadas — se deja igual que antes
- *   a propósito, ver calcularTotales() en EjecucionClient.tsx (fórmula
- *   preservada del Excel fuente del cliente).
- * - Pre-Compromiso, Compromiso (columna única, sin distinguir Normal/
- *   Regularizado) y Ejecución Normal/Regularizado (= Devengado) se cruzan en
- *   vivo con presupuesto_renglones (misma tabla que ya actualizan A01-SIAF,
- *   Compromiso y Devengado), por renglón + sub-producto.
- * - Modificaciones Ingru/Entre Renglones/Ampliación se cruzan en vivo con
- *   las mismas columnas que escribe Reprogramación (ver programacion-actions.ts
- *   guardarModificacion), también por renglón + sub-producto.
+ * - Vigente: presupuesto base del año, fijo (catálogo, EJECUCION_DATA).
+ * - Modificaciones Ingru/Entre Renglones/Ampliación: en vivo desde
+ *   presupuesto_renglones (mismas columnas que escribe Reprogramación).
+ * - Disponible = Vigente + las 3 Modificaciones. Solo cambia cuando se
+ *   aprueba una modificación.
+ * - Pre-Compromiso, Compromiso, Ejecución Normal/Regularizado (=Devengado):
+ *   en vivo desde presupuesto_renglones, igual que antes.
+ * - Programado Normal/Regularizado: lo Aprobado en Programación/
+ *   Reprogramación para el CUATRIMESTRE VIGENTE únicamente (cambia de
+ *   valor solo por venir de otra fila en programacion_entradas, no se sigue
+ *   acumulando dentro del mismo cuatrimestre).
+ * - Total Programado = Programado Normal + Programado Regularizado del
+ *   cuatrimestre vigente (una sola columna, sin dividir Normal/Regularizado).
+ * - Saldo Programado Normal/Regularizado = Programado (del cuatrimestre
+ *   vigente) − Ejecución, por tipo. Se recalcula solo conforme avanza la
+ *   ejecución dentro del mismo cuatrimestre.
+ * - Saldo = Disponible − la suma de Total Programado de TODOS los
+ *   cuatrimestres Aprobados del año (no solo el vigente) — es lo único que
+ *   queda sin asignar a ningún cuatrimestre todavía, y por eso es lo único
+ *   que se puede mover a otro renglón vía Transferencia (ver
+ *   getSaldoRenglon en presupuesto-disponible.ts, misma fórmula).
  */
 export async function getEjecucionData(): Promise<EjecucionRow[]> {
   const cuatrimestreVigente = cuatrimestreDeFecha(fechaGuatemala());
@@ -75,16 +83,16 @@ export async function getEjecucionData(): Promise<EjecucionRow[]> {
     }).from(presupuestoRenglones).where(eq(presupuestoRenglones.ejercicio_fiscal, 2026)),
   ]);
 
-  const saldoPorClave = new Map<string, { normal: number; regularizado: number }>();
+  // Acumulado: suma de TODOS los cuatrimestres del año (para Saldo).
+  const acumuladoPorClave = new Map<string, number>();
+  // Solo el cuatrimestre vigente, por tipo (para Programado/Saldo Programado).
   const programadoPorClave = new Map<string, { normal: number; regularizado: number }>();
+
   for (const e of entradas) {
     const clave = `${e.renglon}|${e.subproducto}`;
     const total = e.mes1 + e.mes2 + e.mes3 + e.mes4;
 
-    const acumulado = saldoPorClave.get(clave) ?? { normal: 0, regularizado: 0 };
-    if (e.tipo === "normal") acumulado.normal += total;
-    else acumulado.regularizado += total;
-    saldoPorClave.set(clave, acumulado);
+    acumuladoPorClave.set(clave, (acumuladoPorClave.get(clave) ?? 0) + total);
 
     if (e.cuatrimestre === cuatrimestreVigente) {
       const delCuatrimestre = programadoPorClave.get(clave) ?? { normal: 0, regularizado: 0 };
@@ -98,22 +106,37 @@ export async function getEjecucionData(): Promise<EjecucionRow[]> {
 
   return EJECUCION_DATA.map(r => {
     const clave = `${r.renglon}|${r.subProducto}`;
-    const saldo = saldoPorClave.get(clave);
-    const programado = programadoPorClave.get(clave);
     const vivo = vivoPorClave.get(clave);
+    const programado = programadoPorClave.get(clave) ?? { normal: 0, regularizado: 0 };
+    const acumulado = acumuladoPorClave.get(clave) ?? 0;
+
+    const modificacionesIngru = vivo?.modificacion_ingru ?? 0;
+    const modificacionesNormal = vivo?.modificacion_entre_renglones ?? 0;
+    const modificacionAmpliacion = vivo?.modificacion_ampliacion ?? 0;
+    const disponible = r.nuevoVigente + modificacionesIngru + modificacionesNormal + modificacionAmpliacion;
+
+    const ejecucionNormal = vivo?.devengado ?? 0;
+    const ejecucionRegularizado = vivo?.devengado_regularizado ?? 0;
+
     return {
-      ...r,
-      modificacionesIngru: vivo?.modificacion_ingru ?? 0,
-      modificacionesNormal: vivo?.modificacion_entre_renglones ?? 0,
-      modificacionAmpliacion: vivo?.modificacion_ampliacion ?? 0,
+      renglon: r.renglon,
+      descripcion: r.descripcion,
+      subProducto: r.subProducto,
+      vigente: r.nuevoVigente,
+      modificacionesIngru,
+      modificacionesNormal,
+      modificacionAmpliacion,
+      disponible,
       preCompromiso: vivo?.pre_compromiso ?? 0,
       compromiso: vivo?.compromiso ?? 0,
-      ejecucionNormal: vivo?.devengado ?? 0,
-      ejecucionRegularizado: vivo?.devengado_regularizado ?? 0,
-      programadoNormal: programado?.normal ?? 0,
-      programadoRegularizado: programado?.regularizado ?? 0,
-      saldoProgramadoNormal: saldo?.normal ?? 0,
-      saldoProgramadoRegularizado: saldo?.regularizado ?? 0,
+      ejecucionNormal,
+      ejecucionRegularizado,
+      programadoNormal: programado.normal,
+      programadoRegularizado: programado.regularizado,
+      saldoProgramadoNormal: programado.normal - ejecucionNormal,
+      saldoProgramadoRegularizado: programado.regularizado - ejecucionRegularizado,
+      totalProgramado: programado.normal + programado.regularizado,
+      saldo: disponible - acumulado,
     };
   });
 }

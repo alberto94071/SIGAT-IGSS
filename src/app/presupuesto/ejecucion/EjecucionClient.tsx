@@ -20,8 +20,6 @@ const Q = (n: number | null | undefined) => {
   return `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
-type Totales = { totalNormal: number; totalRegularizado: number; saldo: number };
-
 // Colores por grupo — clases completas (no interpoladas) para que Tailwind las detecte.
 const COLOR_MAP: Record<string, { header: string; sub: string; body: string }> = {
   slate:  { header: "bg-slate-200",  sub: "bg-slate-100",  body: "bg-slate-50" },
@@ -35,14 +33,16 @@ const COLOR_MAP: Record<string, { header: string; sub: string; body: string }> =
 };
 
 type Columna =
-  | { kind: "simple"; label: string; color: string; get: (r: EjecucionRow, t: Totales) => number }
-  | { kind: "group"; label: string; color: string; sub: { label: string; get: (r: EjecucionRow, t: Totales) => number }[] };
+  | { kind: "simple"; label: string; color: string; get: (r: EjecucionRow) => number }
+  | { kind: "group"; label: string; color: string; sub: { label: string; get: (r: EjecucionRow) => number }[] };
 
 // Estructura de columnas de la tabla de Ejecución, igual en las 3 pestañas de
 // rango de renglón. Cada grupo con Normal/Regularizado lleva dos casillas
-// unidas bajo un mismo título y su propia tonalidad de color.
+// unidas bajo un mismo título y su propia tonalidad de color. Fórmulas
+// confirmadas con el cliente — ver el comentario en getEjecucionData()
+// (ejecucion-actions.ts), que es donde se calculan.
 const COLUMNAS: Columna[] = [
-  { kind: "simple", label: "Nuevo Vigente", color: "slate", get: r => r.nuevoVigente },
+  { kind: "simple", label: "Vigente", color: "slate", get: r => r.vigente },
   {
     kind: "group", label: "Modificaciones", color: "slate",
     sub: [
@@ -51,6 +51,7 @@ const COLUMNAS: Columna[] = [
       { label: "Ampliación", get: r => r.modificacionAmpliacion },
     ],
   },
+  { kind: "simple", label: "Disponible", color: "slate", get: r => r.disponible },
   { kind: "simple", label: "Pre-Compromiso", color: "cyan", get: r => r.preCompromiso },
   { kind: "simple", label: "Compromiso", color: "amber", get: r => r.compromiso },
   {
@@ -74,28 +75,11 @@ const COLUMNAS: Columna[] = [
       { label: "Regularizado", get: r => r.saldoProgramadoRegularizado },
     ],
   },
-  {
-    kind: "group", label: "Total Programado", color: "teal",
-    sub: [
-      { label: "Normal", get: (_r, t) => t.totalNormal },
-      { label: "Regularizado", get: (_r, t) => t.totalRegularizado },
-    ],
-  },
-  { kind: "simple", label: "Saldo", color: "gray", get: (_r, t) => t.saldo },
+  { kind: "simple", label: "Total Programado", color: "teal", get: r => r.totalProgramado },
+  { kind: "simple", label: "Saldo", color: "gray", get: r => r.saldo },
 ];
 
 const TOTAL_COLSPAN = 3 + COLUMNAS.reduce((n, c) => n + (c.kind === "group" ? c.sub.length : 1), 0);
-
-function calcularTotales(row: EjecucionRow): Totales {
-  // Fórmulas de la pestaña EJECUCION del Excel fuente, preservadas tal cual:
-  // Total Normal       = Modif.Ingru + Ejecución.Normal + Programado.Normal + Saldo Prog.Normal
-  // Total Regularizado = Modif.Normal + Ejecución.Regularizado + Programado.Regularizado + Saldo Prog.Regularizado
-  // Saldo               = Nuevo Vigente - (Total Normal + Total Regularizado)
-  const totalNormal = row.modificacionesIngru + row.ejecucionNormal + row.programadoNormal + row.saldoProgramadoNormal;
-  const totalRegularizado = row.modificacionesNormal + row.ejecucionRegularizado + row.programadoRegularizado + row.saldoProgramadoRegularizado;
-  const saldo = row.nuevoVigente - (totalNormal + totalRegularizado);
-  return { totalNormal, totalRegularizado, saldo };
-}
 
 export default function EjecucionClient({ data }: Props) {
   const [activeTab, setActiveTab] = useState(0);
@@ -305,7 +289,6 @@ export default function EjecucionClient({ data }: Props) {
                 </tr>
               ) : (
                 filteredData.map((row, idx) => {
-                  const totales = calcularTotales(row);
                   return (
                     <tr
                       key={`${row.renglon}-${row.subProducto}-${idx}`}
@@ -333,7 +316,7 @@ export default function EjecucionClient({ data }: Props) {
                         if (col.kind === "simple") {
                           return [
                             <td key={col.label} className={`px-4 py-3 text-right text-gray-700 font-medium border-l-2 border-gray-300 ${colores.body}`}>
-                              {Q(col.get(row, totales))}
+                              {Q(col.get(row))}
                             </td>,
                           ];
                         }
@@ -342,7 +325,7 @@ export default function EjecucionClient({ data }: Props) {
                             key={`${col.label}-${s.label}`}
                             className={`px-4 py-3 text-right text-gray-600 ${colores.body} ${i === 0 ? "border-l-2 border-gray-300" : "border-l border-gray-200"}`}
                           >
-                            {Q(s.get(row, totales))}
+                            {Q(s.get(row))}
                           </td>
                         ));
                       })}

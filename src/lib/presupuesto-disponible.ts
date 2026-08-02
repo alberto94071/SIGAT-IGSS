@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { programacionEntradas, presupuestoRenglones } from "@/lib/schema";
 import { and, eq, sql } from "drizzle-orm";
+import { PRESUPUESTO_DATA } from "@/lib/presupuesto-general-data";
 
 // Mismo ejercicio fiscal hardcodeado que usa el resto del módulo de
 // Presupuesto (programacion-actions.ts, ejecucion-actions.ts,
@@ -52,6 +53,53 @@ export async function getDisponible(renglon: number, subproducto: string): Promi
     (vivo?.pre_compromiso ?? 0) + (vivo?.compromiso ?? 0) + (vivo?.devengado ?? 0) + (vivo?.devengado_regularizado ?? 0);
 
   return { programado, modificaciones, usado, disponible: programado + modificaciones - usado };
+}
+
+export type Saldo = {
+  disponible: number;          // Vigente + Modificaciones (Ingru + Entre Renglones + Ampliación)
+  programadoAcumulado: number; // suma de lo Aprobado en TODOS los cuatrimestres del año
+  saldo: number;                // disponible - programadoAcumulado
+};
+
+/**
+ * Saldo real de un renglón+sub-producto — cuánto de su presupuesto ANUAL
+ * (Vigente + Modificaciones) todavía no se ha asignado a NINGÚN cuatrimestre
+ * vía Programación/Reprogramación. Es la cifra que gobierna la Transferencia
+ * entre renglón/sub-producto (regla del cliente: solo se puede tomar dinero
+ * de un renglón para mandarlo a otro con lo que aparece en Saldo — una vez
+ * programado, ya no está disponible para reprogramar a otro lado). No debe
+ * confundirse con getDisponible(), que es un cálculo distinto usado para
+ * aprobar SIAF (programado − ya reservado/ejecutado).
+ */
+export async function getSaldoRenglon(renglon: number, subproducto: string): Promise<Saldo> {
+  const base = PRESUPUESTO_DATA.find(r => r.renglon === renglon && r.subProducto === subproducto);
+  const vigente = base?.vigente ?? 0;
+
+  const [entradasRow] = await db.select({
+    total: sql<number>`COALESCE(SUM(${programacionEntradas.mes1} + ${programacionEntradas.mes2} + ${programacionEntradas.mes3} + ${programacionEntradas.mes4}), 0)`,
+  }).from(programacionEntradas).where(and(
+    eq(programacionEntradas.ejercicio_fiscal, EJERCICIO_FISCAL),
+    eq(programacionEntradas.renglon, renglon),
+    eq(programacionEntradas.subproducto, subproducto),
+    eq(programacionEntradas.estado, "Aprobado"),
+  ));
+  const programadoAcumulado = Number(entradasRow?.total ?? 0);
+
+  const [vivo] = await db.select({
+    modificacion_ingru:           presupuestoRenglones.modificacion_ingru,
+    modificacion_entre_renglones: presupuestoRenglones.modificacion_entre_renglones,
+    modificacion_ampliacion:      presupuestoRenglones.modificacion_ampliacion,
+  }).from(presupuestoRenglones).where(and(
+    eq(presupuestoRenglones.renglon, renglon),
+    eq(presupuestoRenglones.subproducto, subproducto),
+    eq(presupuestoRenglones.ejercicio_fiscal, EJERCICIO_FISCAL),
+  )).limit(1);
+
+  const modificaciones =
+    (vivo?.modificacion_ingru ?? 0) + (vivo?.modificacion_entre_renglones ?? 0) + (vivo?.modificacion_ampliacion ?? 0);
+  const disponible = vigente + modificaciones;
+
+  return { disponible, programadoAcumulado, saldo: disponible - programadoAcumulado };
 }
 
 export type RenglonSubproducto = { renglon: number; subproducto: string; monto: number };

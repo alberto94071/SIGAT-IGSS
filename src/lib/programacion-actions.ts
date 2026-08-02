@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth";
 import { requireModuloAccessAction } from "@/lib/modulo-access";
 import { PRESUPUESTO_DATA } from "@/lib/presupuesto-general-data";
 import { GRUPOS, grupoDeRenglon, TIPOS_MODIFICACION, type TipoModificacion } from "@/lib/programacion-constants";
-import { getDisponible, EJERCICIO_FISCAL } from "@/lib/presupuesto-disponible";
+import { getSaldoRenglon, EJERCICIO_FISCAL } from "@/lib/presupuesto-disponible";
 import {
   ventanaProgramacionAbierta, ventanaReprogramacionAbierta,
   mesCreacionProgramacionLabel, mesesReprogramacionLabel, fechaAprobacionAutomatica,
@@ -437,14 +437,14 @@ export async function getModificaciones(): Promise<ModificacionRow[]> {
   });
 }
 
-export type SubproductoConDisponible = SubproductoDisponible & { disponible: number };
+export type SubproductoConDisponible = SubproductoDisponible & { saldo: number };
 
-/** Sub-productos de un renglón con su presupuesto realmente disponible (programado + modificaciones − ya usado). */
+/** Sub-productos de un renglón con su Saldo real (Vigente + Modificaciones − lo ya programado en todo el año) — lo único que se puede transferir a otro renglón. */
 export async function getSubproductosConDisponible(renglon: number): Promise<SubproductoConDisponible[]> {
   const subs = await getSubproductosDeRenglon(renglon);
   return Promise.all(subs.map(async s => {
-    const { disponible } = await getDisponible(renglon, s.subProducto);
-    return { ...s, disponible };
+    const { saldo } = await getSaldoRenglon(renglon, s.subProducto);
+    return { ...s, saldo };
   }));
 }
 
@@ -511,10 +511,10 @@ export async function transferirPresupuesto(input: TransferenciaInput): Promise<
   const baseDestino = PRESUPUESTO_DATA.find(r => r.renglon === renglonDestino && r.subProducto === subProductoDestino);
   if (!baseDestino) return { error: "El renglón/sub-producto de destino no existe en el catálogo presupuestario" };
 
-  const { disponible } = await getDisponible(renglonOrigen, subProductoOrigen);
-  if (monto > disponible + 0.01) {
+  const { saldo } = await getSaldoRenglon(renglonOrigen, subProductoOrigen);
+  if (monto > saldo + 0.01) {
     return {
-      error: `El origen (renglón ${renglonOrigen} / ${subProductoOrigen}) solo tiene Q${disponible.toLocaleString("es-GT", { minimumFractionDigits: 2 })} disponibles para transferir`,
+      error: `El origen (renglón ${renglonOrigen} / ${subProductoOrigen}) solo tiene Q${saldo.toLocaleString("es-GT", { minimumFractionDigits: 2 })} en Saldo para transferir — lo ya programado en algún cuatrimestre no se puede mover a otro renglón`,
     };
   }
 
@@ -544,10 +544,10 @@ export async function aprobarTransferencia(id: number): Promise<{ ok: true } | {
   if (!fila) return { error: "No existe esa transferencia" };
   if (fila.estado !== "Solicitado") return { error: "Esta transferencia ya no está pendiente de aprobación" };
 
-  const { disponible } = await getDisponible(fila.renglon_origen, fila.subproducto_origen);
-  if (fila.monto > disponible + 0.01) {
+  const { saldo } = await getSaldoRenglon(fila.renglon_origen, fila.subproducto_origen);
+  if (fila.monto > saldo + 0.01) {
     return {
-      error: `El origen (renglón ${fila.renglon_origen} / ${fila.subproducto_origen}) ya no tiene suficiente disponible (Q${disponible.toLocaleString("es-GT", { minimumFractionDigits: 2 })}) para aprobar esta transferencia`,
+      error: `El origen (renglón ${fila.renglon_origen} / ${fila.subproducto_origen}) ya no tiene suficiente Saldo (Q${saldo.toLocaleString("es-GT", { minimumFractionDigits: 2 })}) para aprobar esta transferencia`,
     };
   }
 
