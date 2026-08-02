@@ -372,11 +372,12 @@ export default function ModificacionesClient() {
   );
 }
 
-type SeleccionRenglon = { renglon: number; subProducto: string; descripcion: string; disponible: number };
+type SeleccionRenglon = { renglon: number; subProducto: string; descripcion: string; saldo: number };
 
-// Buscador de renglón + selector de sub-producto (con su presupuesto
-// disponible), reutilizado para elegir tanto el origen como el destino de
-// una transferencia.
+// Buscador de renglón + selector de sub-producto (con su Saldo real —
+// Vigente + Modificaciones menos lo ya programado en el año, que es lo
+// único que se puede transferir), reutilizado para elegir tanto el origen
+// como el destino de una transferencia.
 function RenglonSubproductoPicker({ label, value, onChange }: {
   label: string;
   value: SeleccionRenglon | null;
@@ -437,22 +438,22 @@ function RenglonSubproductoPicker({ label, value, onChange }: {
           value={value?.subProducto ?? ""}
           onChange={e => {
             const s = subs.find(s => s.subProducto === e.target.value);
-            if (s) onChange({ renglon: renglonSel, subProducto: s.subProducto, descripcion: s.descripcion, disponible: s.disponible });
+            if (s) onChange({ renglon: renglonSel, subProducto: s.subProducto, descripcion: s.descripcion, saldo: s.saldo });
             else onChange(null);
           }}
         >
           <option value="">Elige sub-producto…</option>
           {subs.map(s => (
             <option key={s.subProducto} value={s.subProducto}>
-              {s.subProducto} — {s.descripcion} (disponible: {Q(s.disponible)})
+              {s.subProducto} — {s.descripcion} (saldo: {Q(s.saldo)})
             </option>
           ))}
         </select>
       )}
       {value && (
         <p className="text-xs text-gray-500">
-          Renglón <strong>{value.renglon}</strong> / <span className="font-mono">{value.subProducto}</span> — disponible:{" "}
-          <strong className={value.disponible > 0 ? "text-green-700" : "text-red-600"}>{Q(value.disponible)}</strong>
+          Renglón <strong>{value.renglon}</strong> / <span className="font-mono">{value.subProducto}</span> — saldo:{" "}
+          <strong className={value.saldo > 0 ? "text-green-700" : "text-red-600"}>{Q(value.saldo)}</strong>
         </p>
       )}
     </div>
