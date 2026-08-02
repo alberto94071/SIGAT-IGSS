@@ -520,8 +520,8 @@ function TransferenciaView({ onVolver }: { onVolver: () => void }) {
 
       <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <RenglonSubproductoPicker label="Origen (de dónde se quita)" value={origen} onChange={setOrigen} />
-          <RenglonSubproductoPicker label="Destino (a dónde se asigna)" value={destino} onChange={setDestino} />
+          <RenglonSubproductoPicker label="Origen (Débito)" value={origen} onChange={setOrigen} />
+          <RenglonSubproductoPicker label="Destino (Crédito)" value={destino} onChange={setDestino} />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
