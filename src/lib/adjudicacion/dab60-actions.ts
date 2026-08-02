@@ -35,7 +35,7 @@ export async function getOrdenesArchivadasAlmacen() {
 export type Dab60Data = {
   fecha_ingreso_producto: string; no_factura: string; serie_factura: string;
   fecha_emision: string; lote: string; fecha_vencimiento: string;
-  marca: string; modelo: string; serie: string; no_devengado: string;
+  marca: string; modelo: string; serie: string;
 };
 
 // Generar el DAB-60 es puramente administrativo/de bodega — no vuelve a
@@ -62,7 +62,6 @@ export async function generarDab60(ordenId: number, data: Dab60Data): Promise<{ 
       marca:                  data.marca.trim() || null,
       modelo:                 data.modelo.trim() || null,
       serie:                  data.serie.trim() || null,
-      no_devengado:           data.no_devengado.trim() || null,
       dab60_generado_en:      fechaHoraGuatemala(),
       estado:                 "En Devengado",
     }).where(eq(ordenesCompra.id, ordenId));

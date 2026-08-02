@@ -474,7 +474,7 @@ export const ordenesCompra = pgTable("ordenes_compra", {
   estado:           text("estado").notNull().default("Activa"),
   creado_por:       integer("creado_por"),
   created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
-  // ── Pipeline Ordenes → Compromiso → Devengado → DAB-60 ──
+  // ── Pipeline Ordenes → Compromiso → [Almacén/DAB-60] → Devengado → DAF ──
   codigo_ppr:                   text("codigo_ppr"),
   fecha_notificacion_proveedor: text("fecha_notificacion_proveedor"),
   no_compromiso:                text("no_compromiso"),
@@ -491,6 +491,11 @@ export const ordenesCompra = pgTable("ordenes_compra", {
   // Se llena al generar el DAB-60 (Almacén) — marca que la orden ya pasó por
   // ahí, para poder listarla en Almacén/Archivo con datos históricos.
   dab60_generado_en:            text("dab60_generado_en"),
+  // Envío a la DAF (División de Administración Financiera) para pago —
+  // se registra al devengar, independiente del estado interno de la orden.
+  fecha_envio_daf:              text("fecha_envio_daf"),
+  estado_devengado:             text("estado_devengado"), // Enviado | Rechazado | Pagado
+  fecha_pago:                   text("fecha_pago"),
 });
 
 // ─── Compras: solicitudes A-01 SIAF ──────────────────────────────────────────

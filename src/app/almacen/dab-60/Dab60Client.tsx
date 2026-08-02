@@ -23,7 +23,6 @@ const CAMPOS: { key: keyof Dab60Data; label: string; tipo: "date" | "text" }[] =
   { key: "marca",                  label: "Marca",                       tipo: "text" },
   { key: "modelo",                 label: "Modelo",                      tipo: "text" },
   { key: "serie",                  label: "Serie",                       tipo: "text" },
-  { key: "no_devengado",           label: "No. Devengado",               tipo: "text" },
 ];
 
 export default function Dab60Client({ ordenes: init }: { ordenes: Orden[] }) {
@@ -99,7 +98,7 @@ export default function Dab60Client({ ordenes: init }: { ordenes: Orden[] }) {
 function Dab60Modal({ orden: o, onClose, onDone }: { orden: Orden; onClose: () => void; onDone: () => void }) {
   const [data, setData] = useState<Dab60Data>({
     fecha_ingreso_producto: "", no_factura: "", serie_factura: "", fecha_emision: "",
-    lote: "", fecha_vencimiento: "", marca: "", modelo: "", serie: "", no_devengado: "",
+    lote: "", fecha_vencimiento: "", marca: "", modelo: "", serie: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
