@@ -609,6 +609,12 @@ export const presupuestoRenglones = pgTable("presupuesto_renglones", {
   modificacion_ingru:          doublePrecision("modificacion_ingru").notNull().default(0),
   modificacion_entre_renglones: doublePrecision("modificacion_entre_renglones").notNull().default(0),
   modificacion_ampliacion:     doublePrecision("modificacion_ampliacion").notNull().default(0),
+  // Caducidad de cuatrimestre (ver cierre-cuatrimestre.ts): lo que quedó
+  // Programado y NO se alcanzó a comprometer al cerrar un cuatrimestre se
+  // pierde, pero se acumula aquí (nunca se resta solo, solo vía
+  // liberarNoEjecutado) — así ese monto queda permanentemente fuera de
+  // Saldo hasta que se libere explícitamente.
+  no_ejecutado:                doublePrecision("no_ejecutado").notNull().default(0),
   created_at:           text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 

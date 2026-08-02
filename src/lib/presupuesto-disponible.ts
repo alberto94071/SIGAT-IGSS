@@ -57,8 +57,9 @@ export async function getDisponible(renglon: number, subproducto: string): Promi
 
 export type Saldo = {
   disponible: number;          // Vigente + Modificaciones (Ingru + Entre Renglones + Ampliación)
-  programadoAcumulado: number; // suma de lo Aprobado en TODOS los cuatrimestres del año
-  saldo: number;                // disponible - programadoAcumulado
+  programadoAcumulado: number; // suma de lo Aprobado (vivo, sin contar lo Caducado) en TODOS los cuatrimestres del año
+  noEjecutado: number;         // acumulado de lo Caducado sin comprometer — perdido hasta que se libere
+  saldo: number;                // disponible - programadoAcumulado - noEjecutado
 };
 
 /**
@@ -67,7 +68,9 @@ export type Saldo = {
  * vía Programación/Reprogramación. Es la cifra que gobierna la Transferencia
  * entre renglón/sub-producto (regla del cliente: solo se puede tomar dinero
  * de un renglón para mandarlo a otro con lo que aparece en Saldo — una vez
- * programado, ya no está disponible para reprogramar a otro lado). No debe
+ * programado, ya no está disponible para reprogramar a otro lado, y lo que
+ * caduca sin comprometer tampoco — ver no_ejecutado / cierre-cuatrimestre.ts
+ * y liberarNoEjecutado en presupuesto-general-actions.ts). No debe
  * confundirse con getDisponible(), que es un cálculo distinto usado para
  * aprobar SIAF (programado − ya reservado/ejecutado).
  */
@@ -89,6 +92,7 @@ export async function getSaldoRenglon(renglon: number, subproducto: string): Pro
     modificacion_ingru:           presupuestoRenglones.modificacion_ingru,
     modificacion_entre_renglones: presupuestoRenglones.modificacion_entre_renglones,
     modificacion_ampliacion:      presupuestoRenglones.modificacion_ampliacion,
+    no_ejecutado:                 presupuestoRenglones.no_ejecutado,
   }).from(presupuestoRenglones).where(and(
     eq(presupuestoRenglones.renglon, renglon),
     eq(presupuestoRenglones.subproducto, subproducto),
@@ -98,8 +102,9 @@ export async function getSaldoRenglon(renglon: number, subproducto: string): Pro
   const modificaciones =
     (vivo?.modificacion_ingru ?? 0) + (vivo?.modificacion_entre_renglones ?? 0) + (vivo?.modificacion_ampliacion ?? 0);
   const disponible = vigente + modificaciones;
+  const noEjecutado = vivo?.no_ejecutado ?? 0;
 
-  return { disponible, programadoAcumulado, saldo: disponible - programadoAcumulado };
+  return { disponible, programadoAcumulado, noEjecutado, saldo: disponible - programadoAcumulado - noEjecutado };
 }
 
 export type RenglonSubproducto = { renglon: number; subproducto: string; monto: number };

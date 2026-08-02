@@ -1,7 +1,8 @@
 "use client";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Calculator, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
-import type { PresupuestoGeneralRow } from "@/lib/presupuesto-general-actions";
+import { useRouter } from "next/navigation";
+import { Calculator, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Unlock, Loader2 } from "lucide-react";
+import { liberarNoEjecutado, type PresupuestoGeneralRow } from "@/lib/presupuesto-general-actions";
 
 const SCROLL_PASO = 320;
 
@@ -21,9 +22,30 @@ const Q = (n: number | null | undefined) => {
 };
 
 export default function PresupuestoGeneralClient({ data }: Props) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState(0);
   const [renglonBuscado, setRenglonBuscado] = useState("");
   const [orden, setOrden] = useState<"asc" | "desc">("asc");
+  const [liberando, setLiberando] = useState(false);
+  const [mensajeLiberacion, setMensajeLiberacion] = useState<{ type: "error" | "success"; text: string } | null>(null);
+
+  const totalNoEjecutado = useMemo(() => data.reduce((sum, r) => sum + (r.noEjecutado ?? 0), 0), [data]);
+
+  async function handleLiberar() {
+    if (!confirm(
+      `Vas a liberar Q${totalNoEjecutado.toLocaleString("es-GT", { minimumFractionDigits: 2 })} acumulados en No Ejecutado — regresan a Saldo en cada renglón/sub-producto correspondiente, para poder volver a programarlos. Úsalo solo cuando el nivel central ya autorizó liberar esos saldos. ¿Confirmas?`
+    )) return;
+    setLiberando(true);
+    setMensajeLiberacion(null);
+    const res = await liberarNoEjecutado();
+    setLiberando(false);
+    if ("error" in res) {
+      setMensajeLiberacion({ type: "error", text: res.error });
+    } else {
+      setMensajeLiberacion({ type: "success", text: `Se liberaron Q${res.total.toLocaleString("es-GT", { minimumFractionDigits: 2 })} de No Ejecutado — ya están de vuelta en Saldo.` });
+      router.refresh();
+    }
+  }
 
   const currentRango = RANGOS[activeTab];
 
@@ -40,7 +62,8 @@ export default function PresupuestoGeneralClient({ data }: Props) {
     vigente: acc.vigente + r.vigente,
     nuevoVigente: acc.nuevoVigente + r.nuevoVigente,
     devengado: acc.devengado + (r.devengado ?? 0),
-  }), { vigente: 0, nuevoVigente: 0, devengado: 0 }), [filtered]);
+    noEjecutado: acc.noEjecutado + (r.noEjecutado ?? 0),
+  }), { vigente: 0, nuevoVigente: 0, devengado: 0, noEjecutado: 0 }), [filtered]);
 
   // ── Desplazamiento horizontal: barra espejo arriba + flechas fijas + teclado ──
   const topScrollRef = useRef<HTMLDivElement>(null);
@@ -83,13 +106,34 @@ export default function PresupuestoGeneralClient({ data }: Props) {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-          <Calculator className="w-5 h-5" /> Presupuesto por Renglón
-        </h2>
-        <p className="text-sm text-gray-500 mt-0.5">
-          {filtered.length.toLocaleString("es-GT")} renglones en el rango {currentRango.label}
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <Calculator className="w-5 h-5" /> Presupuesto por Renglón
+          </h2>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {filtered.length.toLocaleString("es-GT")} renglones en el rango {currentRango.label}
+          </p>
+        </div>
+        <div className="text-right">
+          <button
+            onClick={handleLiberar}
+            disabled={liberando || totalNoEjecutado <= 0}
+            title={totalNoEjecutado <= 0 ? "No hay nada acumulado en No Ejecutado" : undefined}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {liberando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlock className="w-4 h-4" />}
+            Liberar No Ejecutado
+          </button>
+          <p className="text-xs text-gray-500 mt-1">
+            Acumulado: Q{totalNoEjecutado.toLocaleString("es-GT", { minimumFractionDigits: 2 })} (todos los renglones)
+          </p>
+          {mensajeLiberacion && (
+            <p className={`text-xs mt-1 max-w-xs ${mensajeLiberacion.type === "error" ? "text-red-600" : "text-green-700"}`}>
+              {mensajeLiberacion.text}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* ── Pestañas por rango ── */}
@@ -200,6 +244,7 @@ export default function PresupuestoGeneralClient({ data }: Props) {
                 <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Nuevo Vigente</th>
                 <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Programado</th>
                 <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Devengado</th>
+                <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">No Ejecutado</th>
                 <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">Saldo Presupuestario</th>
                 <th className="px-3 py-2.5 text-right whitespace-nowrap font-semibold">% Ejecución</th>
               </tr>
@@ -207,7 +252,7 @@ export default function PresupuestoGeneralClient({ data }: Props) {
             <tbody className="divide-y divide-gray-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-3 py-8 text-center text-gray-400">
+                  <td colSpan={12} className="px-3 py-8 text-center text-gray-400">
                     No hay datos para este rango de renglones.
                   </td>
                 </tr>
@@ -225,6 +270,7 @@ export default function PresupuestoGeneralClient({ data }: Props) {
                     <td className="px-3 py-2 tabular-nums text-right text-gray-900 font-semibold whitespace-nowrap">{Q(r.nuevoVigente)}</td>
                     <td className="px-3 py-2 tabular-nums text-right text-gray-400 whitespace-nowrap">{Q(r.programado)}</td>
                     <td className="px-3 py-2 tabular-nums text-right text-gray-700 whitespace-nowrap">{Q(r.devengado)}</td>
+                    <td className="px-3 py-2 tabular-nums text-right text-red-500 whitespace-nowrap">{Q(r.noEjecutado)}</td>
                     <td className="px-3 py-2 tabular-nums text-right text-gray-400 whitespace-nowrap">{Q(r.saldoPresupuestario)}</td>
                     <td className="px-3 py-2 tabular-nums text-right text-gray-400 whitespace-nowrap">
                       {r.porcentajeEjecucion != null ? `${r.porcentajeEjecucion.toFixed(1)}%` : "—"}
@@ -242,6 +288,7 @@ export default function PresupuestoGeneralClient({ data }: Props) {
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-900 whitespace-nowrap">{Q(totales.nuevoVigente)}</td>
                   <td></td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-900 whitespace-nowrap">{Q(totales.devengado)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-red-600 whitespace-nowrap">{Q(totales.noEjecutado)}</td>
                   <td colSpan={2}></td>
                 </tr>
               </tfoot>
