@@ -85,9 +85,11 @@ function RevisarModal({ consolidacion: c, onClose, onDone }: {
   const [rechazarModal, setRechazarModal] = useState(false);
   const [motivo,    setMotivo]    = useState("");
 
+  const esCompraDirecta = c.tipo_compra === "Compra Directa";
+
   async function handleAdjudicar() {
     if (!ganadorId) return setError("Selecciona al oferente ganador");
-    if (!numAdj.trim()) return setError("El número de adjudicación es obligatorio");
+    if (!esCompraDirecta && !numAdj.trim()) return setError("El número de adjudicación es obligatorio");
     if (!razon.trim()) return setError("La razón de adjudicación es obligatoria");
     setLoading(true); setError("");
     const res = await adjudicarJunta(c.id, { oferenteId: ganadorId, numero_adjudicacion: numAdj.trim(), razon_adjudicacion: razon.trim() });
@@ -133,11 +135,13 @@ function RevisarModal({ consolidacion: c, onClose, onDone }: {
                 <OferentesEditor oferentes={c.oferentes} maxOferentes={c.oferentes.length}
                   selectable selectedId={ganadorId} onSelect={setGanadorId} />
               </div>
-              <div>
-                <label className="label flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> Número de Adjudicación</label>
-                <input className="input font-mono" value={numAdj}
-                  onChange={e => setNumAdj(e.target.value)} placeholder="Código corto único…" />
-              </div>
+              {!esCompraDirecta && (
+                <div>
+                  <label className="label flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> Número de Adjudicación</label>
+                  <input className="input font-mono" value={numAdj}
+                    onChange={e => setNumAdj(e.target.value)} placeholder="Código corto único…" />
+                </div>
+              )}
               <div>
                 <label className="label">Razón de Adjudicación</label>
                 <textarea className="input" rows={2} value={razon}
@@ -156,7 +160,7 @@ function RevisarModal({ consolidacion: c, onClose, onDone }: {
               </button>
               <div className="flex gap-2">
                 <button onClick={onClose} className="btn-secondary">Cancelar</button>
-                <button onClick={handleAdjudicar} disabled={loading || !ganadorId || !numAdj.trim() || !razon.trim()} className="btn-primary disabled:opacity-50">
+                <button onClick={handleAdjudicar} disabled={loading || !ganadorId || (!esCompraDirecta && !numAdj.trim()) || !razon.trim()} className="btn-primary disabled:opacity-50">
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Gavel className="w-4 h-4" />} Adjudicar
                 </button>
               </div>
