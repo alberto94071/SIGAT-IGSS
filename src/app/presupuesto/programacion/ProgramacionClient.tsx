@@ -162,7 +162,7 @@ export default function ProgramacionClient() {
           >
             <RefreshCw className="w-8 h-8 text-amber-600 mb-3" />
             <h2 className="text-lg font-bold text-gray-900">Reprogramación</h2>
-            <p className="text-sm text-gray-500 mt-1">Registrar una modificación presupuestaria (Ingru, entre renglones o ampliación).</p>
+            <p className="text-sm text-gray-500 mt-1">Asignar o cambiar el monto de un renglón dentro de un cuatrimestre ya en curso — se puede solicitar cualquier día, aunque el renglón no tuviera nada programado todavía.</p>
           </button>
         </div>
       </div>
@@ -486,12 +486,15 @@ function badgeEstado(estado: string) {
   );
 }
 
-// Reprogramación: a diferencia de Programación (que crea entradas nuevas),
-// aquí se listan y editan las ya existentes del cuatrimestre — reutiliza
-// guardarEntrada(modo:"reprogramacion") por fila, que valida la ventana de
-// fecha y regresa la fila a "Solicitado" para que pase de nuevo por la
-// aprobación automática. Rechazar/Eliminar solo aplican mientras siga
-// "Solicitado" (para corregir un error antes de que se apruebe).
+// Reprogramación: puede tanto asignarle presupuesto por primera vez a un
+// renglón dentro de un cuatrimestre en curso (buscador de arriba, igual que
+// Programación pero sin restricción de fecha) como editar lo que ya existe
+// (tabla de abajo) — ambas rutas usan guardarEntrada(modo:"reprogramacion"),
+// que ya no valida ventana de fecha al solicitar (se puede cualquier día) y
+// regresa la fila a "Solicitado" para que pase de nuevo por aprobación —
+// aprobarEntrada sí valida su propia ventana (primeros 5 días hábiles de
+// cada mes). Rechazar/Eliminar solo aplican mientras siga "Solicitado"
+// (para corregir un error antes de que se apruebe).
 function ReprogramacionView({ cuatrimestre, cuatrimestreLabel, entradas, onVolverMenu, onCambiarCuatrimestre, onRecargar }: {
   cuatrimestre: number;
   cuatrimestreLabel: string;
@@ -500,8 +503,95 @@ function ReprogramacionView({ cuatrimestre, cuatrimestreLabel, entradas, onVolve
   onCambiarCuatrimestre: () => void;
   onRecargar: () => void;
 }) {
-  const [renglonQuery, setRenglonQuery] = useState("");
+  // ── Buscar/agregar cualquier renglón (aunque no tenga nada programado
+  // todavía en este cuatrimestre) — mismo patrón que Programación, pero
+  // precargando mes1-4 si ya existe una entrada para ese renglón/sub-
+  // producto/tipo, en vez de dejarlo en blanco.
+  const [busquedaQuery, setBusquedaQuery] = useState("");
+  const [sugerencias, setSugerencias] = useState<SubproductoDisponible[]>([]);
+  const [renglonSeleccionado, setRenglonSeleccionado] = useState<number | null>(null);
+  const [filas, setFilas] = useState<FilaEdicion[]>([]);
+
+  useEffect(() => {
+    if (busquedaQuery.trim() === "") { setSugerencias([]); return; }
+    const t = setTimeout(() => {
+      buscarRenglones(busquedaQuery).then(rows => {
+        const unicos = Array.from(new Map(rows.map(r => [r.renglon, r])).values());
+        setSugerencias(unicos);
+      });
+    }, 200);
+    return () => clearTimeout(t);
+  }, [busquedaQuery]);
+
+  const valoresExistentes = useCallback((renglon: number, subProducto: string, tipo: "normal" | "regularizado") =>
+    entradas.find(e => e.renglon === renglon && e.subProducto === subProducto && e.tipo === tipo),
+  [entradas]);
+
+  const seleccionarRenglon = useCallback((renglon: number) => {
+    setRenglonSeleccionado(renglon);
+    setBusquedaQuery("");
+    setSugerencias([]);
+    getSubproductosDeRenglon(renglon).then(subs => {
+      setFilas(subs.map(s => {
+        const existente = valoresExistentes(renglon, s.subProducto, "normal");
+        return {
+          subProducto: s.subProducto,
+          descripcion: s.descripcion,
+          vigente: s.vigente,
+          tipo: "normal" as const,
+          mes1: existente ? String(existente.mes1 || "") : "",
+          mes2: existente ? String(existente.mes2 || "") : "",
+          mes3: existente ? String(existente.mes3 || "") : "",
+          mes4: existente ? String(existente.mes4 || "") : "",
+          guardando: false, error: null, ok: false,
+        };
+      }));
+    });
+  }, [valoresExistentes]);
+
+  const actualizarFila = (idx: number, patch: Partial<FilaEdicion>) => {
+    setFilas(prev => prev.map((f, i) => i === idx ? { ...f, ...patch } : f));
+  };
+
+  const cambiarTipoFila = (idx: number, nuevoTipo: "normal" | "regularizado") => {
+    if (renglonSeleccionado === null) return;
+    const fila = filas[idx];
+    const existente = valoresExistentes(renglonSeleccionado, fila.subProducto, nuevoTipo);
+    actualizarFila(idx, {
+      tipo: nuevoTipo,
+      mes1: existente ? String(existente.mes1 || "") : "",
+      mes2: existente ? String(existente.mes2 || "") : "",
+      mes3: existente ? String(existente.mes3 || "") : "",
+      mes4: existente ? String(existente.mes4 || "") : "",
+      ok: false, error: null,
+    });
+  };
+
+  const guardarFilaNueva = async (idx: number) => {
+    if (renglonSeleccionado === null) return;
+    const fila = filas[idx];
+    actualizarFila(idx, { guardando: true, error: null, ok: false });
+    const res = await guardarEntrada({
+      cuatrimestre,
+      renglon: renglonSeleccionado,
+      subProducto: fila.subProducto,
+      tipo: fila.tipo,
+      mes1: Number(fila.mes1) || 0,
+      mes2: Number(fila.mes2) || 0,
+      mes3: Number(fila.mes3) || 0,
+      mes4: Number(fila.mes4) || 0,
+      modo: "reprogramacion",
+    });
+    if ("error" in res) {
+      actualizarFila(idx, { guardando: false, error: res.error });
+    } else {
+      actualizarFila(idx, { guardando: false, ok: true, error: null });
+      onRecargar();
+    }
+  };
+
   const [filtroRenglon, setFiltroRenglon] = useState<number | null>(null);
+  const [renglonQuery, setRenglonQuery] = useState("");
   const [borradores, setBorradores] = useState<Record<number, BorradorReprogramacion>>({});
 
   useEffect(() => {
@@ -587,8 +677,109 @@ function ReprogramacionView({ cuatrimestre, cuatrimestreLabel, entradas, onVolve
         </div>
       </div>
 
+      {/* ── Buscar/agregar cualquier renglón, tenga o no algo programado ya en este cuatrimestre ── */}
+      <div className="relative max-w-sm">
+        <label className="text-sm text-gray-600 font-medium block mb-1">Buscar renglón para asignar o cambiar su monto:</label>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={busquedaQuery}
+          onChange={e => setBusquedaQuery(e.target.value.replace(/\D/g, ""))}
+          placeholder="Ej. 182 — puede ser un renglón nuevo, sin nada programado todavía"
+          className="input w-full rounded-lg"
+        />
+        {sugerencias.length > 0 && (
+          <div className="absolute z-20 bg-white border border-gray-200 rounded-lg shadow-lg mt-1 w-full max-h-64 overflow-y-auto">
+            {sugerencias.map(s => (
+              <button
+                key={s.renglon}
+                onClick={() => seleccionarRenglon(s.renglon)}
+                className="block w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b border-gray-100 last:border-0"
+              >
+                <span className="font-semibold text-gray-900">{s.renglon}</span>
+                <span className="text-gray-500"> — {s.descripcion}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {renglonSeleccionado !== null && (
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Sub-Producto</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-700">Vigente</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Tipo</th>
+                  {meses.map(m => (
+                    <th key={m} className="px-3 py-2 text-right font-semibold text-gray-700 w-32">{m}</th>
+                  ))}
+                  <th className="px-3 py-2 text-right font-semibold text-gray-700">Total</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filas.map((f, idx) => {
+                  const total = (Number(f.mes1) || 0) + (Number(f.mes2) || 0) + (Number(f.mes3) || 0) + (Number(f.mes4) || 0);
+                  return (
+                    <tr key={f.subProducto} className="border-b border-gray-100">
+                      <td className="px-3 py-2">
+                        <div className="font-mono text-xs text-gray-700">{f.subProducto}</div>
+                        <div className="text-xs text-gray-400 truncate max-w-[220px]">{f.descripcion}</div>
+                      </td>
+                      <td className="px-3 py-2 text-right text-gray-600">{Q(f.vigente)}</td>
+                      <td className="px-3 py-2">
+                        <select
+                          value={f.tipo}
+                          onChange={e => cambiarTipoFila(idx, e.target.value as "normal" | "regularizado")}
+                          className="input py-1 text-xs rounded-lg"
+                        >
+                          <option value="normal">Normal</option>
+                          <option value="regularizado">Regularizado</option>
+                        </select>
+                      </td>
+                      {(["mes1", "mes2", "mes3", "mes4"] as const).map(campo => (
+                        <td key={campo} className="px-3 py-2">
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={f[campo]}
+                            onChange={e => actualizarFila(idx, { [campo]: e.target.value, ok: false, error: null } as Partial<FilaEdicion>)}
+                            className="input py-1 text-xs rounded-lg w-full text-right"
+                            placeholder="0.00"
+                          />
+                        </td>
+                      ))}
+                      <td className="px-3 py-2 text-right font-semibold text-gray-900">{Q(total)}</td>
+                      <td className="px-3 py-2">
+                        <button
+                          onClick={() => guardarFilaNueva(idx)}
+                          disabled={f.guardando || total <= 0}
+                          className="btn-primary py-1 px-3 text-xs rounded-lg disabled:opacity-50"
+                        >
+                          {f.guardando ? "Guardando…" : "Guardar"}
+                        </button>
+                        {f.ok && (
+                          <div className="flex items-center gap-1 text-green-600 text-xs mt-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Guardado
+                          </div>
+                        )}
+                        {f.error && <p className="text-red-600 text-xs mt-1 max-w-[180px]">{f.error}</p>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-sm">
-        <label className="text-sm text-gray-600 font-medium block mb-1">Filtrar por renglón (opcional):</label>
+        <label className="text-sm text-gray-600 font-medium block mb-1">Filtrar la lista de abajo por renglón (opcional):</label>
         <div className="flex gap-2">
           <input
             type="text"
