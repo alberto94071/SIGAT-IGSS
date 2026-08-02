@@ -48,10 +48,12 @@ export type EjecucionRow = {
  *   vigente) − Ejecución, por tipo. Se recalcula solo conforme avanza la
  *   ejecución dentro del mismo cuatrimestre.
  * - Saldo = Disponible − la suma de Total Programado de TODOS los
- *   cuatrimestres Aprobados del año (no solo el vigente) — es lo único que
- *   queda sin asignar a ningún cuatrimestre todavía, y por eso es lo único
- *   que se puede mover a otro renglón vía Transferencia (ver
- *   getSaldoRenglon en presupuesto-disponible.ts, misma fórmula).
+ *   cuatrimestres Aprobados del año (no solo el vigente) − No Ejecutado
+ *   acumulado (lo que caducó sin comprometerse en cuatrimestres ya
+ *   cerrados, ver cierre-cuatrimestre.ts) — es lo único que queda sin
+ *   asignar a ningún cuatrimestre todavía, y por eso es lo único que se
+ *   puede mover a otro renglón vía Transferencia (ver getSaldoRenglon en
+ *   presupuesto-disponible.ts, misma fórmula).
  */
 export async function getEjecucionData(): Promise<EjecucionRow[]> {
   const cuatrimestreVigente = cuatrimestreDeFecha(fechaGuatemala());
@@ -80,6 +82,7 @@ export async function getEjecucionData(): Promise<EjecucionRow[]> {
       modificacion_ingru:           presupuestoRenglones.modificacion_ingru,
       modificacion_entre_renglones: presupuestoRenglones.modificacion_entre_renglones,
       modificacion_ampliacion:      presupuestoRenglones.modificacion_ampliacion,
+      no_ejecutado:                 presupuestoRenglones.no_ejecutado,
     }).from(presupuestoRenglones).where(eq(presupuestoRenglones.ejercicio_fiscal, 2026)),
   ]);
 
@@ -136,7 +139,7 @@ export async function getEjecucionData(): Promise<EjecucionRow[]> {
       saldoProgramadoNormal: programado.normal - ejecucionNormal,
       saldoProgramadoRegularizado: programado.regularizado - ejecucionRegularizado,
       totalProgramado: programado.normal + programado.regularizado,
-      saldo: disponible - acumulado,
+      saldo: disponible - acumulado - (vivo?.no_ejecutado ?? 0),
     };
   });
 }
