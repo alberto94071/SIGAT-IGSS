@@ -1,24 +1,37 @@
 "use client";
 import { useState } from "react";
-import { FileCheck, X, Loader2, AlertTriangle, Hash } from "lucide-react";
-import { comprometerYEnviarADevengado } from "@/lib/adjudicacion/compromiso-actions";
+import { FileCheck, X, Loader2, AlertTriangle, Hash, CheckCircle, XCircle } from "lucide-react";
+import { registrarCompromiso, aprobarCompromiso, rechazarCompromiso } from "@/lib/adjudicacion/compromiso-actions";
 import RenglonBadges from "@/components/RenglonBadges";
 
 type Orden = {
   id: number; numero: number; anio: number; tipo_compra: string;
   proveedor_nit: string | null; proveedor_nombre: string | null;
-  total: number | null; codigo_ppr: string | null;
+  total: number | null; codigo_ppr: string | null; no_compromiso: string | null;
   renglones: { renglon: number | null; subproducto: string; nombre: string; cantidad: number }[];
 };
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export default function CompromisoClient({ ordenes: init }: { ordenes: Orden[] }) {
+export default function CompromisoClient({ ordenes: init, solicitadas: initSolicitadas }: { ordenes: Orden[]; solicitadas: Orden[] }) {
   const [ordenes, setOrdenes] = useState(init);
+  const [solicitadas, setSolicitadas] = useState(initSolicitadas);
   const [comprometerFor, setComprometerFor] = useState<Orden | null>(null);
+  const [acciones, setAcciones] = useState<Record<number, { cargando: boolean; error: string | null }>>({});
+
+  const ejecutarAccion = async (id: number, accion: (id: number) => Promise<{ ok: true } | { error: string }>) => {
+    setAcciones(prev => ({ ...prev, [id]: { cargando: true, error: null } }));
+    const res = await accion(id);
+    if ("error" in res) {
+      setAcciones(prev => ({ ...prev, [id]: { cargando: false, error: res.error } }));
+    } else {
+      setAcciones(prev => ({ ...prev, [id]: { cargando: false, error: null } }));
+      setSolicitadas(prev => prev.filter(o => o.id !== id));
+    }
+  };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       <div>
         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
           <FileCheck className="w-5 h-5" /> Presupuesto — Compromiso
@@ -72,18 +85,93 @@ export default function CompromisoClient({ ordenes: init }: { ordenes: Orden[] }
         </div>
       </div>
 
+      <div>
+        <h2 className="text-lg font-bold text-gray-900">Pendientes de aprobación de Compromiso</h2>
+        <p className="text-sm text-gray-500 mt-0.5">
+          {solicitadas.length} orden(es) con No. de Compromiso registrado, esperando aprobación de Presupuesto. Mientras no se apruebe, la orden no avanza a Almacén/Devengado.
+        </p>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="table-header">
+                <th className="px-4 py-3 text-left whitespace-nowrap">Orden</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">No. Compromiso</th>
+                <th className="px-4 py-3 text-left">Proveedor</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {solicitadas.map(o => {
+                const a = acciones[o.id];
+                return (
+                  <tr key={o.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
+                      OC-{String(o.numero).padStart(3, "0")}/{o.anio}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{o.no_compromiso ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-gray-900">{o.proveedor_nombre ?? "—"}</p>
+                      {o.proveedor_nit && <p className="text-xs text-gray-400">NIT: {o.proveedor_nit}</p>}
+                      <RenglonBadges renglones={o.renglones} />
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
+                      {o.total != null ? Q(o.total) : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => ejecutarAccion(o.id, aprobarCompromiso)}
+                          disabled={a?.cargando}
+                          title="Aprobar"
+                          className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-50"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => ejecutarAccion(o.id, rechazarCompromiso)}
+                          disabled={a?.cargando}
+                          title="Rechazar"
+                          className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[180px]">{a.error}</p>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {solicitadas.length === 0 && (
+            <div className="text-center py-16 text-gray-400">
+              <FileCheck className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">No hay compromisos pendientes de aprobación.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
       {comprometerFor && (
         <ComprometerModal
           orden={comprometerFor}
           onClose={() => setComprometerFor(null)}
-          onDone={() => { setOrdenes(p => p.filter(o => o.id !== comprometerFor.id)); setComprometerFor(null); }}
+          onDone={(noCompromiso) => {
+            setOrdenes(p => p.filter(o => o.id !== comprometerFor.id));
+            setSolicitadas(p => [...p, { ...comprometerFor, no_compromiso: noCompromiso }]);
+            setComprometerFor(null);
+          }}
         />
       )}
     </div>
   );
 }
 
-function ComprometerModal({ orden: o, onClose, onDone }: { orden: Orden; onClose: () => void; onDone: () => void }) {
+function ComprometerModal({ orden: o, onClose, onDone }: { orden: Orden; onClose: () => void; onDone: (noCompromiso: string) => void }) {
   const [noCompromiso, setNoCompromiso] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -91,10 +179,10 @@ function ComprometerModal({ orden: o, onClose, onDone }: { orden: Orden; onClose
   async function handleEnviar() {
     if (!noCompromiso.trim()) return setError("El No. de Compromiso es obligatorio");
     setSaving(true); setError("");
-    const res = await comprometerYEnviarADevengado(o.id, noCompromiso.trim());
+    const res = await registrarCompromiso(o.id, noCompromiso.trim());
     setSaving(false);
     if ("error" in res) return setError(res.error);
-    onDone();
+    onDone(noCompromiso.trim());
   }
 
   return (
@@ -118,7 +206,7 @@ function ComprometerModal({ orden: o, onClose, onDone }: { orden: Orden; onClose
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
           <button onClick={onClose} className="btn-secondary">Cancelar</button>
           <button onClick={handleEnviar} disabled={saving} className="btn-primary disabled:opacity-50">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileCheck className="w-4 h-4" />} Enviar a Devengado
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileCheck className="w-4 h-4" />} Registrar Compromiso
           </button>
         </div>
       </div>

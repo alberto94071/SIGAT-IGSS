@@ -1,7 +1,7 @@
 "use server";
 import { db } from "@/lib/db";
-import { fondoRotativoPagos, consolidaciones, valesCajaChica, friFondoRotativo } from "@/lib/schema";
-import { eq, inArray, sql } from "drizzle-orm";
+import { fondoRotativoPagos, consolidaciones, valesCajaChica, friFondoRotativo, presupuestoRenglones } from "@/lib/schema";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
 import { esGrupo100 } from "@/lib/programacion-constants";
@@ -11,6 +11,23 @@ import { esGrupo100 } from "@/lib/programacion-constants";
 async function esPagoGrupo100(consolidacionId: number): Promise<boolean> {
   const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
   return renglones.length > 0 && renglones.every(r => esGrupo100(r.renglon));
+}
+
+// Fondo Rotativo no pasa por aprobación de Presupuesto (confirmado por el
+// cliente) — se refleja en Ejecución/Regularizado con lo que el propio
+// Fondo Rotativo ya decidió y ejecutó: en el momento en que se registra la
+// forma de pago (cheque emitido o vale asignado), no antes.
+async function reflejarEnEjecucion(consolidacionId: number): Promise<void> {
+  const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
+  for (const r of renglones) {
+    await db.update(presupuestoRenglones).set({
+      devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) + ${r.total}`,
+    }).where(and(
+      eq(presupuestoRenglones.renglon, r.renglon as number),
+      eq(presupuestoRenglones.subproducto, r.subproducto),
+      eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+    ));
+  }
 }
 
 async function requireCompras(): Promise<{ error: string } | { uid: number }> {
@@ -24,7 +41,8 @@ export type PagoFondoRotativo = {
   id: number; consolidacion_id: number;
   no_factura: string; serie_factura: string; fecha_emision_factura: string;
   forma_pago: string | null; numero_cheque: string | null; fecha_emision_cheque: string | null;
-  destinatario_nombre: string | null; fecha_pago: string | null; numero_vale: string | null;
+  destinatario_nombre: string | null; tipo_documento_pago: string | null; nit_beneficiario: string | null;
+  fecha_pago: string | null; numero_vale: string | null;
   vale_id: number | null; vale_solicitante_nombre: string | null;
   estado: string;
   numero_a04: number | null; anio_a04: number | null;
@@ -81,14 +99,20 @@ export async function getArchivoFondoRotativo(): Promise<PagoFondoRotativo[]> {
   return conDetalle(rows);
 }
 
+export type TipoDocumentoPago = "Factura" | "Vale" | "Formulario";
+
 export async function registrarFormaPagoCheque(id: number, data: {
   numero_cheque: string; fecha_emision_cheque: string;
+  tipo_documento_pago: TipoDocumentoPago; nit_beneficiario: string; destinatario_nombre: string;
 }): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireCompras();
     if ("error" in check) return check;
     if (!data.numero_cheque.trim() || !data.fecha_emision_cheque)
       return { error: "No. de cheque y fecha de emisión son obligatorios" };
+    if (!data.tipo_documento_pago) return { error: "Selecciona el tipo de documento" };
+    if (!data.nit_beneficiario.trim()) return { error: "El NIT del beneficiario es obligatorio" };
+    if (!data.destinatario_nombre.trim()) return { error: "El nombre del beneficiario es obligatorio" };
 
     const [pago] = await db.select().from(fondoRotativoPagos).where(eq(fondoRotativoPagos.id, id)).limit(1);
     if (!pago) return { error: "No se encontró el registro" };
@@ -100,8 +124,14 @@ export async function registrarFormaPagoCheque(id: number, data: {
       forma_pago: "cheque",
       numero_cheque: data.numero_cheque.trim(),
       fecha_emision_cheque: data.fecha_emision_cheque,
+      tipo_documento_pago: data.tipo_documento_pago,
+      nit_beneficiario: data.nit_beneficiario.trim(),
+      destinatario_nombre: data.destinatario_nombre.trim(),
       estado: esGrupo100 ? "Pendiente FRI" : "Enviado a Bancos",
     }).where(eq(fondoRotativoPagos.id, id));
+
+    await reflejarEnEjecucion(pago.consolidacion_id);
+
     return { ok: true };
   } catch {
     return { error: "Error al registrar el pago con cheque" };
@@ -166,6 +196,8 @@ export async function registrarFormaPagoEfectivo(id: number, data: {
       vale_id: vale.id,
       estado: esGrupo100 ? "Pendiente FRI" : "Enviado a Liquidación",
     }).where(eq(fondoRotativoPagos.id, id));
+
+    await reflejarEnEjecucion(pago.consolidacion_id);
 
     return { ok: true };
   } catch {

@@ -43,6 +43,9 @@ export const configuracion = pgTable("configuracion", {
   nit_encargado_unidad:      text("nit_encargado_unidad").notNull().default("52392678"),
   // NIT del solicitante (Caja Chica) — el nombre y número de empleado ya existían.
   nit_solicitante: text("nit_solicitante").notNull().default(""),
+  // Marca el último cuatrimestre ya cerrado (formato "2026-1") para la
+  // caducidad de saldo programado — ver cierre-cuatrimestre.ts.
+  ultimo_cuatrimestre_cerrado: text("ultimo_cuatrimestre_cerrado"),
   updated_at:           text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
@@ -165,7 +168,8 @@ export const friFondoRotativo = pgTable("fri_fondo_rotativo", {
   numero:          integer("numero").notNull(),
   anio:            integer("anio").notNull(),
   total:           doublePrecision("total").notNull(),
-  estado:          text("estado").notNull().default("Generado"), // 'Generado' → 'Reintegrado'
+  estado:          text("estado").notNull().default("Generado"), // 'Generado' → 'Enviado' → 'Rechazado' | 'Reintegrado'
+  fecha_envio_daf: text("fecha_envio_daf"),
   fecha_reintegro: text("fecha_reintegro"),
   creado_por:      integer("creado_por").references(() => usuarios.id),
   created_at:      text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
@@ -182,6 +186,11 @@ export const fondoRotativoPagos = pgTable("fondo_rotativo_pagos", {
   numero_cheque:         text("numero_cheque"),
   fecha_emision_cheque:  text("fecha_emision_cheque"),
   destinatario_nombre:   text("destinatario_nombre"),
+  // Datos obligatorios del pago por cheque (Vía 1): tipo de documento que
+  // respalda el gasto y NIT del beneficiario del cheque (puede no ser el
+  // proveedor de la consolidación — ej. un empleado).
+  tipo_documento_pago:   text("tipo_documento_pago"), // Factura | Vale | Formulario
+  nit_beneficiario:      text("nit_beneficiario"),
   fecha_pago:            text("fecha_pago"),
   numero_vale:           text("numero_vale"),
   vale_id:               integer("vale_id").references((): AnyPgColumn => valesCajaChica.id),
@@ -474,7 +483,7 @@ export const ordenesCompra = pgTable("ordenes_compra", {
   estado:           text("estado").notNull().default("Activa"),
   creado_por:       integer("creado_por"),
   created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
-  // ── Pipeline Ordenes → Compromiso → Devengado → DAB-60 ──
+  // ── Pipeline Ordenes → Compromiso → [Almacén/DAB-60] → Devengado → DAF ──
   codigo_ppr:                   text("codigo_ppr"),
   fecha_notificacion_proveedor: text("fecha_notificacion_proveedor"),
   no_compromiso:                text("no_compromiso"),
@@ -491,6 +500,11 @@ export const ordenesCompra = pgTable("ordenes_compra", {
   // Se llena al generar el DAB-60 (Almacén) — marca que la orden ya pasó por
   // ahí, para poder listarla en Almacén/Archivo con datos históricos.
   dab60_generado_en:            text("dab60_generado_en"),
+  // Envío a la DAF (División de Administración Financiera) para pago —
+  // se registra al devengar, independiente del estado interno de la orden.
+  fecha_envio_daf:              text("fecha_envio_daf"),
+  estado_devengado:             text("estado_devengado"), // Enviado | Rechazado | Pagado
+  fecha_pago:                   text("fecha_pago"),
 });
 
 // ─── Compras: solicitudes A-01 SIAF ──────────────────────────────────────────
@@ -612,18 +626,36 @@ export const programacionEntradas = pgTable("programacion_entradas", {
   mes2:             doublePrecision("mes2").notNull().default(0),
   mes3:             doublePrecision("mes3").notNull().default(0),
   mes4:             doublePrecision("mes4").notNull().default(0),
+  // Solicitado -> Aprobado (automático por fecha, ver dias-habiles.ts) o
+  // Rechazado. Mientras Solicitado se puede editar/rechazar/eliminar; una
+  // vez Aprobado queda bloqueada hasta que una Reprogramación posterior la
+  // vuelva a poner en Solicitado.
+  estado:           text("estado").notNull().default("Solicitado"),
   creado_por:       integer("creado_por").references(() => usuarios.id),
   created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   updated_at:       text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// Ledger de qué compromiso consumió qué parte de una entrada de
+// Programación — necesario para la caducidad de cuatrimestre: al cerrar
+// uno, solo se traslada al siguiente el monto que aparece aquí (ver
+// cierre-cuatrimestre.ts); todo lo demás se marca "Caducado".
+export const programacionCompromisos = pgTable("programacion_compromisos", {
+  id:                       serial("id").primaryKey(),
+  programacion_entrada_id:  integer("programacion_entrada_id").notNull().references(() => programacionEntradas.id),
+  orden_id:                 integer("orden_id").notNull(),
+  no_compromiso:            text("no_compromiso").notNull(),
+  monto:                    doublePrecision("monto").notNull(),
+  created_at:               text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 // ─── Reprogramación: transferencias reales entre renglón/sub-producto ───────
 // A diferencia de los otros tipos de modificación (Ingru, Ampliación, que son
 // un valor libre por renglón+sub-producto sin contrapartida), una
 // transferencia SIEMPRE mueve dinero de un origen a un destino: valida que el
-// origen tenga saldo disponible, resta del origen y suma al destino en
-// presupuesto_renglones.modificacion_entre_renglones, y deja aquí el registro
-// de auditoría (quién, cuándo, de dónde a dónde, cuánto).
+// origen tenga saldo disponible. Queda "Solicitado" sin mover nada; solo al
+// aprobar (quien tenga acceso a mod_presupuesto) se resta del origen y se
+// suma al destino en presupuesto_renglones.modificacion_entre_renglones.
 export const reprogramaciones = pgTable("reprogramaciones", {
   id:                   serial("id").primaryKey(),
   ejercicio_fiscal:     integer("ejercicio_fiscal").notNull().default(2026),
@@ -634,8 +666,28 @@ export const reprogramaciones = pgTable("reprogramaciones", {
   subproducto_destino:  text("subproducto_destino").notNull(),
   monto:                doublePrecision("monto").notNull(),
   motivo:               text("motivo"),
+  estado:               text("estado").notNull().default("Solicitado"),
   creado_por:           integer("creado_por").references(() => usuarios.id),
   created_at:           text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+  updated_at:           text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// ─── Modificaciones Ingru / Ampliación (valor libre, sin contrapartida) ─────
+// Una fila "pendiente" por (renglón, sub-producto, tipo): mientras
+// "Solicitado" no toca presupuesto_renglones. Al aprobar, reemplaza el valor
+// de presupuesto_renglones.modificacion_ingru/modificacion_ampliacion
+// correspondiente (no se acumula — ver guardarModificacion).
+export const modificacionesPresupuestarias = pgTable("modificaciones_presupuestarias", {
+  id:                   serial("id").primaryKey(),
+  ejercicio_fiscal:     integer("ejercicio_fiscal").notNull().default(2026),
+  tipo:                 text("tipo").notNull(),
+  renglon:              integer("renglon").notNull(),
+  subproducto:          text("subproducto").notNull(),
+  valor:                doublePrecision("valor").notNull().default(0),
+  estado:               text("estado").notNull().default("Solicitado"),
+  creado_por:           integer("creado_por").references(() => usuarios.id),
+  created_at:           text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+  updated_at:           text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 // ─── Proveedores ──────────────────────────────────────────────────────────────

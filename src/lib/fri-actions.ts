@@ -12,7 +12,10 @@ async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   return { uid: Number(session.user.id) };
 }
 
-export type Fri = { id: number; numero: number; anio: number; total: number; estado: string; fecha_reintegro: string | null; created_at: string | null };
+export type Fri = {
+  id: number; numero: number; anio: number; total: number; estado: string;
+  fecha_envio_daf: string | null; fecha_reintegro: string | null; created_at: string | null;
+};
 export type PolizaFri = { id: number; numero: number; fecha: string; total: number; estado: string };
 
 export async function getPagosPendientesFri(): Promise<PagoFondoRotativo[]> {
@@ -113,6 +116,49 @@ export async function conformarFri(items: FriItemInput[]): Promise<{ ok: true; f
   }
 }
 
+// El FRI conformado se remite a la división de Fondo Rotativo/DAF para
+// trámite del reintegro — se registra la fecha de envío y queda "Enviado",
+// esperando que se marque Reintegrado (o Rechazado si lo devuelven).
+export async function enviarFriADaf(friId: number, fechaEnvioDaf: string): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireEdit();
+    if ("error" in check) return check;
+    if (!fechaEnvioDaf) return { error: "La fecha de envío es obligatoria" };
+
+    const [fri] = await db.select({ estado: friFondoRotativo.estado }).from(friFondoRotativo).where(eq(friFondoRotativo.id, friId)).limit(1);
+    if (!fri) return { error: "No se encontró el FRI" };
+    if (fri.estado !== "Generado" && fri.estado !== "Rechazado") {
+      return { error: "Este FRI ya fue enviado o reintegrado" };
+    }
+
+    await db.update(friFondoRotativo).set({
+      estado: "Enviado", fecha_envio_daf: fechaEnvioDaf,
+    }).where(eq(friFondoRotativo.id, friId));
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al enviar el FRI a la DAF" };
+  }
+}
+
+// Lo devolvieron: se puede corregir y volver a enviar con enviarFriADaf.
+export async function marcarFriRechazado(friId: number): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireEdit();
+    if ("error" in check) return check;
+
+    const [fri] = await db.select({ estado: friFondoRotativo.estado }).from(friFondoRotativo).where(eq(friFondoRotativo.id, friId)).limit(1);
+    if (!fri) return { error: "No se encontró el FRI" };
+    if (fri.estado !== "Enviado") return { error: "Solo se puede rechazar mientras está Enviado" };
+
+    await db.update(friFondoRotativo).set({ estado: "Rechazado" }).where(eq(friFondoRotativo.id, friId));
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al rechazar el FRI" };
+  }
+}
+
 // Cuando en la vida real Fondo Rotativo deposita el reintegro de este FRI, se
 // marca aquí — acredita el total al saldo disponible del Fondo Rotativo
 // (configuracion.efectivo_caja), para que Caja Chica pueda volver a sacar
@@ -127,7 +173,7 @@ export async function marcarFriReintegrado(friId: number, fechaReintegro: string
 
     const [fri] = await db.select().from(friFondoRotativo).where(eq(friFondoRotativo.id, friId)).limit(1);
     if (!fri) return { error: "No se encontró el FRI" };
-    if (fri.estado !== "Generado") return { error: "Este FRI ya fue marcado como reintegrado" };
+    if (fri.estado !== "Enviado") return { error: "El FRI debe estar Enviado a la DAF antes de marcarlo como reintegrado" };
 
     await db.update(friFondoRotativo).set({
       estado: "Reintegrado", fecha_reintegro: fechaReintegro,

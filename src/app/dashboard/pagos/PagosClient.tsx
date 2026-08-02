@@ -110,6 +110,9 @@ function FormaPagoModal({ pago, onClose, onDone }: {
   const [forma, setForma] = useState<"cheque" | "efectivo" | null>(null);
   const [numeroCheque, setNumeroCheque] = useState("");
   const [fechaEmisionCheque, setFechaEmisionCheque] = useState(fechaGuatemala());
+  const [tipoDocumentoPago, setTipoDocumentoPago] = useState<"Factura" | "Vale" | "Formulario" | "">("Factura");
+  const [nitBeneficiario, setNitBeneficiario] = useState(pago.nit_beneficiario ?? "");
+  const [nombreBeneficiario, setNombreBeneficiario] = useState(pago.destinatario_nombre ?? "");
   const [fechaPago, setFechaPago] = useState(fechaGuatemala());
   const [vales, setVales] = useState<ValePendiente[]>([]);
   const [valesLoading, setValesLoading] = useState(false);
@@ -128,7 +131,11 @@ function FormaPagoModal({ pago, onClose, onDone }: {
   async function handleConfirmar() {
     setLoading(true); setError("");
     const res = forma === "cheque"
-      ? await registrarFormaPagoCheque(pago.id, { numero_cheque: numeroCheque.trim(), fecha_emision_cheque: fechaEmisionCheque })
+      ? await registrarFormaPagoCheque(pago.id, {
+          numero_cheque: numeroCheque.trim(), fecha_emision_cheque: fechaEmisionCheque,
+          tipo_documento_pago: tipoDocumentoPago as "Factura" | "Vale" | "Formulario",
+          nit_beneficiario: nitBeneficiario.trim(), destinatario_nombre: nombreBeneficiario.trim(),
+        })
       : await registrarFormaPagoEfectivo(pago.id, { fecha_pago: fechaPago, vale_id: valeId! });
     setLoading(false);
     if ("error" in res) { setError(res.error); return; }
@@ -169,8 +176,20 @@ function FormaPagoModal({ pago, onClose, onDone }: {
                 <input type="date" className="input" value={fechaEmisionCheque} onChange={e => setFechaEmisionCheque(e.target.value)} />
               </div>
               <div>
-                <label className="label">Destinatario</label>
-                <input className="input bg-gray-50" value={pago.destinatario_nombre ?? ""} readOnly />
+                <label className="label">Tipo de documento</label>
+                <select className="input" value={tipoDocumentoPago} onChange={e => setTipoDocumentoPago(e.target.value as "Factura" | "Vale" | "Formulario")}>
+                  <option value="Factura">Factura</option>
+                  <option value="Vale">Vale</option>
+                  <option value="Formulario">Formulario</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">NIT del beneficiario</label>
+                <input className="input font-mono" value={nitBeneficiario} onChange={e => setNitBeneficiario(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Nombre del beneficiario</label>
+                <input className="input" value={nombreBeneficiario} onChange={e => setNombreBeneficiario(e.target.value)} />
               </div>
             </div>
           )}
@@ -214,7 +233,9 @@ function FormaPagoModal({ pago, onClose, onDone }: {
           {forma !== null && <button onClick={() => setForma(null)} className="btn-secondary">Atrás</button>}
           <button onClick={onClose} className="btn-secondary">Cancelar</button>
           {forma === "cheque" && (
-            <button onClick={handleConfirmar} disabled={loading || !numeroCheque.trim() || !fechaEmisionCheque} className="btn-primary disabled:opacity-50">
+            <button onClick={handleConfirmar}
+              disabled={loading || !numeroCheque.trim() || !fechaEmisionCheque || !tipoDocumentoPago || !nitBeneficiario.trim() || !nombreBeneficiario.trim()}
+              className="btn-primary disabled:opacity-50">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />} Confirmar pago
             </button>
           )}

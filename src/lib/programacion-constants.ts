@@ -10,6 +10,14 @@ export const CUATRIMESTRES = [
   { id: 3, label: "Septiembre - Diciembre", meses: ["Septiembre", "Octubre", "Noviembre", "Diciembre"] },
 ] as const;
 
+// Cuatrimestre (1/2/3) al que pertenece una fecha "YYYY-MM-DD".
+export function cuatrimestreDeFecha(fecha: string): number {
+  const mes = Number(fecha.slice(5, 7));
+  if (mes <= 4) return 1;
+  if (mes <= 8) return 2;
+  return 3;
+}
+
 export function grupoDeRenglon(renglon: number) {
   return GRUPOS.find(g => renglon >= g.min && renglon <= g.max) ?? null;
 }
