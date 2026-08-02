@@ -199,6 +199,39 @@ falta chequear la bandera como en `devengar()`).
 Ya no quedan preguntas abiertas para el cliente. Se procede a implementar
 Fases 8, 10, 11 y 12.
 
+## 6. Ronda 2 — completada
+
+Fases 8, 10, 11 y 12 implementadas, compiladas (`tsc`/`npm run build`
+limpios) y empujadas.
+
+**Hallazgo importante durante la Fase 8**: las migraciones de BD de las
+Fases 3, 5, 6 y parte de la 7 nunca habían llegado realmente a la base de
+datos de desarrollo — `drizzle-kit push` no puede alcanzar Postgres
+directo desde este entorno (solo HTTPS vía proxy), así que esos `db:push`
+anteriores fallaban en silencio. Columnas y tablas enteras faltaban
+(`programacion_entradas.estado`, `ordenes_compra.fecha_envio_daf/
+estado_devengado/fecha_pago`, la tabla `programacion_compromisos` completa,
+`fondo_rotativo_pagos.tipo_documento_pago/nit_beneficiario`,
+`fri_fondo_rotativo.fecha_envio_daf`, `configuracion.
+ultimo_cuatrimestre_cerrado`) — esas fases habrían estado fallando en la
+app real. Se corrigió aplicando el DDL faltante directo contra la rama de
+Neon vía el MCP de Neon, y se hizo un backfill puntual de un pago de Fondo
+Rotativo ya liquidado (consolidación 76, Q169.10) que nunca reflejó su
+monto en Ejecución/Regularizado.
+
+**Pendiente de revisión manual por el cliente/Alberto**: había 9 entradas
+de Programación ya capturadas antes de que el campo `estado` existiera de
+verdad en la base — quedaron en "Solicitado" por defecto y ahora necesitan
+que alguien con acceso a Presupuesto las apruebe una por una (o las
+rechace si ya no aplican) en Presupuesto/Programación.
+
+**Fuera de alcance, detectado pero NO corregido**: dos tablas del schema
+(`requisiciones_bodega` para DAB-75, `viatico_liquidaciones` para la
+Planilla de Viático) tampoco existen en la base de datos — son features
+anteriores a esta ronda, no relacionadas con Presupuesto. Si el cliente
+usa DAB-75 o Viáticos, probablemente estén fallando también; requiere
+confirmación antes de tocarlas.
+
 ## 5. Verificación (para cada fase)
 
 - `npx tsc --noEmit` y `npm run build` limpios.
