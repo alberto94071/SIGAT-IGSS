@@ -1,7 +1,7 @@
 "use server";
 import { fechaGuatemala } from "@/lib/date-utils";
 import { db } from "@/lib/db";
-import { programacionEntradas, presupuestoRenglones, reprogramaciones, modificacionesPresupuestarias } from "@/lib/schema";
+import { programacionEntradas, presupuestoRenglones, reprogramaciones, modificacionesPresupuestarias, reprogramacionLotes } from "@/lib/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { requireModuloAccessAction } from "@/lib/modulo-access";
@@ -11,6 +11,7 @@ import { getSaldoRenglon, EJERCICIO_FISCAL } from "@/lib/presupuesto-disponible"
 import {
   ventanaProgramacionAbierta, mesCreacionProgramacionLabel, fechaAprobacionAutomatica,
   ventanaAprobacionReprogramacionAbierta, ventanaAprobacionModificacionAbierta,
+  mesDelCuatrimestreYaPaso,
 } from "@/lib/programacion-fechas";
 import { procesarCierreCuatrimestres } from "@/lib/cierre-cuatrimestre";
 
@@ -93,13 +94,19 @@ export type ProgramacionEntrada = {
   estado: string;
 };
 
-/** Entradas ya guardadas para un cuatrimestre (para la tabla de "ya programados"). */
+/**
+ * Entradas ya guardadas para un cuatrimestre (para la tabla de "ya
+ * programados" / impresión) — no incluye lo que esté "Borrador" (lotes de
+ * Reprogramación todavía en construcción, sin solicitar), ver
+ * getLoteBorrador para eso.
+ */
 export async function getEntradas(cuatrimestre: number): Promise<ProgramacionEntrada[]> {
   await procesarCierreCuatrimestres();
 
   const filas = await db.select().from(programacionEntradas).where(and(
     eq(programacionEntradas.ejercicio_fiscal, EJERCICIO),
     eq(programacionEntradas.cuatrimestre, cuatrimestre),
+    sql`${programacionEntradas.estado} != 'Borrador'`,
   )).orderBy(programacionEntradas.renglon);
 
   const porClave = new Map(PRESUPUESTO_DATA.map(r => [`${r.renglon}|${r.subProducto}`, r]));
@@ -132,11 +139,35 @@ export type GuardarEntradaInput = {
   modo: "programacion" | "reprogramacion";
 };
 
+/** Busca el lote Borrador abierto del cuatrimestre, o crea uno nuevo si no hay. */
+async function obtenerOCrearLoteBorrador(cuatrimestre: number, uid: number): Promise<number> {
+  const [abierto] = await db.select({ id: reprogramacionLotes.id }).from(reprogramacionLotes).where(and(
+    eq(reprogramacionLotes.ejercicio_fiscal, EJERCICIO),
+    eq(reprogramacionLotes.cuatrimestre, cuatrimestre),
+    eq(reprogramacionLotes.estado, "Borrador"),
+  )).limit(1);
+  if (abierto) return abierto.id;
+
+  const [nuevo] = await db.insert(reprogramacionLotes).values({
+    ejercicio_fiscal: EJERCICIO, cuatrimestre, estado: "Borrador", creado_por: uid,
+  }).returning({ id: reprogramacionLotes.id });
+  return nuevo.id;
+}
+
 /**
  * Guarda (Programación) o actualiza (Reprogramación) el monto mensual de un
  * renglón/sub-producto/tipo dentro de un cuatrimestre. Valida que la suma
  * de todo lo programado en el grupo (rango de renglón) para ese cuatrimestre
- * no supere el 33.33% del monto vigente total del grupo.
+ * no supere el 33.33% del monto vigente total del grupo, y que no se le
+ * asigne/cambie dinero a un mes que ya terminó (para esos meses se conserva
+ * lo que ya hubiera, ignorando lo que mande el cliente).
+ *
+ * Programación sigue siendo fila por fila (Solicitado -> Aprobado). Una
+ * Reprogramación no se solicita ni aprueba fila por fila: cada guardado
+ * queda "Borrador" dentro del lote abierto de este cuatrimestre (ver
+ * obtenerOCrearLoteBorrador) — recién al llamar solicitarLote() se
+ * solicitan todas las filas del lote juntas, y aprobarLote/rechazarLote
+ * deciden sobre el lote completo.
  */
 export async function guardarEntrada(input: GuardarEntradaInput): Promise<{ ok: true } | { error: string }> {
   const check = await requireEdit();
@@ -151,21 +182,13 @@ export async function guardarEntrada(input: GuardarEntradaInput): Promise<{ ok: 
     return { error: `La Programación del cuatrimestre ${cuatrimestre} solo se puede crear/editar durante los primeros 5 días hábiles de ${mesCreacionProgramacionLabel(cuatrimestre)}.` };
   }
   // Reprogramación no tiene ventana de fecha para solicitarse — se puede
-  // cualquier día del año (solo se bloquea al momento de aprobar, ver
-  // aprobarEntrada más abajo).
+  // cualquier día del año (solo se bloquea al momento de aprobar el lote).
 
   const base = PRESUPUESTO_DATA.find(r => r.renglon === renglon && r.subProducto === subProducto);
   if (!base) return { error: "El renglón/sub-producto no existe en el catálogo presupuestario" };
 
   const grupo = grupoDeRenglon(renglon);
   if (!grupo) return { error: "El renglón no pertenece a ningún grupo válido" };
-
-  const mes1 = Math.max(0, input.mes1 || 0);
-  const mes2 = Math.max(0, input.mes2 || 0);
-  const mes3 = Math.max(0, input.mes3 || 0);
-  const mes4 = Math.max(0, input.mes4 || 0);
-  const nuevoTotal = mes1 + mes2 + mes3 + mes4;
-  if (nuevoTotal <= 0) return { error: "Debe ingresar al menos un monto mayor a cero" };
 
   const [existente] = await db.select().from(programacionEntradas).where(and(
     eq(programacionEntradas.ejercicio_fiscal, EJERCICIO),
@@ -183,6 +206,18 @@ export async function guardarEntrada(input: GuardarEntradaInput): Promise<{ ok: 
   // vez a un renglón dentro de un cuatrimestre ya en curso (ej. combustible
   // para una planta eléctrica, imprevisto que no se programó al inicio).
 
+  // Un mes que ya pasó no se puede asignar/cambiar — se conserva lo que ya
+  // hubiera ahí (0 si la fila es nueva), sin importar lo que mande el cliente.
+  const mesesInput = [input.mes1, input.mes2, input.mes3, input.mes4] as const;
+  const mesesExistentes = existente ? [existente.mes1, existente.mes2, existente.mes3, existente.mes4] as const : null;
+  const [mes1, mes2, mes3, mes4] = mesesInput.map((valor, i) => {
+    const indice = i + 1;
+    if (mesDelCuatrimestreYaPaso(cuatrimestre, indice, hoy)) return mesesExistentes ? mesesExistentes[i] : 0;
+    return Math.max(0, valor || 0);
+  });
+  const nuevoTotal = mes1 + mes2 + mes3 + mes4;
+  if (nuevoTotal <= 0) return { error: "Debe ingresar al menos un monto mayor a cero en un mes que no haya pasado todavía" };
+
   const totalGrupo = PRESUPUESTO_DATA
     .filter(r => r.renglon >= grupo.min && r.renglon <= grupo.max)
     .reduce((sum, r) => sum + r.vigente, 0);
@@ -199,16 +234,17 @@ export async function guardarEntrada(input: GuardarEntradaInput): Promise<{ ok: 
     };
   }
 
+  const estadoNuevo = modo === "programacion" ? "Solicitado" : "Borrador";
+  const loteId = modo === "reprogramacion" ? await obtenerOCrearLoteBorrador(cuatrimestre, check.uid) : null;
+
   if (existente) {
-    // Solo llega aquí vía Reprogramación (Programación nunca actualiza una
-    // fila existente, ver validación arriba) — al reprogramar, la solicitud
-    // vuelve a "Solicitado" aunque ya estuviera Aprobada, para que pase de
-    // nuevo por aprobación (con la ventana de Reprogramación, no la de
-    // Programación — ver origen abajo).
+    // Al reprogramar, la solicitud vuelve a Borrador (dentro de un lote)
+    // aunque ya estuviera Aprobada, para que pase de nuevo por aprobación.
     await db.update(programacionEntradas).set({
       mes1, mes2, mes3, mes4,
-      estado: "Solicitado",
+      estado: estadoNuevo,
       origen: modo,
+      lote_id: loteId,
       updated_at: sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`,
     }).where(eq(programacionEntradas.id, existente.id));
   } else {
@@ -216,8 +252,9 @@ export async function guardarEntrada(input: GuardarEntradaInput): Promise<{ ok: 
       ejercicio_fiscal: EJERCICIO,
       cuatrimestre, renglon, subproducto: subProducto, tipo,
       mes1, mes2, mes3, mes4,
-      estado: "Solicitado",
+      estado: estadoNuevo,
       origen: modo,
+      lote_id: loteId,
       creado_por: check.uid,
     });
   }
@@ -241,11 +278,10 @@ function ventanaAprobacionProgramacionAbierta(updatedAt: string | null): boolean
 }
 
 /**
- * Aprueba una entrada de Programación/Reprogramación — solo quien tenga
- * acceso a mod_presupuesto, y solo dentro de su ventana de aprobación:
- * Programación abre el 6to día hábil del mes en que se creó (sin límite
- * después); Reprogramación se puede solicitar cualquier día, pero solo se
- * aprueba durante los primeros 5 días hábiles de cada mes (ver origen).
+ * Aprueba una entrada de Programación — solo quien tenga acceso a
+ * mod_presupuesto, y solo dentro de su ventana de aprobación (abre el 6to
+ * día hábil del mes en que se creó, sin límite después). Reprogramación no
+ * se aprueba fila por fila — ver aprobarLote.
  */
 export async function aprobarEntrada(id: number): Promise<{ ok: true } | { error: string }> {
   const check = await requireModuloAccessAction("mod_presupuesto");
@@ -257,14 +293,9 @@ export async function aprobarEntrada(id: number): Promise<{ ok: true } | { error
     origen: programacionEntradas.origen,
   }).from(programacionEntradas).where(eq(programacionEntradas.id, id)).limit(1);
   if (!fila) return { error: "No existe esa entrada" };
+  if (fila.origen === "reprogramacion") return { error: "Esta Reprogramación se aprueba junto con todo su lote — ve a Reprogramaciones pendientes." };
   if (fila.estado !== "Solicitado") return { error: "Esta entrada ya no está pendiente de aprobación" };
-
-  const hoy = fechaGuatemala();
-  if (fila.origen === "reprogramacion") {
-    if (!ventanaAprobacionReprogramacionAbierta(hoy)) {
-      return { error: "Las Reprogramaciones solo se pueden aprobar durante los primeros 5 días hábiles de cada mes." };
-    }
-  } else if (!ventanaAprobacionProgramacionAbierta(fila.updated_at)) {
+  if (!ventanaAprobacionProgramacionAbierta(fila.updated_at)) {
     return { error: "Todavía no se puede aprobar esta entrada — espera a que abra su ventana de aprobación." };
   }
 
@@ -272,14 +303,15 @@ export async function aprobarEntrada(id: number): Promise<{ ok: true } | { error
   return { ok: true };
 }
 
-/** Rechaza una entrada de Programación/Reprogramación mientras siga "Solicitado" — solo quien tenga acceso a mod_presupuesto. */
+/** Rechaza una entrada de Programación mientras siga "Solicitado" — solo quien tenga acceso a mod_presupuesto. Reprogramación se rechaza por lote — ver rechazarLote. */
 export async function rechazarEntrada(id: number): Promise<{ ok: true } | { error: string }> {
   const check = await requireModuloAccessAction("mod_presupuesto");
   if ("error" in check) return check;
 
-  const [fila] = await db.select({ estado: programacionEntradas.estado })
+  const [fila] = await db.select({ estado: programacionEntradas.estado, origen: programacionEntradas.origen })
     .from(programacionEntradas).where(eq(programacionEntradas.id, id)).limit(1);
   if (!fila) return { error: "No existe esa entrada" };
+  if (fila.origen === "reprogramacion") return { error: "Esta Reprogramación se rechaza junto con todo su lote — ve a Reprogramaciones pendientes." };
   if (fila.estado !== "Solicitado") return { error: "Ya no se puede rechazar: la entrada dejó de estar Solicitada" };
 
   await db.update(programacionEntradas).set({
@@ -290,17 +322,149 @@ export async function rechazarEntrada(id: number): Promise<{ ok: true } | { erro
   return { ok: true };
 }
 
-/** Elimina una entrada de Programación/Reprogramación mientras siga "Solicitado" (para corregir errores). */
+/**
+ * Elimina una entrada mientras se pueda seguir editando: Programación
+ * mientras siga "Solicitado", Reprogramación mientras su lote siga
+ * "Borrador" (para corregir errores antes de solicitar/aprobar). Si era la
+ * última fila del lote, el lote vacío también se elimina.
+ */
 export async function eliminarEntrada(id: number): Promise<{ ok: true } | { error: string }> {
   const check = await requireEdit();
   if ("error" in check) return check;
 
-  const [fila] = await db.select({ estado: programacionEntradas.estado })
+  const [fila] = await db.select({ estado: programacionEntradas.estado, origen: programacionEntradas.origen, lote_id: programacionEntradas.lote_id })
     .from(programacionEntradas).where(eq(programacionEntradas.id, id)).limit(1);
   if (!fila) return { error: "No existe esa entrada" };
-  if (fila.estado !== "Solicitado") return { error: "Ya no se puede eliminar: la entrada dejó de estar Solicitada" };
+  const estadoEditable = fila.origen === "reprogramacion" ? "Borrador" : "Solicitado";
+  if (fila.estado !== estadoEditable) {
+    return { error: fila.origen === "reprogramacion" ? "Ya no se puede eliminar: este lote ya fue solicitado" : "Ya no se puede eliminar: la entrada dejó de estar Solicitada" };
+  }
 
   await db.delete(programacionEntradas).where(eq(programacionEntradas.id, id));
+
+  if (fila.lote_id) {
+    const [{ restantes }] = await db.select({ restantes: sql<number>`count(*)` })
+      .from(programacionEntradas).where(eq(programacionEntradas.lote_id, fila.lote_id));
+    if (Number(restantes) === 0) {
+      await db.delete(reprogramacionLotes).where(eq(reprogramacionLotes.id, fila.lote_id));
+    }
+  }
+
+  return { ok: true };
+}
+
+export type LoteReprogramacion = {
+  id: number;
+  cuatrimestre: number;
+  estado: string;
+  filas: ProgramacionEntrada[];
+};
+
+async function cargarLote(loteId: number): Promise<LoteReprogramacion | null> {
+  const [lote] = await db.select().from(reprogramacionLotes).where(eq(reprogramacionLotes.id, loteId)).limit(1);
+  if (!lote) return null;
+  const filas = await db.select().from(programacionEntradas).where(eq(programacionEntradas.lote_id, loteId)).orderBy(programacionEntradas.renglon);
+  const porClave = new Map(PRESUPUESTO_DATA.map(r => [`${r.renglon}|${r.subProducto}`, r]));
+  return {
+    id: lote.id,
+    cuatrimestre: lote.cuatrimestre,
+    estado: lote.estado,
+    filas: filas.map(f => ({
+      id: f.id, cuatrimestre: f.cuatrimestre, renglon: f.renglon,
+      descripcion: porClave.get(`${f.renglon}|${f.subproducto}`)?.descripcion ?? "",
+      subProducto: f.subproducto, tipo: f.tipo as "normal" | "regularizado",
+      mes1: f.mes1, mes2: f.mes2, mes3: f.mes3, mes4: f.mes4,
+      total: f.mes1 + f.mes2 + f.mes3 + f.mes4, estado: f.estado,
+    })),
+  };
+}
+
+/** Lote Borrador abierto (si hay) de este cuatrimestre, con todo lo que se ha ido armando renglón por renglón. */
+export async function getLoteBorrador(cuatrimestre: number): Promise<LoteReprogramacion | null> {
+  const [abierto] = await db.select({ id: reprogramacionLotes.id }).from(reprogramacionLotes).where(and(
+    eq(reprogramacionLotes.ejercicio_fiscal, EJERCICIO),
+    eq(reprogramacionLotes.cuatrimestre, cuatrimestre),
+    eq(reprogramacionLotes.estado, "Borrador"),
+  )).limit(1);
+  if (!abierto) return null;
+  return cargarLote(abierto.id);
+}
+
+/** Todos los lotes de Reprogramación Solicitados (pendientes de aprobación), más recientes primero. */
+export async function getLotesPendientes(): Promise<LoteReprogramacion[]> {
+  const lotes = await db.select({ id: reprogramacionLotes.id }).from(reprogramacionLotes).where(and(
+    eq(reprogramacionLotes.ejercicio_fiscal, EJERCICIO),
+    eq(reprogramacionLotes.estado, "Solicitado"),
+  )).orderBy(sql`${reprogramacionLotes.id} DESC`);
+  const cargados = await Promise.all(lotes.map(l => cargarLote(l.id)));
+  return cargados.filter((l): l is LoteReprogramacion => l !== null);
+}
+
+/** Envía todo el lote Borrador (todas sus filas juntas) a aprobación — desde aquí ya no se puede seguir editando fila por fila hasta que se apruebe o se rechace. */
+export async function solicitarLote(loteId: number): Promise<{ ok: true } | { error: string }> {
+  const check = await requireEdit();
+  if ("error" in check) return check;
+
+  const [lote] = await db.select({ estado: reprogramacionLotes.estado }).from(reprogramacionLotes).where(eq(reprogramacionLotes.id, loteId)).limit(1);
+  if (!lote) return { error: "No existe ese lote" };
+  if (lote.estado !== "Borrador") return { error: "Este lote ya fue solicitado" };
+
+  const [{ total }] = await db.select({ total: sql<number>`count(*)` }).from(programacionEntradas).where(eq(programacionEntradas.lote_id, loteId));
+  if (Number(total) === 0) return { error: "Agrega al menos un renglón antes de solicitar" };
+
+  await db.update(programacionEntradas).set({ estado: "Solicitado" }).where(and(
+    eq(programacionEntradas.lote_id, loteId),
+    eq(programacionEntradas.estado, "Borrador"),
+  ));
+  await db.update(reprogramacionLotes).set({
+    estado: "Solicitado",
+    updated_at: sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`,
+  }).where(eq(reprogramacionLotes.id, loteId));
+
+  return { ok: true };
+}
+
+/** Aprueba un lote completo de Reprogramación — solo quien tenga acceso a mod_presupuesto, y solo dentro de la ventana (primeros 5 días hábiles de cada mes). Aprueba todas sus filas juntas. */
+export async function aprobarLote(loteId: number): Promise<{ ok: true } | { error: string }> {
+  const check = await requireModuloAccessAction("mod_presupuesto");
+  if ("error" in check) return check;
+
+  const [lote] = await db.select({ estado: reprogramacionLotes.estado }).from(reprogramacionLotes).where(eq(reprogramacionLotes.id, loteId)).limit(1);
+  if (!lote) return { error: "No existe ese lote" };
+  if (lote.estado !== "Solicitado") return { error: "Este lote ya no está pendiente de aprobación" };
+  if (!ventanaAprobacionReprogramacionAbierta(fechaGuatemala())) {
+    return { error: "Las Reprogramaciones solo se pueden aprobar durante los primeros 5 días hábiles de cada mes." };
+  }
+
+  await db.update(programacionEntradas).set({ estado: "Aprobado" }).where(and(
+    eq(programacionEntradas.lote_id, loteId),
+    eq(programacionEntradas.estado, "Solicitado"),
+  ));
+  await db.update(reprogramacionLotes).set({
+    estado: "Aprobado",
+    updated_at: sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`,
+  }).where(eq(reprogramacionLotes.id, loteId));
+
+  return { ok: true };
+}
+
+/** Rechaza un lote completo — solo quien tenga acceso a mod_presupuesto. No lo elimina: lo regresa entero a Borrador para que se pueda corregir la fila mala (fila por fila) y volver a solicitar, sin perder las demás. */
+export async function rechazarLote(loteId: number): Promise<{ ok: true } | { error: string }> {
+  const check = await requireModuloAccessAction("mod_presupuesto");
+  if ("error" in check) return check;
+
+  const [lote] = await db.select({ estado: reprogramacionLotes.estado }).from(reprogramacionLotes).where(eq(reprogramacionLotes.id, loteId)).limit(1);
+  if (!lote) return { error: "No existe ese lote" };
+  if (lote.estado !== "Solicitado") return { error: "Este lote ya no está pendiente de aprobación" };
+
+  await db.update(programacionEntradas).set({ estado: "Borrador" }).where(and(
+    eq(programacionEntradas.lote_id, loteId),
+    eq(programacionEntradas.estado, "Solicitado"),
+  ));
+  await db.update(reprogramacionLotes).set({
+    estado: "Borrador",
+    updated_at: sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`,
+  }).where(eq(reprogramacionLotes.id, loteId));
 
   return { ok: true };
 }
