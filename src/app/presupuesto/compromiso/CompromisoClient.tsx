@@ -46,7 +46,7 @@ export default function CompromisoClient({ ordenes: init, solicitadas: initSolic
               <tr className="table-header">
                 <th className="px-4 py-3 text-left whitespace-nowrap">Orden</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Código PPR</th>
-                <th className="px-4 py-3 text-left">Proveedor</th>
+                <th className="px-4 py-3 text-left max-w-xs">Proveedor</th>
                 <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
                 <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>
               </tr>
@@ -58,7 +58,7 @@ export default function CompromisoClient({ ordenes: init, solicitadas: initSolic
                     OC-{String(o.numero).padStart(3, "0")}/{o.anio}
                   </td>
                   <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{o.codigo_ppr ?? "—"}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 max-w-xs">
                     <p className="font-medium text-gray-900">{o.proveedor_nombre ?? "—"}</p>
                     {o.proveedor_nit && <p className="text-xs text-gray-400">NIT: {o.proveedor_nit}</p>}
                     <RenglonBadges renglones={o.renglones} />
@@ -99,7 +99,7 @@ export default function CompromisoClient({ ordenes: init, solicitadas: initSolic
               <tr className="table-header">
                 <th className="px-4 py-3 text-left whitespace-nowrap">Orden</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">No. Compromiso</th>
-                <th className="px-4 py-3 text-left">Proveedor</th>
+                <th className="px-4 py-3 text-left max-w-xs">Proveedor</th>
                 <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
                 <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>
               </tr>
@@ -113,7 +113,7 @@ export default function CompromisoClient({ ordenes: init, solicitadas: initSolic
                       OC-{String(o.numero).padStart(3, "0")}/{o.anio}
                     </td>
                     <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{o.no_compromiso ?? "—"}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 max-w-xs">
                       <p className="font-medium text-gray-900">{o.proveedor_nombre ?? "—"}</p>
                       {o.proveedor_nit && <p className="text-xs text-gray-400">NIT: {o.proveedor_nit}</p>}
                       <RenglonBadges renglones={o.renglones} />
