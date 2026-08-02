@@ -48,11 +48,9 @@ de envío a DAF desde cero, no corregir un texto.**
 
 ### 2.2 Ruteo a DAB-60 es por ORDEN completa, no por renglón individual
 `compromiso-actions.ts:43`: `necesitaDab60 = renglones.some(r =>
-requiereDab60(r.renglon))`. Si **cualquier** renglón de la orden cae en
-200-399 (sin excepción), **toda la orden** pasa por Almacén/DAB-60 antes de
-Devengado — incluso si esa misma orden tiene también renglones 100-199, que
-según la regla del cliente deberían ir directo a Devengado.
-→ **Pregunta bloqueante, ver Q2 abajo.**
+requiereDab60(r.renglon))`. Confirmado con el usuario que esto está bien
+así: ninguna orden real mezcla renglones de distintos grupos, por norma
+general. **No requiere cambios.**
 
 ### 2.3 "Saldo Programado = Programado − Ejecutado" no es lo que calcula hoy
 En `ejecucion-actions.ts`:
@@ -79,8 +77,8 @@ Compromiso a la entrada de programación que consumió (nueva FK o ledger).
 Cero utilidades de días hábiles o feriados guatemaltecos en todo el repo.
 Toda la lógica de "primeros 5 días hábiles de Enero/Abril/Agosto",
 "día 15-20 del mes", "1er o 2do día hábil", etc. hay que construirla desde
-cero, y necesita saber qué cuenta como feriado.
-→ **Pregunta bloqueante, ver Q1 abajo.**
+cero. Confirmado con el usuario: solo feriados nacionales oficiales (ver
+§3, Q1).
 
 ### 2.6 Estados "Solicitado"/"Aprobado"/"Rechazado" en Programación/Reprogramación
 No existen en el schema. Hoy cualquier usuario con rol ≠ "consulta" edita en
@@ -91,15 +89,15 @@ lógica de aprobación (¿automática por fecha, o manual con botón de alguien?
 ### 2.7 Modificaciones: el mapeo INTER/INTRA/Ampliación no calza limpio con lo que ya existe
 - `TIPOS_MODIFICACION` hoy solo tiene `"ingru"` y `"ampliacion"` (2 opciones,
   edición de un solo valor por renglón/subproducto, sin origen/destino).
-- Existe una columna `presupuestoRenglones.modificacion_entre_renglones`
-  **pero no está conectada a ningún tipo seleccionable** — es una columna
-  huérfana.
-- El flujo de "Transferencia entre renglón/sub-producto" (`transferirPresupuesto`,
-  con origen y destino reales) es el que más se parece a "Modificación entre
-  Renglones (INTER)" del pedido del cliente, pero hoy **no restringe** a que
-  origen y destino compartan el mismo Grupo de Gasto y mismo Subproducto —
-  permite cualquier combinación.
-→ Hay que confirmar el mapeo exacto antes de tocar esto. Ver Q5 abajo.
+- La columna `presupuestoRenglones.modificacion_entre_renglones` sigue
+  huérfana (no conectada a ningún tipo seleccionable) — se queda así, no es
+  necesaria.
+- Confirmado con el usuario: "INTER" no es un término real (error de
+  transcripción), pero la Transferencia (`transferirPresupuesto`, origen→
+  destino) sí es una funcionalidad real bajo otro nombre. Se mantiene su
+  lógica actual **sin** restricción de mismo Grupo de Gasto/Subproducto —
+  esa restricción del prompt se descarta. Solo falta agregarle ventana de
+  fecha + PDF (ver §3, Q5 y Fase 3).
 
 ### 2.8 Devengado no captura nada hoy — el "No. de Devengado" está en el paso equivocado
 `devengar()` es un solo clic sin formulario. El campo `no_devengado` que
@@ -156,69 +154,61 @@ mismo esfuerzo.
 
 ---
 
-## 3. Respuestas ya confirmadas por el usuario
+## 3. Respuestas confirmadas por el usuario
 
+- **Q1 (feriados) → resuelta.** Solo feriados nacionales oficiales de
+  Guatemala: 1 ene, Jueves y Viernes Santo (fecha móvil, calculable), 1 may,
+  15 sep, 1 nov, 24-25 dic, 31 dic. Sin asuetos institucionales adicionales
+  del IGSS por ahora. **Fases 1, 2 y 3 desbloqueadas.**
 - **Q2 (ruteo DAB-60) → resuelta.** Ningún SIAF/orden mezcla renglones de
   distintos grupos — es norma general que una orden solo contenga renglones
-  del mismo rango. Por lo tanto el ruteo por ORDEN completa (como está hoy)
-  es correcto y no hace falta rediseñar a nivel de línea. **Fase 5
-  desbloqueada.**
+  del mismo rango. El ruteo por ORDEN completa (como está hoy) es correcto,
+  no hace falta rediseñar a nivel de línea. **Fase 5 desbloqueada.**
 - **Q3 (aprobación Programación/Reprogramación) → resuelta.** Es automática
   por fecha (un chequeo cambia el estado de `Solicitado` a `Aprobado` el día
-  que corresponde, sin acción humana). **Fase 2 desbloqueada** (falta solo
-  Q1 de días hábiles).
-- **Q5 (mapeo Modificaciones) → invalidada, requiere aclaración.** El
-  usuario indicó que el término "INTER" **no existe** en el negocio real —
-  "todo es Ingru" — y que probablemente fue un error de la transcripción
-  IA→IA del audio original. Esto es importante: **pone en duda la
-  fiabilidad del prompt estructurado en esta sección**, ya que pasó por dos
-  pasadas de IA (transcripción de audio + generación de prompt) antes de
-  llegar aquí. No se puede diseñar la Fase 3 (Modificaciones) hasta aclarar
-  cuántos tipos de modificación existen realmente y cómo se llaman. Ver
-  pregunta nueva abajo.
+  que corresponde, sin acción humana).
+- **Q5 (mapeo Modificaciones) → resuelta.** "INTER" no existe como nombre
+  real (fue error de la transcripción del audio), pero la funcionalidad de
+  Transferencia entre renglón/sub-producto (origen→destino) **sí es real**,
+  solo cambia el nombre. Se mantiene tal como está programada hoy — **sin**
+  la restricción de mismo Grupo de Gasto/Subproducto que pedía el prompt
+  (esa restricción se descarta salvo que el cliente diga lo contrario más
+  adelante). **Fase 3 desbloqueada y reducida de alcance:** ya no hace falta
+  tocar la lógica de Transferencia, solo agregarle su ventana de fecha
+  (15-20 de cada mes) y el PDF de formato; y agregarle la ventana de fecha
+  (1er/2do día hábil, feb-dic) al tipo "Ingru" existente + su PDF.
 
-## 3.1. Preguntas abiertas — necesito respuesta antes de codificar
+## 3.1. Puntos menores — sigo con mi propuesta salvo objeción
 
-**Q1. Días hábiles — ¿solo feriados nacionales oficiales, o también asuetos
-institucionales del IGSS?** El usuario confirmó que sí importan los
-feriados (no solo fin de semana), pero falta la fuente exacta. Propuesta:
-implemento los feriados nacionales fijos por ley de Guatemala (1 ene, 1 may,
-15 sep, 1 nov, 24-25 dic, 31 dic) más Jueves y Viernes Santo (fecha móvil,
-calculable). Falta confirmar si el IGSS tiene asuetos institucionales
-adicionales (ej. día del empleado público u otro) que deba sumar a esa
-lista. Ver pregunta de seguimiento en el chat.
+No son bloqueantes; si el cliente corrige algo después, se ajusta en un
+commit aparte.
 
-**Q4. Traslado de saldo con Compromiso al siguiente cuatrimestre: ¿cómo se
-debe enlazar un Compromiso a la entrada de programación específica que
-consumió?** Hoy el Compromiso es un monto agregado por renglón/subproducto,
-sin cuatrimestre ni referencia a una fila de `programacionEntradas`. Propongo
-agregar `cuatrimestre` y una referencia al compromiso en el registro de
-consumo — pero quiero confirmar contigo/el cliente antes de diseñar el
-ledger exacto.
+**Q4. Traslado de saldo con Compromiso al siguiente cuatrimestre.**
+Propuesta de diseño: agregar `cuatrimestre` (nullable) y `compromiso_ref`
+(texto, el mismo `no_compromiso` que ya se captura en
+`comprometerYEnviarADevengado`) a una nueva tabla de "consumo" — o,
+más simple y con menos riesgo de romper lo existente: agregar esas dos
+columnas directamente a `programacionEntradas` y, al comprometer una orden,
+buscar la entrada de programación del cuatrimestre vigente para ese
+renglón/subproducto y marcarla con el número de compromiso + el monto
+comprometido. Al cerrar un cuatrimestre, todo lo programado sin
+`compromiso_ref` se considera caduco (no se traslada); lo que sí tiene
+`compromiso_ref` se re-crea como entrada del cuatrimestre siguiente por el
+monto comprometido. Implemento esto salvo que el cliente prefiera otro
+mecanismo.
 
-**Q5 (reabierta). ¿Cuántos tipos de Modificación existen realmente y cómo
-se llaman?** El usuario indicó que "INTER" no existe en el negocio real y
-que probablemente fue un error de transcripción — "todo es Ingru". Esto
-coincide con lo que YA está programado hoy (`TIPOS_MODIFICACION` solo tiene
-`"ingru"` y `"ampliacion"`, sin "entre renglones"). Necesito confirmar: ¿la
-Transferencia actual (origen/destino) sigue siendo una funcionalidad real
-del negocio bajo otro nombre, o fue también una invención de la
-transcripción y no debería existir como "tipo de Modificación"? Ver
-pregunta de seguimiento en el chat.
+**Q6. NIT del beneficiario en pago por cheque.** Propuesta: campo de texto
+libre en el formulario de `registrarFormaPagoCheque`, pre-llenado con
+`consolidaciones.proveedor_nit` si existe, pero editable — porque el
+beneficiario del cheque puede no ser el proveedor (ej. pago a un empleado).
+Se guarda en columna nueva `fondoRotativoPagos.nit_beneficiario`.
 
-**Q6. Pago por cheque — el NIT del beneficiario: ¿siempre es el NIT del
-proveedor de la consolidación (`consolidaciones.proveedor_nit`), o puede
-ser un NIT distinto (ej. un empleado) que hay que capturar en un campo
-propio del pago?**
-
-> **Nota general sobre confiabilidad del prompt:** dado que el documento
-> original pasó por dos pasadas de IA (transcripción de audio → generación
-> de prompt estructurado), y ya se detectó al menos un término inventado
-> ("INTER"), recomiendo que cualquier regla de negocio con nombres o cifras
-> específicas (fechas exactas, nombres de tipos, rangos de renglón) que no
-> coincida con lo que ya está implementado se trate como sospechosa hasta
-> confirmarla con el cliente, en vez de asumir que el prompt es
-> perfectamente fiel al audio original.
+> **Nota general sobre confiabilidad del prompt:** el documento original
+> pasó por dos pasadas de IA (transcripción de audio → generación de
+> prompt estructurado) y ya se confirmó al menos un término inventado
+> ("INTER"). Donde el prompt describe una regla con nombres/cifras
+> específicas que no coincide con lo ya implementado, se prioriza lo ya
+> implementado salvo que el cliente confirme explícitamente el cambio.
 
 ---
 
@@ -228,25 +218,28 @@ Dado el tamaño, propongo dividirlo en fases entregables por separado (cada
 una con su propio typecheck/build/migración/commit), en vez de un solo
 cambio gigante:
 
-1. **Utilidad de días hábiles guatemaltecos** (`src/lib/dias-habiles.ts`) —
-   base para todo lo demás de fechas. Bloqueada por Q1.
-2. **Programación/Reprogramación**: columna `estado` en `programacionEntradas`,
-   ventanas de fecha con la utilidad de (1), botones Editar/Rechazar/Eliminar
-   mientras `Solicitado`, bloqueo al pasar a `Aprobado`, PDF de formato.
-   Bloqueada por Q1, Q3.
-3. **Modificaciones**: restricción de mismo Grupo/Subproducto en
-   Transferencia, ventanas de fecha por tipo, PDF de formato. Bloqueada por
-   Q1, Q5.
-4. **Ejecución**: arreglar el cálculo real de Programado/Saldo Programado
-   por cuatrimestre vigente (no acumulado). No bloqueada, se puede hacer ya.
+Todas las dudas bloqueantes ya se resolvieron (§3). Orden sugerido:
+
+1. **Utilidad de días hábiles guatemaltecos** (`src/lib/dias-habiles.ts`).
+2. **Ejecución**: arreglar el cálculo real de Programado/Saldo Programado
+   por cuatrimestre vigente (no acumulado) — independiente, se puede hacer
+   primero para no bloquear nada más.
+3. **Programación/Reprogramación**: columna `estado` en `programacionEntradas`,
+   ventanas de fecha con la utilidad de (1), aprobación automática por
+   fecha, botones Editar/Rechazar/Eliminar mientras `Solicitado`, bloqueo al
+   pasar a `Aprobado`, PDF de formato.
+4. **Modificaciones**: ventana de fecha 1er/2do día hábil para "Ingru",
+   ventana 15-20 de cada mes para Transferencia, ventana Abril/Julio/
+   Septiembre para "Ampliación", PDF de formato para las tres.
 5. **Compromiso → DAB-60 → Devengado → DAF**: mover `no_devengado` al paso
-   de Devengado, agregar formulario con fecha envío DAF + estado
-   Enviado/Rechazado/Pagado + fecha de pago condicional. Bloqueada por Q2.
-6. **Caducidad de cuatrimestre + traslado por Compromiso**: el ledger nuevo.
-   Bloqueada por Q4.
+   de Devengado (agregar formulario ahí, hoy no tiene ninguno), agregar
+   fecha envío DAF + estado Enviado/Rechazado/Pagado + fecha de pago
+   condicional.
+6. **Caducidad de cuatrimestre + traslado por Compromiso**: ledger nuevo
+   (propuesta en Q4).
 7. **Fondo Rotativo/Pagos**: agregar Tipo/NIT/Beneficiario al pago por
-   cheque; estados Enviado/Rechazado + fecha envío DAF en FRI; PDF de
-   Arqueo del Fondo Rotativo Interno. Bloqueada por Q6 (parcialmente).
+   cheque (propuesta en Q6); estados Enviado/Rechazado + fecha envío DAF en
+   FRI; PDF de Arqueo del Fondo Rotativo Interno.
 
 ## 5. Verificación (para cada fase)
 
