@@ -2,6 +2,8 @@ import { db } from "@/lib/db";
 import { programacionEntradas, presupuestoRenglones } from "@/lib/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { PRESUPUESTO_DATA } from "@/lib/presupuesto-general-data";
+import { fechaGuatemala } from "@/lib/date-utils";
+import { cuatrimestreDeFecha } from "@/lib/programacion-constants";
 
 // Mismo ejercicio fiscal hardcodeado que usa el resto del módulo de
 // Presupuesto (programacion-actions.ts, ejecucion-actions.ts,
@@ -16,20 +18,28 @@ export type Disponible = {
   disponible: number;
 };
 
-// Presupuesto real disponible de un renglón+sub-producto: lo programado en
-// Programación (los 4 meses de los 3 cuatrimestres, Normal + Regularizado
-// sumados — a la fecha de aprobar un SIAF todavía no se sabe si terminará
-// siendo Normal o Regularizado) más las modificaciones presupuestarias
-// (Ingru + transferencias + Ampliación), menos lo que ya está reservado o
-// ejecutado en cualquier etapa (Pre-Compromiso, Compromiso, Devengado).
+// Presupuesto real disponible de un renglón+sub-producto: lo Aprobado en
+// Programación/Reprogramación del CUATRIMESTRE VIGENTE únicamente (Normal +
+// Regularizado sumados — a la fecha de aprobar un SIAF todavía no se sabe si
+// terminará siendo Normal o Regularizado) más las modificaciones
+// presupuestarias (Ingru + transferencias + Ampliación), menos lo que ya
+// está reservado o ejecutado en cualquier etapa (Pre-Compromiso, Compromiso,
+// Devengado). No se puede usar por adelantado lo programado para un
+// cuatrimestre futuro, ni lo que quedó de uno ya cerrado (eso ya caducó o
+// pasó a no_ejecutado) — regla confirmada con el cliente: sin Programación/
+// Reprogramación Aprobada del cuatrimestre vigente, no se puede hacer nada,
+// aunque haya saldo en otros cuatrimestres.
 export async function getDisponible(renglon: number, subproducto: string): Promise<Disponible> {
+  const cuatrimestreVigente = cuatrimestreDeFecha(fechaGuatemala());
+
   const [entradasRow] = await db.select({
     total: sql<number>`COALESCE(SUM(${programacionEntradas.mes1} + ${programacionEntradas.mes2} + ${programacionEntradas.mes3} + ${programacionEntradas.mes4}), 0)`,
   }).from(programacionEntradas).where(and(
     eq(programacionEntradas.ejercicio_fiscal, EJERCICIO_FISCAL),
     eq(programacionEntradas.renglon, renglon),
     eq(programacionEntradas.subproducto, subproducto),
-    sql`${programacionEntradas.estado} != 'Caducado'`,
+    eq(programacionEntradas.cuatrimestre, cuatrimestreVigente),
+    eq(programacionEntradas.estado, "Aprobado"),
   ));
   const programado = Number(entradasRow?.total ?? 0);
 
