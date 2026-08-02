@@ -21,14 +21,16 @@ export async function adjudicarJunta(consolidacionId: number, data: {
     const check = await requireJunta();
     if ("error" in check) return check;
 
-    const numAdj = data.numero_adjudicacion.trim();
-    const razon = data.razon_adjudicacion.trim();
-    if (!numAdj) return { error: "El número de adjudicación es obligatorio" };
-    if (!razon) return { error: "La razón de adjudicación es obligatoria" };
-
     const [con] = await db.select().from(consolidaciones).where(eq(consolidaciones.id, consolidacionId)).limit(1);
     if (!con) return { error: "No se encontró la consolidación" };
     if (con.estado !== "Enviado a Junta") return { error: "Esta consolidación no está lista para adjudicar" };
+
+    // Compra Directa no pide número de adjudicación en este paso (se
+    // definirá más adelante en otro momento del proceso) — solo la razón.
+    const numAdj = data.numero_adjudicacion.trim();
+    const razon = data.razon_adjudicacion.trim();
+    if (con.tipo_compra !== "Compra Directa" && !numAdj) return { error: "El número de adjudicación es obligatorio" };
+    if (!razon) return { error: "La razón de adjudicación es obligatoria" };
 
     const [ofrt] = await db.select().from(oferentes)
       .where(and(eq(oferentes.id, data.oferenteId), eq(oferentes.consolidacion_id, consolidacionId))).limit(1);
@@ -40,7 +42,7 @@ export async function adjudicarJunta(consolidacionId: number, data: {
       proveedor_id:         ofrt.proveedor_id,
       proveedor_nit:        ofrt.nit,
       proveedor_nombre:     ofrt.nombre,
-      numero_adjudicacion:  numAdj,
+      numero_adjudicacion:  numAdj || null, // columna única — null (no "") si Compra Directa la deja vacía
       razon_adjudicacion:   razon,
     }).where(eq(consolidaciones.id, consolidacionId));
 

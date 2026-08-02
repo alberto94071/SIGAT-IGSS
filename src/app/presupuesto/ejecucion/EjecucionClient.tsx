@@ -1,6 +1,6 @@
 "use client";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { ChevronDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import type { EjecucionRow } from "@/lib/ejecucion-actions";
 
 const SCROLL_PASO = 320;
@@ -75,7 +75,6 @@ const TOTAL_COLSPAN = 3 + COLUMNAS.reduce((n, c) => n + (c.kind === "group" ? c.
 
 export default function EjecucionClient({ data }: Props) {
   const [activeTab, setActiveTab] = useState(0);
-  const [expandedRenglon, setExpandedRenglon] = useState<number | null>(null);
   const [orden, setOrden] = useState<"asc" | "desc">("asc");
   const [renglonBuscado, setRenglonBuscado] = useState("");
 
@@ -232,17 +231,17 @@ export default function EjecucionClient({ data }: Props) {
         >
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th rowSpan={2} className="px-4 py-2 text-left font-semibold text-gray-700 w-24 align-bottom">Renglon</th>
-                <th rowSpan={2} className="px-4 py-2 text-left font-semibold text-gray-700 min-w-48 align-bottom">Descripcion</th>
-                <th rowSpan={2} className="px-4 py-2 text-left font-semibold text-gray-700 w-28 align-bottom">Sub-Producto</th>
+              <tr>
+                <th rowSpan={2} className="sticky top-0 z-20 h-11 bg-gray-50 px-4 py-2 text-left font-semibold text-gray-700 w-24 align-bottom border-b border-gray-200">Renglon</th>
+                <th rowSpan={2} className="sticky top-0 z-20 h-11 bg-gray-50 px-4 py-2 text-left font-semibold text-gray-700 min-w-48 align-bottom border-b border-gray-200">Descripcion</th>
+                <th rowSpan={2} className="sticky top-0 z-20 h-11 bg-gray-50 px-4 py-2 text-left font-semibold text-gray-700 w-40 whitespace-nowrap align-bottom border-b border-gray-200">Sub-Producto</th>
                 {COLUMNAS.map(col => {
                   const colores = COLOR_MAP[col.color];
                   return col.kind === "simple" ? (
                     <th
                       key={col.label}
                       rowSpan={2}
-                      className={`px-4 py-2 text-right font-semibold text-gray-800 w-36 align-bottom border-l-2 border-gray-300 ${colores.header}`}
+                      className={`sticky top-0 z-20 h-11 px-4 py-2 text-right font-semibold text-gray-800 w-36 align-bottom border-l-2 border-b border-gray-300 ${colores.header}`}
                     >
                       {col.label}
                     </th>
@@ -250,21 +249,21 @@ export default function EjecucionClient({ data }: Props) {
                     <th
                       key={col.label}
                       colSpan={col.sub.length}
-                      className={`px-4 py-2 text-center font-semibold text-gray-800 border-l-2 border-gray-300 ${colores.header}`}
+                      className={`sticky top-0 z-20 h-11 px-4 py-2 text-center font-semibold text-gray-800 border-l-2 border-gray-300 ${colores.header}`}
                     >
                       {col.label}
                     </th>
                   );
                 })}
               </tr>
-              <tr className="border-b-2 border-gray-300">
+              <tr>
                 {COLUMNAS.filter(c => c.kind === "group").flatMap(col => {
                   const colores = COLOR_MAP[col.color];
                   const grupo = col as Extract<Columna, { kind: "group" }>;
                   return grupo.sub.map((s, i) => (
                     <th
                       key={`${col.label}-${s.label}`}
-                      className={`px-4 py-1.5 text-right font-medium text-gray-700 text-xs w-32 ${colores.sub} ${i === 0 ? "border-l-2 border-gray-300" : "border-l border-gray-200"}`}
+                      className={`sticky top-11 z-20 px-4 py-1.5 text-right font-medium text-gray-700 text-xs w-32 border-b-2 border-gray-300 ${colores.sub} ${i === 0 ? "border-l-2 border-gray-300" : "border-l border-gray-200"}`}
                     >
                       {s.label}
                     </th>
@@ -284,30 +283,18 @@ export default function EjecucionClient({ data }: Props) {
                   return (
                     <tr
                       key={`${row.renglon}-${row.subProducto}-${idx}`}
-                      className="border-b border-gray-200 hover:bg-gray-50/70 transition-colors"
+                      className="border-b border-gray-200 transition-[filter] duration-150 hover:brightness-[0.96]"
                     >
-                      <td className="px-4 py-3 font-semibold text-gray-900">{row.renglon}</td>
-                      <td className="px-4 py-3 text-gray-600">
-                        <button
-                          onClick={() =>
-                            setExpandedRenglon(expandedRenglon === row.renglon ? null : row.renglon)
-                          }
-                          className="flex items-center gap-1 text-brand-600 hover:text-brand-700"
-                        >
-                          <ChevronDown
-                            className={`w-4 h-4 transition-transform ${
-                              expandedRenglon === row.renglon ? "rotate-180" : ""
-                            }`}
-                          />
-                          <span className="truncate max-w-80">{row.descripcion}</span>
-                        </button>
+                      <td className="px-4 py-2 font-semibold text-gray-900">{row.renglon}</td>
+                      <td className="px-4 py-2 text-gray-600">
+                        <span className="block truncate max-w-80">{row.descripcion}</span>
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{row.subProducto}</td>
+                      <td className="px-4 py-2 text-gray-600 whitespace-nowrap">{row.subProducto}</td>
                       {COLUMNAS.flatMap(col => {
                         const colores = COLOR_MAP[col.color];
                         if (col.kind === "simple") {
                           return [
-                            <td key={col.label} className={`px-4 py-3 text-right text-gray-700 font-medium border-l-2 border-gray-300 ${colores.body}`}>
+                            <td key={col.label} className={`px-4 py-2 text-right text-gray-700 font-medium border-l-2 border-gray-300 ${colores.body}`}>
                               {Q(col.get(row))}
                             </td>,
                           ];
@@ -315,7 +302,7 @@ export default function EjecucionClient({ data }: Props) {
                         return col.sub.map((s, i) => (
                           <td
                             key={`${col.label}-${s.label}`}
-                            className={`px-4 py-3 text-right text-gray-600 ${colores.body} ${i === 0 ? "border-l-2 border-gray-300" : "border-l border-gray-200"}`}
+                            className={`px-4 py-2 text-right text-gray-600 ${colores.body} ${i === 0 ? "border-l-2 border-gray-300" : "border-l border-gray-200"}`}
                           >
                             {Q(s.get(row))}
                           </td>
