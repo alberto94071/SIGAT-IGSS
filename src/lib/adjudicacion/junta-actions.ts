@@ -25,11 +25,10 @@ export async function adjudicarJunta(consolidacionId: number, data: {
     if (!con) return { error: "No se encontró la consolidación" };
     if (con.estado !== "Enviado a Junta") return { error: "Esta consolidación no está lista para adjudicar" };
 
-    // Compra Directa no pide número de adjudicación en este paso (se
+    // Ningún tipo de compra pide número de adjudicación en este paso (se
     // definirá más adelante en otro momento del proceso) — solo la razón.
     const numAdj = data.numero_adjudicacion.trim();
     const razon = data.razon_adjudicacion.trim();
-    if (con.tipo_compra !== "Compra Directa" && !numAdj) return { error: "El número de adjudicación es obligatorio" };
     if (!razon) return { error: "La razón de adjudicación es obligatoria" };
 
     const [ofrt] = await db.select().from(oferentes)

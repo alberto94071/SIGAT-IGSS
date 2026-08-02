@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Gavel, X, Loader2, AlertTriangle, XCircle, Hash } from "lucide-react";
+import { Gavel, X, Loader2, AlertTriangle, XCircle } from "lucide-react";
 import ConsolidacionesTable, { correlativo } from "./ConsolidacionesTable";
 import OferentesEditor from "./OferentesEditor";
 import { adjudicarJunta, rechazarJunta } from "@/lib/adjudicacion/junta-actions";
@@ -78,27 +78,25 @@ function RevisarModal({ consolidacion: c, onClose, onDone }: {
   consolidacion: Consolidacion; onClose: () => void; onDone: (patch: Partial<Consolidacion>) => void;
 }) {
   const [ganadorId, setGanadorId] = useState<number | null>(c.oferente_ganador_id);
-  const [numAdj,    setNumAdj]    = useState(c.numero_adjudicacion ?? "");
   const [razon,     setRazon]     = useState(c.razon_adjudicacion ?? "");
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState("");
   const [rechazarModal, setRechazarModal] = useState(false);
   const [motivo,    setMotivo]    = useState("");
 
-  const esCompraDirecta = c.tipo_compra === "Compra Directa";
-
+  // El número de adjudicación no se pide en este paso, para ningún tipo de
+  // compra — se definirá más adelante en otro momento del proceso.
   async function handleAdjudicar() {
     if (!ganadorId) return setError("Selecciona al oferente ganador");
-    if (!esCompraDirecta && !numAdj.trim()) return setError("El número de adjudicación es obligatorio");
     if (!razon.trim()) return setError("La razón de adjudicación es obligatoria");
     setLoading(true); setError("");
-    const res = await adjudicarJunta(c.id, { oferenteId: ganadorId, numero_adjudicacion: numAdj.trim(), razon_adjudicacion: razon.trim() });
+    const res = await adjudicarJunta(c.id, { oferenteId: ganadorId, numero_adjudicacion: "", razon_adjudicacion: razon.trim() });
     setLoading(false);
     if ("error" in res) return setError(res.error);
     const ganador = c.oferentes.find(o => o.id === ganadorId);
     onDone({
       estado: "Adjudicado", oferente_ganador_id: ganadorId,
-      numero_adjudicacion: numAdj.trim(), razon_adjudicacion: razon.trim(),
+      numero_adjudicacion: c.numero_adjudicacion, razon_adjudicacion: razon.trim(),
       proveedor_id: ganador?.proveedor_id ?? null, proveedor_nit: ganador?.nit ?? null, proveedor_nombre: ganador?.nombre ?? null,
     });
   }
@@ -135,13 +133,6 @@ function RevisarModal({ consolidacion: c, onClose, onDone }: {
                 <OferentesEditor oferentes={c.oferentes} maxOferentes={c.oferentes.length}
                   selectable selectedId={ganadorId} onSelect={setGanadorId} />
               </div>
-              {!esCompraDirecta && (
-                <div>
-                  <label className="label flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> Número de Adjudicación</label>
-                  <input className="input font-mono" value={numAdj}
-                    onChange={e => setNumAdj(e.target.value)} placeholder="Código corto único…" />
-                </div>
-              )}
               <div>
                 <label className="label">Razón de Adjudicación</label>
                 <textarea className="input" rows={2} value={razon}
@@ -160,7 +151,7 @@ function RevisarModal({ consolidacion: c, onClose, onDone }: {
               </button>
               <div className="flex gap-2">
                 <button onClick={onClose} className="btn-secondary">Cancelar</button>
-                <button onClick={handleAdjudicar} disabled={loading || !ganadorId || (!esCompraDirecta && !numAdj.trim()) || !razon.trim()} className="btn-primary disabled:opacity-50">
+                <button onClick={handleAdjudicar} disabled={loading || !ganadorId || !razon.trim()} className="btn-primary disabled:opacity-50">
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Gavel className="w-4 h-4" />} Adjudicar
                 </button>
               </div>
