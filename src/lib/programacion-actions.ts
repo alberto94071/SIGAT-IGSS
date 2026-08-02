@@ -7,6 +7,10 @@ import { auth } from "@/lib/auth";
 import { PRESUPUESTO_DATA } from "@/lib/presupuesto-general-data";
 import { GRUPOS, grupoDeRenglon, TIPOS_MODIFICACION, type TipoModificacion } from "@/lib/programacion-constants";
 import { getDisponible, EJERCICIO_FISCAL } from "@/lib/presupuesto-disponible";
+import {
+  ventanaProgramacionAbierta, ventanaReprogramacionAbierta,
+  mesCreacionProgramacionLabel, mesesReprogramacionLabel, fechaAprobacionAutomatica,
+} from "@/lib/programacion-fechas";
 
 const EJERCICIO = EJERCICIO_FISCAL;
 
@@ -83,10 +87,36 @@ export type ProgramacionEntrada = {
   mes3: number;
   mes4: number;
   total: number;
+  estado: string;
 };
+
+// Aprobación automática por fecha: no hay cron en este proyecto, así que
+// cada vez que se listan entradas se revisan las que siguen "Solicitado" y
+// se aprueban las que ya cumplieron su fecha de aprobación automática (ver
+// programacion-fechas.ts). Efecto equivalente a un job diario, sin infraestructura extra.
+async function aprobarSolicitudesVencidas(cuatrimestre: number): Promise<void> {
+  const hoy = fechaGuatemala();
+  const pendientes = await db.select({ id: programacionEntradas.id, updated_at: programacionEntradas.updated_at })
+    .from(programacionEntradas).where(and(
+      eq(programacionEntradas.ejercicio_fiscal, EJERCICIO),
+      eq(programacionEntradas.cuatrimestre, cuatrimestre),
+      eq(programacionEntradas.estado, "Solicitado"),
+    ));
+
+  for (const p of pendientes) {
+    const fechaBase = p.updated_at ?? hoy;
+    const anio = Number(fechaBase.slice(0, 4));
+    const mes = Number(fechaBase.slice(5, 7));
+    if (hoy >= fechaAprobacionAutomatica(anio, mes)) {
+      await db.update(programacionEntradas).set({ estado: "Aprobado" }).where(eq(programacionEntradas.id, p.id));
+    }
+  }
+}
 
 /** Entradas ya guardadas para un cuatrimestre (para la tabla de "ya programados"). */
 export async function getEntradas(cuatrimestre: number): Promise<ProgramacionEntrada[]> {
+  await aprobarSolicitudesVencidas(cuatrimestre);
+
   const filas = await db.select().from(programacionEntradas).where(and(
     eq(programacionEntradas.ejercicio_fiscal, EJERCICIO),
     eq(programacionEntradas.cuatrimestre, cuatrimestre),
@@ -105,6 +135,7 @@ export async function getEntradas(cuatrimestre: number): Promise<ProgramacionEnt
       tipo: f.tipo as "normal" | "regularizado",
       mes1: f.mes1, mes2: f.mes2, mes3: f.mes3, mes4: f.mes4,
       total: f.mes1 + f.mes2 + f.mes3 + f.mes4,
+      estado: f.estado,
     };
   });
 }
@@ -134,6 +165,17 @@ export async function guardarEntrada(input: GuardarEntradaInput): Promise<{ ok: 
   const { cuatrimestre, renglon, subProducto, tipo, modo } = input;
   if (![1, 2, 3].includes(cuatrimestre)) return { error: "Cuatrimestre inválido" };
   if (tipo !== "normal" && tipo !== "regularizado") return { error: "Tipo inválido" };
+
+  const hoy = fechaGuatemala();
+  if (modo === "programacion") {
+    if (!ventanaProgramacionAbierta(cuatrimestre, hoy)) {
+      return { error: `La Programación del cuatrimestre ${cuatrimestre} solo se puede crear/editar durante los primeros 5 días hábiles de ${mesCreacionProgramacionLabel(cuatrimestre)}.` };
+    }
+  } else {
+    if (!ventanaReprogramacionAbierta(hoy)) {
+      return { error: `La Reprogramación solo se puede crear/editar durante los primeros 5 días hábiles de: ${mesesReprogramacionLabel()}.` };
+    }
+  }
 
   const base = PRESUPUESTO_DATA.find(r => r.renglon === renglon && r.subProducto === subProducto);
   if (!base) return { error: "El renglón/sub-producto no existe en el catálogo presupuestario" };
@@ -180,8 +222,13 @@ export async function guardarEntrada(input: GuardarEntradaInput): Promise<{ ok: 
   }
 
   if (existente) {
+    // Solo llega aquí vía Reprogramación (Programación nunca actualiza una
+    // fila existente, ver validación arriba) — al reprogramar, la solicitud
+    // vuelve a "Solicitado" aunque ya estuviera Aprobada, para que pase de
+    // nuevo por la aprobación automática.
     await db.update(programacionEntradas).set({
       mes1, mes2, mes3, mes4,
+      estado: "Solicitado",
       updated_at: sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`,
     }).where(eq(programacionEntradas.id, existente.id));
   } else {
@@ -189,9 +236,43 @@ export async function guardarEntrada(input: GuardarEntradaInput): Promise<{ ok: 
       ejercicio_fiscal: EJERCICIO,
       cuatrimestre, renglon, subproducto: subProducto, tipo,
       mes1, mes2, mes3, mes4,
+      estado: "Solicitado",
       creado_por: check.uid,
     });
   }
+
+  return { ok: true };
+}
+
+/** Rechaza una entrada de Programación/Reprogramación mientras siga "Solicitado". */
+export async function rechazarEntrada(id: number): Promise<{ ok: true } | { error: string }> {
+  const check = await requireEdit();
+  if ("error" in check) return check;
+
+  const [fila] = await db.select({ estado: programacionEntradas.estado })
+    .from(programacionEntradas).where(eq(programacionEntradas.id, id)).limit(1);
+  if (!fila) return { error: "No existe esa entrada" };
+  if (fila.estado !== "Solicitado") return { error: "Ya no se puede rechazar: la entrada dejó de estar Solicitada" };
+
+  await db.update(programacionEntradas).set({
+    estado: "Rechazado",
+    updated_at: sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`,
+  }).where(eq(programacionEntradas.id, id));
+
+  return { ok: true };
+}
+
+/** Elimina una entrada de Programación/Reprogramación mientras siga "Solicitado" (para corregir errores). */
+export async function eliminarEntrada(id: number): Promise<{ ok: true } | { error: string }> {
+  const check = await requireEdit();
+  if ("error" in check) return check;
+
+  const [fila] = await db.select({ estado: programacionEntradas.estado })
+    .from(programacionEntradas).where(eq(programacionEntradas.id, id)).limit(1);
+  if (!fila) return { error: "No existe esa entrada" };
+  if (fila.estado !== "Solicitado") return { error: "Ya no se puede eliminar: la entrada dejó de estar Solicitada" };
+
+  await db.delete(programacionEntradas).where(eq(programacionEntradas.id, id));
 
   return { ok: true };
 }

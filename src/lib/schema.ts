@@ -612,6 +612,11 @@ export const programacionEntradas = pgTable("programacion_entradas", {
   mes2:             doublePrecision("mes2").notNull().default(0),
   mes3:             doublePrecision("mes3").notNull().default(0),
   mes4:             doublePrecision("mes4").notNull().default(0),
+  // Solicitado -> Aprobado (automático por fecha, ver dias-habiles.ts) o
+  // Rechazado. Mientras Solicitado se puede editar/rechazar/eliminar; una
+  // vez Aprobado queda bloqueada hasta que una Reprogramación posterior la
+  // vuelva a poner en Solicitado.
+  estado:           text("estado").notNull().default("Solicitado"),
   creado_por:       integer("creado_por").references(() => usuarios.id),
   created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   updated_at:       text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
