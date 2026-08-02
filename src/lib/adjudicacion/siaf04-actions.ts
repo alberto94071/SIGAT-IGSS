@@ -71,6 +71,7 @@ export async function generarSiaf04(consolidacionId: number, data: {
       consolidacion_id: consolidacionId,
       no_factura: noFactura, serie_factura: serie, fecha_emision_factura: data.fecha_emision,
       destinatario_nombre: con.proveedor_nombre,
+      nit_beneficiario: con.proveedor_nit,
       creado_por: check.uid,
     });
 

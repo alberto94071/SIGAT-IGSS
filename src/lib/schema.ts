@@ -168,7 +168,8 @@ export const friFondoRotativo = pgTable("fri_fondo_rotativo", {
   numero:          integer("numero").notNull(),
   anio:            integer("anio").notNull(),
   total:           doublePrecision("total").notNull(),
-  estado:          text("estado").notNull().default("Generado"), // 'Generado' → 'Reintegrado'
+  estado:          text("estado").notNull().default("Generado"), // 'Generado' → 'Enviado' → 'Rechazado' | 'Reintegrado'
+  fecha_envio_daf: text("fecha_envio_daf"),
   fecha_reintegro: text("fecha_reintegro"),
   creado_por:      integer("creado_por").references(() => usuarios.id),
   created_at:      text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
@@ -185,6 +186,11 @@ export const fondoRotativoPagos = pgTable("fondo_rotativo_pagos", {
   numero_cheque:         text("numero_cheque"),
   fecha_emision_cheque:  text("fecha_emision_cheque"),
   destinatario_nombre:   text("destinatario_nombre"),
+  // Datos obligatorios del pago por cheque (Vía 1): tipo de documento que
+  // respalda el gasto y NIT del beneficiario del cheque (puede no ser el
+  // proveedor de la consolidación — ej. un empleado).
+  tipo_documento_pago:   text("tipo_documento_pago"), // Factura | Vale | Formulario
+  nit_beneficiario:      text("nit_beneficiario"),
   fecha_pago:            text("fecha_pago"),
   numero_vale:           text("numero_vale"),
   vale_id:               integer("vale_id").references((): AnyPgColumn => valesCajaChica.id),

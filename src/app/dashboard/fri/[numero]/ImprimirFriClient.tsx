@@ -6,10 +6,13 @@ import PrintPages from "@/components/print-pages/PrintPages";
 import type { Fri, PolizaFri } from "@/lib/fri-actions";
 import type { PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 
+type SaldoFondoRotativo = { monto_fondo_rotativo: number; saldo_disponible: number; efectivo_en_caja: number };
+
 interface Props {
   fri: Fri;
   pagos: PagoFondoRotativo[];
   polizas: PolizaFri[];
+  saldo: SaldoFondoRotativo;
   nombreUnidad: string;
   nombreEncargado: string; cargoEncargado: string;
 }
@@ -42,7 +45,7 @@ function ColGroup() {
   return <colgroup>{COLS.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>;
 }
 
-export default function ImprimirFriClient({ fri, pagos, polizas, nombreUnidad, nombreEncargado, cargoEncargado }: Props) {
+export default function ImprimirFriClient({ fri, pagos, polizas, saldo, nombreUnidad, nombreEncargado, cargoEncargado }: Props) {
   const router = useRouter();
   const [paginas, setPaginas] = useState(1);
   const filas = filasDe(pagos, polizas);
@@ -97,6 +100,26 @@ export default function ImprimirFriClient({ fri, pagos, polizas, nombreUnidad, n
           </tr>
         </tfoot>
       </table>
+
+      <p style={{ fontSize: "9.5pt", fontWeight: "bold", margin: "16px 0 6px 0" }}>Arqueo del Fondo Rotativo Interno</p>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "8.5pt", tableLayout: "fixed" }}>
+        <colgroup><col style={{ width: "60%" }} /><col style={{ width: "40%" }} /></colgroup>
+        <tbody>
+          <tr>
+            <td style={{ border: "1px solid #999", padding: "5px 6px" }}>Monto del Fondo Rotativo otorgado</td>
+            <td style={{ border: "1px solid #999", padding: "5px 6px", textAlign: "right", fontFamily: "monospace" }}>Q {Q(saldo.monto_fondo_rotativo)}</td>
+          </tr>
+          <tr>
+            <td style={{ border: "1px solid #999", padding: "5px 6px" }}>Disponibilidad (saldo del Fondo Rotativo)</td>
+            <td style={{ border: "1px solid #999", padding: "5px 6px", textAlign: "right", fontFamily: "monospace" }}>Q {Q(saldo.saldo_disponible)}</td>
+          </tr>
+          <tr>
+            <td style={{ border: "1px solid #999", padding: "5px 6px" }}>Efectivo/vales activos en Caja Chica</td>
+            <td style={{ border: "1px solid #999", padding: "5px 6px", textAlign: "right", fontFamily: "monospace" }}>Q {Q(saldo.efectivo_en_caja)}</td>
+          </tr>
+        </tbody>
+      </table>
+
       <div style={{ textAlign: "center", marginTop: "50px", fontSize: "9pt" }}>
         <div style={{ borderBottom: "1px solid #000", width: "260px", margin: "0 auto 4px auto", height: "30px" }} />
         <p style={{ margin: 0, fontWeight: "bold" }}>{nombreEncargado}</p>

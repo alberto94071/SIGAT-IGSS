@@ -4,7 +4,7 @@ import { fechaGuatemala } from "@/lib/date-utils";
 import { useState } from "react";
 import Link from "next/link";
 import { Wallet, Printer, ChevronDown, ChevronRight, Loader2, AlertTriangle, CheckCircle2, X } from "lucide-react";
-import { conformarFri, marcarFriReintegrado, getFriConDetalle, type Fri, type PolizaFri, type FriItemInput } from "@/lib/fri-actions";
+import { conformarFri, marcarFriReintegrado, enviarFriADaf, marcarFriRechazado, getFriConDetalle, type Fri, type PolizaFri, type FriItemInput } from "@/lib/fri-actions";
 import type { PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -40,6 +40,17 @@ export default function FriClient({
   const [expandido, setExpandido] = useState<number | null>(null);
   const [detalle, setDetalle] = useState<Record<number, { pagos: PagoFondoRotativo[]; polizas: PolizaFri[] }>>({});
   const [reintegrarFor, setReintegrarFor] = useState<Fri | null>(null);
+  const [enviarFor, setEnviarFor] = useState<Fri | null>(null);
+  const [rowError, setRowError] = useState<Record<number, string>>({});
+  const [rechazando, setRechazando] = useState<number | null>(null);
+
+  async function handleRechazar(f: Fri) {
+    setRechazando(f.id); setRowError(prev => ({ ...prev, [f.id]: "" }));
+    const res = await marcarFriRechazado(f.id);
+    setRechazando(null);
+    if ("error" in res) { setRowError(prev => ({ ...prev, [f.id]: res.error })); return; }
+    setFris(prev => prev.map(x => x.id === f.id ? { ...x, estado: "Rechazado" } : x));
+  }
 
   const filas: Row[] = [...pendientesPagos.map(pagoARow), ...pendientesPolizas.map(polizaARow)];
 
@@ -149,6 +160,7 @@ export default function FriClient({
                   <th className="px-4 py-3 w-8"></th>
                   <th className="px-4 py-3 text-left whitespace-nowrap">FRI No.</th>
                   <th className="px-4 py-3 text-left whitespace-nowrap">Estado</th>
+                  <th className="px-4 py-3 text-left whitespace-nowrap">Envío a DAF</th>
                   <th className="px-4 py-3 text-left whitespace-nowrap">Fecha reintegro</th>
                   <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
                   <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>
@@ -166,20 +178,37 @@ export default function FriClient({
                       <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">FRI {f.numero}/{f.anio}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          f.estado === "Reintegrado" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                          f.estado === "Reintegrado" ? "bg-green-100 text-green-700"
+                            : f.estado === "Enviado" ? "bg-blue-100 text-blue-700"
+                            : f.estado === "Rechazado" ? "bg-red-100 text-red-700"
+                            : "bg-amber-100 text-amber-700"
                         }`}>
                           {f.estado}
                         </span>
+                        {rowError[f.id] && <p className="text-[10px] text-red-600 mt-1 max-w-[160px]">{rowError[f.id]}</p>}
                       </td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{f.fecha_envio_daf ?? "—"}</td>
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{f.fecha_reintegro ?? "—"}</td>
                       <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">{Q(f.total)}</td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-2">
-                          {f.estado === "Generado" && (
-                            <button onClick={() => setReintegrarFor(f)}
-                              className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700">
-                              <CheckCircle2 className="w-3 h-3" /> Marcar Reintegrado
+                          {(f.estado === "Generado" || f.estado === "Rechazado") && (
+                            <button onClick={() => setEnviarFor(f)}
+                              className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700">
+                              Enviar a DAF
                             </button>
+                          )}
+                          {f.estado === "Enviado" && (
+                            <>
+                              <button onClick={() => handleRechazar(f)} disabled={rechazando === f.id}
+                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50">
+                                {rechazando === f.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null} Rechazar
+                              </button>
+                              <button onClick={() => setReintegrarFor(f)}
+                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700">
+                                <CheckCircle2 className="w-3 h-3" /> Marcar Reintegrado
+                              </button>
+                            </>
                           )}
                           <Link href={`/dashboard/fri/${f.numero}?anio=${f.anio}`}
                             className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">
@@ -190,7 +219,7 @@ export default function FriClient({
                     </tr>
                     {expandido === f.id && (
                       <tr>
-                        <td colSpan={6} className="px-4 py-3 bg-gray-50">
+                        <td colSpan={7} className="px-4 py-3 bg-gray-50">
                           {!detalle[f.id] ? (
                             <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
                           ) : (
@@ -240,6 +269,56 @@ export default function FriClient({
           }}
         />
       )}
+
+      {enviarFor && (
+        <EnviarDafModal
+          fri={enviarFor}
+          onClose={() => setEnviarFor(null)}
+          onDone={(fecha) => {
+            setFris(prev => prev.map(f => f.id === enviarFor.id
+              ? { ...f, estado: "Enviado", fecha_envio_daf: fecha } : f));
+            setEnviarFor(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function EnviarDafModal({ fri, onClose, onDone }: { fri: Fri; onClose: () => void; onDone: (fecha: string) => void }) {
+  const [fecha, setFecha] = useState(fechaGuatemala());
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleConfirmar() {
+    setLoading(true); setError("");
+    const res = await enviarFriADaf(fri.id, fecha);
+    setLoading(false);
+    if ("error" in res) return setError(res.error);
+    onDone(fecha);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h2 className="font-semibold text-gray-900">Enviar a DAF — FRI {fri.numero}/{fri.anio}</h2>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <div>
+            <label className="label">Fecha de envío a la DAF</label>
+            <input type="date" className="input" value={fecha} onChange={e => setFecha(e.target.value)} />
+          </div>
+          {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
+        </div>
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+          <button onClick={onClose} className="btn-secondary">Cancelar</button>
+          <button onClick={handleConfirmar} disabled={loading || !fecha} className="btn-primary disabled:opacity-50">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Enviar a DAF
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
