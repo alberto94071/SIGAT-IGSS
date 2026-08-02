@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { programacionEntradas, presupuestoRenglones } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { EJECUCION_DATA } from "@/lib/ejecucion-data";
+import { fechaGuatemala } from "@/lib/date-utils";
+import { cuatrimestreDeFecha } from "@/lib/programacion-constants";
 
 export type EjecucionRow = {
   renglon: number;
@@ -25,9 +27,15 @@ export type EjecucionRow = {
 /**
  * Carga los datos de ejecución presupuestaria.
  *
- * - Saldo Programado Normal/Regularizado se cruzan en vivo con la suma de
- *   todo lo capturado en Programación y Reprogramación (programacion_entradas,
- *   los 4 meses de cada cuatrimestre) por renglón + sub-producto + tipo.
+ * - Programado Normal/Regularizado es lo capturado en programacion_entradas
+ *   para el CUATRIMESTRE VIGENTE (según la fecha de hoy), por renglón +
+ *   sub-producto + tipo.
+ * - Saldo Programado Normal/Regularizado se cruza en vivo con la suma de
+ *   TODOS los cuatrimestres capturados en Programación y Reprogramación
+ *   (programacion_entradas, los 4 meses de cada uno) por renglón +
+ *   sub-producto + tipo — se deja igual que antes a propósito, ver
+ *   calcularTotales() en EjecucionClient.tsx (fórmula preservada del Excel
+ *   fuente del cliente).
  * - Pre-Compromiso, Compromiso (columna única, sin distinguir Normal/
  *   Regularizado) y Ejecución Normal/Regularizado (= Devengado) se cruzan en
  *   vivo con presupuesto_renglones (misma tabla que ya actualizan A01-SIAF,
@@ -37,11 +45,14 @@ export type EjecucionRow = {
  *   guardarModificacion), también por renglón + sub-producto.
  */
 export async function getEjecucionData(): Promise<EjecucionRow[]> {
+  const cuatrimestreVigente = cuatrimestreDeFecha(fechaGuatemala());
+
   const [entradas, renglonesVivos] = await Promise.all([
     db.select({
       renglon:     programacionEntradas.renglon,
       subproducto: programacionEntradas.subproducto,
       tipo:        programacionEntradas.tipo,
+      cuatrimestre: programacionEntradas.cuatrimestre,
       mes1:        programacionEntradas.mes1,
       mes2:        programacionEntradas.mes2,
       mes3:        programacionEntradas.mes3,
@@ -61,13 +72,22 @@ export async function getEjecucionData(): Promise<EjecucionRow[]> {
   ]);
 
   const saldoPorClave = new Map<string, { normal: number; regularizado: number }>();
+  const programadoPorClave = new Map<string, { normal: number; regularizado: number }>();
   for (const e of entradas) {
     const clave = `${e.renglon}|${e.subproducto}`;
-    const acumulado = saldoPorClave.get(clave) ?? { normal: 0, regularizado: 0 };
     const total = e.mes1 + e.mes2 + e.mes3 + e.mes4;
+
+    const acumulado = saldoPorClave.get(clave) ?? { normal: 0, regularizado: 0 };
     if (e.tipo === "normal") acumulado.normal += total;
     else acumulado.regularizado += total;
     saldoPorClave.set(clave, acumulado);
+
+    if (e.cuatrimestre === cuatrimestreVigente) {
+      const delCuatrimestre = programadoPorClave.get(clave) ?? { normal: 0, regularizado: 0 };
+      if (e.tipo === "normal") delCuatrimestre.normal += total;
+      else delCuatrimestre.regularizado += total;
+      programadoPorClave.set(clave, delCuatrimestre);
+    }
   }
 
   const vivoPorClave = new Map(renglonesVivos.map(r => [`${r.renglon}|${r.subproducto}`, r]));
@@ -75,6 +95,7 @@ export async function getEjecucionData(): Promise<EjecucionRow[]> {
   return EJECUCION_DATA.map(r => {
     const clave = `${r.renglon}|${r.subProducto}`;
     const saldo = saldoPorClave.get(clave);
+    const programado = programadoPorClave.get(clave);
     const vivo = vivoPorClave.get(clave);
     return {
       ...r,
@@ -85,6 +106,8 @@ export async function getEjecucionData(): Promise<EjecucionRow[]> {
       compromiso: vivo?.compromiso ?? 0,
       ejecucionNormal: vivo?.devengado ?? 0,
       ejecucionRegularizado: vivo?.devengado_regularizado ?? 0,
+      programadoNormal: programado?.normal ?? 0,
+      programadoRegularizado: programado?.regularizado ?? 0,
       saldoProgramadoNormal: saldo?.normal ?? 0,
       saldoProgramadoRegularizado: saldo?.regularizado ?? 0,
     };
