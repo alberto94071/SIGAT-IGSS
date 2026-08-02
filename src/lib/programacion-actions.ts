@@ -9,9 +9,8 @@ import { PRESUPUESTO_DATA } from "@/lib/presupuesto-general-data";
 import { GRUPOS, grupoDeRenglon, TIPOS_MODIFICACION, type TipoModificacion } from "@/lib/programacion-constants";
 import { getSaldoRenglon, EJERCICIO_FISCAL } from "@/lib/presupuesto-disponible";
 import {
-  ventanaProgramacionAbierta, ventanaReprogramacionAbierta,
-  mesCreacionProgramacionLabel, mesesReprogramacionLabel, fechaAprobacionAutomatica,
-  ventanaIngruAbierta, ventanaTransferenciaAbierta, ventanaAmpliacionAbierta,
+  ventanaProgramacionAbierta, mesCreacionProgramacionLabel, fechaAprobacionAutomatica,
+  ventanaAprobacionReprogramacionAbierta, ventanaAprobacionModificacionAbierta,
 } from "@/lib/programacion-fechas";
 import { procesarCierreCuatrimestres } from "@/lib/cierre-cuatrimestre";
 
@@ -148,15 +147,12 @@ export async function guardarEntrada(input: GuardarEntradaInput): Promise<{ ok: 
   if (tipo !== "normal" && tipo !== "regularizado") return { error: "Tipo inválido" };
 
   const hoy = fechaGuatemala();
-  if (modo === "programacion") {
-    if (!ventanaProgramacionAbierta(cuatrimestre, hoy)) {
-      return { error: `La Programación del cuatrimestre ${cuatrimestre} solo se puede crear/editar durante los primeros 5 días hábiles de ${mesCreacionProgramacionLabel(cuatrimestre)}.` };
-    }
-  } else {
-    if (!ventanaReprogramacionAbierta(hoy)) {
-      return { error: `La Reprogramación solo se puede crear/editar durante los primeros 5 días hábiles de: ${mesesReprogramacionLabel()}.` };
-    }
+  if (modo === "programacion" && !ventanaProgramacionAbierta(cuatrimestre, hoy)) {
+    return { error: `La Programación del cuatrimestre ${cuatrimestre} solo se puede crear/editar durante los primeros 5 días hábiles de ${mesCreacionProgramacionLabel(cuatrimestre)}.` };
   }
+  // Reprogramación no tiene ventana de fecha para solicitarse — se puede
+  // cualquier día del año (solo se bloquea al momento de aprobar, ver
+  // aprobarEntrada más abajo).
 
   const base = PRESUPUESTO_DATA.find(r => r.renglon === renglon && r.subProducto === subProducto);
   if (!base) return { error: "El renglón/sub-producto no existe en el catálogo presupuestario" };
@@ -182,9 +178,10 @@ export async function guardarEntrada(input: GuardarEntradaInput): Promise<{ ok: 
   if (modo === "programacion" && existente) {
     return { error: "Este renglón/sub-producto ya fue programado en este cuatrimestre. Use Reprogramación para modificarlo." };
   }
-  if (modo === "reprogramacion" && !existente) {
-    return { error: "No existe una programación previa para reprogramar. Use Programación para crearla." };
-  }
+  // Reprogramación sí puede crear la entrada si todavía no existe — regla
+  // confirmada con el cliente: sirve para asignarle presupuesto por primera
+  // vez a un renglón dentro de un cuatrimestre ya en curso (ej. combustible
+  // para una planta eléctrica, imprevisto que no se programó al inicio).
 
   const totalGrupo = PRESUPUESTO_DATA
     .filter(r => r.renglon >= grupo.min && r.renglon <= grupo.max)
@@ -206,10 +203,12 @@ export async function guardarEntrada(input: GuardarEntradaInput): Promise<{ ok: 
     // Solo llega aquí vía Reprogramación (Programación nunca actualiza una
     // fila existente, ver validación arriba) — al reprogramar, la solicitud
     // vuelve a "Solicitado" aunque ya estuviera Aprobada, para que pase de
-    // nuevo por la aprobación automática.
+    // nuevo por aprobación (con la ventana de Reprogramación, no la de
+    // Programación — ver origen abajo).
     await db.update(programacionEntradas).set({
       mes1, mes2, mes3, mes4,
       estado: "Solicitado",
+      origen: modo,
       updated_at: sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`,
     }).where(eq(programacionEntradas.id, existente.id));
   } else {
@@ -218,6 +217,7 @@ export async function guardarEntrada(input: GuardarEntradaInput): Promise<{ ok: 
       cuatrimestre, renglon, subproducto: subProducto, tipo,
       mes1, mes2, mes3, mes4,
       estado: "Solicitado",
+      origen: modo,
       creado_por: check.uid,
     });
   }
@@ -225,12 +225,14 @@ export async function guardarEntrada(input: GuardarEntradaInput): Promise<{ ok: 
   return { ok: true };
 }
 
-// Ventana en que se puede aprobar/rechazar una entrada, según el mes en que
-// se creó/editó por última vez (mismo cálculo que antes hacía la aprobación
-// automática — ver fechaAprobacionAutomatica en programacion-fechas.ts):
-// abre ese día y queda abierta indefinidamente después (no hay fecha límite
-// para que Presupuesto la revise).
-function ventanaAprobacionAbierta(updatedAt: string | null): boolean {
+// Ventana de aprobación de una entrada de Programación, según el mes en que
+// se creó/editó por última vez (ver fechaAprobacionAutomatica en
+// programacion-fechas.ts): abre ese día y queda abierta indefinidamente
+// después (no hay fecha límite para que Presupuesto la revise). Solo aplica
+// a Programación — Reprogramación usa su propia ventana recurrente (ver
+// ventanaAprobacionReprogramacionAbierta), que no depende de cuándo se
+// solicitó.
+function ventanaAprobacionProgramacionAbierta(updatedAt: string | null): boolean {
   const hoy = fechaGuatemala();
   const fechaBase = updatedAt ?? hoy;
   const anio = Number(fechaBase.slice(0, 4));
@@ -238,16 +240,31 @@ function ventanaAprobacionAbierta(updatedAt: string | null): boolean {
   return hoy >= fechaAprobacionAutomatica(anio, mes);
 }
 
-/** Aprueba una entrada de Programación/Reprogramación — solo quien tenga acceso a mod_presupuesto, y solo dentro de su ventana de aprobación. */
+/**
+ * Aprueba una entrada de Programación/Reprogramación — solo quien tenga
+ * acceso a mod_presupuesto, y solo dentro de su ventana de aprobación:
+ * Programación abre el 6to día hábil del mes en que se creó (sin límite
+ * después); Reprogramación se puede solicitar cualquier día, pero solo se
+ * aprueba durante los primeros 5 días hábiles de cada mes (ver origen).
+ */
 export async function aprobarEntrada(id: number): Promise<{ ok: true } | { error: string }> {
   const check = await requireModuloAccessAction("mod_presupuesto");
   if ("error" in check) return check;
 
-  const [fila] = await db.select({ estado: programacionEntradas.estado, updated_at: programacionEntradas.updated_at })
-    .from(programacionEntradas).where(eq(programacionEntradas.id, id)).limit(1);
+  const [fila] = await db.select({
+    estado: programacionEntradas.estado,
+    updated_at: programacionEntradas.updated_at,
+    origen: programacionEntradas.origen,
+  }).from(programacionEntradas).where(eq(programacionEntradas.id, id)).limit(1);
   if (!fila) return { error: "No existe esa entrada" };
   if (fila.estado !== "Solicitado") return { error: "Esta entrada ya no está pendiente de aprobación" };
-  if (!ventanaAprobacionAbierta(fila.updated_at)) {
+
+  const hoy = fechaGuatemala();
+  if (fila.origen === "reprogramacion") {
+    if (!ventanaAprobacionReprogramacionAbierta(hoy)) {
+      return { error: "Las Reprogramaciones solo se pueden aprobar durante los primeros 5 días hábiles de cada mes." };
+    }
+  } else if (!ventanaAprobacionProgramacionAbierta(fila.updated_at)) {
     return { error: "Todavía no se puede aprobar esta entrada — espera a que abra su ventana de aprobación." };
   }
 
@@ -297,10 +314,12 @@ export type GuardarModificacionInput = {
 
 /**
  * Reprogramación: registra la SOLICITUD de una modificación (Ingru /
- * Ampliación) para un renglón + sub-producto — queda "Solicitado" y NO
- * toca presupuesto_renglones todavía; eso solo pasa al aprobar (ver
- * aprobarModificacion), que SUMA este valor al acumulado del año (puede
- * ser negativo para registrar que se le quitó presupuesto a ese renglón).
+ * Ampliación) para un renglón + sub-producto — se puede solicitar cualquier
+ * día del año. Queda "Solicitado" y NO toca presupuesto_renglones todavía;
+ * eso solo pasa al aprobar (ver aprobarModificacion, que además solo se
+ * puede hacer del 15 al 20 de cada mes), que SUMA este valor al acumulado
+ * del año (puede ser negativo para registrar que se le quitó presupuesto a
+ * ese renglón).
  */
 export async function guardarModificacion(input: GuardarModificacionInput): Promise<{ ok: true } | { error: string }> {
   const check = await requireEdit();
@@ -308,14 +327,6 @@ export async function guardarModificacion(input: GuardarModificacionInput): Prom
 
   const tipoInfo = TIPOS_MODIFICACION.find(t => t.id === input.tipo);
   if (!tipoInfo) return { error: "Tipo de modificación inválido" };
-
-  const hoy = fechaGuatemala();
-  if (input.tipo === "ingru" && !ventanaIngruAbierta(hoy)) {
-    return { error: "La Modificación tipo Ingru solo se puede registrar el 1er o 2do día hábil de cada mes (de febrero a diciembre)." };
-  }
-  if (input.tipo === "ampliacion" && !ventanaAmpliacionAbierta(hoy)) {
-    return { error: "La Modificación de Ampliación solo se puede registrar en abril, julio o septiembre." };
-  }
 
   const base = PRESUPUESTO_DATA.find(r => r.renglon === input.renglon && r.subProducto === input.subProducto);
   if (!base) return { error: "El renglón/sub-producto no existe en el catálogo presupuestario" };
@@ -349,9 +360,10 @@ export async function guardarModificacion(input: GuardarModificacionInput): Prom
 
 /**
  * Aprueba una modificación Ingru/Ampliación — solo quien tenga acceso a
- * mod_presupuesto. Recién aquí se refleja en presupuesto_renglones, SUMANDO
- * (o restando, si el valor aprobado es negativo) al acumulado del año —
- * igual que ya hace modificacion_entre_renglones vía transferirPresupuesto.
+ * mod_presupuesto, y solo del 15 al 20 de cada mes. Recién aquí se refleja
+ * en presupuesto_renglones, SUMANDO (o restando, si el valor aprobado es
+ * negativo) al acumulado del año — igual que ya hace
+ * modificacion_entre_renglones vía transferirPresupuesto.
  */
 export async function aprobarModificacion(id: number): Promise<{ ok: true } | { error: string }> {
   const check = await requireModuloAccessAction("mod_presupuesto");
@@ -361,6 +373,9 @@ export async function aprobarModificacion(id: number): Promise<{ ok: true } | { 
     .where(eq(modificacionesPresupuestarias.id, id)).limit(1);
   if (!fila) return { error: "No existe esa modificación" };
   if (fila.estado !== "Solicitado") return { error: "Esta modificación ya no está pendiente de aprobación" };
+  if (!ventanaAprobacionModificacionAbierta(fechaGuatemala())) {
+    return { error: "Las Modificaciones (Ingru/Ampliación) solo se pueden aprobar del 15 al 20 de cada mes." };
+  }
 
   const tipoInfo = TIPOS_MODIFICACION.find(t => t.id === fila.tipo);
   if (!tipoInfo) return { error: "Tipo de modificación inválido" };
@@ -490,21 +505,19 @@ async function sumarModificacionEntreRenglones(renglon: number, subProducto: str
 
 /**
  * Reprogramación por transferencia real: registra la SOLICITUD de mover
- * `monto` del renglón/sub-producto de origen al de destino. Valida que el
- * origen tenga saldo disponible suficiente para no comprometer más de lo
- * que hay, pero NO mueve nada todavía — queda "Solicitado" en
- * `reprogramaciones`; el movimiento real a presupuesto_renglones ocurre
- * solo al aprobar (ver aprobarTransferencia).
+ * `monto` del renglón/sub-producto de origen al de destino — se puede
+ * solicitar cualquier día del año. Valida que el origen tenga saldo
+ * disponible suficiente para no comprometer más de lo que hay, pero NO
+ * mueve nada todavía — queda "Solicitado" en `reprogramaciones`; el
+ * movimiento real a presupuesto_renglones ocurre solo al aprobar (ver
+ * aprobarTransferencia, que además solo se puede hacer del 15 al 20 de
+ * cada mes).
  */
 export async function transferirPresupuesto(input: TransferenciaInput): Promise<{ ok: true } | { error: string }> {
   const check = await requireEdit();
   if ("error" in check) return check;
 
   const { renglonOrigen, subProductoOrigen, renglonDestino, subProductoDestino, motivo } = input;
-
-  if (!ventanaTransferenciaAbierta(fechaGuatemala())) {
-    return { error: "La Transferencia entre renglón/sub-producto solo se puede registrar del 15 al 20 de cada mes (de febrero a diciembre)." };
-  }
 
   const monto = input.monto || 0;
   if (!(monto > 0)) return { error: "Ingresa un monto válido" };
@@ -538,9 +551,10 @@ export async function transferirPresupuesto(input: TransferenciaInput): Promise<
 }
 
 /**
- * Aprueba una transferencia — solo quien tenga acceso a mod_presupuesto.
- * Vuelve a validar que el origen siga teniendo saldo disponible suficiente
- * (pudo cambiar desde que se solicitó) antes de mover el dinero.
+ * Aprueba una transferencia — solo quien tenga acceso a mod_presupuesto, y
+ * solo del 15 al 20 de cada mes. Vuelve a validar que el origen siga
+ * teniendo saldo disponible suficiente (pudo cambiar desde que se solicitó)
+ * antes de mover el dinero.
  */
 export async function aprobarTransferencia(id: number): Promise<{ ok: true } | { error: string }> {
   const check = await requireModuloAccessAction("mod_presupuesto");
@@ -549,6 +563,9 @@ export async function aprobarTransferencia(id: number): Promise<{ ok: true } | {
   const [fila] = await db.select().from(reprogramaciones).where(eq(reprogramaciones.id, id)).limit(1);
   if (!fila) return { error: "No existe esa transferencia" };
   if (fila.estado !== "Solicitado") return { error: "Esta transferencia ya no está pendiente de aprobación" };
+  if (!ventanaAprobacionModificacionAbierta(fechaGuatemala())) {
+    return { error: "Las Transferencias entre renglón/sub-producto solo se pueden aprobar del 15 al 20 de cada mes." };
+  }
 
   const { saldo } = await getSaldoRenglon(fila.renglon_origen, fila.subproducto_origen);
   if (fila.monto > saldo + 0.01) {

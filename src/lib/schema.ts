@@ -638,6 +638,10 @@ export const programacionEntradas = pgTable("programacion_entradas", {
   // vez Aprobado queda bloqueada hasta que una Reprogramación posterior la
   // vuelva a poner en Solicitado.
   estado:           text("estado").notNull().default("Solicitado"),
+  // De qué modo (guardarEntrada) quedó la solicitud actualmente pendiente/
+  // vigente: "programacion" o "reprogramacion" — cada una tiene su propia
+  // ventana de aprobación (ver aprobarEntrada en programacion-actions.ts).
+  origen:           text("origen").notNull().default("programacion"),
   creado_por:       integer("creado_por").references(() => usuarios.id),
   created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   updated_at:       text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
