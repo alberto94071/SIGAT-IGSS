@@ -10,6 +10,7 @@ import { getDisponible, EJERCICIO_FISCAL } from "@/lib/presupuesto-disponible";
 import {
   ventanaProgramacionAbierta, ventanaReprogramacionAbierta,
   mesCreacionProgramacionLabel, mesesReprogramacionLabel, fechaAprobacionAutomatica,
+  ventanaIngruAbierta, ventanaTransferenciaAbierta, ventanaAmpliacionAbierta,
 } from "@/lib/programacion-fechas";
 
 const EJERCICIO = EJERCICIO_FISCAL;
@@ -296,6 +297,14 @@ export async function guardarModificacion(input: GuardarModificacionInput): Prom
   const tipoInfo = TIPOS_MODIFICACION.find(t => t.id === input.tipo);
   if (!tipoInfo) return { error: "Tipo de modificación inválido" };
 
+  const hoy = fechaGuatemala();
+  if (input.tipo === "ingru" && !ventanaIngruAbierta(hoy)) {
+    return { error: "La Modificación tipo Ingru solo se puede registrar el 1er o 2do día hábil de cada mes (de febrero a diciembre)." };
+  }
+  if (input.tipo === "ampliacion" && !ventanaAmpliacionAbierta(hoy)) {
+    return { error: "La Modificación de Ampliación solo se puede registrar en abril, julio o septiembre." };
+  }
+
   const base = PRESUPUESTO_DATA.find(r => r.renglon === input.renglon && r.subProducto === input.subProducto);
   if (!base) return { error: "El renglón/sub-producto no existe en el catálogo presupuestario" };
 
@@ -421,6 +430,11 @@ export async function transferirPresupuesto(input: TransferenciaInput): Promise<
   if ("error" in check) return check;
 
   const { renglonOrigen, subProductoOrigen, renglonDestino, subProductoDestino, motivo } = input;
+
+  if (!ventanaTransferenciaAbierta(fechaGuatemala())) {
+    return { error: "La Transferencia entre renglón/sub-producto solo se puede registrar del 15 al 20 de cada mes (de febrero a diciembre)." };
+  }
+
   const monto = input.monto || 0;
   if (!(monto > 0)) return { error: "Ingresa un monto válido" };
   if (renglonOrigen === renglonDestino && subProductoOrigen === subProductoDestino) {

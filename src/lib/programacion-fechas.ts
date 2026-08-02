@@ -1,7 +1,9 @@
 // Ventanas de fecha y aprobación automática de Programación y
 // Reprogramación (ver implementation_plan.md, Fase 3). Construido sobre las
 // primitivas de días hábiles de dias-habiles.ts.
-import { nEsimoDiaHabilDelMes, estaEnPrimerosNDiasHabiles } from "@/lib/dias-habiles";
+import {
+  nEsimoDiaHabilDelMes, estaEnPrimerosNDiasHabiles, estaEnRangoDiasDelMes, estaEnMeses,
+} from "@/lib/dias-habiles";
 
 // Mes (1-12) en que se crea la Programación de cada cuatrimestre: se
 // programa un cuatrimestre durante el último mes del cuatrimestre anterior
@@ -57,4 +59,24 @@ export function fechaAprobacionAutomatica(anio: number, mesUltimaEdicion: number
   if (mesUltimaEdicion === 4) return nEsimoDiaHabilDelMes(anio, 5, 1);
   if (mesUltimaEdicion === 8) return nEsimoDiaHabilDelMes(anio, 9, 1);
   return nEsimoDiaHabilDelMes(anio, mesUltimaEdicion, 6);
+}
+
+// ─── Modificaciones presupuestarias (Ingru / Transferencia / Ampliación) ───
+// Meses en que aplican Ingru y Transferencia: de febrero a diciembre.
+const MESES_MODIFICACION = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const MESES_AMPLIACION = [4, 7, 9]; // abril, julio, septiembre
+
+// Ingru: 1er o 2do día hábil de cada mes (feb-dic).
+export function ventanaIngruAbierta(fecha: string): boolean {
+  return estaEnMeses(fecha, MESES_MODIFICACION) && estaEnPrimerosNDiasHabiles(fecha, 2);
+}
+
+// Transferencia entre renglón/sub-producto: del 15 al 20 de cada mes (feb-dic).
+export function ventanaTransferenciaAbierta(fecha: string): boolean {
+  return estaEnMeses(fecha, MESES_MODIFICACION) && estaEnRangoDiasDelMes(fecha, 15, 20);
+}
+
+// Ampliación: solo en abril, julio y septiembre (sin restricción de día del mes).
+export function ventanaAmpliacionAbierta(fecha: string): boolean {
+  return estaEnMeses(fecha, MESES_AMPLIACION);
 }

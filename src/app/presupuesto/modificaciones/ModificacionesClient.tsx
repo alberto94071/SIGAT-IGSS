@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, CheckCircle2, ArrowRightLeft } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, CheckCircle2, ArrowRightLeft, Printer } from "lucide-react";
 import { CUATRIMESTRES, TIPOS_MODIFICACION, type TipoModificacion } from "@/lib/programacion-constants";
 import {
   buscarRenglones, getSubproductosDeRenglon, getSubproductosConDisponible,
@@ -99,9 +100,17 @@ export default function ModificacionesClient() {
   if (tipoModificacion === null) {
     return (
       <div className="max-w-3xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Modificaciones</h1>
-          <p className="text-gray-500 mt-2">Registra una modificación presupuestaria (Ingru, entre renglones o ampliación).</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Modificaciones</h1>
+            <p className="text-gray-500 mt-2">Registra una modificación presupuestaria (Ingru, entre renglones o ampliación).</p>
+          </div>
+          <Link
+            href="/presupuesto/modificaciones/imprimir"
+            className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 whitespace-nowrap mt-1"
+          >
+            <Printer className="w-4 h-4" /> Imprimir
+          </Link>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {TIPOS_MODIFICACION.map(t => (
