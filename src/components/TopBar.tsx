@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Menu, XCircle, CheckCheck } from "lucide-react";
+import { Bell, Menu, XCircle, CheckCheck, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { getMisNotificaciones, marcarNotificacionLeida, marcarTodasLeidas } from "@/app/notificaciones/actions";
 import PersonalizacionButton from "./PersonalizacionButton";
 
@@ -10,6 +10,8 @@ interface Props {
   rolLabel:    string;
   rolColor:    string;
   onMenuOpen?: () => void;
+  sidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 type Notificacion = {
@@ -19,7 +21,7 @@ type Notificacion = {
 
 const POLL_MS = 30000;
 
-export default function TopBar({ userName, rolLabel, rolColor, onMenuOpen }: Props) {
+export default function TopBar({ userName, rolLabel, rolColor, onMenuOpen, sidebarCollapsed, onToggleSidebar }: Props) {
   const router = useRouter();
   const now = new Date();
   const fecha = now.toLocaleDateString("es-GT", {
@@ -78,6 +80,17 @@ export default function TopBar({ userName, rolLabel, rolColor, onMenuOpen }: Pro
         >
           <Menu className="w-5 h-5" />
         </button>
+        {/* Plegar/mostrar navbar del módulo — solo escritorio */}
+        {onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            className="hidden md:block p-2 -ml-1 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+            aria-label={sidebarCollapsed ? "Mostrar navegación" : "Ocultar navegación"}
+            title={sidebarCollapsed ? "Mostrar navegación" : "Ocultar navegación"}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
+          </button>
+        )}
         <p className="text-sm text-gray-500 capitalize hidden sm:block">{fecha}</p>
       </div>
 

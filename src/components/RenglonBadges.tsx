@@ -5,7 +5,7 @@ export default function RenglonBadges({ renglones }: { renglones: Renglon[] }) {
   return (
     <div className="flex flex-wrap gap-1 mt-1">
       {renglones.map((r, i) => (
-        <span key={i} className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full font-mono whitespace-nowrap">
+        <span key={i} className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-md font-mono break-words max-w-full">
           {r.codigo_igss ?? "—"} · {r.nombre} · {r.subproducto} · Renglón {r.renglon ?? "—"} ({r.cantidad.toLocaleString("es-GT")})
         </span>
       ))}
