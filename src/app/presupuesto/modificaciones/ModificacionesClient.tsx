@@ -221,6 +221,10 @@ export default function ModificacionesClient() {
         </button>
       </div>
 
+      <p className="text-xs text-gray-500">
+        El valor se acumula al total del año en cada renglón/sub-producto (ver /presupuesto/general). Ingresa un monto positivo para agregar presupuesto, o negativo para quitarlo.
+      </p>
+
       {/* ── Buscar renglón ── */}
       <div className="relative max-w-sm">
         <label className="text-sm text-gray-600 font-medium block mb-1">Buscar renglón:</label>
@@ -271,12 +275,12 @@ export default function ModificacionesClient() {
                     <td className="px-3 py-2">
                       <input
                         type="number"
-                        min={0}
                         step="0.01"
                         value={f.valor}
                         onChange={e => actualizarFilaModificacion(idx, { valor: e.target.value, ok: false, error: null })}
                         className="input py-1 text-xs rounded-lg w-full text-right"
                         placeholder="0.00"
+                        title="Positivo para agregar presupuesto, negativo para quitarlo"
                       />
                     </td>
                     <td className="px-3 py-2">
