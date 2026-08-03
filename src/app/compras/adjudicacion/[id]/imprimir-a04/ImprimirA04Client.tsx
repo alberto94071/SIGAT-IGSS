@@ -210,8 +210,9 @@ export default function ImprimirA04Client({
                   <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{renglon?.codigo_ppr ?? "—"}</td>
                   <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{renglon?.renglon ?? "—"}</td>
                   <td style={{ border: "1px solid #333", padding: "6px" }}>
-                    <p style={{ margin: "0 0 3px 0", fontWeight: "bold" }}>{(renglon?.nombre ?? "").toUpperCase()}</p>
-                    <p style={{ margin: 0 }}>{c.a04_descripcion ?? "—"}</p>
+                    <p style={{ margin: 0, fontWeight: "bold" }}>
+                      {(c.a04_descripcion || renglon?.nombre || "—").toUpperCase()}
+                    </p>
                   </td>
                   <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{c.a04_unidad_medida ?? "—"}</td>
                   <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{c.a04_cantidad?.toLocaleString("es-GT") ?? "—"}</td>
