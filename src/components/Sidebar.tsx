@@ -63,14 +63,14 @@ export default function Sidebar({ navItems, user, moduleLabel = "Módulo", onClo
     <aside className="w-60 text-white flex flex-col h-full" style={{ backgroundColor: "var(--cip-barra, #111827)" }}>
       {/* Logo / Back to CIP */}
       <div className="px-4 py-4 border-b border-gray-800">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shrink-0 p-1">
+        <div className="flex flex-col items-center text-center gap-2 mb-3">
+          <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shrink-0 p-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-cip.png" alt="Logo CIP" className="w-full h-full object-contain" />
           </div>
-          <div className="min-w-0">
-            <p className="text-sm font-bold leading-tight text-white">CIP</p>
-            <p className="text-xs text-gray-400 truncate">Instituto Guatemalteco de Seguridad Social</p>
+          <div>
+            <p className="text-base font-bold leading-tight text-white">CIP</p>
+            <p className="text-xs text-gray-400 leading-snug mt-0.5">Instituto Guatemalteco de Seguridad Social</p>
           </div>
         </div>
         <Link
