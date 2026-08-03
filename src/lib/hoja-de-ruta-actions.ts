@@ -87,7 +87,14 @@ export async function construirHojaDeRuta(ids: number[]): Promise<HojaDeRuta[]> 
   return siafs.map((s): HojaDeRuta => {
     const con = s.consolidacion_id != null ? consols.find(c => c.id === s.consolidacion_id) ?? null : null;
     const acta = con ? actas.find(a => a.consolidacion_id === con.id) ?? null : null;
-    const orden = con ? ordenes.find(o => o.consolidacion_id === con.id) ?? null : null;
+    // Puede haber más de una orden para la misma consolidación si una se
+    // devolvió hasta Adjudicación (ver regresarOrdenAAdjudicacion) y se
+    // volvió a generar otra — se prioriza la vigente (no Anulada); si todas
+    // están Anuladas, se muestra la más reciente.
+    const ordenesDeCon = con ? ordenes.filter(o => o.consolidacion_id === con.id) : [];
+    const orden = ordenesDeCon.find(o => o.estado !== "Anulada")
+      ?? [...ordenesDeCon].sort((a, b) => b.id - a.id)[0]
+      ?? null;
     const pago = con ? pagos.find(p => p.consolidacion_id === con.id) ?? null : null;
 
     return {

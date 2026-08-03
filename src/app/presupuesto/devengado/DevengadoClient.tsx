@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { FileCheck, Loader2, X, Send, CheckCircle, XCircle, Undo2 } from "lucide-react";
 import { registrarDevengado, aprobarDevengado, rechazarDevengado, actualizarEstadoDevengado, type EstadoDevengado } from "@/lib/adjudicacion/devengado-actions";
-import { regresarACompromiso, regresarADab60 } from "@/lib/adjudicacion/compromiso-actions";
+import { regresarACompromiso, regresarADab60, regresarOrdenAAdjudicacion } from "@/lib/adjudicacion/compromiso-actions";
 import { fechaGuatemala } from "@/lib/date-utils";
 import RenglonBadges from "@/components/RenglonBadges";
 
@@ -44,14 +44,23 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
     }
   };
 
-  // Rechazada por la DAF: si la orden pasó por Almacén/DAB-60, el error
-  // más probable está en los datos que capturó Almacén (no en el
-  // Compromiso, que sigue siendo válido) — se devuelve solo hasta la
-  // bandeja de aprobación de DAB-60, no hasta Compromiso.
-  const handleRegresarDab60 = async (o: Orden) => {
-    if (!confirm("¿Devolver esta orden a la bandeja de aprobación de Almacén/DAB-60 para corregir sus datos? El Compromiso no se toca, solo se deshace el Devengado.")) return;
+  // Rechazada por la DAF: puede corregirse desde distintos puntos según en
+  // dónde estuvo el error — el Compromiso (nuevo No.), lo que capturó
+  // Almacén en el DAB-60 (sin tocar Compromiso), o la adjudicación misma
+  // (tipo de compra, cotización, proveedor...), deshaciendo todo hasta
+  // Compras/Adjudicación.
+  const DESTINO_ACCION: Record<"compromiso" | "dab60" | "adjudicacion", (id: number) => Promise<{ ok: true } | { error: string }>> = {
+    compromiso: regresarACompromiso, dab60: regresarADab60, adjudicacion: regresarOrdenAAdjudicacion,
+  };
+  const DESTINO_CONFIRM: Record<"compromiso" | "dab60" | "adjudicacion", string> = {
+    compromiso: "¿Devolver esta orden a Compromiso? Se deshacen los movimientos de presupuesto que ya se habían hecho (Devengado y/o Compromiso) y tendrá que registrarse un nuevo No. de Compromiso.",
+    dab60: "¿Devolver esta orden a la bandeja de aprobación de Almacén/DAB-60 para corregir sus datos? El Compromiso no se toca, solo se deshace el Devengado.",
+    adjudicacion: "¿Devolver esta orden hasta Compras/Adjudicación? Se deshacen TODOS los movimientos de presupuesto (vuelve a Pre-Compromiso), se anula la orden y su DAB-60 (si tenía) ya no se podrá reimprimir, y la consolidación vuelve a \"Pendiente adjudicación\" para rehacer todo el proceso.",
+  };
+  const handleRegresarA = async (o: Orden, destino: "compromiso" | "dab60" | "adjudicacion") => {
+    if (!confirm(DESTINO_CONFIRM[destino])) return;
     setAccionesRegresar(prev => ({ ...prev, [o.id]: { cargando: true, error: null } }));
-    const res = await regresarADab60(o.id);
+    const res = await DESTINO_ACCION[destino](o.id);
     if ("error" in res) {
       setAccionesRegresar(prev => ({ ...prev, [o.id]: { cargando: false, error: res.error } }));
     } else {
@@ -233,8 +242,7 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
               {enviadas.map(o => (
                 <FilaSeguimiento
                   key={o.id} orden={o} onActualizado={onEstadoActualizado}
-                  onRegresar={() => o.dab60_generado_en ? handleRegresarDab60(o) : handleRegresar(o.id, "enviadas")}
-                  etiquetaRegresar={o.dab60_generado_en ? "Devolver a Almacén/DAB-60" : "Devolver a Compromiso"}
+                  onRegresar={destino => handleRegresarA(o, destino)}
                   regresando={accionesRegresar[o.id]?.cargando ?? false}
                   errorRegresar={accionesRegresar[o.id]?.error ?? null}
                 />
@@ -313,11 +321,16 @@ const BADGE: Record<string, string> = {
   Pagado: "bg-green-100 text-green-700",
 };
 
-function FilaSeguimiento({ orden: o, onActualizado, onRegresar, etiquetaRegresar, regresando, errorRegresar }: {
+const ETIQUETA_DESTINO: Record<"compromiso" | "dab60" | "adjudicacion", string> = {
+  compromiso: "Devolver a Compromiso",
+  dab60: "Devolver a Almacén/DAB-60",
+  adjudicacion: "Devolver a Compras/Adjudicación",
+};
+
+function FilaSeguimiento({ orden: o, onActualizado, onRegresar, regresando, errorRegresar }: {
   orden: Orden;
   onActualizado: (id: number, estado: EstadoDevengado, fechaPago: string | null) => void;
-  onRegresar: () => void;
-  etiquetaRegresar: string;
+  onRegresar: (destino: "compromiso" | "dab60" | "adjudicacion") => void;
   regresando: boolean;
   errorRegresar: string | null;
 }) {
@@ -325,6 +338,10 @@ function FilaSeguimiento({ orden: o, onActualizado, onRegresar, etiquetaRegresar
   const [pidiendoFechaPago, setPidiendoFechaPago] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+  const [menuDestinoAbierto, setMenuDestinoAbierto] = useState(false);
+  const destinos: ("compromiso" | "dab60" | "adjudicacion")[] = o.dab60_generado_en
+    ? ["dab60", "compromiso", "adjudicacion"]
+    : ["compromiso", "adjudicacion"];
 
   async function marcar(estado: EstadoDevengado, fecha?: string) {
     setGuardando(true); setError("");
@@ -375,10 +392,26 @@ function FilaSeguimiento({ orden: o, onActualizado, onRegresar, etiquetaRegresar
           </div>
         )}
         {o.estado_devengado !== "Pagado" && !pidiendoFechaPago && (
-          <button onClick={onRegresar} disabled={regresando} title={etiquetaRegresar}
-            className="mt-1.5 flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50 ml-auto">
-            {regresando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Undo2 className="w-3.5 h-3.5" />} {etiquetaRegresar}
-          </button>
+          <div className="relative inline-block mt-1.5">
+            <button onClick={() => setMenuDestinoAbierto(p => !p)} disabled={regresando}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50 ml-auto">
+              {regresando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Undo2 className="w-3.5 h-3.5" />} Devolver…
+            </button>
+            {menuDestinoAbierto && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setMenuDestinoAbierto(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 bg-white rounded-xl shadow-lg border border-gray-100 py-1 min-w-[220px] text-left">
+                  {destinos.map(destino => (
+                    <button key={destino}
+                      onClick={() => { setMenuDestinoAbierto(false); onRegresar(destino); }}
+                      className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
+                      {ETIQUETA_DESTINO[destino]}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         )}
         {errorRegresar && <p className="text-xs text-red-600 mt-1 max-w-[180px] text-right">{errorRegresar}</p>}
       </td>

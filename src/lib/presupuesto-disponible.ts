@@ -147,3 +147,69 @@ export async function mensajePresupuestoExcedido(excedidos: PresupuestoExcedido[
   ).join("; ");
   return `No hay presupuesto programado suficiente para: ${detalle}. Ve a Presupuesto/Programación para programar o reprogramar antes de aprobar.`;
 }
+
+// A diferencia de getDisponible() (que suma Normal + Regularizado porque al
+// aprobar un SIAF todavía no se sabe cuál de los dos terminará siendo), acá
+// ya se conoce el tipo — Baja Cuantía/Casos de Excepción se ramifican en
+// Normal (pasa por Compromiso) o Regularizado (va directo a Fondo Rotativo,
+// nunca toca Pre-Compromiso/Compromiso) desde "Iniciar Adjudicación". Por
+// eso el check se hace por separado contra el Programado de ESE tipo en el
+// cuatrimestre vigente — mismo "Saldo Programado Normal/Regularizado" que ya
+// se muestra en /presupuesto/ejecucion: Programado del tipo menos lo ya
+// Ejecutado (Devengado) de ese mismo tipo (confirmado con el cliente: no
+// resta Compromiso, solo lo ya devengado).
+export async function getDisponiblePorTipo(renglon: number, subproducto: string, tipo: "normal" | "regularizado"): Promise<Disponible> {
+  const cuatrimestreVigente = cuatrimestreDeFecha(fechaGuatemala());
+
+  const [entradasRow] = await db.select({
+    total: sql<number>`COALESCE(SUM(${programacionEntradas.mes1} + ${programacionEntradas.mes2} + ${programacionEntradas.mes3} + ${programacionEntradas.mes4}), 0)`,
+  }).from(programacionEntradas).where(and(
+    eq(programacionEntradas.ejercicio_fiscal, EJERCICIO_FISCAL),
+    eq(programacionEntradas.renglon, renglon),
+    eq(programacionEntradas.subproducto, subproducto),
+    eq(programacionEntradas.cuatrimestre, cuatrimestreVigente),
+    eq(programacionEntradas.estado, "Aprobado"),
+    eq(programacionEntradas.tipo, tipo),
+  ));
+  const programado = Number(entradasRow?.total ?? 0);
+
+  const [vivo] = await db.select({
+    devengado:               presupuestoRenglones.devengado,
+    devengado_regularizado: presupuestoRenglones.devengado_regularizado,
+  }).from(presupuestoRenglones).where(and(
+    eq(presupuestoRenglones.renglon, renglon),
+    eq(presupuestoRenglones.subproducto, subproducto),
+    eq(presupuestoRenglones.ejercicio_fiscal, EJERCICIO_FISCAL),
+  )).limit(1);
+
+  const usado = tipo === "normal" ? (vivo?.devengado ?? 0) : (vivo?.devengado_regularizado ?? 0);
+
+  return { programado, modificaciones: 0, usado, disponible: programado - usado };
+}
+
+export async function verificarProgramadoPorTipo(
+  items: RenglonSubproducto[], tipo: "normal" | "regularizado",
+): Promise<PresupuestoExcedido[]> {
+  const porClave = new Map<string, RenglonSubproducto>();
+  for (const item of items) {
+    const key = `${item.renglon}::${item.subproducto}`;
+    const existente = porClave.get(key);
+    if (existente) existente.monto += item.monto;
+    else porClave.set(key, { ...item });
+  }
+
+  const excedidos: PresupuestoExcedido[] = [];
+  for (const { renglon, subproducto, monto } of porClave.values()) {
+    const { disponible } = await getDisponiblePorTipo(renglon, subproducto, tipo);
+    if (monto > disponible + 0.01) excedidos.push({ renglon, subproducto, disponible, requerido: monto });
+  }
+  return excedidos;
+}
+
+export function mensajeProgramadoExcedido(excedidos: PresupuestoExcedido[], tipo: "normal" | "regularizado"): string {
+  const tipoLabel = tipo === "normal" ? "Normal" : "Regularizado";
+  const detalle = excedidos.map(e =>
+    `renglón ${e.renglon} / ${e.subproducto} (Programado ${tipoLabel} disponible Q${e.disponible.toLocaleString("es-GT", { minimumFractionDigits: 2 })}, se necesitan Q${e.requerido.toLocaleString("es-GT", { minimumFractionDigits: 2 })})`
+  ).join("; ");
+  return `No hay Programado ${tipoLabel} suficiente para: ${detalle}. Ve a Presupuesto/Programación para programar ${tipoLabel} de este cuatrimestre.`;
+}

@@ -511,6 +511,11 @@ export const ordenesCompra = pgTable("ordenes_compra", {
   // Se llena al generar el DAB-60 (Almacén) — marca que la orden ya pasó por
   // ahí, para poder listarla en Almacén/Archivo con datos históricos.
   dab60_generado_en:            text("dab60_generado_en"),
+  // Se marca al devolver la orden hasta Compras/Adjudicación (ver
+  // regresarOrdenAAdjudicacion en compromiso-actions.ts) si ya tenía un
+  // DAB-60 generado — el registro se conserva para historial/auditoría en
+  // Almacén/Archivo, pero ya no se puede volver a imprimir.
+  dab60_anulado:                boolean("dab60_anulado").notNull().default(false),
   // Envío a la DAF (División de Administración Financiera) para pago —
   // se registra al devengar, independiente del estado interno de la orden.
   fecha_envio_daf:              text("fecha_envio_daf"),
