@@ -55,7 +55,7 @@ export default function CompromisoClient({ ordenes: init, solicitadas: initSolic
               {ordenes.map(o => (
                 <tr key={o.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
-                    OC-{String(o.numero).padStart(3, "0")}/{o.anio}
+                    OC-{String(o.numero).padStart(3, "0")}
                   </td>
                   <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{o.codigo_ppr ?? "—"}</td>
                   <td className="px-4 py-3 max-w-xs">
@@ -110,7 +110,7 @@ export default function CompromisoClient({ ordenes: init, solicitadas: initSolic
                 return (
                   <tr key={o.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
-                      OC-{String(o.numero).padStart(3, "0")}/{o.anio}
+                      OC-{String(o.numero).padStart(3, "0")}
                     </td>
                     <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{o.no_compromiso ?? "—"}</td>
                     <td className="px-4 py-3 max-w-xs">
@@ -189,7 +189,7 @@ function ComprometerModal({ orden: o, onClose, onDone }: { orden: Orden; onClose
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h2 className="font-semibold text-gray-900">Comprometer — OC-{String(o.numero).padStart(3, "0")}/{o.anio}</h2>
+          <h2 className="font-semibold text-gray-900">Comprometer — OC-{String(o.numero).padStart(3, "0")}</h2>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X className="w-4 h-4" /></button>
         </div>
         <div className="px-5 py-4 space-y-3">
