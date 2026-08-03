@@ -20,6 +20,11 @@ const Q = (n: number | null | undefined) => {
   return `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
+// Negativo (ej. comprometido más de lo que había Programado/Pre-Compromiso
+// disponible) resalta en rojo, para detectarlo de un vistazo y saber a
+// cuáles renglones les hace falta una Reprogramación.
+const valorClase = (n: number | null | undefined) => (n ?? 0) < 0 ? "text-red-600 font-bold" : "";
+
 // Colores por grupo — clases completas (no interpoladas) para que Tailwind las detecte.
 const COLOR_MAP: Record<string, { header: string; sub: string; body: string }> = {
   slate:  { header: "bg-slate-200",  sub: "bg-slate-100",  body: "bg-slate-50" },
@@ -293,20 +298,24 @@ export default function EjecucionClient({ data }: Props) {
                       {COLUMNAS.flatMap(col => {
                         const colores = COLOR_MAP[col.color];
                         if (col.kind === "simple") {
+                          const valor = col.get(row);
                           return [
-                            <td key={col.label} className={`px-4 py-2 text-right text-gray-700 font-medium border-l-2 border-gray-300 ${colores.body}`}>
-                              {Q(col.get(row))}
+                            <td key={col.label} className={`px-4 py-2 text-right font-medium border-l-2 border-gray-300 ${colores.body} ${valorClase(valor) || "text-gray-700"}`}>
+                              {Q(valor)}
                             </td>,
                           ];
                         }
-                        return col.sub.map((s, i) => (
-                          <td
-                            key={`${col.label}-${s.label}`}
-                            className={`px-4 py-2 text-right text-gray-600 ${colores.body} ${i === 0 ? "border-l-2 border-gray-300" : "border-l border-gray-200"}`}
-                          >
-                            {Q(s.get(row))}
-                          </td>
-                        ));
+                        return col.sub.map((s, i) => {
+                          const valor = s.get(row);
+                          return (
+                            <td
+                              key={`${col.label}-${s.label}`}
+                              className={`px-4 py-2 text-right ${colores.body} ${i === 0 ? "border-l-2 border-gray-300" : "border-l border-gray-200"} ${valorClase(valor) || "text-gray-600"}`}
+                            >
+                              {Q(valor)}
+                            </td>
+                          );
+                        });
                       })}
                     </tr>
                   );

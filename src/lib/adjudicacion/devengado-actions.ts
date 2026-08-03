@@ -80,6 +80,13 @@ export async function registrarDevengado(ordenId: number, input: DevengarInput):
  * orden queda "Completada" y arranca el seguimiento con la DAF (División de
  * Administración Financiera) — estado_devengado "Enviado", que de ahí puede
  * pasar a "Rechazado" o "Pagado" con actualizarEstadoDevengado.
+ *
+ * El Compromiso se libera por el monto completo (r.total, lo que se había
+ * comprometido) pero a Devengado solo entra el monto neto de IVA cuando la
+ * orden NO está marcada exenta — el IGSS es agente retenedor: si algo
+ * cuesta Q4,000 y no es exento, solo paga Q3,520 al proveedor (retiene 12%
+ * para el SAT), y ese neto es lo que se ejecuta del presupuesto. Si está
+ * exenta, se paga el monto completo.
  */
 export async function aprobarDevengado(ordenId: number): Promise<{ ok: true } | { error: string }> {
   try {
@@ -89,6 +96,7 @@ export async function aprobarDevengado(ordenId: number): Promise<{ ok: true } | 
     const [orden] = await db.select({
       estado: ordenesCompra.estado,
       consolidacion_id: ordenesCompra.consolidacion_id,
+      exento_iva: ordenesCompra.exento_iva,
     }).from(ordenesCompra)
       .where(eq(ordenesCompra.id, ordenId)).limit(1);
     if (!orden) return { error: "No se encontró la orden" };
@@ -105,11 +113,12 @@ export async function aprobarDevengado(ordenId: number): Promise<{ ok: true } | 
 
     const renglones = await gruposRenglonDeConsolidacion(orden.consolidacion_id);
     for (const r of renglones) {
+      const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
       await db.update(presupuestoRenglones).set({
         compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${r.total}`,
         ...(esRegularizado
-          ? { devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) + ${r.total}` }
-          : { devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) + ${r.total}` }),
+          ? { devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) + ${montoDevengado}` }
+          : { devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) + ${montoDevengado}` }),
       }).where(and(
         eq(presupuestoRenglones.renglon, r.renglon as number),
         eq(presupuestoRenglones.subproducto, r.subproducto),

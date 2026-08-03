@@ -3,7 +3,7 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   Route, Search, FileText, Layers, Gavel, ShoppingCart, Printer,
-  XCircle, ChevronDown, ChevronRight, Wallet, Calculator, Archive, Landmark, Coins, FileCheck,
+  XCircle, ChevronDown, ChevronRight, Wallet, Calculator, Archive, Landmark, Coins, FileCheck, Undo2,
 } from "lucide-react";
 import type { HojaDeRuta } from "@/lib/hoja-de-ruta-actions";
 import { resumenEstado, type Tono } from "@/lib/hoja-de-ruta-utils";
@@ -185,6 +185,16 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
                     {h.orden?.estado === "Completada" && (
                       <Paso icon={Calculator} titulo="Presupuesto/Devengado — Completada">
                         {h.orden.no_devengado && <p className="text-xs text-gray-500">No. Devengado: {h.orden.no_devengado}</p>}
+                      </Paso>
+                    )}
+
+                    {/* Paso: devoluciones — cada vez que Presupuesto regresó la orden a
+                        Compromiso desde un paso posterior (ver regresarACompromiso). */}
+                    {h.orden?.historial_devoluciones && (
+                      <Paso icon={Undo2} titulo="Devuelta a un paso anterior">
+                        {h.orden.historial_devoluciones.split("\n").map((linea, i) => (
+                          <p key={i} className="text-xs text-amber-700">{linea}</p>
+                        ))}
                       </Paso>
                     )}
 

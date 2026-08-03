@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/lib/db";
-import { ordenesCompra } from "@/lib/schema";
+import { ordenesCompra, consolidaciones } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { requireModuloAccessAction } from "@/lib/modulo-access";
@@ -8,7 +8,7 @@ import { gruposRenglonDeConsolidacion } from "./renglon-utils";
 import { presupuestoRenglones, programacionEntradas, programacionCompromisos } from "@/lib/schema";
 import { and } from "drizzle-orm";
 import { requiereDab60, cuatrimestreDeFecha } from "@/lib/programacion-constants";
-import { fechaGuatemala } from "@/lib/date-utils";
+import { fechaGuatemala, fechaHoraGuatemala } from "@/lib/date-utils";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -63,6 +63,11 @@ export async function registrarCompromiso(ordenId: number, noCompromiso: string)
  * Aprueba el Compromiso — solo quien tenga acceso a mod_presupuesto. Recién
  * aquí se mueve Pre-Compromiso → Compromiso y la orden puede avanzar a
  * Almacén/DAB-60 o Devengado; antes de esto queda bloqueada.
+ *
+ * Antes de mover nada, valida que cada renglón/sub-producto todavía tenga
+ * suficiente Pre-Compromiso reservado para cubrir el monto actual — puede
+ * haber cambiado desde que se aprobó el SIAF (ej. el precio se ajustó ya
+ * adjudicado) y por eso no basta con lo que ya se validó en ese momento.
  */
 export async function aprobarCompromiso(ordenId: number): Promise<{ ok: true } | { error: string }> {
   try {
@@ -79,6 +84,24 @@ export async function aprobarCompromiso(ordenId: number): Promise<{ ok: true } |
     if (orden.estado !== "Compromiso Solicitado") return { error: "Esta orden no está pendiente de aprobación de Compromiso" };
 
     const renglones = await gruposRenglonDeConsolidacion(orden.consolidacion_id);
+
+    const faltantes: string[] = [];
+    for (const r of renglones) {
+      const [vivo] = await db.select({ pre_compromiso: presupuestoRenglones.pre_compromiso })
+        .from(presupuestoRenglones).where(and(
+          eq(presupuestoRenglones.renglon, r.renglon as number),
+          eq(presupuestoRenglones.subproducto, r.subproducto),
+          eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+        )).limit(1);
+      const disponible = vivo?.pre_compromiso ?? 0;
+      if (r.total > disponible + 0.01) {
+        const faltante = r.total - disponible;
+        faltantes.push(`renglón ${r.renglon} / ${r.subproducto} (disponible Q${disponible.toLocaleString("es-GT", { minimumFractionDigits: 2 })}, faltan Q${faltante.toLocaleString("es-GT", { minimumFractionDigits: 2 })})`);
+      }
+    }
+    if (faltantes.length > 0) {
+      return { error: `No hay suficiente Pre-Compromiso reservado para: ${faltantes.join("; ")}. Solicita una Reprogramación antes de aprobar.` };
+    }
 
     // Insumos (renglones 200-299/300-399, salvo servicios 261/266/295) pasan
     // primero por Almacén/DAB-60; el resto va directo a Devengado.
@@ -148,5 +171,103 @@ export async function rechazarCompromiso(ordenId: number): Promise<{ ok: true } 
     return { ok: true };
   } catch {
     return { error: "Error al rechazar el compromiso" };
+  }
+}
+
+const ESTADOS_REGRESABLES = ["Pendiente DAB-60", "En Devengado", "Devengado Solicitado", "Completada"];
+
+/**
+ * Devuelve una orden a "En Compromiso" desde cualquier punto posterior a
+ * que se aprobó el Compromiso — incluso ya devengada — deshaciendo los
+ * movimientos de presupuesto que ya se habían hecho: si ya llegó a
+ * Devengado (orden "Completada"), primero se resta lo que se había sumado
+ * a Devengado (neto de IVA, ver aprobarDevengado) y se restaura el
+ * Compromiso liberado ahí; siempre se deshace también la aprobación del
+ * Compromiso (vuelve a Pre-Compromiso). No se puede usar si ya se marcó
+ * "Pagado" — para entonces el desembolso ya ocurrió en la realidad. Solo
+ * quien tenga acceso a mod_presupuesto. Queda registrado en
+ * historial_devoluciones, para que se vea en Hoja de Ruta.
+ */
+export async function regresarACompromiso(ordenId: number, motivo?: string): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireModuloAccessAction("mod_presupuesto");
+    if ("error" in check) return check;
+
+    const [orden] = await db.select({
+      estado: ordenesCompra.estado,
+      consolidacion_id: ordenesCompra.consolidacion_id,
+      exento_iva: ordenesCompra.exento_iva,
+      estado_devengado: ordenesCompra.estado_devengado,
+      historial_devoluciones: ordenesCompra.historial_devoluciones,
+    }).from(ordenesCompra).where(eq(ordenesCompra.id, ordenId)).limit(1);
+    if (!orden) return { error: "No se encontró la orden" };
+    if (!ESTADOS_REGRESABLES.includes(orden.estado)) {
+      return { error: "Esta orden no se puede devolver a Compromiso desde su estado actual" };
+    }
+    if (orden.estado === "Completada" && orden.estado_devengado === "Pagado") {
+      return { error: "Ya se marcó como Pagado — el desembolso ya ocurrió, no se puede devolver" };
+    }
+
+    const yaDevengado = orden.estado === "Completada";
+    const renglones = await gruposRenglonDeConsolidacion(orden.consolidacion_id);
+
+    let esRegularizado = false;
+    if (yaDevengado) {
+      const [con] = await db.select({ regularizado: consolidaciones.regularizado })
+        .from(consolidaciones).where(eq(consolidaciones.id, orden.consolidacion_id)).limit(1);
+      esRegularizado = con?.regularizado === true;
+    }
+
+    for (const r of renglones) {
+      if (yaDevengado) {
+        const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
+        await db.update(presupuestoRenglones).set({
+          pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${r.total}`,
+          ...(esRegularizado
+            ? { devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) - ${montoDevengado}` }
+            : { devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) - ${montoDevengado}` }),
+        }).where(and(
+          eq(presupuestoRenglones.renglon, r.renglon as number),
+          eq(presupuestoRenglones.subproducto, r.subproducto),
+          eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+        ));
+        // El Compromiso no se toca: aprobarDevengado ya lo había liberado
+        // (-r.total) y ahora se está deshaciendo también la aprobación del
+        // Compromiso (+r.total más abajo estaría de más) — se cancelan.
+      } else {
+        await db.update(presupuestoRenglones).set({
+          pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${r.total}`,
+          compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${r.total}`,
+          saldo_disponible: sql`COALESCE(${presupuestoRenglones.saldo_disponible}, 0) + ${r.total}`,
+        }).where(and(
+          eq(presupuestoRenglones.renglon, r.renglon as number),
+          eq(presupuestoRenglones.subproducto, r.subproducto),
+          eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+        ));
+      }
+    }
+
+    // El compromiso de esta orden se está deshaciendo por completo (en las
+    // dos ramas de arriba) — el ledger de cierre de cuatrimestre ya no debe
+    // contarlo, o cierre-cuatrimestre.ts lo trasladaría igual al siguiente
+    // cuatrimestre aunque el compromiso ya no exista.
+    await db.delete(programacionCompromisos).where(eq(programacionCompromisos.orden_id, ordenId));
+
+    const nota = `${fechaHoraGuatemala()}: Devuelta desde ${orden.estado} a Compromiso${motivo?.trim() ? ` — ${motivo.trim()}` : ""}`;
+    const historial = orden.historial_devoluciones ? `${orden.historial_devoluciones}\n${nota}` : nota;
+
+    await db.update(ordenesCompra).set({
+      estado: "En Compromiso",
+      no_compromiso: null,
+      no_devengado: null,
+      fecha_envio_daf: null,
+      estado_devengado: null,
+      fecha_pago: null,
+      historial_devoluciones: historial,
+    }).where(eq(ordenesCompra.id, ordenId));
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al devolver la orden a Compromiso" };
   }
 }
