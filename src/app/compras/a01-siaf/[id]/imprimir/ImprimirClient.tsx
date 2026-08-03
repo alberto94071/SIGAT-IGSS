@@ -322,8 +322,9 @@ export default function ImprimirClient({
                 {/* Nota — solo ocupa el ancho de la columna Descripción, no toda la tabla.
                     Las líneas verticales que separan Código/Descripción/Cantidad se
                     repiten acá (mismo left/right que arriba) para que no se corten
-                    justo donde empieza esta fila. */}
-                <div style={{ borderTop: "1px solid #bbb", height: NOTA_H, display: "flex", alignItems: "center", flexShrink: 0, position: "relative" }}>
+                    justo donde empieza esta fila. Sin borde superior — la fila de
+                    arriba (filas vacías) ya cierra visualmente ahí. */}
+                <div style={{ height: NOTA_H, display: "flex", alignItems: "center", flexShrink: 0, position: "relative" }}>
                   <div style={{ position: "absolute", left: W_COD, top: 0, bottom: 0, width: "2px", background: "#1a1a1a", zIndex: 1 }} />
                   <div style={{ position: "absolute", right: W_CANT, top: 0, bottom: 0, width: "2px", background: "#1a1a1a", zIndex: 1 }} />
                   <div style={{ width: W_COD, flexShrink: 0 }} />
