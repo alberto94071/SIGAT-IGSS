@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { consolidaciones, ordenesCompra, siafCompras } from "@/lib/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { gruposRenglonDeConsolidacion, getPprsPorCodigos, guardarPprSeleccion, type PprOpcion } from "./renglon-utils";
+import { gruposRenglonDeConsolidacion, getPprsPorItems, clavePprDeItem, guardarPprSeleccion, type PprOpcion, type ItemParaPpr } from "./renglon-utils";
 
 async function requireCompras(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -48,10 +48,12 @@ export async function getConsolidacionesPendientesOrden(): Promise<Consolidacion
   }));
 }
 
-// PPR/presentación disponible por cada código IGSS base de la lista — para
-// poblar el selector al generar la Orden de Compra o el SIAF-04.
-export async function getPprsParaRenglones(codigos: (string | null)[]): Promise<Record<string, PprOpcion[]>> {
-  return getPprsPorCodigos(codigos.filter((c): c is string => !!c));
+// PPR/presentación disponible por cada renglón de la lista — para poblar el
+// selector al generar la Orden de Compra o el SIAF-04. Indexado por
+// clavePprDeItem(item) — no siempre es el código IGSS tal cual, ver
+// renglon-utils.ts para el caso "S/C" (sin código).
+export async function getPprsParaRenglones(items: ItemParaPpr[]): Promise<Record<string, PprOpcion[]>> {
+  return getPprsPorItems(items);
 }
 
 export async function getOrdenesEnProceso() {
@@ -88,9 +90,10 @@ export async function generarOrdenDeCompra(consolidacionId: number, data: {
 
     // Todo renglón con presentaciones registradas en Base de Datos Central
     // debe traer su PPR elegido antes de generar la orden.
-    const pprDisponibles = await getPprsPorCodigos(renglones.map(r => r.codigo_igss));
+    const pprDisponibles = await getPprsPorItems(renglones.map(r => ({ codigo_igss: r.codigo_igss, nombre: r.nombre, renglon: r.renglon })));
     for (const r of renglones) {
-      if (!r.codigo_igss || !pprDisponibles[r.codigo_igss]?.length) continue;
+      const clave = clavePprDeItem({ codigo_igss: r.codigo_igss, nombre: r.nombre, renglon: r.renglon });
+      if (!pprDisponibles[clave]?.length) continue;
       const elegido = data.seleccionPpr.find(s => s.codigo_igss === r.codigo_igss && s.subproducto === r.subproducto);
       if (!elegido?.codigo_ppr) return { error: `Selecciona el PPR/presentación de "${r.nombre}" antes de generar la orden` };
     }
