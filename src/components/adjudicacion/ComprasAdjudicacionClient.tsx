@@ -293,9 +293,10 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
 
   // Regularizado (Baja Cuantía) también requiere respaldarse en una
   // cotización — anual (insumos con precio pactado) o de servicio, según el
-  // caso. Casos de Excepción no la pide. El monto final igual se teclea a
-  // mano por insumo (viene de la factura real), la cotización solo se liga
-  // como referencia/justificación.
+  // caso. Casos de Excepción no la pide. Al elegir la cotización, los
+  // precios se cruzan por código de insumo y se llenan solos (igual que en
+  // Normal) — pero se dejan editables porque el monto final viene de la
+  // factura real, que puede diferir de lo pactado.
   async function pickRgSubTipo(st: SubTipoBaja) {
     setSubTipo(st);
     setCotizAnualFound(null); setCotizAnualNumero(""); setCotizAnualError("");
@@ -306,6 +307,28 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
       setCotizLoading(false);
       setCotizaciones(cs as unknown as CotizacionServicio[]);
     }
+  }
+
+  function prefillPreciosDesdeCotizacionAnual(cot: CotizacionAnual) {
+    setRgPrecios(prev => {
+      const next = { ...prev };
+      for (const p of c.precios) {
+        const linea = p.codigo_igss ? cot.items.find(i => i.codigo_igss === p.codigo_igss) : undefined;
+        if (linea) next[`${p.codigo_igss}::${p.subproducto}`] = String(linea.precio_unitario);
+      }
+      return next;
+    });
+  }
+
+  // La cotización de servicio trae un solo costo total (no por insumo) — solo
+  // se puede cruzar automáticamente cuando la consolidación tiene una única
+  // línea (el caso normal para un servicio); si tiene varias, se deja que se
+  // llenen a mano porque no hay forma de saber cómo se reparte el costo.
+  function prefillPrecioDesdeCotizacionServicio(cot: CotizacionServicio) {
+    if (c.precios.length !== 1) return;
+    const p = c.precios[0];
+    const precio = cot.costo / (p.cantidad || 1);
+    setRgPrecios(prev => ({ ...prev, [`${p.codigo_igss}::${p.subproducto}`]: String(precio) }));
   }
 
   async function finalizarEnviar() {
@@ -612,7 +635,7 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                     <div>
                       <label className="label">Nombre de cotización anual</label>
                       <CotizacionAnualAutocomplete
-                        onSelect={cot => { setCotizAnualFound(cot); setCotizAnualError(""); }}
+                        onSelect={cot => { setCotizAnualFound(cot); setCotizAnualError(""); if (cot) prefillPreciosDesdeCotizacionAnual(cot); }}
                       />
                       {cotizAnualError && <p className="text-xs text-red-600 mt-1">{cotizAnualError}</p>}
                       {cotizAnualFound && (
@@ -638,7 +661,9 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                         {cotizaciones.map(cot => (
                           <label key={cot.id}
                             className={`flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0 cursor-pointer ${cotizId === cot.id ? "bg-brand-50" : "bg-white"}`}>
-                            <input type="radio" name="rg-cotizacion" checked={cotizId === cot.id} onChange={() => setCotizId(cot.id)} className="w-4 h-4 accent-brand-600" />
+                            <input type="radio" name="rg-cotizacion" checked={cotizId === cot.id}
+                              onChange={() => { setCotizId(cot.id); prefillPrecioDesdeCotizacionServicio(cot); }}
+                              className="w-4 h-4 accent-brand-600" />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-gray-900 truncate">{cot.servicio}</p>
                               <p className="text-xs text-gray-400">{cot.proveedor_nombre} · {cot.fecha}</p>
@@ -681,6 +706,10 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                 <div className="space-y-2">
                   {c.precios.map(p => {
                     const key = `${p.codigo_igss}::${p.subproducto}`;
+                    const precioCotizado = subTipo === "con_insumos" && p.codigo_igss
+                      ? cotizAnualFound?.items.find(i => i.codigo_igss === p.codigo_igss)?.precio_unitario
+                      : undefined;
+                    const difiere = precioCotizado != null && parseFloat(rgPrecios[key] ?? "") !== precioCotizado;
                     return (
                       <div key={key} className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2">
                         <div className="flex-1 min-w-0">
@@ -688,6 +717,11 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                           <p className="text-[11px] text-gray-400">
                             {p.codigo_igss ?? "—"} · {p.cantidad.toLocaleString("es-GT")} {p.unidad_medida ?? ""}
                           </p>
+                          {precioCotizado != null && (
+                            <p className={`text-[11px] mt-0.5 ${difiere ? "text-amber-600 font-medium" : "text-gray-400"}`}>
+                              Cotizado: {Q(precioCotizado)}{difiere && " · precio distinto al de la cotización"}
+                            </p>
+                          )}
                         </div>
                         <input type="number" step="0.01" min="0.01" className="input w-28 text-sm"
                           placeholder="Precio"
