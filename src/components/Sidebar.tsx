@@ -64,7 +64,7 @@ export default function Sidebar({ navItems, user, moduleLabel = "Módulo", onClo
       {/* Logo / Back to CIP */}
       <div className="px-4 py-4 border-b border-gray-800">
         <div className="flex flex-col items-center text-center gap-2 mb-3">
-          <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shrink-0 p-2">
+          <div className="w-36 h-36 bg-white rounded-2xl flex items-center justify-center shrink-0 p-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-cip.png" alt="Logo CIP" className="w-full h-full object-contain" />
           </div>
