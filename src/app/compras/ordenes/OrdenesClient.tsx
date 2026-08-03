@@ -21,6 +21,15 @@ type OrdenGenerada = {
   renglones: { renglon: number | null; subproducto: string; nombre: string; cantidad: number }[];
 };
 
+// Código PPR de una presentación = concatenación de "código" + "ppr" tal
+// como están en Base de Datos Central (ej. "36823-40485") — es lo que
+// distingue una presentación de otra del mismo insumo. Algunos insumos
+// antiguos no tienen "código" propio (solo código IGSS compartido, ver
+// comentario en renglon-utils.ts); para esos se usa código IGSS como respaldo.
+function codigoDeOpcion(o: PprOpcion): string {
+  return `${o.codigo ?? o.codigo_igss}-${o.codigo_ppr}`;
+}
+
 const TIPO_COLOR: Record<string, string> = {
   "Compra Directa":    "bg-blue-100 text-blue-700",
   "Baja Cuantía":      "bg-emerald-100 text-emerald-700",
@@ -212,7 +221,9 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
   const [fechaNotificacion, setFechaNotificacion] = useState(fechaGuatemala());
   const [pprsPorCodigo, setPprsPorCodigo] = useState<Record<string, PprOpcion[]>>({});
   const [pprsLoading, setPprsLoading] = useState(true);
-  const [seleccion, setSeleccion] = useState<Record<string, number>>({}); // key `codigo_igss::subproducto` -> codigo_ppr
+  // key `codigo_igss::subproducto` -> código PPR elegido, ya concatenado
+  // "código-ppr" (ej. "36823-40485") — ver codigoDeOpcion más abajo.
+  const [seleccion, setSeleccion] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -242,7 +253,7 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
       if (!opciones?.length) continue;
       const elegido = seleccion[keyDe(r)];
       if (!elegido) return setError(`Selecciona el PPR/presentación de "${r.nombre}"`);
-      seleccionPpr.push({ codigo_igss: r.codigo_igss!, subproducto: r.subproducto, codigo_ppr: String(elegido) });
+      seleccionPpr.push({ codigo_igss: r.codigo_igss!, subproducto: r.subproducto, codigo_ppr: elegido });
     }
 
     setSaving(true); setError("");
@@ -253,7 +264,7 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
     setSaving(false);
     if ("error" in res) return setError(res.error);
 
-    const codigoPpr = [...new Set(seleccionPpr.map(s => `${s.codigo_igss}-${s.codigo_ppr}`))].join(", ") || null;
+    const codigoPpr = [...new Set(seleccionPpr.map(s => s.codigo_ppr))].join(", ") || null;
     const newOrden: OrdenGenerada = {
       id: res.ordenId,
       numero: parseInt(numeroOrden.trim(), 10),
@@ -272,7 +283,7 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
       estado: "Generada",
       codigo_ppr: codigoPpr,
       fecha_notificacion_proveedor: fechaNotificacion,
-      renglones: c.renglones.map(r => ({ ...r, codigo_ppr: seleccion[keyDe(r)] != null ? String(seleccion[keyDe(r)]) : r.codigo_ppr })),
+      renglones: c.renglones.map(r => ({ ...r, codigo_ppr: seleccion[keyDe(r)] ?? r.codigo_ppr })),
     };
 
     onGenerada(newOrden);
@@ -317,7 +328,7 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
                       return (
                         <tr key={i} className="bg-white align-top">
                           <td className="px-3 py-2 font-mono text-gray-600">
-                            {elegido ? `${r.codigo_igss}-${elegido}` : (r.codigo_igss || "—")}
+                            {elegido ?? (r.codigo_igss || "—")}
                           </td>
                           <td className="px-3 py-2 text-gray-700">
                             <span className="font-medium">{r.subproducto}</span> — {r.nombre} <span className="text-gray-400">({r.cantidad.toLocaleString("es-GT")})</span>
@@ -327,11 +338,11 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
                               <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />
                             ) : opciones?.length ? (
                               <select className="input py-1 text-xs" value={elegido ?? ""}
-                                onChange={e => setSeleccion(p => ({ ...p, [key]: Number(e.target.value) }))}>
+                                onChange={e => setSeleccion(p => ({ ...p, [key]: e.target.value }))}>
                                 <option value="">Elige presentación…</option>
                                 {opciones.map(o => (
-                                  <option key={o.codigo_ppr ?? ""} value={o.codigo_ppr ?? ""}>
-                                    {o.codigo_ppr} — {o.nombre}{o.caracteristicas ? ` (${o.caracteristicas})` : ""}{o.presentacion ? ` · ${o.presentacion}` : ""}{o.unidad_medida ? ` · ${o.unidad_medida}` : ""}
+                                  <option key={codigoDeOpcion(o)} value={codigoDeOpcion(o)}>
+                                    {codigoDeOpcion(o)} — {o.nombre}{o.caracteristicas ? ` (${o.caracteristicas})` : ""}{o.presentacion ? ` · ${o.presentacion}` : ""}{o.unidad_medida ? ` · ${o.unidad_medida}` : ""}
                                   </option>
                                 ))}
                               </select>
