@@ -8,7 +8,7 @@ type Orden = {
   id: number; numero: number; anio: number;
   proveedor_nit: string | null; proveedor_nombre: string | null;
   total: number | null; estado: string;
-  dab60_generado_en: string | null;
+  dab60_generado_en: string | null; dab60_anulado: boolean;
   no_factura: string | null; serie_factura: string | null; fecha_emision: string | null;
   lote: string | null; fecha_vencimiento: string | null;
   marca: string | null; modelo: string | null; serie: string | null; no_devengado: string | null;
@@ -21,6 +21,7 @@ const ESTADO_STYLE: Record<string, string> = {
   "DAB-60 Pendiente Aprobación": "bg-blue-100 text-blue-700",
   "En Devengado":                "bg-amber-100 text-amber-700",
   "Completada":                  "bg-green-100 text-green-700",
+  "Anulada":                     "bg-red-100 text-red-700",
 };
 
 export default function ArchivoClient({ ordenes }: { ordenes: Orden[] }) {
@@ -96,10 +97,14 @@ export default function ArchivoClient({ ordenes }: { ordenes: Orden[] }) {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <Link href={`/almacen/dab-60/${o.id}/imprimir`}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
-                      <Printer className="w-3 h-3" /> Imprimir
-                    </Link>
+                    {o.dab60_anulado ? (
+                      <span className="text-xs text-gray-400">DAB-60 anulado</span>
+                    ) : (
+                      <Link href={`/almacen/dab-60/${o.id}/imprimir`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+                        <Printer className="w-3 h-3" /> Imprimir
+                      </Link>
+                    )}
                   </td>
                 </tr>
               ))}

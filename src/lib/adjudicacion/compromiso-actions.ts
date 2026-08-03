@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/lib/db";
-import { ordenesCompra, consolidaciones } from "@/lib/schema";
+import { ordenesCompra, consolidaciones, actasAdjudicacion, oferentes, cotizacionesServicio } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { requireModuloAccessAction } from "@/lib/modulo-access";
@@ -9,6 +9,7 @@ import { presupuestoRenglones, programacionEntradas, programacionCompromisos } f
 import { and } from "drizzle-orm";
 import { requiereDab60, cuatrimestreDeFecha } from "@/lib/programacion-constants";
 import { fechaGuatemala, fechaHoraGuatemala } from "@/lib/date-utils";
+import { verificarProgramadoPorTipo, mensajeProgramadoExcedido } from "@/lib/presupuesto-disponible";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -103,6 +104,20 @@ export async function aprobarCompromiso(ordenId: number): Promise<{ ok: true } |
       return { error: `La programación no es suficiente: ${faltantes.join("; ")}. Solicita una Reprogramación antes de aprobar.` };
     }
 
+    // Toda orden que llega a Compromiso es "Normal" (Regularizado nunca
+    // genera Orden de Compra) — además del Pre-Compromiso reservado arriba,
+    // se valida que exista Programado NORMAL suficiente en el cuatrimestre
+    // vigente para ese renglón: el Pre-Compromiso combinado (Normal +
+    // Regularizado, reservado al aprobar el SIAF) puede alcanzar aunque el
+    // tipo específico que se terminó eligiendo no tenga Programado propio.
+    const excedidosProgramado = await verificarProgramadoPorTipo(
+      renglones.map(r => ({ renglon: r.renglon as number, subproducto: r.subproducto, monto: r.total })),
+      "normal",
+    );
+    if (excedidosProgramado.length > 0) {
+      return { error: mensajeProgramadoExcedido(excedidosProgramado, "normal") };
+    }
+
     // Insumos (renglones 200-299/300-399, salvo servicios 261/266/295) pasan
     // primero por Almacén/DAB-60; el resto va directo a Devengado.
     const necesitaDab60 = renglones.some(r => requiereDab60(r.renglon));
@@ -174,7 +189,7 @@ export async function rechazarCompromiso(ordenId: number): Promise<{ ok: true } 
   }
 }
 
-const ESTADOS_REGRESABLES = ["Pendiente DAB-60", "En Devengado", "Devengado Solicitado", "Completada"];
+const ESTADOS_REGRESABLES = ["Pendiente DAB-60", "DAB-60 Pendiente Aprobación", "En Devengado", "Devengado Solicitado", "Completada"];
 
 /**
  * Devuelve una orden a "En Compromiso" desde cualquier punto posterior a
@@ -336,5 +351,123 @@ export async function regresarADab60(ordenId: number, motivo?: string): Promise<
     return { ok: true };
   } catch {
     return { error: "Error al devolver la orden a Almacén/DAB-60" };
+  }
+}
+
+/**
+ * Devuelve una orden (desde cualquier punto posterior a la aprobación del
+ * Compromiso, igual que regresarACompromiso) hasta Compras/Adjudicación —
+ * para el caso de que el error esté en cómo se adjudicó (tipo de compra,
+ * cotización, proveedor, oferentes...), no solo en el Compromiso o en
+ * Almacén. Deshace TODOS los movimientos de presupuesto (Devengado si ya se
+ * había hecho, y el Compromiso completo — vuelve a Pre-Compromiso), anula
+ * la orden (queda "Anulada", ya no aparece en ninguna bandeja activa; si
+ * tenía un DAB-60 generado se marca dab60_anulado — se conserva para
+ * historial en Almacén/Archivo, pero ya no se puede reimprimir), borra el
+ * Acta de Junta Adjudicadora si existía (su consolidacion_id es único, no
+ * puede quedar una vieja estorbando cuando se vuelva a adjudicar) y
+ * cualquier oferente/cotización de servicio reservada, y regresa la
+ * consolidación a "Pendiente adjudicación" para volver a armar todo el
+ * proceso desde Compras/Adjudicación. Solo quien tenga acceso a
+ * mod_presupuesto. Queda registrado en historial_devoluciones (de la orden
+ * y de la consolidación), para que se vea en Hoja de Ruta.
+ */
+export async function regresarOrdenAAdjudicacion(ordenId: number, motivo?: string): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireModuloAccessAction("mod_presupuesto");
+    if ("error" in check) return check;
+
+    const [orden] = await db.select({
+      estado: ordenesCompra.estado,
+      consolidacion_id: ordenesCompra.consolidacion_id,
+      exento_iva: ordenesCompra.exento_iva,
+      estado_devengado: ordenesCompra.estado_devengado,
+      dab60_generado_en: ordenesCompra.dab60_generado_en,
+      historial_devoluciones: ordenesCompra.historial_devoluciones,
+    }).from(ordenesCompra).where(eq(ordenesCompra.id, ordenId)).limit(1);
+    if (!orden) return { error: "No se encontró la orden" };
+    if (!ESTADOS_REGRESABLES.includes(orden.estado)) {
+      return { error: "Esta orden no se puede devolver a Adjudicación desde su estado actual" };
+    }
+    if (orden.estado === "Completada" && orden.estado_devengado === "Pagado") {
+      return { error: "Ya se marcó como Pagado — el desembolso ya ocurrió, no se puede devolver" };
+    }
+
+    const yaDevengado = orden.estado === "Completada";
+    const renglones = await gruposRenglonDeConsolidacion(orden.consolidacion_id);
+
+    // Mismo cálculo que regresarACompromiso (ya probado): si ya estaba
+    // Devengado, aprobarDevengado había liberado el Compromiso (-r.total) —
+    // deshacer eso Y la aprobación del propio Compromiso (+r.total) se
+    // cancelan, así que ahí solo se toca Devengado y Pre-Compromiso. Si no
+    // había llegado a Devengado, el Compromiso sí se deshace por completo.
+    for (const r of renglones) {
+      if (yaDevengado) {
+        const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
+        await db.update(presupuestoRenglones).set({
+          pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${r.total}`,
+          devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) - ${montoDevengado}`,
+        }).where(and(
+          eq(presupuestoRenglones.renglon, r.renglon as number),
+          eq(presupuestoRenglones.subproducto, r.subproducto),
+          eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+        ));
+      } else {
+        await db.update(presupuestoRenglones).set({
+          pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${r.total}`,
+          compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${r.total}`,
+          saldo_disponible: sql`COALESCE(${presupuestoRenglones.saldo_disponible}, 0) + ${r.total}`,
+        }).where(and(
+          eq(presupuestoRenglones.renglon, r.renglon as number),
+          eq(presupuestoRenglones.subproducto, r.subproducto),
+          eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+        ));
+      }
+    }
+
+    await db.delete(programacionCompromisos).where(eq(programacionCompromisos.orden_id, ordenId));
+
+    const notaOrden = `${fechaHoraGuatemala()}: Devuelta desde ${orden.estado} a Compras/Adjudicación${motivo?.trim() ? ` — ${motivo.trim()}` : ""}`;
+    const historialOrden = orden.historial_devoluciones ? `${orden.historial_devoluciones}\n${notaOrden}` : notaOrden;
+
+    await db.update(ordenesCompra).set({
+      estado: "Anulada",
+      dab60_anulado: orden.dab60_generado_en != null,
+      no_devengado: null,
+      fecha_envio_daf: null,
+      estado_devengado: null,
+      fecha_pago: null,
+      historial_devoluciones: historialOrden,
+    }).where(eq(ordenesCompra.id, ordenId));
+
+    // El Acta tiene consolidacion_id único — hay que borrarla para poder
+    // volver a generar una nueva al re-adjudicar.
+    await db.delete(actasAdjudicacion).where(eq(actasAdjudicacion.consolidacion_id, orden.consolidacion_id));
+    await db.delete(oferentes).where(eq(oferentes.consolidacion_id, orden.consolidacion_id));
+    await db.update(cotizacionesServicio)
+      .set({ usado: false, usado_en_consolidacion_id: null })
+      .where(eq(cotizacionesServicio.usado_en_consolidacion_id, orden.consolidacion_id));
+
+    const [con] = await db.select({ historial_devoluciones: consolidaciones.historial_devoluciones })
+      .from(consolidaciones).where(eq(consolidaciones.id, orden.consolidacion_id)).limit(1);
+    const notaCon = `${fechaHoraGuatemala()}: Devuelta desde Presupuesto/Compromiso-Devengado a Compras/Adjudicación${motivo?.trim() ? ` — ${motivo.trim()}` : ""}`;
+    const historialCon = con?.historial_devoluciones ? `${con.historial_devoluciones}\n${notaCon}` : notaCon;
+
+    await db.update(consolidaciones).set({
+      estado: "Pendiente adjudicación",
+      destino: null,
+      tipo_compra: null,
+      regularizado: null,
+      proveedor_id: null, proveedor_nit: null, proveedor_nombre: null,
+      exento_iva: false, total: null, monto_bruto: null,
+      numero_adjudicacion: null, razon_adjudicacion: null,
+      cotizacion_anual_id: null,
+      motivo_rechazo: null, rechazado_por: null, rechazado_en: null,
+      historial_devoluciones: historialCon,
+    }).where(eq(consolidaciones.id, orden.consolidacion_id));
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al devolver la orden a Compras/Adjudicación" };
   }
 }
