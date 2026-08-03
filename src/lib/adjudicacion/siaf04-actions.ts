@@ -1,8 +1,8 @@
 "use server";
-import { fechaGuatemala } from "@/lib/date-utils";
+import { fechaGuatemala, fechaHoraGuatemala } from "@/lib/date-utils";
 
 import { db } from "@/lib/db";
-import { consolidaciones, fondoRotativoPagos } from "@/lib/schema";
+import { consolidaciones, fondoRotativoPagos, oferentes, cotizacionesServicio } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { getPendientesPorDestino } from "./actions";
@@ -79,5 +79,55 @@ export async function generarSiaf04(consolidacionId: number, data: {
     return { ok: true };
   } catch {
     return { error: "Error al generar el SIAF-04" };
+  }
+}
+
+/**
+ * Devuelve una consolidación pendiente en Fondo Rotativo/SIAF-04 (todavía
+ * sin generar el SIAF-04) hasta Compras/Adjudicación, por si se confundieron
+ * los datos al registrar el Regularizado (tipo de compra, cotización,
+ * proveedor, precios...) — deja la consolidación en "Pendiente
+ * adjudicación" para volver a ingresarlos desde cero, sin deshacer la
+ * consolidación de SIAFs (a diferencia de rechazarEnAdjudicacion, que sí la
+ * deshace por completo). Libera cualquier cotización de servicio que se
+ * hubiera reservado. Queda registrado en historial_devoluciones, para que
+ * se vea en Hoja de Ruta.
+ */
+export async function regresarAAdjudicacion(consolidacionId: number, motivo?: string): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireCompras();
+    if ("error" in check) return check;
+
+    const [con] = await db.select().from(consolidaciones).where(eq(consolidaciones.id, consolidacionId)).limit(1);
+    if (!con) return { error: "No se encontró la consolidación" };
+    if (con.destino !== "fondo_rotativo" || con.estado !== "Enviado a Fondo Rotativo")
+      return { error: "Esta consolidación no está pendiente en Fondo Rotativo" };
+    if (con.numero_a04 != null) return { error: "Ya se generó el SIAF-04 para esta consolidación — ya no se puede devolver" };
+
+    await db.delete(oferentes).where(eq(oferentes.consolidacion_id, consolidacionId));
+    await db.update(cotizacionesServicio)
+      .set({ usado: false, usado_en_consolidacion_id: null })
+      .where(eq(cotizacionesServicio.usado_en_consolidacion_id, consolidacionId));
+
+    const nota = `${fechaHoraGuatemala()}: Devuelta desde Fondo Rotativo/SIAF-04 a Compras/Adjudicación${motivo?.trim() ? ` — ${motivo.trim()}` : ""}`;
+    const historial = con.historial_devoluciones ? `${con.historial_devoluciones}\n${nota}` : nota;
+
+    await db.update(consolidaciones).set({
+      estado: "Pendiente adjudicación",
+      destino: null,
+      tipo_compra: null,
+      regularizado: null,
+      proveedor_id: null, proveedor_nit: null, proveedor_nombre: null,
+      exento_iva: false, total: null, monto_bruto: null,
+      proveedor_direccion: null, proveedor_telefono: null,
+      numero_adjudicacion: null, razon_adjudicacion: null,
+      cotizacion_anual_id: null,
+      a04_no_pedido: null, a04_descripcion: null, a04_unidad_medida: null, a04_cantidad: null,
+      historial_devoluciones: historial,
+    }).where(eq(consolidaciones.id, consolidacionId));
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al devolver la consolidación a Adjudicación" };
   }
 }

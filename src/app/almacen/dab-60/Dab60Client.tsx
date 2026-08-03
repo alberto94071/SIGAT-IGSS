@@ -1,20 +1,25 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, X, Loader2, Send } from "lucide-react";
-import { generarDab60, type Dab60Data } from "@/lib/adjudicacion/dab60-actions";
+import Link from "next/link";
+import { Archive, X, Loader2, Send, CheckCircle, Pencil, Printer } from "lucide-react";
+import { generarDab60, aprobarDab60, type Dab60Data } from "@/lib/adjudicacion/dab60-actions";
 import RenglonBadges from "@/components/RenglonBadges";
 
 type Orden = {
   id: number; numero: number; anio: number;
   proveedor_nit: string | null; proveedor_nombre: string | null;
   total: number | null; no_compromiso: string | null;
+  no_recibo_almacen: string | null; serie_recibo_almacen: string | null; encargado_almacen: string | null;
+  fecha_ingreso_producto: string | null; no_factura: string | null; serie_factura: string | null;
+  fecha_emision: string | null; lote: string | null; fecha_vencimiento: string | null;
+  marca: string | null; modelo: string | null; serie: string | null;
   renglones: { renglon: number | null; subproducto: string; nombre: string; cantidad: number }[];
 };
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-type CampoOpcional = Omit<Dab60Data, "no_recibo_almacen" | "serie_recibo_almacen">;
+type CampoOpcional = Omit<Dab60Data, "no_recibo_almacen" | "serie_recibo_almacen" | "encargado_almacen">;
 
 const CAMPOS: { key: keyof CampoOpcional; label: string; tipo: "date" | "text" }[] = [
   { key: "fecha_ingreso_producto", label: "Fecha de ingreso del producto", tipo: "date" },
@@ -28,12 +33,25 @@ const CAMPOS: { key: keyof CampoOpcional; label: string; tipo: "date" | "text" }
   { key: "serie",                  label: "Serie",                       tipo: "text" },
 ];
 
-export default function Dab60Client({ ordenes: init }: { ordenes: Orden[] }) {
+export default function Dab60Client({ ordenes: init, pendientesAprobacion: initPendientes }: { ordenes: Orden[]; pendientesAprobacion: Orden[] }) {
   const [ordenes, setOrdenes] = useState(init);
+  const [pendientesAprobacion, setPendientesAprobacion] = useState(initPendientes);
   const [dabFor, setDabFor] = useState<Orden | null>(null);
+  const [acciones, setAcciones] = useState<Record<number, { cargando: boolean; error: string | null }>>({});
+
+  async function handleAprobar(id: number) {
+    setAcciones(prev => ({ ...prev, [id]: { cargando: true, error: null } }));
+    const res = await aprobarDab60(id);
+    if ("error" in res) {
+      setAcciones(prev => ({ ...prev, [id]: { cargando: false, error: res.error } }));
+    } else {
+      setAcciones(prev => ({ ...prev, [id]: { cargando: false, error: null } }));
+      setPendientesAprobacion(p => p.filter(o => o.id !== id));
+    }
+  }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       <div>
         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
           <Archive className="w-5 h-5" /> DAB-60
@@ -87,41 +105,134 @@ export default function Dab60Client({ ordenes: init }: { ordenes: Orden[] }) {
         </div>
       </div>
 
+      <div>
+        <h2 className="text-lg font-bold text-gray-900">Pendientes de aprobación de DAB-60</h2>
+        <p className="text-sm text-gray-500 mt-0.5">
+          {pendientesAprobacion.length} orden(es) con DAB-60 generado, esperando aprobación antes de pasar a Presupuesto/Devengado. Si algo se ingresó mal, corrígelo aquí con "Editar" antes de aprobar.
+        </p>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="table-header">
+                <th className="px-4 py-3 text-left whitespace-nowrap">Orden</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">No./Serie Recibo</th>
+                <th className="px-4 py-3 text-left">Proveedor</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {pendientesAprobacion.map(o => {
+                const a = acciones[o.id];
+                return (
+                  <tr key={o.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
+                      OC-{String(o.numero).padStart(3, "0")}/{o.anio}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">
+                      {o.no_recibo_almacen ?? "—"} / {o.serie_recibo_almacen ?? "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-gray-900">{o.proveedor_nombre ?? "—"}</p>
+                      {o.proveedor_nit && <p className="text-xs text-gray-400">NIT: {o.proveedor_nit}</p>}
+                      <RenglonBadges renglones={o.renglones} />
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
+                      {o.total != null ? Q(o.total) : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Link href={`/almacen/dab-60/${o.id}/imprimir`}
+                          title="Imprimir"
+                          className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100">
+                          <Printer className="w-4 h-4" />
+                        </Link>
+                        <button onClick={() => setDabFor(o)} disabled={a?.cargando}
+                          title="Editar"
+                          className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleAprobar(o.id)} disabled={a?.cargando}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors">
+                          {a?.cargando ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />} Aprobar
+                        </button>
+                      </div>
+                      {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[220px] text-right ml-auto">{a.error}</p>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {pendientesAprobacion.length === 0 && (
+            <div className="text-center py-16 text-gray-400">
+              <CheckCircle className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">No hay DAB-60 pendientes de aprobación.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
       {dabFor && (
         <Dab60Modal
           orden={dabFor}
           onClose={() => setDabFor(null)}
-          onDone={() => { setOrdenes(p => p.filter(o => o.id !== dabFor.id)); setDabFor(null); }}
+          onDone={(orden, esNuevo) => {
+            if (esNuevo) {
+              setOrdenes(p => p.filter(o => o.id !== orden.id));
+              setPendientesAprobacion(p => [...p, orden]);
+            } else {
+              setPendientesAprobacion(p => p.map(o => o.id === orden.id ? orden : o));
+            }
+            setDabFor(null);
+          }}
         />
       )}
     </div>
   );
 }
 
-function Dab60Modal({ orden: o, onClose, onDone }: { orden: Orden; onClose: () => void; onDone: () => void }) {
+function Dab60Modal({ orden: o, onClose, onDone }: {
+  orden: Orden; onClose: () => void; onDone: (orden: Orden, esNuevo: boolean) => void;
+}) {
   const router = useRouter();
-  const [noRecibo, setNoRecibo] = useState("");
-  const [serieRecibo, setSerieRecibo] = useState("");
-  const [data, setData] = useState<Omit<Dab60Data, "no_recibo_almacen" | "serie_recibo_almacen">>({
-    fecha_ingreso_producto: "", no_factura: "", serie_factura: "", fecha_emision: "",
-    lote: "", fecha_vencimiento: "", marca: "", modelo: "", serie: "",
+  const esNuevo = !o.no_recibo_almacen;
+  const [noRecibo, setNoRecibo] = useState(o.no_recibo_almacen ?? "");
+  const [serieRecibo, setSerieRecibo] = useState(o.serie_recibo_almacen ?? "");
+  const [encargado, setEncargado] = useState(o.encargado_almacen ?? "");
+  const [data, setData] = useState<CampoOpcional>({
+    fecha_ingreso_producto: o.fecha_ingreso_producto ?? "", no_factura: o.no_factura ?? "",
+    serie_factura: o.serie_factura ?? "", fecha_emision: o.fecha_emision ?? "",
+    lote: o.lote ?? "", fecha_vencimiento: o.fecha_vencimiento ?? "",
+    marca: o.marca ?? "", modelo: o.modelo ?? "", serie: o.serie ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  function set(key: keyof typeof data, value: string) {
+  function set(key: keyof CampoOpcional, value: string) {
     setData(p => ({ ...p, [key]: value }));
   }
 
   async function handleEnviar() {
     if (!noRecibo.trim() || !serieRecibo.trim())
       return setError("El No. y la Serie de Recibo de Almacén son obligatorios");
+    if (!encargado.trim())
+      return setError("El nombre del Encargado de Almacén es obligatorio");
     setSaving(true); setError("");
-    const res = await generarDab60(o.id, { ...data, no_recibo_almacen: noRecibo, serie_recibo_almacen: serieRecibo });
+    const res = await generarDab60(o.id, {
+      ...data, no_recibo_almacen: noRecibo, serie_recibo_almacen: serieRecibo, encargado_almacen: encargado,
+    });
     setSaving(false);
     if ("error" in res) return setError(res.error);
-    router.push(`/almacen/dab-60/${o.id}/imprimir`);
-    onDone();
+    const ordenActualizada: Orden = {
+      ...o, ...data,
+      no_recibo_almacen: noRecibo.trim(), serie_recibo_almacen: serieRecibo.trim(), encargado_almacen: encargado.trim(),
+    };
+    if (esNuevo) router.push(`/almacen/dab-60/${o.id}/imprimir`);
+    onDone(ordenActualizada, esNuevo);
   }
 
   return (
@@ -139,6 +250,10 @@ function Dab60Modal({ orden: o, onClose, onDone }: { orden: Orden; onClose: () =
           <div>
             <label className="label">Serie de Recibo de Almacén</label>
             <input className="input" value={serieRecibo} onChange={e => setSerieRecibo(e.target.value)} />
+          </div>
+          <div className="col-span-2">
+            <label className="label">Encargado de Almacén</label>
+            <input className="input" value={encargado} onChange={e => setEncargado(e.target.value)} />
           </div>
           <p className="col-span-2 text-xs text-gray-400 -mt-1 mb-1">
             El resto de estos datos son opcionales — puedes dejarlos en blanco y completarlos después.
@@ -158,7 +273,7 @@ function Dab60Modal({ orden: o, onClose, onDone }: { orden: Orden; onClose: () =
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
           <button onClick={onClose} className="btn-secondary">Cancelar</button>
           <button onClick={handleEnviar} disabled={saving} className="btn-primary disabled:opacity-50">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Generar DAB-60
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} {esNuevo ? "Generar DAB-60" : "Guardar cambios"}
           </button>
         </div>
       </div>

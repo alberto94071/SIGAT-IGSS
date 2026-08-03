@@ -131,6 +131,17 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
                       </Paso>
                     )}
 
+                    {/* Paso: devoluciones — cada vez que se devolvió la
+                        consolidación a Compras/Adjudicación desde un paso
+                        posterior (ver regresarAAdjudicacion en siaf04-actions.ts). */}
+                    {h.consolidacion?.historial_devoluciones && (
+                      <Paso icon={Undo2} titulo="Devuelta a un paso anterior">
+                        {h.consolidacion.historial_devoluciones.split("\n").map((linea, i) => (
+                          <p key={i} className="text-xs text-amber-700">{linea}</p>
+                        ))}
+                      </Paso>
+                    )}
+
                     {/* Paso: Acta (solo si esta consolidación pasó por Junta Adjudicadora) */}
                     {h.acta && (
                       <Paso icon={Gavel} titulo={`Acta ${h.acta.no_acta}`}
@@ -171,6 +182,9 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
                     {h.orden?.dab60_generado_en && (
                       <Paso icon={Archive} titulo={`Almacén/DAB-60 — ${h.orden.dab60_generado_en}`}
                         accion={<PrintLink href={`/almacen/dab-60/${h.orden.id}/imprimir`} label="Ver / Imprimir DAB-60" />}>
+                        {h.orden.estado === "DAB-60 Pendiente Aprobación" && (
+                          <p className="text-xs text-amber-700 font-medium">Esperando aprobación en Almacén/DAB-60</p>
+                        )}
                         <p className="text-xs text-gray-500">
                           Factura {h.orden.serie_factura ?? "—"}-{h.orden.no_factura ?? "—"} · Emisión {h.orden.fecha_emision ?? "—"}
                           {h.orden.fecha_ingreso_producto && <> · Ingreso: {h.orden.fecha_ingreso_producto}</>}
