@@ -17,6 +17,7 @@ type Firmante = { id: number; nombre: string; cargo: string };
 interface Props {
   solicitud: Solicitud; items: Item[]; config: Config;
   todosFirmantes: Firmante[]; firmantesSeleccionados: Firmante[];
+  mostrarSubproducto: boolean;
 }
 
 const FONT = "Arial, Helvetica, sans-serif";
@@ -87,7 +88,7 @@ function paginarItems(items: Item[], capacidad: number): PageInfo[] {
 }
 
 export default function ImprimirClient({
-  solicitud, items, config, todosFirmantes, firmantesSeleccionados: initFirmantes,
+  solicitud, items, config, todosFirmantes, firmantesSeleccionados: initFirmantes, mostrarSubproducto,
 }: Props) {
   const router = useRouter();
   const [firmantes, setFirmantes] = useState<Firmante[]>(initFirmantes);
@@ -286,11 +287,13 @@ export default function ImprimirClient({
                         <div style={{ width: W_COD, textAlign: "center", flexShrink: 0, fontFamily: "monospace", fontSize: "8pt" }}>
                           {item.codigo_igss ?? ""}
                         </div>
-                        <div style={{ flex: 1, padding: "0 8px", display: "flex", justifyContent: "space-between", alignItems: "center", overflow: "hidden" }}>
-                          <span style={{ textTransform: "uppercase", fontSize: "8pt", lineHeight: 1.2 }}>{item.nombre}</span>
-                          <span style={{ fontSize: "7.5pt", color: "#333", whiteSpace: "nowrap", marginLeft: "8px", flexShrink: 0 }}>
-                            {item.subproducto}
-                          </span>
+                        <div style={{ flex: 1, padding: "0 8px", display: "flex", justifyContent: mostrarSubproducto ? "space-between" : "flex-start", alignItems: "center", overflow: "hidden" }}>
+                          <span style={{ textTransform: "uppercase", fontSize: "8pt", lineHeight: 1.2, width: mostrarSubproducto ? undefined : "100%" }}>{item.nombre}</span>
+                          {mostrarSubproducto && (
+                            <span style={{ fontSize: "7.5pt", color: "#333", whiteSpace: "nowrap", marginLeft: "8px", flexShrink: 0 }}>
+                              {item.subproducto}
+                            </span>
+                          )}
                         </div>
                         <div style={{ width: W_CANT, textAlign: "center", flexShrink: 0, fontSize: "9pt" }}>
                           {item.cantidad_solicitada.toLocaleString("es-GT")}
@@ -316,8 +319,13 @@ export default function ImprimirClient({
                   </div>
                 </div>
 
-                {/* Nota — solo ocupa el ancho de la columna Descripción, no toda la tabla */}
-                <div style={{ borderTop: "1px solid #bbb", height: NOTA_H, display: "flex", alignItems: "center", flexShrink: 0 }}>
+                {/* Nota — solo ocupa el ancho de la columna Descripción, no toda la tabla.
+                    Las líneas verticales que separan Código/Descripción/Cantidad se
+                    repiten acá (mismo left/right que arriba) para que no se corten
+                    justo donde empieza esta fila. */}
+                <div style={{ borderTop: "1px solid #bbb", height: NOTA_H, display: "flex", alignItems: "center", flexShrink: 0, position: "relative" }}>
+                  <div style={{ position: "absolute", left: W_COD, top: 0, bottom: 0, width: "2px", background: "#1a1a1a", zIndex: 1 }} />
+                  <div style={{ position: "absolute", right: W_CANT, top: 0, bottom: 0, width: "2px", background: "#1a1a1a", zIndex: 1 }} />
                   <div style={{ width: W_COD, flexShrink: 0 }} />
                   <span style={{ flex: 1, padding: "0 8px", fontSize: "6.5pt", color: "#555", fontFamily: FONT }}>
                     Los productos de los listados institucionales, se encuentran homologados con el catálogo general de insumos del SIGES, Presupuesto por Resultados (PpR)
