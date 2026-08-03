@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
-import { FileCheck, Loader2, X, Send, CheckCircle, XCircle } from "lucide-react";
+import { FileCheck, Loader2, X, Send, CheckCircle, XCircle, Undo2 } from "lucide-react";
 import { registrarDevengado, aprobarDevengado, rechazarDevengado, actualizarEstadoDevengado, type EstadoDevengado } from "@/lib/adjudicacion/devengado-actions";
+import { regresarACompromiso } from "@/lib/adjudicacion/compromiso-actions";
 import { fechaGuatemala } from "@/lib/date-utils";
 import RenglonBadges from "@/components/RenglonBadges";
 
@@ -22,11 +23,25 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
   const [enviadas, setEnviadas] = useState(initEnviadas);
   const [devengarFor, setDevengarFor] = useState<Orden | null>(null);
   const [acciones, setAcciones] = useState<Record<number, { cargando: boolean; error: string | null }>>({});
+  const [accionesRegresar, setAccionesRegresar] = useState<Record<number, { cargando: boolean; error: string | null }>>({});
 
   function onRegistrado(orden: Orden) {
     setOrdenes(p => p.filter(x => x.id !== orden.id));
     setSolicitadas(p => [...p, orden]);
   }
+
+  const handleRegresar = async (id: number, origen: "ordenes" | "enviadas") => {
+    if (!confirm("¿Devolver esta orden a Compromiso? Se deshacen los movimientos de presupuesto que ya se habían hecho (Devengado y/o Compromiso) y tendrá que registrarse un nuevo No. de Compromiso.")) return;
+    setAccionesRegresar(prev => ({ ...prev, [id]: { cargando: true, error: null } }));
+    const res = await regresarACompromiso(id);
+    if ("error" in res) {
+      setAccionesRegresar(prev => ({ ...prev, [id]: { cargando: false, error: res.error } }));
+    } else {
+      setAccionesRegresar(prev => ({ ...prev, [id]: { cargando: false, error: null } }));
+      if (origen === "ordenes") setOrdenes(p => p.filter(o => o.id !== id));
+      else setEnviadas(p => p.filter(o => o.id !== id));
+    }
+  };
 
   const ejecutarAccion = async (id: number, accion: (id: number) => Promise<{ ok: true } | { error: string }>, alAprobar?: (o: Orden) => void) => {
     setAcciones(prev => ({ ...prev, [id]: { cargando: true, error: null } }));
@@ -82,10 +97,19 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
                     {o.total != null ? Q(o.total) : "—"}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <button onClick={() => setDevengarFor(o)}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors ml-auto">
-                      <FileCheck className="w-3 h-3" /> Devengar
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button onClick={() => handleRegresar(o.id, "ordenes")}
+                        disabled={accionesRegresar[o.id]?.cargando}
+                        title="Devolver a Compromiso"
+                        className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">
+                        {accionesRegresar[o.id]?.cargando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                      </button>
+                      <button onClick={() => setDevengarFor(o)}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors">
+                        <FileCheck className="w-3 h-3" /> Devengar
+                      </button>
+                    </div>
+                    {accionesRegresar[o.id]?.error && <p className="text-red-600 text-xs mt-1 max-w-[180px]">{accionesRegresar[o.id]!.error}</p>}
                   </td>
                 </tr>
               ))}
@@ -190,7 +214,12 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
             </thead>
             <tbody className="divide-y divide-gray-100">
               {enviadas.map(o => (
-                <FilaSeguimiento key={o.id} orden={o} onActualizado={onEstadoActualizado} />
+                <FilaSeguimiento
+                  key={o.id} orden={o} onActualizado={onEstadoActualizado}
+                  onRegresar={() => handleRegresar(o.id, "enviadas")}
+                  regresando={accionesRegresar[o.id]?.cargando ?? false}
+                  errorRegresar={accionesRegresar[o.id]?.error ?? null}
+                />
               ))}
             </tbody>
           </table>
@@ -266,9 +295,12 @@ const BADGE: Record<string, string> = {
   Pagado: "bg-green-100 text-green-700",
 };
 
-function FilaSeguimiento({ orden: o, onActualizado }: {
+function FilaSeguimiento({ orden: o, onActualizado, onRegresar, regresando, errorRegresar }: {
   orden: Orden;
   onActualizado: (id: number, estado: EstadoDevengado, fechaPago: string | null) => void;
+  onRegresar: () => void;
+  regresando: boolean;
+  errorRegresar: string | null;
 }) {
   const [fechaPago, setFechaPago] = useState(fechaGuatemala());
   const [pidiendoFechaPago, setPidiendoFechaPago] = useState(false);
@@ -323,6 +355,13 @@ function FilaSeguimiento({ orden: o, onActualizado }: {
             </button>
           </div>
         )}
+        {o.estado_devengado !== "Pagado" && !pidiendoFechaPago && (
+          <button onClick={onRegresar} disabled={regresando} title="Devolver a Compromiso"
+            className="mt-1.5 flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50 ml-auto">
+            {regresando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Undo2 className="w-3.5 h-3.5" />} Devolver a Compromiso
+          </button>
+        )}
+        {errorRegresar && <p className="text-xs text-red-600 mt-1 max-w-[180px] text-right">{errorRegresar}</p>}
       </td>
     </tr>
   );

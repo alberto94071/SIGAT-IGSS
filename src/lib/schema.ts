@@ -505,6 +505,10 @@ export const ordenesCompra = pgTable("ordenes_compra", {
   fecha_envio_daf:              text("fecha_envio_daf"),
   estado_devengado:             text("estado_devengado"), // Enviado | Rechazado | Pagado
   fecha_pago:                   text("fecha_pago"),
+  // Bitácora de veces que se devolvió la orden a un paso anterior (ver
+  // regresarACompromiso en compromiso-actions.ts) — una línea por cada
+  // devolución, para poder verla en Hoja de Ruta.
+  historial_devoluciones:       text("historial_devoluciones"),
 });
 
 // ─── Compras: solicitudes A-01 SIAF ──────────────────────────────────────────
