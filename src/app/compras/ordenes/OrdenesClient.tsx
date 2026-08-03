@@ -6,7 +6,7 @@ import {
   ShoppingCart, Search, X, Loader2, AlertTriangle, Hash, Calendar, Building2, DollarSign, Send,
 } from "lucide-react";
 import { generarOrdenDeCompra, enviarOrdenAPresupuesto, getPprsParaRenglones, type ConsolidacionPendienteOrden } from "@/lib/adjudicacion/ordenes-actions";
-import type { PprOpcion } from "@/lib/adjudicacion/renglon-utils";
+import type { PprOpcion, ItemParaPpr } from "@/lib/adjudicacion/renglon-utils";
 import RenglonBadges from "@/components/RenglonBadges";
 import { useRouter } from "next/navigation";
 
@@ -21,13 +21,33 @@ type OrdenGenerada = {
   renglones: { renglon: number | null; subproducto: string; nombre: string; cantidad: number }[];
 };
 
+// Misma clave que clavePprDeItem en renglon-utils.ts (duplicada acá porque
+// ese archivo usa `db` y no se puede importar del todo en un client
+// component) — "S/C" es un marcador de "sin código" que comparten insumos
+// que no tienen nada que ver entre sí, así que ahí se agrupa por nombre +
+// renglón en vez de por el código compartido.
+function clavePprDeItem(r: ItemParaPpr): string {
+  return r.codigo_igss && r.codigo_igss !== "S/C" ? r.codigo_igss : `${r.nombre.trim().toLowerCase()}::${r.renglon ?? ""}`;
+}
+
 // Código PPR de una presentación = concatenación de "código" + "ppr" tal
 // como están en Base de Datos Central (ej. "36823-40485") — es lo que
 // distingue una presentación de otra del mismo insumo. Algunos insumos
 // antiguos no tienen "código" propio (solo código IGSS compartido, ver
-// comentario en renglon-utils.ts); para esos se usa código IGSS como respaldo.
+// comentario en renglon-utils.ts); para esos se usa código IGSS como
+// respaldo, y si tampoco hay código IGSS real (ej. "S/C"), el id de Base de
+// Datos Central — para no chocar con otro insumo distinto que también sea
+// "S/C" (ej. Agua vs. Energía Eléctrica).
+function tieneCodigoReal(o: PprOpcion): boolean {
+  return !!o.codigo || (!!o.codigo_igss && o.codigo_igss !== "S/C");
+}
 function codigoDeOpcion(o: PprOpcion): string {
-  return `${o.codigo ?? o.codigo_igss}-${o.codigo_ppr}`;
+  return tieneCodigoReal(o) ? `${o.codigo ?? o.codigo_igss}-${o.codigo_ppr}` : `S/C-${o.id}`;
+}
+function etiquetaDeOpcion(o: PprOpcion): string {
+  const prefijo = tieneCodigoReal(o) ? `${codigoDeOpcion(o)} — ` : "";
+  const desc = o.descripcion_igss || o.nombre;
+  return `${prefijo}${desc}${o.caracteristicas ? ` (${o.caracteristicas})` : ""}${o.presentacion ? ` · ${o.presentacion}` : ""}${o.unidad_medida ? ` · ${o.unidad_medida}` : ""}`;
 }
 
 const TIPO_COLOR: Record<string, string> = {
@@ -232,7 +252,7 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
   useEffect(() => {
     let vivo = true;
     setPprsLoading(true);
-    getPprsParaRenglones(c.renglones.map(r => r.codigo_igss)).then(res => {
+    getPprsParaRenglones(c.renglones.map(r => ({ codigo_igss: r.codigo_igss, nombre: r.nombre, renglon: r.renglon }))).then(res => {
       if (vivo) { setPprsPorCodigo(res); setPprsLoading(false); }
     });
     return () => { vivo = false; };
@@ -249,7 +269,7 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
 
     const seleccionPpr: { codigo_igss: string; subproducto: string; codigo_ppr: string }[] = [];
     for (const r of c.renglones) {
-      const opciones = r.codigo_igss ? pprsPorCodigo[r.codigo_igss] : undefined;
+      const opciones = pprsPorCodigo[clavePprDeItem(r)];
       if (!opciones?.length) continue;
       const elegido = seleccion[keyDe(r)];
       if (!elegido) return setError(`Selecciona el PPR/presentación de "${r.nombre}"`);
@@ -322,7 +342,7 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {c.renglones.map((r, i) => {
-                      const opciones = r.codigo_igss ? pprsPorCodigo[r.codigo_igss] : undefined;
+                      const opciones = pprsPorCodigo[clavePprDeItem(r)];
                       const key = keyDe(r);
                       const elegido = seleccion[key];
                       return (
@@ -342,7 +362,7 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
                                 <option value="">Elige presentación…</option>
                                 {opciones.map(o => (
                                   <option key={codigoDeOpcion(o)} value={codigoDeOpcion(o)}>
-                                    {codigoDeOpcion(o)} — {o.nombre}{o.caracteristicas ? ` (${o.caracteristicas})` : ""}{o.presentacion ? ` · ${o.presentacion}` : ""}{o.unidad_medida ? ` · ${o.unidad_medida}` : ""}
+                                    {etiquetaDeOpcion(o)}
                                   </option>
                                 ))}
                               </select>

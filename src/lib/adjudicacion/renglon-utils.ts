@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { siafCompras, siafComprasItems, catalogoCompras, baseDatosCentral } from "@/lib/schema";
-import { eq, and, or, inArray, isNotNull } from "drizzle-orm";
+import { eq, and, or, inArray, ilike, isNotNull } from "drizzle-orm";
 
 // ─── PPR (presentación) por código base ──────────────────────────────────────
 // Un mismo insumo puede tener varias presentaciones/PPR registradas en Base de
@@ -12,37 +12,86 @@ import { eq, and, or, inArray, isNotNull } from "drizzle-orm";
 // catalogo_compras/siaf_compras_items es en realidad el valor compartido de
 // base_datos_central.codigo_igss, no de .codigo. Por eso se busca por ambos
 // campos a la vez.
+//
+// "S/C" (sin código) es un caso aparte: NO es un código compartido de un
+// mismo insumo con varias presentaciones — es un marcador que usan muchos
+// insumos distintos entre sí (ej. Energía Eléctrica de varios períodos,
+// Agua, servicios de Casos de Excepción) para decir "no tiene código". Si se
+// agrupara por "S/C" como si fuera un código real, terminarían mezclados
+// insumos que no tienen nada que ver — para esos, lo único que realmente
+// distingue uno de otro es el nombre + el renglón (base_datos_central no
+// tiene columna de sub-producto).
 export type PprOpcion = {
-  codigo: string | null; codigo_igss: string | null; codigo_ppr: number | null;
-  nombre: string; caracteristicas: string | null; presentacion: string | null; unidad_medida: string | null;
+  id: number; codigo: string | null; codigo_igss: string | null; codigo_ppr: number | null;
+  nombre: string; descripcion_igss: string | null;
+  caracteristicas: string | null; presentacion: string | null; unidad_medida: string | null;
 };
 
-// Trae, para cada código de la lista (el que haya quedado guardado como
-// codigo_igss del renglón), todas sus presentaciones/PPR registradas en Base
-// de Datos Central — para poblar el selector de PPR al generar la Orden de
-// Compra o el SIAF-04. El resultado queda indexado por el código de entrada,
-// para poder cruzarlo directo con el renglón sin importar cuál de los dos
-// campos haya sido el que coincidió.
-export async function getPprsPorCodigos(codigos: (string | null)[]): Promise<Record<string, PprOpcion[]>> {
-  const limpios = [...new Set(codigos.filter((c): c is string => !!c))];
-  if (limpios.length === 0) return {};
-  const rows = await db.select({
-    codigo:          baseDatosCentral.codigo,
-    codigo_igss:     baseDatosCentral.codigo_igss,
-    codigo_ppr:      baseDatosCentral.codigo_ppr,
-    nombre:          baseDatosCentral.nombre,
-    caracteristicas: baseDatosCentral.caracteristicas,
-    presentacion:    baseDatosCentral.presentacion,
-    unidad_medida:   baseDatosCentral.unidad_medida,
-  }).from(baseDatosCentral)
-    .where(or(inArray(baseDatosCentral.codigo, limpios), inArray(baseDatosCentral.codigo_igss, limpios)))
-    .orderBy(baseDatosCentral.codigo_ppr);
+export type ItemParaPpr = { codigo_igss: string | null; nombre: string; renglon: number | null };
 
+const SIN_CODIGO = "S/C";
+
+function tieneCodigoReal(codigoIgss: string | null): boolean {
+  return !!codigoIgss && codigoIgss !== SIN_CODIGO;
+}
+
+// Misma clave en el servidor (acá) y en el cliente (ver clavePprDeItem
+// duplicada en OrdenesClient.tsx/Siaf04Client.tsx) — así ambos lados
+// concuerdan en cómo indexar el resultado sin tener que compartir código
+// que dependa de la base de datos.
+export function clavePprDeItem(r: ItemParaPpr): string {
+  return tieneCodigoReal(r.codigo_igss) ? r.codigo_igss! : `${r.nombre.trim().toLowerCase()}::${r.renglon ?? ""}`;
+}
+
+const SELECT_COLUMNAS = {
+  id:               baseDatosCentral.id,
+  codigo:           baseDatosCentral.codigo,
+  codigo_igss:      baseDatosCentral.codigo_igss,
+  codigo_ppr:       baseDatosCentral.codigo_ppr,
+  nombre:           baseDatosCentral.nombre,
+  descripcion_igss: baseDatosCentral.descripcion_igss,
+  caracteristicas:  baseDatosCentral.caracteristicas,
+  presentacion:     baseDatosCentral.presentacion,
+  unidad_medida:    baseDatosCentral.unidad_medida,
+  renglon:          baseDatosCentral.renglon,
+};
+
+// Trae, para cada renglón/insumo de la lista, todas sus presentaciones/PPR
+// registradas en Base de Datos Central — para poblar el selector de PPR al
+// generar la Orden de Compra o el SIAF-04. El resultado queda indexado por
+// clavePprDeItem(item), para poder cruzarlo directo con el renglón.
+export async function getPprsPorItems(items: ItemParaPpr[]): Promise<Record<string, PprOpcion[]>> {
   const out: Record<string, PprOpcion[]> = {};
-  for (const entrada of limpios) {
-    const opciones = rows.filter(r => r.codigo === entrada || r.codigo_igss === entrada);
-    if (opciones.length > 0) out[entrada] = opciones as PprOpcion[];
+
+  const conCodigo = items.filter(i => tieneCodigoReal(i.codigo_igss));
+  const codigosReales = [...new Set(conCodigo.map(i => i.codigo_igss!))];
+  if (codigosReales.length > 0) {
+    const rows = await db.select(SELECT_COLUMNAS).from(baseDatosCentral)
+      .where(or(inArray(baseDatosCentral.codigo, codigosReales), inArray(baseDatosCentral.codigo_igss, codigosReales)))
+      .orderBy(baseDatosCentral.codigo_ppr);
+    for (const codigo of codigosReales) {
+      const opciones = rows.filter(r => r.codigo === codigo || r.codigo_igss === codigo);
+      if (opciones.length > 0) out[codigo] = opciones;
+    }
   }
+
+  const sinCodigo = items.filter(i => !tieneCodigoReal(i.codigo_igss));
+  if (sinCodigo.length > 0) {
+    const nombresUnicos = [...new Set(sinCodigo.map(i => i.nombre.trim()).filter(n => n.length > 0))];
+    if (nombresUnicos.length > 0) {
+      const rows = await db.select(SELECT_COLUMNAS).from(baseDatosCentral)
+        .where(or(...nombresUnicos.map(n => ilike(baseDatosCentral.nombre, n))))
+        .orderBy(baseDatosCentral.codigo_ppr);
+      for (const item of sinCodigo) {
+        const nombreItem = item.nombre.trim().toLowerCase();
+        const opciones = rows.filter(r =>
+          r.nombre.trim().toLowerCase() === nombreItem && (item.renglon == null || r.renglon === item.renglon)
+        );
+        if (opciones.length > 0) out[clavePprDeItem(item)] = opciones;
+      }
+    }
+  }
+
   return out;
 }
 

@@ -6,7 +6,7 @@ import { consolidaciones, fondoRotativoPagos } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { getPendientesPorDestino } from "./actions";
-import { gruposRenglonDeConsolidacion, getPprsPorCodigos, guardarPprSeleccion } from "./renglon-utils";
+import { gruposRenglonDeConsolidacion, getPprsPorItems, clavePprDeItem, guardarPprSeleccion } from "./renglon-utils";
 import type { Consolidacion } from "./types";
 
 async function requireCompras(): Promise<{ error: string } | { uid: number }> {
@@ -50,9 +50,10 @@ export async function generarSiaf04(consolidacionId: number, data: {
     if (con.numero_a04 != null) return { error: "Ya se generó el SIAF-04 para esta consolidación" };
 
     const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
-    const pprDisponibles = await getPprsPorCodigos(renglones.map(r => r.codigo_igss));
+    const pprDisponibles = await getPprsPorItems(renglones.map(r => ({ codigo_igss: r.codigo_igss, nombre: r.nombre, renglon: r.renglon })));
     for (const r of renglones) {
-      if (!r.codigo_igss || !pprDisponibles[r.codigo_igss]?.length) continue;
+      const clave = clavePprDeItem({ codigo_igss: r.codigo_igss, nombre: r.nombre, renglon: r.renglon });
+      if (!pprDisponibles[clave]?.length) continue;
       const elegido = data.seleccionPpr.find(s => s.codigo_igss === r.codigo_igss && s.subproducto === r.subproducto);
       if (!elegido?.codigo_ppr) return { error: `Selecciona el PPR/presentación de "${r.nombre}" antes de generar el SIAF-04` };
     }
