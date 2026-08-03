@@ -340,7 +340,7 @@ function FilaSeguimiento({ orden: o, onActualizado, onRegresar, regresando, erro
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
   const [menuDestinoAbierto, setMenuDestinoAbierto] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
   const botonRegresarRef = useRef<HTMLButtonElement>(null);
   const destinos: ("compromiso" | "dab60" | "adjudicacion")[] = o.dab60_generado_en
     ? ["dab60", "compromiso", "adjudicacion"]
@@ -351,10 +351,19 @@ function FilaSeguimiento({ orden: o, onActualizado, onRegresar, regresando, erro
   // (esta fila suele ser de las últimas del cuerpo). Un dropdown "position:
   // absolute" normal quedaba cortado/invisible ahí — se saca a un portal
   // sobre <body> con "position: fixed", igual que lo resuelven Radix/
-  // Headless UI, para que no dependa del overflow de ningún ancestro.
+  // Headless UI, para que no dependa del overflow de ningún ancestro. Y como
+  // el botón suele estar cerca del borde inferior de la pantalla, si no hay
+  // espacio debajo el menú se abre hacia arriba en vez de quedar cortado.
   function abrirMenuDestino() {
     const rect = botonRegresarRef.current?.getBoundingClientRect();
-    if (rect) setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    if (!rect) return;
+    const right = window.innerWidth - rect.right;
+    const alturaEstimada = destinos.length * 32 + 8;
+    if (window.innerHeight - rect.bottom < alturaEstimada + 8) {
+      setMenuPos({ bottom: window.innerHeight - rect.top + 4, right });
+    } else {
+      setMenuPos({ top: rect.bottom + 4, right });
+    }
     setMenuDestinoAbierto(true);
   }
 
@@ -419,7 +428,7 @@ function FilaSeguimiento({ orden: o, onActualizado, onRegresar, regresando, erro
                 <div className="fixed inset-0 z-40" onClick={() => setMenuDestinoAbierto(false)} />
                 <div
                   className="fixed z-50 flex flex-col bg-white rounded-xl shadow-lg border border-gray-100 py-1 min-w-[220px] text-left"
-                  style={{ top: menuPos.top, right: menuPos.right }}
+                  style={{ top: menuPos.top, bottom: menuPos.bottom, right: menuPos.right }}
                 >
                   {destinos.map(destino => (
                     <button key={destino}
