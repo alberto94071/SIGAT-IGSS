@@ -139,6 +139,7 @@ function FormaPagoModal({ pago, onClose, onDone }: {
       : await registrarFormaPagoEfectivo(pago.id, { fecha_pago: fechaPago, vale_id: valeId! });
     setLoading(false);
     if ("error" in res) { setError(res.error); return; }
+    if (forma === "efectivo") window.open("/caja-chica/pagos", "_blank");
     onDone();
   }
 
