@@ -1,10 +1,8 @@
-import { getLiquidacionesPendientes } from "@/lib/caja-chica-liquidacion-actions";
 import { getValeActivo, getUsoValePasajes, getUsoValeGastosVarios } from "@/lib/vale-actions";
 import LiquidacionClient from "./LiquidacionClient";
 
 export default async function CajaChicaLiquidacionPage() {
-  const [pagos, valePasajes, valeGastosVarios] = await Promise.all([
-    getLiquidacionesPendientes(),
+  const [valePasajes, valeGastosVarios] = await Promise.all([
     getValeActivo("pasajes"),
     getValeActivo("gastos_varios"),
   ]);
@@ -14,7 +12,6 @@ export default async function CajaChicaLiquidacionPage() {
 
   return (
     <LiquidacionClient
-      pagos={pagos}
       valePasajes={valePasajes?.estado === "Activo" ? valePasajes : null}
       usoPasajes={usoPasajes}
       valeGastosVarios={valeGastosVarios?.estado === "Activo" ? valeGastosVarios : null}
