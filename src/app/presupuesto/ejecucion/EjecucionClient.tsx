@@ -232,21 +232,21 @@ export default function EjecucionClient({ data }: Props) {
           onScroll={handleTableScroll}
           onKeyDown={handleKeyDown}
           tabIndex={0}
-          className="overflow-x-auto focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-400"
+          className="overflow-auto max-h-[70vh] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-400"
         >
           <table className="w-full text-sm">
             <thead>
               <tr>
-                <th rowSpan={2} className="sticky top-0 z-20 h-11 bg-gray-50 px-4 py-2 text-left font-semibold text-gray-700 w-24 align-bottom border-b border-gray-200">Renglon</th>
-                <th rowSpan={2} className="sticky top-0 z-20 h-11 bg-gray-50 px-4 py-2 text-left font-semibold text-gray-700 min-w-48 align-bottom border-b border-gray-200">Descripcion</th>
-                <th rowSpan={2} className="sticky top-0 z-20 h-11 bg-gray-50 px-4 py-2 text-left font-semibold text-gray-700 w-40 whitespace-nowrap align-bottom border-b border-gray-200">Sub-Producto</th>
+                <th rowSpan={2} className="sticky top-0 z-20 h-11 bg-gray-50 px-4 py-2 text-center font-semibold text-gray-700 w-24 align-bottom border-b border-gray-200">Renglon</th>
+                <th rowSpan={2} className="sticky top-0 z-20 h-11 bg-gray-50 px-4 py-2 text-center font-semibold text-gray-700 min-w-48 align-bottom border-b border-gray-200">Descripcion</th>
+                <th rowSpan={2} className="sticky top-0 z-20 h-11 bg-gray-50 px-4 py-2 text-center font-semibold text-gray-700 w-40 whitespace-nowrap align-bottom border-b border-gray-200">Sub-Producto</th>
                 {COLUMNAS.map(col => {
                   const colores = COLOR_MAP[col.color];
                   return col.kind === "simple" ? (
                     <th
                       key={col.label}
                       rowSpan={2}
-                      className={`sticky top-0 z-20 h-11 px-4 py-2 text-right font-semibold text-gray-800 w-36 align-bottom border-l-2 border-b border-gray-300 ${colores.header}`}
+                      className={`sticky top-0 z-20 h-11 px-4 py-2 text-center font-semibold text-gray-800 w-36 align-bottom border-l-2 border-b border-gray-300 ${colores.header}`}
                     >
                       {col.label}
                     </th>
@@ -268,7 +268,7 @@ export default function EjecucionClient({ data }: Props) {
                   return grupo.sub.map((s, i) => (
                     <th
                       key={`${col.label}-${s.label}`}
-                      className={`sticky top-11 z-20 px-4 py-1.5 text-right font-medium text-gray-700 text-xs w-32 border-b-2 border-gray-300 ${colores.sub} ${i === 0 ? "border-l-2 border-gray-300" : "border-l border-gray-200"}`}
+                      className={`sticky top-11 z-20 px-4 py-1.5 text-center font-medium text-gray-700 text-xs w-32 border-b-2 border-gray-300 ${colores.sub} ${i === 0 ? "border-l-2 border-gray-300" : "border-l border-gray-200"}`}
                     >
                       {s.label}
                     </th>
