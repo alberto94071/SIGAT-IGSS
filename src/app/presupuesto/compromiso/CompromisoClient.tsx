@@ -140,7 +140,7 @@ export default function CompromisoClient({ ordenes: init, solicitadas: initSolic
                           <XCircle className="w-4 h-4" />
                         </button>
                       </div>
-                      {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[180px]">{a.error}</p>}
+                      {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[260px] whitespace-normal break-words text-left ml-auto">{a.error}</p>}
                     </td>
                   </tr>
                 );

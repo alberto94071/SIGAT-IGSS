@@ -11,6 +11,15 @@ import type { Consolidacion } from "@/lib/adjudicacion/types";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+// Código PPR de una presentación = concatenación de "código" + "ppr" tal
+// como están en Base de Datos Central (ej. "36823-40485") — es lo que
+// distingue una presentación de otra del mismo insumo. Algunos insumos
+// antiguos no tienen "código" propio (solo código IGSS compartido, ver
+// comentario en renglon-utils.ts); para esos se usa código IGSS como respaldo.
+function codigoDeOpcion(o: PprOpcion): string {
+  return `${o.codigo ?? o.codigo_igss}-${o.codigo_ppr}`;
+}
+
 interface Props { consolidaciones: Consolidacion[]; }
 
 export default function Siaf04Client({ consolidaciones: init }: Props) {
@@ -118,7 +127,7 @@ function GenerarSiafModal({ consolidacion: c, onClose, onDone }: {
   const [fechaEmision, setFechaEmision] = useState(fechaGuatemala());
   const [pprsPorCodigo, setPprsPorCodigo] = useState<Record<string, PprOpcion[]>>({});
   const [pprsLoading, setPprsLoading] = useState(true);
-  const [seleccion, setSeleccion] = useState<Record<string, number>>({});
+  const [seleccion, setSeleccion] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -147,7 +156,7 @@ function GenerarSiafModal({ consolidacion: c, onClose, onDone }: {
       if (!opciones?.length) continue;
       const elegido = seleccion[keyDe(r)];
       if (!elegido) { setError(`Selecciona el PPR/presentación de "${r.nombre}"`); return; }
-      seleccionPpr.push({ codigo_igss: r.codigo_igss!, subproducto: r.subproducto, codigo_ppr: String(elegido) });
+      seleccionPpr.push({ codigo_igss: r.codigo_igss!, subproducto: r.subproducto, codigo_ppr: elegido });
     }
 
     setLoading(true); setError("");
@@ -198,18 +207,18 @@ function GenerarSiafModal({ consolidacion: c, onClose, onDone }: {
                 return (
                   <div key={i} className="rounded-lg border border-gray-200 px-3 py-2 text-xs space-y-1">
                     <p className="text-gray-700">
-                      <span className="font-mono text-gray-500">{elegido ? `${r.codigo_igss}-${elegido}` : (r.codigo_igss || "—")}</span>
+                      <span className="font-mono text-gray-500">{elegido ?? (r.codigo_igss || "—")}</span>
                       {" — "}<span className="font-medium">{r.nombre}</span> <span className="text-gray-400">({r.cantidad.toLocaleString("es-GT")})</span>
                     </p>
                     {pprsLoading ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />
                     ) : opciones?.length ? (
                       <select className="input py-1 text-xs" value={elegido ?? ""}
-                        onChange={e => setSeleccion(p => ({ ...p, [key]: Number(e.target.value) }))}>
+                        onChange={e => setSeleccion(p => ({ ...p, [key]: e.target.value }))}>
                         <option value="">Elige presentación…</option>
                         {opciones.map(o => (
-                          <option key={o.codigo_ppr ?? ""} value={o.codigo_ppr ?? ""}>
-                            {o.codigo_ppr} — {o.nombre}{o.caracteristicas ? ` (${o.caracteristicas})` : ""}{o.presentacion ? ` · ${o.presentacion}` : ""}{o.unidad_medida ? ` · ${o.unidad_medida}` : ""}
+                          <option key={codigoDeOpcion(o)} value={codigoDeOpcion(o)}>
+                            {codigoDeOpcion(o)} — {o.nombre}{o.caracteristicas ? ` (${o.caracteristicas})` : ""}{o.presentacion ? ` · ${o.presentacion}` : ""}{o.unidad_medida ? ` · ${o.unidad_medida}` : ""}
                           </option>
                         ))}
                       </select>

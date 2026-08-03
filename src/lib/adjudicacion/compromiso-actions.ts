@@ -100,7 +100,7 @@ export async function aprobarCompromiso(ordenId: number): Promise<{ ok: true } |
       }
     }
     if (faltantes.length > 0) {
-      return { error: `No hay suficiente Pre-Compromiso reservado para: ${faltantes.join("; ")}. Solicita una Reprogramación antes de aprobar.` };
+      return { error: `La programación no es suficiente: ${faltantes.join("; ")}. Solicita una Reprogramación antes de aprobar.` };
     }
 
     // Insumos (renglones 200-299/300-399, salvo servicios 261/266/295) pasan
