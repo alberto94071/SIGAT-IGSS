@@ -441,7 +441,10 @@ export async function regresarOrdenAAdjudicacion(ordenId: number, motivo?: strin
     }).where(eq(ordenesCompra.id, ordenId));
 
     // El Acta tiene consolidacion_id único — hay que borrarla para poder
-    // volver a generar una nueva al re-adjudicar.
+    // volver a generar una nueva al re-adjudicar. oferente_ganador_id
+    // referencia oferentes.id sin cascade — hay que soltarlo antes de poder
+    // borrar los oferentes.
+    await db.update(consolidaciones).set({ oferente_ganador_id: null }).where(eq(consolidaciones.id, orden.consolidacion_id));
     await db.delete(actasAdjudicacion).where(eq(actasAdjudicacion.consolidacion_id, orden.consolidacion_id));
     await db.delete(oferentes).where(eq(oferentes.consolidacion_id, orden.consolidacion_id));
     await db.update(cotizacionesServicio)

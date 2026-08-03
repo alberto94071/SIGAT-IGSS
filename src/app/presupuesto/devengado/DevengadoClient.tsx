@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { FileCheck, Loader2, X, Send, CheckCircle, XCircle, Undo2 } from "lucide-react";
 import { registrarDevengado, aprobarDevengado, rechazarDevengado, actualizarEstadoDevengado, type EstadoDevengado } from "@/lib/adjudicacion/devengado-actions";
 import { regresarACompromiso, regresarADab60, regresarOrdenAAdjudicacion } from "@/lib/adjudicacion/compromiso-actions";
@@ -339,9 +340,23 @@ function FilaSeguimiento({ orden: o, onActualizado, onRegresar, regresando, erro
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
   const [menuDestinoAbierto, setMenuDestinoAbierto] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const botonRegresarRef = useRef<HTMLButtonElement>(null);
   const destinos: ("compromiso" | "dab60" | "adjudicacion")[] = o.dab60_generado_en
     ? ["dab60", "compromiso", "adjudicacion"]
     : ["compromiso", "adjudicacion"];
+
+  // La tabla es horizontalmente scrolleable (overflow-x-auto), lo que en la
+  // práctica también recorta cualquier contenido que se salga verticalmente
+  // (esta fila suele ser de las últimas del cuerpo). Un dropdown "position:
+  // absolute" normal quedaba cortado/invisible ahí — se saca a un portal
+  // sobre <body> con "position: fixed", igual que lo resuelven Radix/
+  // Headless UI, para que no dependa del overflow de ningún ancestro.
+  function abrirMenuDestino() {
+    const rect = botonRegresarRef.current?.getBoundingClientRect();
+    if (rect) setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    setMenuDestinoAbierto(true);
+  }
 
   async function marcar(estado: EstadoDevengado, fecha?: string) {
     setGuardando(true); setError("");
@@ -392,24 +407,30 @@ function FilaSeguimiento({ orden: o, onActualizado, onRegresar, regresando, erro
           </div>
         )}
         {o.estado_devengado !== "Pagado" && !pidiendoFechaPago && (
-          <div className="relative inline-block mt-1.5">
-            <button onClick={() => setMenuDestinoAbierto(p => !p)} disabled={regresando}
+          <div className="inline-block mt-1.5">
+            <button ref={botonRegresarRef}
+              onClick={() => menuDestinoAbierto ? setMenuDestinoAbierto(false) : abrirMenuDestino()}
+              disabled={regresando}
               className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50 ml-auto">
               {regresando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Undo2 className="w-3.5 h-3.5" />} Devolver…
             </button>
-            {menuDestinoAbierto && (
+            {menuDestinoAbierto && menuPos && createPortal(
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setMenuDestinoAbierto(false)} />
-                <div className="absolute right-0 top-full mt-1 z-20 bg-white rounded-xl shadow-lg border border-gray-100 py-1 min-w-[220px] text-left">
+                <div className="fixed inset-0 z-40" onClick={() => setMenuDestinoAbierto(false)} />
+                <div
+                  className="fixed z-50 flex flex-col bg-white rounded-xl shadow-lg border border-gray-100 py-1 min-w-[220px] text-left"
+                  style={{ top: menuPos.top, right: menuPos.right }}
+                >
                   {destinos.map(destino => (
                     <button key={destino}
                       onClick={() => { setMenuDestinoAbierto(false); onRegresar(destino); }}
-                      className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
+                      className="block w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
                       {ETIQUETA_DESTINO[destino]}
                     </button>
                   ))}
                 </div>
-              </>
+              </>,
+              document.body
             )}
           </div>
         )}
