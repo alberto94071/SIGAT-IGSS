@@ -24,6 +24,7 @@ export type HojaDeRuta = {
     proveedor_nombre: string | null; proveedor_nit: string | null; total: number | null;
     numero_a04: number | null; anio_a04: number | null;
     cotizacion_anual_id: number | null; referencia: string | null;
+    historial_devoluciones: string | null;
   } | null;
   acta: {
     id: number; no_acta: string; no_formulario: string; estado: string; motivo_rechazo: string | null;
@@ -110,6 +111,7 @@ export async function construirHojaDeRuta(ids: number[]): Promise<HojaDeRuta[]> 
         proveedor_nombre: con.proveedor_nombre, proveedor_nit: con.proveedor_nit, total: con.total,
         numero_a04: con.numero_a04, anio_a04: con.anio_a04,
         cotizacion_anual_id: con.cotizacion_anual_id, referencia: con.referencia,
+        historial_devoluciones: con.historial_devoluciones,
       } : null,
       acta: acta ? {
         id: acta.id, no_acta: acta.no_acta, no_formulario: acta.no_formulario,

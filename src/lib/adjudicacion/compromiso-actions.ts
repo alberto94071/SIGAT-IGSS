@@ -271,3 +271,70 @@ export async function regresarACompromiso(ordenId: number, motivo?: string): Pro
     return { error: "Error al devolver la orden a Compromiso" };
   }
 }
+
+/**
+ * Devuelve una orden ya "Completada" (rechazada por la DAF en seguimiento
+ * de pago) a la bandeja de aprobación de Almacén/DAB-60, en vez de hasta
+ * Compromiso — para el caso más común de una DAF rechazada: el error está
+ * en los datos que capturó Almacén (No./Serie de Recibo, factura, lote...),
+ * no en el Compromiso en sí, que sigue siendo válido y no se toca. Solo
+ * aplica a órdenes que sí pasaron por DAB-60 (dab60_generado_en); las que
+ * no (servicios) siguen usando regresarACompromiso. Deshace únicamente el
+ * movimiento de presupuesto de Devengado (vuelve a Compromiso, resta de
+ * Devengado/Devengado Regularizado). Solo quien tenga acceso a
+ * mod_presupuesto. Queda registrado en historial_devoluciones.
+ */
+export async function regresarADab60(ordenId: number, motivo?: string): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireModuloAccessAction("mod_presupuesto");
+    if ("error" in check) return check;
+
+    const [orden] = await db.select({
+      estado: ordenesCompra.estado,
+      consolidacion_id: ordenesCompra.consolidacion_id,
+      exento_iva: ordenesCompra.exento_iva,
+      estado_devengado: ordenesCompra.estado_devengado,
+      dab60_generado_en: ordenesCompra.dab60_generado_en,
+      historial_devoluciones: ordenesCompra.historial_devoluciones,
+    }).from(ordenesCompra).where(eq(ordenesCompra.id, ordenId)).limit(1);
+    if (!orden) return { error: "No se encontró la orden" };
+    if (orden.estado !== "Completada") return { error: "Esta orden no está en seguimiento de pago con la DAF" };
+    if (orden.estado_devengado === "Pagado") return { error: "Ya se marcó como Pagado — el desembolso ya ocurrió, no se puede devolver" };
+    if (!orden.dab60_generado_en) return { error: "Esta orden no pasó por Almacén/DAB-60 — usa Devolver a Compromiso" };
+
+    const [con] = await db.select({ regularizado: consolidaciones.regularizado })
+      .from(consolidaciones).where(eq(consolidaciones.id, orden.consolidacion_id)).limit(1);
+    const esRegularizado = con?.regularizado === true;
+
+    const renglones = await gruposRenglonDeConsolidacion(orden.consolidacion_id);
+    for (const r of renglones) {
+      const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
+      await db.update(presupuestoRenglones).set({
+        compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) + ${r.total}`,
+        ...(esRegularizado
+          ? { devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) - ${montoDevengado}` }
+          : { devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) - ${montoDevengado}` }),
+      }).where(and(
+        eq(presupuestoRenglones.renglon, r.renglon as number),
+        eq(presupuestoRenglones.subproducto, r.subproducto),
+        eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+      ));
+    }
+
+    const nota = `${fechaHoraGuatemala()}: Devuelta desde Completada (rechazada por la DAF) a Almacén/DAB-60${motivo?.trim() ? ` — ${motivo.trim()}` : ""}`;
+    const historial = orden.historial_devoluciones ? `${orden.historial_devoluciones}\n${nota}` : nota;
+
+    await db.update(ordenesCompra).set({
+      estado: "DAB-60 Pendiente Aprobación",
+      no_devengado: null,
+      fecha_envio_daf: null,
+      estado_devengado: null,
+      fecha_pago: null,
+      historial_devoluciones: historial,
+    }).where(eq(ordenesCompra.id, ordenId));
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al devolver la orden a Almacén/DAB-60" };
+  }
+}

@@ -3,8 +3,8 @@ import { fechaGuatemala } from "@/lib/date-utils";
 
 import { Fragment, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronRight, FileText, Loader2, CheckCircle2, X } from "lucide-react";
-import { generarSiaf04 } from "@/lib/adjudicacion/siaf04-actions";
+import { ChevronDown, ChevronRight, FileText, Loader2, CheckCircle2, X, Undo2 } from "lucide-react";
+import { generarSiaf04, regresarAAdjudicacion } from "@/lib/adjudicacion/siaf04-actions";
 import { getPprsParaRenglones } from "@/lib/adjudicacion/ordenes-actions";
 import type { PprOpcion, ItemParaPpr } from "@/lib/adjudicacion/renglon-utils";
 import type { Consolidacion } from "@/lib/adjudicacion/types";
@@ -46,6 +46,17 @@ export default function Siaf04Client({ consolidaciones: init }: Props) {
   const [consolidaciones, setConsolidaciones] = useState(init);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [modalFor, setModalFor] = useState<Consolidacion | null>(null);
+  const [devolviendo, setDevolviendo] = useState<number | null>(null);
+  const [rowError, setRowError] = useState<Record<number, string>>({});
+
+  async function handleDevolver(c: Consolidacion) {
+    if (!confirm(`¿Devolver esta compra a Compras/Adjudicación para volver a ingresar los datos? Se pierde lo capturado en Regularizado (tipo de compra, cotización, proveedor, precios).`)) return;
+    setDevolviendo(c.id); setRowError(prev => ({ ...prev, [c.id]: "" }));
+    const res = await regresarAAdjudicacion(c.id);
+    setDevolviendo(null);
+    if ("error" in res) { setRowError(prev => ({ ...prev, [c.id]: res.error })); return; }
+    setConsolidaciones(p => p.filter(x => x.id !== c.id));
+  }
 
   if (consolidaciones.length === 0) {
     return (
@@ -100,10 +111,18 @@ export default function Siaf04Client({ consolidaciones: init }: Props) {
                         {c.total != null ? Q(c.total) : "—"}
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                        <button onClick={() => setModalFor(c)}
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors">
-                          <FileText className="w-3 h-3" /> Generar SIAF
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button onClick={() => handleDevolver(c)} disabled={devolviendo === c.id}
+                            title="Devolver a Compras/Adjudicación"
+                            className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">
+                            {devolviendo === c.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                          </button>
+                          <button onClick={() => setModalFor(c)}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors">
+                            <FileText className="w-3 h-3" /> Generar SIAF
+                          </button>
+                        </div>
+                        {rowError[c.id] && <p className="text-red-600 text-xs mt-1 max-w-[200px] text-right ml-auto">{rowError[c.id]}</p>}
                       </td>
                     </tr>
                     {expanded && (

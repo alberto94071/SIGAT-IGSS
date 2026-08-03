@@ -339,6 +339,11 @@ export const consolidaciones = pgTable("consolidaciones", {
   // Cotización anual (Contrato y Cotizaciones) que respaldó una Baja Cuantía/Normal
   // enviada directo a Actas — solo trazabilidad, ver cotizacionesAnuales abajo.
   cotizacion_anual_id: integer("cotizacion_anual_id"),
+  // Bitácora de veces que se devolvió la consolidación a Compras/Adjudicación
+  // desde un paso posterior (ver regresarAAdjudicacion en siaf04-actions.ts) —
+  // una línea por cada devolución, para poder verla en Hoja de Ruta. Mismo
+  // patrón que ordenesCompra.historial_devoluciones.
+  historial_devoluciones: text("historial_devoluciones"),
 });
 
 // ─── Acta de Junta Adjudicadora — una por consolidación adjudicada ───────────
@@ -498,6 +503,10 @@ export const ordenesCompra = pgTable("ordenes_compra", {
   serie:                        text("serie"),
   no_recibo_almacen:            text("no_recibo_almacen"),
   serie_recibo_almacen:         text("serie_recibo_almacen"),
+  // Nombre del encargado de Almacén que firma/entrega — el DAB-60 es un
+  // talonario pre-impreso físico, no un formato con firmantes: solo se
+  // imprime este nombre en la parte correspondiente del papel.
+  encargado_almacen:            text("encargado_almacen"),
   no_devengado:                 text("no_devengado"),
   // Se llena al generar el DAB-60 (Almacén) — marca que la orden ya pasó por
   // ahí, para poder listarla en Almacén/Archivo con datos históricos.

@@ -18,8 +18,9 @@ type Orden = {
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const ESTADO_STYLE: Record<string, string> = {
-  "En Devengado": "bg-amber-100 text-amber-700",
-  "Completada":   "bg-green-100 text-green-700",
+  "DAB-60 Pendiente Aprobación": "bg-blue-100 text-blue-700",
+  "En Devengado":                "bg-amber-100 text-amber-700",
+  "Completada":                  "bg-green-100 text-green-700",
 };
 
 export default function ArchivoClient({ ordenes }: { ordenes: Orden[] }) {
