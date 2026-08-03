@@ -291,6 +291,23 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     }
   }
 
+  // Regularizado (Baja Cuantía) también requiere respaldarse en una
+  // cotización — anual (insumos con precio pactado) o de servicio, según el
+  // caso. Casos de Excepción no la pide. El monto final igual se teclea a
+  // mano por insumo (viene de la factura real), la cotización solo se liga
+  // como referencia/justificación.
+  async function pickRgSubTipo(st: SubTipoBaja) {
+    setSubTipo(st);
+    setCotizAnualFound(null); setCotizAnualNumero(""); setCotizAnualError("");
+    setCotizId(null);
+    if (st === "por_servicios" && cotizaciones.length === 0) {
+      setCotizLoading(true);
+      const cs = await buscarCotizacionServicio();
+      setCotizLoading(false);
+      setCotizaciones(cs as unknown as CotizacionServicio[]);
+    }
+  }
+
   async function finalizarEnviar() {
     if (oferentes.length === 0) return setError("Agrega al menos un oferente");
     const label = tipoCompra ? REFERENCIA_LABEL[tipoCompra] : null;
@@ -387,6 +404,11 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
   async function enviarRegularizado() {
     if (!rgNit.trim() || !rgNombre.trim()) return setError("NIT y nombre son obligatorios");
     if (!rgDireccion.trim()) return setError("La dirección del proveedor es obligatoria");
+    if (tipoCompra === "Baja Cuantía") {
+      if (!subTipo) return setError("Selecciona el tipo de cotización");
+      if (subTipo === "con_insumos" && !cotizAnualFound) return setError("Busca y selecciona una cotización anual válida");
+      if (subTipo === "por_servicios" && !cotizId) return setError("Selecciona una cotización de servicio");
+    }
     const items = c.precios.map(p => ({
       codigo_igss: p.codigo_igss, subproducto: p.subproducto,
       precio_unitario: parseFloat(rgPrecios[`${p.codigo_igss}::${p.subproducto}`] ?? ""),
@@ -406,6 +428,8 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
       nit: rgNit.trim(), nombre: rgNombre.trim(), exento_iva: rgExento,
       proveedor_direccion: rgDireccion.trim(), proveedor_telefono: rgTelefono.trim(),
       no_pedido: noPedido, descripcion, unidad_medida: unidadMedida, cantidad, items,
+      cotizacion_anual_id: subTipo === "con_insumos" ? cotizAnualFound?.id : undefined,
+      cotizacion_servicio_id: subTipo === "por_servicios" ? cotizId ?? undefined : undefined,
     });
     setLoading(false);
     if ("limitExceeded" in res) { setLimitExceeded(true); setError(res.error); return; }
@@ -568,6 +592,65 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
           {/* Regularizado (Baja Cuantía o Casos de Excepción) */}
           {esBajaOExcepcion && regularizado === true && (
             <div className="space-y-3">
+              {/* Baja Cuantía Regularizado también se respalda en una cotización
+                  — anual (insumos) o de servicio. Casos de Excepción no la pide. */}
+              {tipoCompra === "Baja Cuantía" && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Cotización</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button onClick={() => pickRgSubTipo("con_insumos")} disabled={loading}
+                      className={`p-3 rounded-xl border-2 text-sm font-medium transition-all ${subTipo === "con_insumos" ? "border-brand-600 bg-brand-50 text-brand-700" : "border-gray-200 bg-white text-gray-700 hover:border-brand-300"}`}>
+                      Cotización anual (insumos)
+                    </button>
+                    <button onClick={() => pickRgSubTipo("por_servicios")} disabled={loading}
+                      className={`p-3 rounded-xl border-2 text-sm font-medium transition-all ${subTipo === "por_servicios" ? "border-brand-600 bg-brand-50 text-brand-700" : "border-gray-200 bg-white text-gray-700 hover:border-brand-300"}`}>
+                      Cotización de servicio
+                    </button>
+                  </div>
+
+                  {subTipo === "con_insumos" && (
+                    <div>
+                      <label className="label">Nombre de cotización anual</label>
+                      <CotizacionAnualAutocomplete
+                        onSelect={cot => { setCotizAnualFound(cot); setCotizAnualError(""); }}
+                      />
+                      {cotizAnualError && <p className="text-xs text-red-600 mt-1">{cotizAnualError}</p>}
+                      {cotizAnualFound && (
+                        <div className="border border-green-200 bg-green-50 rounded-xl px-4 py-3 text-sm mt-2">
+                          <p className="font-semibold text-gray-900">{cotizAnualFound.proveedor_nombre}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {cotizAnualFound.numero} · {cotizAnualFound.items.length} insumo(s) con precio pactado
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {subTipo === "por_servicios" && (
+                    cotizLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                    ) : cotizaciones.length === 0 ? (
+                      <p className="text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                        No hay cotizaciones de servicio registradas. Regístrala primero en Contrato y Cotizaciones.
+                      </p>
+                    ) : (
+                      <div className="border border-gray-200 rounded-xl overflow-hidden">
+                        {cotizaciones.map(cot => (
+                          <label key={cot.id}
+                            className={`flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0 cursor-pointer ${cotizId === cot.id ? "bg-brand-50" : "bg-white"}`}>
+                            <input type="radio" name="rg-cotizacion" checked={cotizId === cot.id} onChange={() => setCotizId(cot.id)} className="w-4 h-4 accent-brand-600" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">{cot.servicio}</p>
+                              <p className="text-xs text-gray-400">{cot.proveedor_nombre} · {cot.fecha}</p>
+                            </div>
+                            <p className="text-sm font-bold text-gray-900 shrink-0">{Q(cot.costo)}</p>
+                          </label>
+                        ))}
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
               <div>
                 <label className="label flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" /> NIT</label>
                 <NitAutocomplete
@@ -765,7 +848,9 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
               </button>
             )}
             {esBajaOExcepcion && regularizado === true && (
-              <button onClick={enviarRegularizado} disabled={loading} className="btn-primary disabled:opacity-50">
+              <button onClick={enviarRegularizado}
+                disabled={loading || (tipoCompra === "Baja Cuantía" && ((subTipo === "con_insumos" && !cotizAnualFound) || (subTipo === "por_servicios" && !cotizId) || !subTipo))}
+                className="btn-primary disabled:opacity-50">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />} Enviar a Fondo Rotativo
               </button>
             )}
