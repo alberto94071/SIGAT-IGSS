@@ -29,7 +29,7 @@ export type HojaDeRuta = {
     id: number; no_acta: string; no_formulario: string; estado: string; motivo_rechazo: string | null;
   } | null;
   orden: {
-    numero: number; anio: number; fecha: string; estado: string;
+    id: number; numero: number; anio: number; fecha: string; estado: string;
     no_compromiso: string | null; dab60_generado_en: string | null;
     no_devengado: string | null; fecha_ingreso_producto: string | null;
     no_factura: string | null; serie_factura: string | null; fecha_emision: string | null;
@@ -116,7 +116,7 @@ export async function construirHojaDeRuta(ids: number[]): Promise<HojaDeRuta[]> 
         estado: acta.estado, motivo_rechazo: acta.motivo_rechazo,
       } : null,
       orden: orden ? {
-        numero: orden.numero, anio: orden.anio, fecha: orden.fecha, estado: orden.estado,
+        id: orden.id, numero: orden.numero, anio: orden.anio, fecha: orden.fecha, estado: orden.estado,
         no_compromiso: orden.no_compromiso, dab60_generado_en: orden.dab60_generado_en,
         no_devengado: orden.no_devengado, fecha_ingreso_producto: orden.fecha_ingreso_producto,
         no_factura: orden.no_factura, serie_factura: orden.serie_factura, fecha_emision: orden.fecha_emision,

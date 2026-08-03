@@ -169,7 +169,8 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
                         (insumo del grupo 200/300, salvo servicios 261/266/295).
                         Los datos de factura/lote/marca/etc. son opcionales. */}
                     {h.orden?.dab60_generado_en && (
-                      <Paso icon={Archive} titulo={`Almacén/DAB-60 — ${h.orden.dab60_generado_en}`}>
+                      <Paso icon={Archive} titulo={`Almacén/DAB-60 — ${h.orden.dab60_generado_en}`}
+                        accion={<PrintLink href={`/almacen/dab-60/${h.orden.id}/imprimir`} label="Ver / Imprimir DAB-60" />}>
                         <p className="text-xs text-gray-500">
                           Factura {h.orden.serie_factura ?? "—"}-{h.orden.no_factura ?? "—"} · Emisión {h.orden.fecha_emision ?? "—"}
                           {h.orden.fecha_ingreso_producto && <> · Ingreso: {h.orden.fecha_ingreso_producto}</>}
