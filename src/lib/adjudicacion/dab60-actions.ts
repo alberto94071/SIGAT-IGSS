@@ -33,6 +33,7 @@ export async function getOrdenesArchivadasAlmacen() {
 }
 
 export type Dab60Data = {
+  no_recibo_almacen: string; serie_recibo_almacen: string;
   fecha_ingreso_producto: string; no_factura: string; serie_factura: string;
   fecha_emision: string; lote: string; fecha_vencimiento: string;
   marca: string; modelo: string; serie: string;
@@ -40,12 +41,17 @@ export type Dab60Data = {
 
 // Generar el DAB-60 es puramente administrativo/de bodega — no vuelve a
 // tocar Compromiso ni Devengado (eso ya se movió al comprometer y se termina
-// de mover al devengar). Los datos de factura/lote/marca/etc. son opcionales:
-// se guardan si se capturan, pero no bloquean el ingreso a Almacén.
+// de mover al devengar). El No. y Serie de Recibo de Almacén son los únicos
+// datos obligatorios (identifican el documento físico de ingreso); el resto
+// de factura/lote/marca/etc. son opcionales: se guardan si se capturan, pero
+// no bloquean el ingreso a Almacén.
 export async function generarDab60(ordenId: number, data: Dab60Data): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireEdit();
     if ("error" in check) return check;
+
+    if (!data.no_recibo_almacen.trim() || !data.serie_recibo_almacen.trim())
+      return { error: "El No. y la Serie de Recibo de Almacén son obligatorios" };
 
     const [orden] = await db.select({ estado: ordenesCompra.estado }).from(ordenesCompra)
       .where(eq(ordenesCompra.id, ordenId)).limit(1);
@@ -53,6 +59,8 @@ export async function generarDab60(ordenId: number, data: Dab60Data): Promise<{ 
     if (orden.estado !== "Pendiente DAB-60") return { error: "Esta orden ya fue procesada en DAB-60" };
 
     await db.update(ordenesCompra).set({
+      no_recibo_almacen:      data.no_recibo_almacen.trim(),
+      serie_recibo_almacen:   data.serie_recibo_almacen.trim(),
       fecha_ingreso_producto: data.fecha_ingreso_producto.trim() || null,
       no_factura:             data.no_factura.trim() || null,
       serie_factura:          data.serie_factura.trim() || null,

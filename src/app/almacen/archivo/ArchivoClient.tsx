@@ -1,6 +1,7 @@
 "use client";
 import { useState, useMemo } from "react";
-import { Archive, Search } from "lucide-react";
+import Link from "next/link";
+import { Archive, Search, Printer } from "lucide-react";
 import RenglonBadges from "@/components/RenglonBadges";
 
 type Orden = {
@@ -62,6 +63,7 @@ export default function ArchivoClient({ ordenes }: { ordenes: Orden[] }) {
                 <th className="px-4 py-3 text-left whitespace-nowrap">Marca / Modelo / Serie</th>
                 <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Estado</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -91,6 +93,12 @@ export default function ArchivoClient({ ordenes }: { ordenes: Orden[] }) {
                     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${ESTADO_STYLE[o.estado] ?? "bg-gray-100 text-gray-600"}`}>
                       {o.estado}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <Link href={`/almacen/dab-60/${o.id}/imprimir`}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+                      <Printer className="w-3 h-3" /> Imprimir
+                    </Link>
                   </td>
                 </tr>
               ))}

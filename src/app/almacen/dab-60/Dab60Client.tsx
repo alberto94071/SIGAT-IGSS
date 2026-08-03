@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Archive, X, Loader2, Send } from "lucide-react";
 import { generarDab60, type Dab60Data } from "@/lib/adjudicacion/dab60-actions";
 import RenglonBadges from "@/components/RenglonBadges";
@@ -13,7 +14,9 @@ type Orden = {
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const CAMPOS: { key: keyof Dab60Data; label: string; tipo: "date" | "text" }[] = [
+type CampoOpcional = Omit<Dab60Data, "no_recibo_almacen" | "serie_recibo_almacen">;
+
+const CAMPOS: { key: keyof CampoOpcional; label: string; tipo: "date" | "text" }[] = [
   { key: "fecha_ingreso_producto", label: "Fecha de ingreso del producto", tipo: "date" },
   { key: "no_factura",             label: "No. Factura",                  tipo: "text" },
   { key: "serie_factura",          label: "Serie de factura",             tipo: "text" },
@@ -96,22 +99,28 @@ export default function Dab60Client({ ordenes: init }: { ordenes: Orden[] }) {
 }
 
 function Dab60Modal({ orden: o, onClose, onDone }: { orden: Orden; onClose: () => void; onDone: () => void }) {
-  const [data, setData] = useState<Dab60Data>({
+  const router = useRouter();
+  const [noRecibo, setNoRecibo] = useState("");
+  const [serieRecibo, setSerieRecibo] = useState("");
+  const [data, setData] = useState<Omit<Dab60Data, "no_recibo_almacen" | "serie_recibo_almacen">>({
     fecha_ingreso_producto: "", no_factura: "", serie_factura: "", fecha_emision: "",
     lote: "", fecha_vencimiento: "", marca: "", modelo: "", serie: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  function set(key: keyof Dab60Data, value: string) {
+  function set(key: keyof typeof data, value: string) {
     setData(p => ({ ...p, [key]: value }));
   }
 
   async function handleEnviar() {
+    if (!noRecibo.trim() || !serieRecibo.trim())
+      return setError("El No. y la Serie de Recibo de Almacén son obligatorios");
     setSaving(true); setError("");
-    const res = await generarDab60(o.id, data);
+    const res = await generarDab60(o.id, { ...data, no_recibo_almacen: noRecibo, serie_recibo_almacen: serieRecibo });
     setSaving(false);
     if ("error" in res) return setError(res.error);
+    router.push(`/almacen/dab-60/${o.id}/imprimir`);
     onDone();
   }
 
@@ -123,8 +132,16 @@ function Dab60Modal({ orden: o, onClose, onDone }: { orden: Orden; onClose: () =
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X className="w-4 h-4" /></button>
         </div>
         <div className="px-5 py-5 grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">No. de Recibo de Almacén</label>
+            <input className="input" value={noRecibo} onChange={e => setNoRecibo(e.target.value)} autoFocus />
+          </div>
+          <div>
+            <label className="label">Serie de Recibo de Almacén</label>
+            <input className="input" value={serieRecibo} onChange={e => setSerieRecibo(e.target.value)} />
+          </div>
           <p className="col-span-2 text-xs text-gray-400 -mt-1 mb-1">
-            Todos estos datos son opcionales — puedes dejarlos en blanco y completarlos después.
+            El resto de estos datos son opcionales — puedes dejarlos en blanco y completarlos después.
           </p>
           {CAMPOS.map(({ key, label, tipo }) => (
             <div key={key} className={tipo === "date" ? "" : "col-span-2 sm:col-span-1"}>

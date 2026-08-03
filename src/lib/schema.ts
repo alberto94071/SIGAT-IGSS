@@ -496,6 +496,8 @@ export const ordenesCompra = pgTable("ordenes_compra", {
   marca:                        text("marca"),
   modelo:                       text("modelo"),
   serie:                        text("serie"),
+  no_recibo_almacen:            text("no_recibo_almacen"),
+  serie_recibo_almacen:         text("serie_recibo_almacen"),
   no_devengado:                 text("no_devengado"),
   // Se llena al generar el DAB-60 (Almacén) — marca que la orden ya pasó por
   // ahí, para poder listarla en Almacén/Archivo con datos históricos.
