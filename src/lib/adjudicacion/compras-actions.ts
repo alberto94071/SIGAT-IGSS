@@ -469,6 +469,7 @@ export async function registrarRegularizado(consolidacionId: number, data: {
   proveedor_direccion: string; proveedor_telefono: string;
   no_pedido: string; descripcion: string; unidad_medida: string; cantidad: number;
   items: { codigo_igss: string | null; subproducto: string; precio_unitario: number }[];
+  cotizacion_anual_id?: number; cotizacion_servicio_id?: number;
 }): Promise<{ ok: true } | { error: string; limitExceeded?: true }> {
   try {
     const check = await requireCompras();
@@ -489,6 +490,26 @@ export async function registrarRegularizado(consolidacionId: number, data: {
     if (!(data.cantidad > 0)) return { error: "Ingresa una cantidad válida" };
     if (data.items.length === 0) return { error: "No hay insumos para valorizar" };
     if (data.items.some(i => !(i.precio_unitario > 0))) return { error: "Ingresa un precio unitario válido para cada insumo" };
+
+    // Casos de Excepción no lleva cotización — Baja Cuantía sí, sea anual
+    // (insumos con precio pactado) o de servicio (una sola cotización recibida
+    // con antelación), según el caso.
+    let cotAnual: typeof cotizacionesAnuales.$inferSelect | null = null;
+    let cotServicio: typeof cotizacionesServicio.$inferSelect | null = null;
+    if (con.tipo_compra === "Baja Cuantía") {
+      if (!data.cotizacion_anual_id && !data.cotizacion_servicio_id)
+        return { error: "Selecciona una cotización (anual o de servicio) antes de continuar" };
+      if (data.cotizacion_anual_id) {
+        const [cot] = await db.select().from(cotizacionesAnuales).where(eq(cotizacionesAnuales.id, data.cotizacion_anual_id)).limit(1);
+        if (!cot) return { error: "No se encontró la cotización anual" };
+        cotAnual = cot;
+      } else if (data.cotizacion_servicio_id) {
+        const [cot] = await db.select().from(cotizacionesServicio).where(eq(cotizacionesServicio.id, data.cotizacion_servicio_id)).limit(1);
+        if (!cot) return { error: "No se encontró la cotización de servicio" };
+        if (cot.usado) return { error: "Esa cotización ya fue usada en otra consolidación" };
+        cotServicio = cot;
+      }
+    }
 
     const siafIds = (await db.select({ id: siafCompras.id }).from(siafCompras)
       .where(eq(siafCompras.consolidacion_id, consolidacionId))).map(s => s.id);
@@ -534,7 +555,23 @@ export async function registrarRegularizado(consolidacionId: number, data: {
       proveedor_direccion: data.proveedor_direccion.trim(), proveedor_telefono: data.proveedor_telefono.trim(),
       a04_no_pedido: data.no_pedido.trim(), a04_descripcion: data.descripcion.trim(),
       a04_unidad_medida: data.unidad_medida.trim(), a04_cantidad: data.cantidad,
+      cotizacion_anual_id: cotAnual?.id ?? null,
     }).where(eq(consolidaciones.id, consolidacionId));
+
+    if (cotServicio) {
+      await db.delete(oferentes).where(eq(oferentes.consolidacion_id, consolidacionId));
+      await db.insert(oferentes).values({
+        consolidacion_id: consolidacionId,
+        proveedor_id: cotServicio.proveedor_id,
+        cotizacion_servicio_id: cotServicio.id,
+        nit: data.nit.trim(), nombre: data.nombre.trim(),
+        costo: monto_bruto, exento_iva: data.exento_iva,
+        orden: 0, creado_por: check.uid,
+      });
+      await db.update(cotizacionesServicio)
+        .set({ usado: true, usado_en_consolidacion_id: consolidacionId })
+        .where(eq(cotizacionesServicio.id, cotServicio.id));
+    }
 
     return { ok: true as const };
   } catch {
