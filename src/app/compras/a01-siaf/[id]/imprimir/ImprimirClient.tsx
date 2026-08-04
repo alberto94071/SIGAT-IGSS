@@ -191,26 +191,6 @@ export default function ImprimirClient({
             <div key={pageNum} className={`sheet-page${i > 0 ? " sheet-page-break" : ""}`}>
             <div className="a4-sheet">
 
-              {/* ── Marca de agua: usuario que imprimió, repetida en diagonal ──
-                  z-index -1 dentro del stacking context propio de .a4-sheet
-                  (position:relative + z-index:0), así queda detrás de todos
-                  los recuadros mas encima del fondo blanco de la hoja. */}
-              <div style={{
-                position: "absolute", inset: 0, overflow: "hidden", zIndex: -1,
-                pointerEvents: "none", display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <div style={{ transform: "rotate(-35deg)", display: "flex", flexDirection: "column", alignItems: "center", gap: "46px", width: "170%" }}>
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <span key={i} style={{
-                      fontSize: "12pt", fontWeight: "bold", color: "rgba(0,0,0,0.08)",
-                      fontFamily: FONT, whiteSpace: "nowrap", letterSpacing: "1px",
-                    }}>
-                      {Array(4).fill(`IMPRESO POR: ${impresoPor.toUpperCase()}`).join("     •     ")}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
               {/* ── RECUADRO 1: Logo + Título (sin línea divisora) ── */}
               <div style={{
                 border: B, borderRadius: R, display: "flex", alignItems: "center",
@@ -433,6 +413,7 @@ export default function ImprimirClient({
               {/* Pie */}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "7.5pt", color: "#666", fontFamily: FONT }}>
                 <span>ID: {solicitud.id}</span>
+                <span>Impreso por: {impresoPor}</span>
                 <span>Fecha de impresión: {new Date().toLocaleDateString("es-GT")}</span>
                 <span>Hoja {pageNum} de {totalPages}</span>
               </div>
