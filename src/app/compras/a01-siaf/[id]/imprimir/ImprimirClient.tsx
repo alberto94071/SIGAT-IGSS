@@ -18,6 +18,7 @@ interface Props {
   solicitud: Solicitud; items: Item[]; config: Config;
   todosFirmantes: Firmante[]; firmantesSeleccionados: Firmante[];
   mostrarSubproducto: boolean;
+  impresoPor: string;
 }
 
 const FONT = "Arial, Helvetica, sans-serif";
@@ -28,11 +29,11 @@ const C = "#000";
 // Alturas fijas en px — calibradas para que el sheet tenga proporción A4 (1:1.41)
 // Ancho = 210mm ≈ 794px en pantalla a 96dpi → alto objetivo ≈ 1123px
 const H_BOX1 = 82;    // Logo + título
-const H_BOX2 = 142;   // Datos de registro (más alto para que quepa Dirección con aire abajo)
-const H_TABLE = 650;   // Tabla — el bloque más grande, da la proporción A4
-const H_FIRMA = 90;    // Recuadros de firma
-const H_JUST = 48;    // Justificación
-const GAP = 5;     // px entre recuadros
+const H_BOX2 = 130;   // Datos de registro (más alto para que quepa Dirección con aire abajo)
+const H_TABLE = 610;   // Tabla — el bloque más grande, da la proporción A4
+const H_FIRMA = 78;    // Recuadros de firma
+const H_JUST = 88;    // Justificación — más alta para que quepan justificaciones largas
+const GAP = 4;     // px entre recuadros
 
 const W_COD = 72;     // Ancho columna Código
 const W_CANT = 88;     // Ancho columna Cantidad
@@ -88,7 +89,7 @@ function paginarItems(items: Item[], capacidad: number): PageInfo[] {
 }
 
 export default function ImprimirClient({
-  solicitud, items, config, todosFirmantes, firmantesSeleccionados: initFirmantes, mostrarSubproducto,
+  solicitud, items, config, todosFirmantes, firmantesSeleccionados: initFirmantes, mostrarSubproducto, impresoPor,
 }: Props) {
   const router = useRouter();
   const [firmantes, setFirmantes] = useState<Firmante[]>(initFirmantes);
@@ -214,13 +215,13 @@ export default function ImprimirClient({
                 border: B, borderRadius: R, height: H_BOX2, marginBottom: GAP,
                 padding: "8px 14px 22px 14px", boxSizing: "border-box",
               }}>
-                <div style={{ display: "flex", marginBottom: "7px" }}>
-                  <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "14px" }}>
-                    <span style={{ fontWeight: "bold", fontFamily: FONT, fontSize: "9.5pt", color: C }}>Fecha de Registro</span>
-                    <span style={{ fontFamily: FONT, fontSize: "9.5pt", color: C }}>{solicitud.fecha}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "7px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontWeight: "bold", fontFamily: FONT, fontSize: "11pt", color: C }}>Fecha de Registro</span>
+                    <span style={{ fontFamily: FONT, fontSize: "11pt", color: C }}>{solicitud.fecha}</span>
                   </div>
-                  <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "12px" }}>
-                    <span style={{ fontWeight: "bold", fontFamily: FONT, fontSize: "9.5pt", color: C }}>Correlativo No.</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontWeight: "bold", fontFamily: FONT, fontSize: "11pt", color: C }}>Correlativo No.</span>
                     <span style={{ fontWeight: "bold", fontFamily: FONT, fontSize: "11pt", color: C }}>{corrLabel}</span>
                   </div>
                 </div>
@@ -383,7 +384,7 @@ export default function ImprimirClient({
               <div style={{ display: "flex", gap: "12px", height: H_FIRMA, marginBottom: GAP }}>
                 {[0, 1].map(idx => (
                   <div key={idx} style={{ flex: 1, border: B, borderRadius: R, display: "flex", alignItems: "flex-end", justifyContent: "center", padding: "0 14px 10px" }}>
-                    <div style={{ width: "100%", borderTop: "1.5px solid #222", paddingTop: "5px", textAlign: "center" }}>
+                    <div style={{ width: "100%", textAlign: "center" }}>
                       <p style={{ margin: "0 0 2px 0", fontWeight: "bold", fontSize: "8.5pt", textTransform: "uppercase", fontFamily: FONT, color: C }}>
                         {firmantes[idx]?.nombre ?? ""}
                       </p>
@@ -398,7 +399,7 @@ export default function ImprimirClient({
               {/* ── Justificación ── */}
               <div style={{
                 border: B, borderRadius: R, height: H_JUST, marginBottom: GAP,
-                padding: "6px 12px", boxSizing: "border-box",
+                padding: "4px 12px", boxSizing: "border-box",
                 display: "flex", alignItems: "flex-start", gap: "6px", overflow: "hidden",
               }}>
                 <span style={{ fontWeight: "bold", fontSize: "8pt", whiteSpace: "nowrap", fontFamily: FONT, color: C, paddingTop: "1px" }}>
@@ -412,6 +413,7 @@ export default function ImprimirClient({
               {/* Pie */}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "7.5pt", color: "#666", fontFamily: FONT }}>
                 <span>ID: {solicitud.id}</span>
+                <span>Impreso por: {impresoPor}</span>
                 <span>Fecha de impresión: {new Date().toLocaleDateString("es-GT")}</span>
                 <span>Hoja {pageNum} de {totalPages}</span>
               </div>
@@ -438,15 +440,17 @@ export default function ImprimirClient({
           width: 210mm;
           margin: 0 auto 24px auto;
           box-shadow: 0 4px 32px rgba(0,0,0,0.22);
-          padding: 10mm 12mm 8mm 12mm;
+          padding: 12mm;
           box-sizing: border-box;
           display: flex;
           flex-direction: column;
+          position: relative;
+          z-index: 0;
         }
         .no-print { display: block; }
 
         @media print {
-          @page { size: A4 portrait; margin: 8mm 10mm; }
+          @page { size: A4 portrait; margin: 10mm; }
           .no-print { display: none !important; }
           #print-wrapper {
             background: white !important;

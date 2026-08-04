@@ -54,6 +54,7 @@ export default async function ImprimirPage({ params, searchParams }: Props) {
       todosFirmantes={todosFirmantes as any}
       firmantesSeleccionados={firmantesSeleccionados as any}
       mostrarSubproducto={mostrarSubproducto}
+      impresoPor={session.user.name ?? session.user.email ?? "Usuario"}
     />
   );
 }
