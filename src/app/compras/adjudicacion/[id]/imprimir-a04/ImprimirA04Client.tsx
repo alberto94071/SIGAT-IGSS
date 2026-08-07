@@ -289,7 +289,10 @@ export default function ImprimirA04Client({
           {/* Firmas */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginTop: "20px" }}>
             {[0, 1, 2].map(i => (
-              <div key={i} style={{ border: B, borderRadius: R, padding: "28px 10px 10px 10px", textAlign: "center", fontSize: "8.5pt" }}>
+              <div key={i} style={{
+                border: B, borderRadius: R, minHeight: "130px", boxSizing: "border-box",
+                padding: "80px 10px 14px 10px", textAlign: "center", fontSize: "8.5pt",
+              }}>
                 <p style={{ margin: 0, fontWeight: "bold" }}>{firmantes[i]?.nombre || "—"}</p>
                 <p style={{ margin: "2px 0 0 0" }}>{firmantes[i]?.cargo || FIRMA_SLOTS[i]}</p>
               </div>
