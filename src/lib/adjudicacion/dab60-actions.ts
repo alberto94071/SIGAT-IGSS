@@ -19,22 +19,27 @@ async function requireEdit(): Promise<{ error: string } | { uid: number }> {
 // Posiciones (mm) de cada campo del DAB-60, guardadas por el modo "Ver
 // posiciones" — arrancan vacías hasta que alguien arrastra y guarda por
 // primera vez; el cliente completa lo que falte con sus valores por defecto.
-export async function getPosicionesDab60(): Promise<Record<string, { top: number; left: number }>> {
+type PosGuardada = { top: number; left: number; width?: number; height?: number };
+
+export async function getPosicionesDab60(): Promise<Record<string, PosGuardada>> {
   const rows = await db.select().from(dab60Posiciones);
-  const out: Record<string, { top: number; left: number }> = {};
-  for (const r of rows) out[r.campo] = { top: r.top, left: r.left };
+  const out: Record<string, PosGuardada> = {};
+  for (const r of rows) {
+    out[r.campo] = { top: r.top, left: r.left, width: r.width ?? undefined, height: r.height ?? undefined };
+  }
   return out;
 }
 
 export async function guardarPosicionesDab60(
-  posiciones: Record<string, { top: number; left: number }>
+  posiciones: Record<string, PosGuardada>
 ): Promise<{ ok: true } | { error: string }> {
   const check = await requireEdit();
   if ("error" in check) return check;
 
-  for (const [campo, { top, left }] of Object.entries(posiciones)) {
-    await db.insert(dab60Posiciones).values({ campo, top, left })
-      .onConflictDoUpdate({ target: dab60Posiciones.campo, set: { top, left } });
+  for (const [campo, { top, left, width, height }] of Object.entries(posiciones)) {
+    const values = { campo, top, left, width: width ?? null, height: height ?? null };
+    await db.insert(dab60Posiciones).values(values)
+      .onConflictDoUpdate({ target: dab60Posiciones.campo, set: { top, left, width: values.width, height: values.height } });
   }
   return { ok: true };
 }

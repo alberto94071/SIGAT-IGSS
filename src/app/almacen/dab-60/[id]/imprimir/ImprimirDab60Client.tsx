@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect, useCallback, type RefObject } from "react";
+import { useState, useRef, useLayoutEffect, useCallback, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft, Eye, EyeOff, Save, RotateCcw } from "lucide-react";
 import { guardarPosicionesDab60, getFondoDab60 } from "@/lib/adjudicacion/dab60-actions";
@@ -24,7 +24,7 @@ type Datos = {
 
 interface Props {
   orden: Orden; renglones: Renglon[]; datos: Datos;
-  posicionesGuardadas: Record<string, { top: number; left: number }>;
+  posicionesGuardadas: Record<string, Pos>;
 }
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -33,13 +33,17 @@ const FONT = "Arial, Helvetica, sans-serif";
 const HOJA_W_MM = 215.9;
 const HOJA_H_MM = 279.4;
 const ROW_H_MM = 5.5;
+const MIN_W_MM = 8;
+const MIN_H_MM = 4;
+const DEFAULT_FONT_PT = 9;
+const MIN_FONT_PT = 4;
 
-type Pos = { top: number; left: number };
+type Pos = { top: number; left: number; width?: number; height?: number };
 
 // Posiciones por defecto (mm desde la esquina superior izquierda de la hoja
 // carta) — punto de partida calibrado contra un DAB-60 real. Se guarda lo que
-// el usuario arrastre en el modo "Ver posiciones"; lo que no se haya
-// guardado todavía usa estos valores.
+// el usuario arrastre/redimensione en el modo "Ver posiciones"; lo que no se
+// haya guardado todavía usa estos valores.
 const POS_DEFAULT: Record<string, Pos> = {
   lugar_fecha:           { top: 25,  left: 45 },
   no_recibo_almacen:     { top: 28,  left: 150 },
@@ -49,6 +53,7 @@ const POS_DEFAULT: Record<string, Pos> = {
   clave_administrativa:  { top: 46,  left: 178 },
   orden_compra:          { top: 58,  left: 45 },
   a01_siaf:              { top: 58,  left: 95 },
+  no_compromiso:         { top: 58,  left: 140 },
   proveedor_nombre:      { top: 56,  left: 178 },
   metodo_compra:         { top: 60,  left: 45 },
   renglon:               { top: 66,  left: 45 },
@@ -61,7 +66,7 @@ const POS_DEFAULT: Record<string, Pos> = {
   marca:                 { top: 96,  left: 48 },
   lote:                  { top: 108, left: 150 },
   fecha_vencimiento:     { top: 114, left: 150 },
-  descripcion:           { top: 128, left: 20 },
+  descripcion:           { top: 128, left: 20, width: 150, height: 18 },
   encargado_almacen:     { top: 141, left: 45 },
   fecha_emision:         { top: 250, left: 20 },
   fecha_ingreso:         { top: 250, left: 75 },
@@ -69,6 +74,41 @@ const POS_DEFAULT: Record<string, Pos> = {
   serie:                 { top: 256, left: 20 },
   serie_factura:         { top: 256, left: 75 },
   proveedor_nit:         { top: 256, left: 130 },
+};
+
+// Nombre legible de cada campo — se muestra como etiqueta al pasar el mouse
+// encima en el modo "Ver posiciones", para no confundir campos con formato
+// parecido (fechas, números, etc.) mientras se posicionan sobre el talonario.
+const FIELD_LABELS: Record<string, string> = {
+  lugar_fecha:          "Lugar y fecha",
+  no_recibo_almacen:    "No. de Recibo de Almacén",
+  serie_recibo_almacen: "Serie de Recibo de Almacén",
+  no_factura:           "No. de Factura",
+  dependencia:          "Dependencia",
+  clave_administrativa: "Clave administrativa",
+  orden_compra:         "No. de Orden de Compra",
+  a01_siaf:             "Correlativo A-01 SIAF",
+  no_compromiso:        "No. de Compromiso (SIAF)",
+  proveedor_nombre:     "Nombre del proveedor",
+  metodo_compra:        "Método de compra",
+  renglon:              "Renglón presupuestario",
+  col_cantidad:         "Columna: Cantidad",
+  col_unidad:           "Columna: Unidad de medida",
+  col_codigo:           "Columna: Código",
+  col_codigo_ppr:       "Columna: Código IGSS-PPR",
+  col_v_unitario:       "Columna: Valor unitario",
+  col_valor_total:      "Columna: Valor total",
+  marca:                "Marca",
+  lote:                 "Lote",
+  fecha_vencimiento:    "Fecha de vencimiento",
+  descripcion:          "Descripción",
+  encargado_almacen:    "Encargado de Almacén",
+  fecha_emision:        "Fecha de emisión (factura)",
+  fecha_ingreso:        "Fecha de ingreso del producto",
+  modelo:               "Modelo",
+  serie:                "Serie",
+  serie_factura:        "Serie de Factura",
+  proveedor_nit:        "NIT del proveedor",
 };
 
 function useDrag(
@@ -94,60 +134,221 @@ function useDrag(
     if (!d) return;
     const dx = (e.clientX - d.startX) * d.mmPerPxX;
     const dy = (e.clientY - d.startY) * d.mmPerPxY;
-    onChange(id, { top: Math.max(0, d.startTop + dy), left: Math.max(0, d.startLeft + dx) });
-  }, [id, onChange]);
+    onChange(id, { ...pos, top: Math.max(0, d.startTop + dy), left: Math.max(0, d.startLeft + dx) });
+  }, [id, onChange, pos]);
 
   const onPointerUp = useCallback(() => { draggingRef.current = null; }, []);
 
   return { onPointerDown, onPointerMove, onPointerUp };
 }
 
+// Redimensiona el contenedor del campo (mm) arrastrando desde su esquina
+// inferior derecha. La primera vez que se usa, arranca del tamaño natural
+// que el campo ya tenía renderizado (para que no "salte").
+function useResize(
+  hojaRef: RefObject<HTMLDivElement | null>, fieldRef: RefObject<HTMLDivElement | null>,
+  id: string, pos: Pos, onChange: (id: string, pos: Pos) => void, enabled: boolean,
+) {
+  const resizingRef = useRef<{ startX: number; startY: number; startW: number; startH: number; mmPerPxX: number; mmPerPxY: number } | null>(null);
+
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    if (!enabled) return;
+    e.preventDefault(); e.stopPropagation();
+    const hojaRect = hojaRef.current?.getBoundingClientRect();
+    const fieldRect = fieldRef.current?.getBoundingClientRect();
+    if (!hojaRect || !fieldRect) return;
+    const mmPerPxX = HOJA_W_MM / hojaRect.width;
+    const mmPerPxY = HOJA_H_MM / hojaRect.height;
+    resizingRef.current = {
+      startX: e.clientX, startY: e.clientY,
+      startW: pos.width ?? fieldRect.width * mmPerPxX,
+      startH: pos.height ?? fieldRect.height * mmPerPxY,
+      mmPerPxX, mmPerPxY,
+    };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }, [enabled, hojaRef, fieldRef, pos.width, pos.height]);
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    const r = resizingRef.current;
+    if (!r) return;
+    const dx = (e.clientX - r.startX) * r.mmPerPxX;
+    const dy = (e.clientY - r.startY) * r.mmPerPxY;
+    onChange(id, { ...pos, width: Math.max(MIN_W_MM, r.startW + dx), height: Math.max(MIN_H_MM, r.startH + dy) });
+  }, [id, onChange, pos]);
+
+  const onPointerUp = useCallback(() => { resizingRef.current = null; }, []);
+
+  return { onPointerDown, onPointerMove, onPointerUp };
+}
+
+// Reduce el tamaño de letra hasta que el texto quepa dentro del contenedor
+// (solo cuando el campo tiene ancho/alto fijos, es decir, ya fue
+// redimensionado); si no, el campo sigue usando su ancho natural de siempre.
+function useAutoFit(ref: RefObject<HTMLElement | null>, active: boolean, ...deps: unknown[]) {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (!active) { el.style.fontSize = ""; return; }
+    let size = DEFAULT_FONT_PT;
+    el.style.fontSize = `${size}pt`;
+    while (size > MIN_FONT_PT && (el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight)) {
+      size -= 0.25;
+      el.style.fontSize = `${size}pt`;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, ...deps]);
+}
+
+type Handlers = { onPointerDown: (e: React.PointerEvent) => void; onPointerMove: (e: React.PointerEvent) => void; onPointerUp: () => void };
+
+function DragHandle({ handlers, label }: { handlers: Handlers; label?: string }) {
+  return (
+    <div
+      className="dab-handle dab-handle-move no-print" contentEditable={false}
+      title={label ? `Mover — ${label}` : "Mover"}
+      onPointerDown={handlers.onPointerDown} onPointerMove={handlers.onPointerMove} onPointerUp={handlers.onPointerUp}
+    />
+  );
+}
+
+function ResizeHandle({ handlers, label }: { handlers: Handlers; label?: string }) {
+  return (
+    <div
+      className="dab-handle dab-handle-resize no-print" contentEditable={false}
+      title={label ? `Cambiar tamaño — ${label}` : "Cambiar tamaño"}
+      onPointerDown={handlers.onPointerDown} onPointerMove={handlers.onPointerMove} onPointerUp={handlers.onPointerUp}
+    />
+  );
+}
+
 function Campo({
-  id, texto, hojaRef, pos, onChange, editable, style,
+  id, texto, hojaRef, pos, onChange, editable, style, label, onTextChange, multiline = false,
 }: {
   id: string; texto: string; hojaRef: RefObject<HTMLDivElement | null>; pos: Pos;
   onChange: (id: string, pos: Pos) => void; editable: boolean; style?: React.CSSProperties;
+  label?: string; onTextChange?: (id: string, texto: string) => void; multiline?: boolean;
 }) {
-  const { onPointerDown, onPointerMove, onPointerUp } = useDrag(hojaRef, id, pos, onChange, editable);
+  // El wrapper externo (outerRef) define la posición y el tamaño del campo y
+  // aloja las manijas de mover/redimensionar SIN recortarlas; el recorte
+  // (overflow hidden) y el autoajuste de letra van en el div interno, para
+  // que las manijas —que sobresalen un poco del borde— sigan siendo
+  // clickeables aunque el campo ya tenga un tamaño fijo.
+  const outerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const drag = useDrag(hojaRef, id, pos, onChange, editable);
+  const resize = useResize(hojaRef, outerRef, id, pos, onChange, editable);
+  const sized = pos.width != null && pos.height != null;
+  useAutoFit(innerRef, sized, texto, pos.width, pos.height);
+
   const contenido = editable && !texto ? `⟨${id}⟩` : texto;
+
+  const handleBlur = useCallback((e: React.FocusEvent<HTMLDivElement>) => {
+    onTextChange?.(id, e.currentTarget.textContent ?? "");
+  }, [id, onTextChange]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!multiline && e.key === "Enter") { e.preventDefault(); (e.currentTarget as HTMLElement).blur(); }
+  }, [multiline]);
+
   return (
     <div
+      ref={outerRef}
       className="dab-campo"
-      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
+      title={editable ? label : undefined}
       style={{
         position: "absolute", top: `${pos.top}mm`, left: `${pos.left}mm`,
-        fontSize: "9pt", whiteSpace: "nowrap", fontFamily: FONT, color: "#000",
-        cursor: editable ? "grab" : undefined, touchAction: editable ? "none" : undefined,
-        ...style,
+        width: sized ? `${pos.width}mm` : undefined, height: sized ? `${pos.height}mm` : undefined,
       }}
     >
-      {contenido}
+      <div
+        ref={innerRef}
+        contentEditable={editable}
+        suppressContentEditableWarning
+        onBlur={editable ? handleBlur : undefined}
+        onKeyDown={editable ? handleKeyDown : undefined}
+        style={{
+          width: sized ? "100%" : undefined, height: sized ? "100%" : undefined,
+          overflow: sized ? "hidden" : undefined,
+          fontSize: "9pt", whiteSpace: sized ? (multiline ? "pre-line" : "normal") : "nowrap",
+          fontFamily: FONT, color: "#000",
+          cursor: editable ? "text" : undefined,
+          ...style,
+        }}
+      >
+        {contenido}
+      </div>
+      {editable && <DragHandle handlers={drag} label={label} />}
+      {editable && <ResizeHandle handlers={resize} label={label} />}
+    </div>
+  );
+}
+
+function ColumnaLinea({
+  texto, align, heightMm, widthMm, sized, editable, onCommit,
+}: {
+  texto: string; align: "left" | "right" | "center"; heightMm: number; widthMm?: number;
+  sized: boolean; editable: boolean; onCommit?: (texto: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useAutoFit(ref, sized, texto, widthMm, heightMm);
+
+  const handleBlur = useCallback((e: React.FocusEvent<HTMLDivElement>) => {
+    onCommit?.(e.currentTarget.textContent ?? "");
+  }, [onCommit]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter") { e.preventDefault(); (e.currentTarget as HTMLElement).blur(); }
+  }, []);
+
+  return (
+    <div
+      ref={ref} contentEditable={editable} suppressContentEditableWarning
+      onBlur={editable ? handleBlur : undefined} onKeyDown={editable ? handleKeyDown : undefined}
+      style={{
+        height: `${heightMm}mm`, width: sized ? `${widthMm}mm` : undefined,
+        overflow: sized ? "hidden" : undefined,
+        fontSize: "9pt", whiteSpace: sized ? "normal" : "nowrap", fontFamily: FONT, color: "#000",
+        textAlign: align, cursor: editable ? "text" : undefined,
+      }}
+    >
+      {texto}
     </div>
   );
 }
 
 function ColumnaCampo({
-  id, valores, hojaRef, pos, onChange, editable, align = "left",
+  id, valores, hojaRef, pos, onChange, editable, align = "left", label, onTextChange,
 }: {
   id: string; valores: string[]; hojaRef: RefObject<HTMLDivElement | null>; pos: Pos;
   onChange: (id: string, pos: Pos) => void; editable: boolean; align?: "left" | "right" | "center";
+  label?: string; onTextChange?: (idx: number, texto: string) => void;
 }) {
-  const { onPointerDown, onPointerMove, onPointerUp } = useDrag(hojaRef, id, pos, onChange, editable);
+  const fieldRef = useRef<HTMLDivElement>(null);
+  const drag = useDrag(hojaRef, id, pos, onChange, editable);
+  const resize = useResize(hojaRef, fieldRef, id, pos, onChange, editable);
   const lineas = valores.length > 0 ? valores : (editable ? [`⟨${id}⟩`] : [""]);
+  const sized = pos.width != null && pos.height != null;
+  const rowH = sized ? (pos.height as number) / lineas.length : ROW_H_MM;
+
   return (
     <div
+      ref={fieldRef}
       className="dab-campo"
-      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
+      title={editable ? label : undefined}
       style={{
         position: "absolute", top: `${pos.top}mm`, left: `${pos.left}mm`,
-        cursor: editable ? "grab" : undefined, touchAction: editable ? "none" : undefined,
+        width: sized ? `${pos.width}mm` : undefined,
       }}
     >
       {lineas.map((v, i) => (
-        <div key={i} style={{ height: `${ROW_H_MM}mm`, fontSize: "9pt", whiteSpace: "nowrap", fontFamily: FONT, color: "#000", textAlign: align }}>
-          {v}
-        </div>
+        <ColumnaLinea
+          key={i} texto={v} align={align} heightMm={rowH} widthMm={sized ? pos.width : undefined}
+          sized={sized} editable={editable}
+          onCommit={editable ? (t) => onTextChange?.(i, t) : undefined}
+        />
       ))}
+      {editable && <DragHandle handlers={drag} label={label} />}
+      {editable && <ResizeHandle handlers={resize} label={label} />}
     </div>
   );
 }
@@ -156,17 +357,31 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
   const router = useRouter();
   const [verPosiciones, setVerPosiciones] = useState(false);
   const [pos, setPos] = useState<Record<string, Pos>>({ ...POS_DEFAULT, ...posicionesGuardadas });
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [colOverrides, setColOverrides] = useState<Record<string, string[]>>({});
   const [fondo, setFondo] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
   const hojaRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (verPosiciones && !fondo) getFondoDab60().then(setFondo);
   }, [verPosiciones, fondo]);
 
   const onChangePos = useCallback((id: string, next: Pos) => {
     setPos(p => ({ ...p, [id]: next }));
+  }, []);
+
+  const onTextChange = useCallback((id: string, texto: string) => {
+    setOverrides(o => ({ ...o, [id]: texto }));
+  }, []);
+
+  const onColTextChange = useCallback((id: string, idx: number, texto: string) => {
+    setColOverrides(o => {
+      const arr = [...(o[id] ?? [])];
+      arr[idx] = texto;
+      return { ...o, [id]: arr };
+    });
   }, []);
 
   async function guardarPosiciones() {
@@ -192,12 +407,27 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
     : "");
   const valoresTotales   = renglones.map(r => Q(r.total));
 
-  const campo = (id: string, texto: string, style?: React.CSSProperties) => (
-    <Campo id={id} texto={texto} hojaRef={hojaRef} pos={pos[id] ?? POS_DEFAULT[id]} onChange={onChangePos} editable={verPosiciones} style={style} />
-  );
-  const columna = (id: string, valores: string[], align?: "left" | "right" | "center") => (
-    <ColumnaCampo id={id} valores={valores} hojaRef={hojaRef} pos={pos[id] ?? POS_DEFAULT[id]} onChange={onChangePos} editable={verPosiciones} align={align} />
-  );
+  const campo = (id: string, textoDefault: string, opts?: { style?: React.CSSProperties; multiline?: boolean }) => {
+    const texto = overrides[id] ?? textoDefault;
+    return (
+      <Campo
+        id={id} texto={texto} hojaRef={hojaRef} pos={pos[id] ?? POS_DEFAULT[id]} onChange={onChangePos}
+        editable={verPosiciones} style={opts?.style} label={FIELD_LABELS[id] ?? id}
+        onTextChange={onTextChange} multiline={opts?.multiline}
+      />
+    );
+  };
+  const columna = (id: string, valoresDefault: string[], align?: "left" | "right" | "center") => {
+    const overrideArr = colOverrides[id];
+    const valores = overrideArr ? valoresDefault.map((v, i) => overrideArr[i] ?? v) : valoresDefault;
+    return (
+      <ColumnaCampo
+        id={id} valores={valores} hojaRef={hojaRef} pos={pos[id] ?? POS_DEFAULT[id]} onChange={onChangePos}
+        editable={verPosiciones} align={align} label={FIELD_LABELS[id] ?? id}
+        onTextChange={(idx, t) => onColTextChange(id, idx, t)}
+      />
+    );
+  };
 
   return (
     <>
@@ -207,6 +437,11 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
         </button>
         <span className="text-gray-300">|</span>
         <span className="text-sm font-semibold text-gray-700">DAB-60 — {numeroOrden}</span>
+        {verPosiciones && (
+          <span className="text-xs text-gray-400">
+            Arrastrá el punto azul para mover, el verde para cambiar tamaño, y hacé clic sobre el texto para editarlo.
+          </span>
+        )}
         <div className="flex items-center gap-3 ml-auto">
           {verPosiciones && (
             <>
@@ -249,6 +484,7 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
           {campo("clave_administrativa", datos.claveAdministrativa)}
           {campo("orden_compra", datos.ordenCompra)}
           {campo("a01_siaf", datos.a01Siaf)}
+          {campo("no_compromiso", o.no_compromiso ?? "")}
           {campo("proveedor_nombre", o.proveedor_nombre ?? "")}
           {campo("metodo_compra", datos.metodoCompra)}
           {campo("renglon", datos.renglon)}
@@ -263,7 +499,7 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
           {campo("marca", o.marca ?? "")}
           {campo("lote", o.lote ?? "")}
           {campo("fecha_vencimiento", o.fecha_vencimiento ?? "")}
-          {campo("descripcion", datos.descripcion, { whiteSpace: "pre-line", width: "150mm", lineHeight: 1.5 })}
+          {campo("descripcion", datos.descripcion, { style: { lineHeight: 1.35 }, multiline: true })}
           {campo("encargado_almacen", o.encargado_almacen ?? "")}
 
           {campo("fecha_emision", o.fecha_emision ?? "")}
@@ -294,7 +530,12 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
       `}</style>
       {verPosiciones && (
         <style>{`
-          .dab-campo { outline: 1px dashed #f43f5e; background: rgba(244,63,94,0.06); padding: 1px 2px; }
+          @media screen {
+            .dab-campo { outline: 1px dashed #f43f5e; background: rgba(244,63,94,0.06); padding: 1px 2px; box-sizing: border-box; }
+          }
+          .dab-handle { position: absolute; width: 3mm; height: 3mm; border-radius: 2px; box-sizing: border-box; z-index: 10; }
+          .dab-handle-move { top: 0; left: -4mm; background: #3b82f6; cursor: grab; touch-action: none; }
+          .dab-handle-resize { bottom: -1.5mm; right: -1.5mm; background: #10b981; cursor: nwse-resize; touch-action: none; }
         `}</style>
       )}
     </>
