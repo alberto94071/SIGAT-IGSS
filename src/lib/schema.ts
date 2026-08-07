@@ -1013,7 +1013,12 @@ export const pasajesPagos = pgTable("pasajes_pagos", {
 // guardada acá (mm desde la esquina superior izquierda de la hoja carta) y es
 // la que se usa en todas las impresiones siguientes, sin tocar código.
 export const dab60Posiciones = pgTable("dab60_posiciones", {
-  campo: text("campo").primaryKey(),
-  top:   doublePrecision("top").notNull(),
-  left:  doublePrecision("left").notNull(),
+  campo:  text("campo").primaryKey(),
+  top:    doublePrecision("top").notNull(),
+  left:   doublePrecision("left").notNull(),
+  // Tamaño del contenedor (mm) — opcional; sin guardar todavía, el campo usa
+  // su ancho natural (una sola línea, sin recorte). Al redimensionar en el
+  // modo "Ver posiciones" queda fijo y el texto se autoajusta para caber.
+  width:  doublePrecision("width"),
+  height: doublePrecision("height"),
 });
