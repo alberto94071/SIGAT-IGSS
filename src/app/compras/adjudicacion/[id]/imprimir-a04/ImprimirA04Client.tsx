@@ -13,7 +13,10 @@ type Consolidacion = {
   a04_no_pedido: string | null; a04_descripcion: string | null;
   a04_unidad_medida: string | null; a04_cantidad: number | null;
 };
-type Renglon = { renglon: number | null; codigo_ppr: string | null; nombre: string };
+type Renglon = {
+  renglon: number | null; codigo_ppr: string | null; nombre: string;
+  cantidad: number; total: number; unidad_medida: string | null;
+};
 type Firmante = { id: number; nombre: string; cargo: string };
 
 interface Props {
@@ -50,6 +53,17 @@ function Radio({ marcado }: { marcado: boolean }) {
   );
 }
 
+function V({ children, minWidth = "60px", grow = false }: { children: React.ReactNode; minWidth?: string; grow?: boolean }) {
+  return (
+    <span style={{
+      borderBottom: "1px solid #000", display: "inline-block", minWidth,
+      flex: grow ? 1 : undefined, padding: "0 3px",
+    }}>
+      {children ?? " "}
+    </span>
+  );
+}
+
 export default function ImprimirA04Client({
   consolidacion: c, renglones, nombreUnidad, codigoUnidad,
   direccionUnidad, municipio, todosFirmantes, firmantesSeleccionados: initFirmantes,
@@ -68,6 +82,34 @@ export default function ImprimirA04Client({
   const montoBruto = c.monto_bruto ?? c.total ?? 0;
   const iva = c.exento_iva ? 0 : montoBruto * 0.12;
   const liquido = c.total ?? (montoBruto - iva);
+
+  // Con un solo renglón se usa la descripción/cantidad/unidad capturadas a
+  // mano al regularizar (pueden traer texto resumido, ej. "Global") y el
+  // total agregado de la consolidación. Con varios renglones no hay un
+  // resumen manual por línea, así que cada uno se imprime con sus propios
+  // datos reales (mismo cálculo de precio unitario e IVA que usa el DAB-60).
+  const filas = renglones.length > 1
+    ? renglones.map(r => {
+        const total = r.total;
+        const ivaFila = c.exento_iva ? 0 : total * 0.12;
+        return {
+          codigoPpr: r.codigo_ppr ?? "—",
+          renglonNum: r.renglon != null ? String(r.renglon) : "—",
+          descripcion: r.nombre.toUpperCase(),
+          unidad: r.unidad_medida ?? "—",
+          cantidad: r.cantidad.toLocaleString("es-GT"),
+          precioUnitario: r.cantidad > 0 ? total / r.cantidad : 0,
+          total, iva: ivaFila, liquido: total - ivaFila,
+        };
+      })
+    : [{
+        codigoPpr: renglon?.codigo_ppr ?? "—",
+        renglonNum: renglon?.renglon != null ? String(renglon.renglon) : "—",
+        descripcion: (c.a04_descripcion || renglon?.nombre || "—").toUpperCase(),
+        unidad: c.a04_unidad_medida ?? renglon?.unidad_medida ?? "—",
+        cantidad: (c.a04_cantidad ?? renglon?.cantidad)?.toLocaleString("es-GT") ?? "—",
+        precioUnitario: montoBruto, total: montoBruto, iva, liquido,
+      }];
 
   return (
     <>
@@ -124,7 +166,7 @@ export default function ImprimirA04Client({
         <div id="a4-sheet" style={{ fontFamily: FONT, color: C }}>
 
           {/* Encabezado: logo + forma + título */}
-          <div style={{ display: "flex", alignItems: "center", marginBottom: "10px" }}>
+          <div style={{ border: B, borderRadius: R, display: "flex", alignItems: "center", padding: "8px 14px", marginBottom: "10px" }}>
             <img src="/LOGO_SIAF01.svg" alt="IGSS" style={{ height: "48px", width: "auto", flexShrink: 0 }} />
             <div style={{ flex: 1, textAlign: "center" }}>
               <p style={{ margin: 0, fontWeight: "bold", fontSize: "12pt" }}>ORDEN PARA RENDIR FONDO ROTATIVO</p>
@@ -138,17 +180,18 @@ export default function ImprimirA04Client({
               <p style={{ margin: "0 0 8px 0", fontWeight: "bold", textAlign: "center", fontSize: "8.5pt" }}>
                 DATOS UNIDAD EJECUTORA / CENTRO DE COSTO
               </p>
-              <div style={{ display: "flex", gap: "14px", marginBottom: "4px" }}>
-                <span><strong>Correlativo No.</strong> {correlativoA04}</span>
-                <span><strong>Fecha:</strong> {c.a04_fecha ?? "—"}</span>
-                <span><strong>Código Unidad Ejecutora:</strong> {codigoUnidad}</span>
+              <div style={{ display: "flex", gap: "14px", marginBottom: "6px" }}>
+                <span><strong>Correlativo No.</strong> <V minWidth="40px">{correlativoA04}</V></span>
+                <span><strong>Fecha:</strong> <V minWidth="80px">{c.a04_fecha ?? null}</V></span>
+                <span><strong>Código Unidad Ejecutora:</strong> <V minWidth="50px">{codigoUnidad}</V></span>
               </div>
-              <p style={{ margin: "0 0 4px 0" }}>
-                <strong>Nombre Unidad Ejecutora o Centro de Costo:</strong><br />
-                <strong>{nombreUnidad}</strong>
+              <p style={{ margin: "0 0 6px 0", display: "flex", alignItems: "baseline", gap: "4px" }}>
+                <strong style={{ whiteSpace: "nowrap" }}>Nombre Unidad Ejecutora o Centro de Costo:</strong>
+                <V grow minWidth="80px"><strong>{nombreUnidad}</strong></V>
               </p>
-              <p style={{ margin: 0 }}>
-                <strong>Dirección Unidad Ejecutora o centro de Costo:</strong> {direccionUnidad}, {municipio}
+              <p style={{ margin: 0, display: "flex", alignItems: "baseline", gap: "4px" }}>
+                <strong style={{ whiteSpace: "nowrap" }}>Dirección Unidad Ejecutora o centro de Costo:</strong>
+                <V grow minWidth="80px">{direccionUnidad}, {municipio}</V>
               </p>
             </div>
             <div style={{ width: "180px", flexShrink: 0, padding: "10px 12px" }}>
@@ -169,13 +212,25 @@ export default function ImprimirA04Client({
           {/* Recuadro: Datos del proveedor */}
           <div style={{ border: B, borderRadius: R, padding: "10px 12px", marginBottom: "10px", fontSize: "9pt" }}>
             <p style={{ margin: "0 0 8px 0", fontWeight: "bold", textAlign: "center", fontSize: "8.5pt" }}>DATOS DEL PROVEEDOR</p>
-            <div style={{ display: "flex", marginBottom: "4px" }}>
-              <span style={{ flex: 1 }}><strong>Nombre o Razón Social:</strong> {c.proveedor_nombre ?? "—"}</span>
-              <span style={{ width: "180px", flexShrink: 0 }}><strong>NIT/CUI:</strong> {c.proveedor_nit ?? "—"}</span>
+            <div style={{ display: "flex", gap: "10px", marginBottom: "6px" }}>
+              <span style={{ flex: 1, display: "flex", alignItems: "baseline", gap: "4px" }}>
+                <strong style={{ whiteSpace: "nowrap" }}>Nombre o Razón Social:</strong>
+                <V grow minWidth="80px">{c.proveedor_nombre ?? null}</V>
+              </span>
+              <span style={{ width: "200px", flexShrink: 0, display: "flex", alignItems: "baseline", gap: "4px" }}>
+                <strong style={{ whiteSpace: "nowrap" }}>NIT/CUI:</strong>
+                <V grow minWidth="60px">{c.proveedor_nit ?? null}</V>
+              </span>
             </div>
-            <div style={{ display: "flex" }}>
-              <span style={{ flex: 1 }}><strong>Dirección:</strong> {c.proveedor_direccion ?? "—"}</span>
-              <span style={{ width: "180px", flexShrink: 0 }}><strong>Teléfono:</strong> {c.proveedor_telefono ?? "—"}</span>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <span style={{ flex: 1, display: "flex", alignItems: "baseline", gap: "4px" }}>
+                <strong style={{ whiteSpace: "nowrap" }}>Dirección:</strong>
+                <V grow minWidth="80px">{c.proveedor_direccion ?? null}</V>
+              </span>
+              <span style={{ width: "200px", flexShrink: 0, display: "flex", alignItems: "baseline", gap: "4px" }}>
+                <strong style={{ whiteSpace: "nowrap" }}>Teléfono:</strong>
+                <V grow minWidth="60px">{c.proveedor_telefono ?? null}</V>
+              </span>
             </div>
           </div>
 
@@ -185,9 +240,9 @@ export default function ImprimirA04Client({
               DETALLE DE BIENES Y/O SERVICIOS
             </p>
             <p style={{ margin: "0 0 8px 0", textAlign: "center", fontSize: "8pt" }}>
-              ADQUIRIDOS SEGÚN DOCUMENTO TRIBUTARIO ELECTRÓNICO -DTE- No. <strong>{c.a04_dte_numero ?? "—"}</strong>
-              &nbsp;&nbsp;Serie: <strong>{c.a04_dte_serie ?? "—"}</strong>
-              &nbsp;&nbsp;de fecha: <strong>{c.a04_dte_fecha ?? "—"}</strong>
+              ADQUIRIDOS SEGÚN DOCUMENTO TRIBUTARIO ELECTRÓNICO -DTE- No. <V minWidth="70px">{c.a04_dte_numero ?? null}</V>
+              &nbsp;&nbsp;Serie: <V minWidth="50px">{c.a04_dte_serie ?? null}</V>
+              &nbsp;&nbsp;de fecha: <V minWidth="80px">{c.a04_dte_fecha ?? null}</V>
             </p>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "8pt" }}>
               <thead>
@@ -205,22 +260,22 @@ export default function ImprimirA04Client({
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{c.a04_no_pedido ?? "—"}</td>
-                  <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{renglon?.codigo_ppr ?? "—"}</td>
-                  <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{renglon?.renglon ?? "—"}</td>
-                  <td style={{ border: "1px solid #333", padding: "6px" }}>
-                    <p style={{ margin: 0, fontWeight: "bold" }}>
-                      {(c.a04_descripcion || renglon?.nombre || "—").toUpperCase()}
-                    </p>
-                  </td>
-                  <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{c.a04_unidad_medida ?? "—"}</td>
-                  <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{c.a04_cantidad?.toLocaleString("es-GT") ?? "—"}</td>
-                  <td style={{ border: "1px solid #333", padding: "4px", textAlign: "right" }}>{Q(montoBruto)}</td>
-                  <td style={{ border: "1px solid #333", padding: "4px", textAlign: "right" }}>{Q(montoBruto)}</td>
-                  <td style={{ border: "1px solid #333", padding: "4px", textAlign: "right" }}>{Q(iva)}</td>
-                  <td style={{ border: "1px solid #333", padding: "4px", textAlign: "right" }}>{Q(liquido)}</td>
-                </tr>
+                {filas.map((f, i) => (
+                  <tr key={i}>
+                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{c.a04_no_pedido ?? "—"}</td>
+                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{f.codigoPpr}</td>
+                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{f.renglonNum}</td>
+                    <td style={{ border: "1px solid #333", padding: "6px" }}>
+                      <p style={{ margin: 0, fontWeight: "bold" }}>{f.descripcion}</p>
+                    </td>
+                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{f.unidad}</td>
+                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{f.cantidad}</td>
+                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "right" }}>{Q(f.precioUnitario)}</td>
+                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "right" }}>{Q(f.total)}</td>
+                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "right" }}>{Q(f.iva)}</td>
+                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "right" }}>{Q(f.liquido)}</td>
+                  </tr>
+                ))}
                 <tr>
                   <td colSpan={7} style={{ border: "1px solid #333", padding: "4px", textAlign: "right", fontWeight: "bold" }}>Totales</td>
                   <td style={{ border: "1px solid #333", padding: "4px", textAlign: "right", fontWeight: "bold" }}>{Q(montoBruto)}</td>
@@ -234,7 +289,10 @@ export default function ImprimirA04Client({
           {/* Firmas */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginTop: "20px" }}>
             {[0, 1, 2].map(i => (
-              <div key={i} style={{ border: B, borderRadius: R, padding: "28px 10px 10px 10px", textAlign: "center", fontSize: "8.5pt" }}>
+              <div key={i} style={{
+                border: B, borderRadius: R, minHeight: "130px", boxSizing: "border-box",
+                padding: "80px 10px 14px 10px", textAlign: "center", fontSize: "8.5pt",
+              }}>
                 <p style={{ margin: 0, fontWeight: "bold" }}>{firmantes[i]?.nombre || "—"}</p>
                 <p style={{ margin: "2px 0 0 0" }}>{firmantes[i]?.cargo || FIRMA_SLOTS[i]}</p>
               </div>
@@ -250,11 +308,11 @@ export default function ImprimirA04Client({
         }
         #a4-sheet {
           background: white; width: 297mm; min-height: 210mm; box-shadow: 0 4px 32px rgba(0,0,0,0.22);
-          padding: 14mm; box-sizing: border-box;
+          padding: 8mm; box-sizing: border-box;
         }
         .no-print { display: block; }
         @media print {
-          @page { size: A4 landscape; margin: 10mm; }
+          @page { size: A4 landscape; margin: 6mm; }
           .no-print { display: none !important; }
           #print-wrapper { background: white !important; padding: 0 !important; margin: 0 !important; min-height: 0 !important; display: block !important; }
           #a4-sheet { width: 100% !important; min-height: 0 !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; }

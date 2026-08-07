@@ -2,16 +2,55 @@
 import { fechaHoraGuatemala } from "@/lib/date-utils";
 
 import { db } from "@/lib/db";
-import { ordenesCompra } from "@/lib/schema";
+import { ordenesCompra, dab60Posiciones } from "@/lib/schema";
 import { eq, sql, isNotNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
+import { readFile } from "fs/promises";
+import path from "path";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
   if (!session) return { error: "No autorizado" };
   if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
   return { uid: Number(session.user.id) };
+}
+
+// Posiciones (mm) de cada campo del DAB-60, guardadas por el modo "Ver
+// posiciones" — arrancan vacías hasta que alguien arrastra y guarda por
+// primera vez; el cliente completa lo que falte con sus valores por defecto.
+export async function getPosicionesDab60(): Promise<Record<string, { top: number; left: number }>> {
+  const rows = await db.select().from(dab60Posiciones);
+  const out: Record<string, { top: number; left: number }> = {};
+  for (const r of rows) out[r.campo] = { top: r.top, left: r.left };
+  return out;
+}
+
+export async function guardarPosicionesDab60(
+  posiciones: Record<string, { top: number; left: number }>
+): Promise<{ ok: true } | { error: string }> {
+  const check = await requireEdit();
+  if ("error" in check) return check;
+
+  for (const [campo, { top, left }] of Object.entries(posiciones)) {
+    await db.insert(dab60Posiciones).values({ campo, top, left })
+      .onConflictDoUpdate({ target: dab60Posiciones.campo, set: { top, left } });
+  }
+  return { ok: true };
+}
+
+// Imagen del talonario DAB-60 real, solo para calibrar posiciones — no vive
+// en /public (que Next.js sirve sin autenticación) sino en /private, y esta
+// server action exige sesión antes de devolverla como data URI.
+export async function getFondoDab60(): Promise<string | null> {
+  const session = await auth();
+  if (!session) return null;
+  try {
+    const bytes = await readFile(path.join(process.cwd(), "private", "dab60-fondo.jpg"));
+    return `data:image/jpeg;base64,${bytes.toString("base64")}`;
+  } catch {
+    return null;
+  }
 }
 
 export async function getOrdenesEnDab() {
