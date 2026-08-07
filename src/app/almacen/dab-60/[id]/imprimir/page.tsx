@@ -1,12 +1,23 @@
 import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { ordenesCompra } from "@/lib/schema";
+import { ordenesCompra, configuracion } from "@/lib/schema";
 import { eq } from "drizzle-orm";
-import { gruposRenglonDeConsolidacion } from "@/lib/adjudicacion/renglon-utils";
+import { gruposRenglonDeConsolidacion, siafCorrelativosDeConsolidacion } from "@/lib/adjudicacion/renglon-utils";
+import { getPosicionesDab60 } from "@/lib/adjudicacion/dab60-actions";
 import ImprimirDab60Client from "./ImprimirDab60Client";
 
 interface Props { params: Promise<{ id: string }> }
+
+const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+  "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+// "2026-06-23" → "23 de junio de 2026"
+function fechaLarga(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return `${d} de ${MESES[m - 1]} de ${y}`;
+}
 
 export default async function ImprimirDab60Page({ params }: Props) {
   const session = await auth();
@@ -30,7 +41,34 @@ export default async function ImprimirDab60Page({ params }: Props) {
     );
   }
 
-  const renglones = await gruposRenglonDeConsolidacion(orden.consolidacion_id);
+  const [renglones, a01SiafCorrelativos, config, posicionesGuardadas] = await Promise.all([
+    gruposRenglonDeConsolidacion(orden.consolidacion_id),
+    siafCorrelativosDeConsolidacion(orden.consolidacion_id),
+    db.select().from(configuracion).limit(1),
+    getPosicionesDab60(),
+  ]);
 
-  return <ImprimirDab60Client orden={orden as any} renglones={renglones} />;
+  const cfg = config[0];
+  const renglonesUnicos = [...new Set(renglones.map(r => r.renglon).filter((r): r is number => r != null))];
+  const descripcion = [...new Set(renglones.map(r => r.nombre.trim()).filter(Boolean))].join("; ");
+
+  const datos = {
+    lugarFecha: cfg ? `${cfg.municipio}, ${fechaLarga(orden.fecha)}` : fechaLarga(orden.fecha),
+    dependencia: cfg ? `${cfg.codigo_contable}-${cfg.nombre_unidad}`.toUpperCase() : "",
+    claveAdministrativa: cfg?.codigo_contable ?? "",
+    ordenCompra: `${orden.numero}/${orden.anio}`,
+    a01Siaf: a01SiafCorrelativos.join(", "),
+    metodoCompra: orden.tipo_compra,
+    renglon: renglonesUnicos.join(", "),
+    descripcion,
+  };
+
+  return (
+    <ImprimirDab60Client
+      orden={orden as any}
+      renglones={renglones as any}
+      datos={datos}
+      posicionesGuardadas={posicionesGuardadas}
+    />
+  );
 }

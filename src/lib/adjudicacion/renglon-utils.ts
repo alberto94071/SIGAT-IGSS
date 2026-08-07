@@ -153,9 +153,23 @@ export async function unidadMedidaLookupMap(): Promise<Map<string, string | null
   return map;
 }
 
+// Mismo cruce que unidadMedidaLookupMap, pero para "codigo" (columna aparte de
+// Base de Datos Central, distinta de código IGSS y de código PPR) — es la que
+// se imprime en la columna "CODIGO" del DAB-60.
+export async function codigoLookupMap(): Promise<Map<string, string | null>> {
+  const rows = await db.select({
+    codigo_igss: baseDatosCentral.codigo_igss, nombre: baseDatosCentral.nombre,
+    codigo: baseDatosCentral.codigo,
+  }).from(baseDatosCentral).where(isNotNull(baseDatosCentral.codigo_igss));
+  const map = new Map<string, string | null>();
+  for (const r of rows) if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.codigo);
+  return map;
+}
+
 export type GrupoRenglon = {
   renglon: number | null; codigo_igss: string | null; codigo_ppr: string | null; subproducto: string;
   nombre: string; cantidad: number; total: number;
+  unidad_medida: string | null; codigo: string | null;
 };
 
 // Agrupa los insumos de los SIAF consolidados de una consolidación por
@@ -175,6 +189,8 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
     precio_unitario:     siafComprasItems.precio_unitario,
   }).from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds));
 
+  const [unidades, codigos] = await Promise.all([unidadMedidaLookupMap(), codigoLookupMap()]);
+
   const grupos = new Map<string, GrupoRenglon>();
   for (const item of items) {
     let renglon: number | null = null;
@@ -191,11 +207,24 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
       existente.cantidad += item.cantidad_solicitada;
       existente.total += itemTotal;
     }
-    else grupos.set(key, {
-      renglon, codigo_igss: item.codigo_igss, codigo_ppr: item.codigo_ppr,
-      subproducto: item.subproducto, nombre: item.nombre, cantidad: item.cantidad_solicitada,
-      total: itemTotal,
-    });
+    else {
+      const fichaKey = `${item.codigo_igss}::${normalizaNombre(item.nombre)}`;
+      grupos.set(key, {
+        renglon, codigo_igss: item.codigo_igss, codigo_ppr: item.codigo_ppr,
+        subproducto: item.subproducto, nombre: item.nombre, cantidad: item.cantidad_solicitada,
+        total: itemTotal,
+        unidad_medida: unidades.get(fichaKey) ?? null,
+        codigo: codigos.get(fichaKey) ?? null,
+      });
+    }
   }
   return Array.from(grupos.values());
+}
+
+// Correlativos ("numero/anio") de las solicitudes A-01 SIAF consolidadas en
+// una orden de compra — para imprimirlos en el DAB-60 ("A-01 SIAF: ###/AAAA").
+export async function siafCorrelativosDeConsolidacion(consolidacionId: number): Promise<string[]> {
+  const rows = await db.select({ numero: siafCompras.numero, anio: siafCompras.anio }).from(siafCompras)
+    .where(eq(siafCompras.consolidacion_id, consolidacionId));
+  return [...new Set(rows.map(r => `${r.numero}/${r.anio}`))];
 }

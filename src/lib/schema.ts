@@ -1006,3 +1006,14 @@ export const pasajesPagos = pgTable("pasajes_pagos", {
   creado_por:       integer("creado_por").references(() => usuarios.id),
   created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
+
+// ─── Posiciones de campos del DAB-60 (talonario pre-impreso) ─────────────────
+// El modo "Ver posiciones" permite arrastrar cada bloque de texto sobre una
+// imagen de referencia del talonario real; la posición donde se suelta queda
+// guardada acá (mm desde la esquina superior izquierda de la hoja carta) y es
+// la que se usa en todas las impresiones siguientes, sin tocar código.
+export const dab60Posiciones = pgTable("dab60_posiciones", {
+  campo: text("campo").primaryKey(),
+  top:   doublePrecision("top").notNull(),
+  left:  doublePrecision("left").notNull(),
+});
