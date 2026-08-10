@@ -15,13 +15,14 @@ import {
   elegirTipoCompra, guardarCompraDirectaEvento, agregarOferente, eliminarOferente,
   elegirFormaBajaCuantia, buscarCotizacionServicio, confirmarBajaCuantiaServicios,
   adjudicarDirecto, enviarAJunta, registrarRegularizado, rechazarEnAdjudicacion,
-  confirmarBajaCuantiaConCotizacionAnual,
+  confirmarBajaCuantiaConCotizacionAnual, confirmarCompraDirectaConNog,
 } from "@/lib/adjudicacion/compras-actions";
 import { buscarCotizacionAnualPorNumero } from "@/lib/adjudicacion/cotizaciones-actions";
+import { buscarNogPorNumero } from "@/lib/nog-actions";
 import { anularConsolidacion } from "@/lib/adjudicacion/actions";
 import {
   TIPOS, REFERENCIA_LABEL, MAX_OFERENTES, LIMITE_POR_TIPO,
-  type TipoCompra, type Consolidacion, type CotizacionServicio, type Oferente, type CotizacionAnual,
+  type TipoCompra, type Consolidacion, type CotizacionServicio, type Oferente, type CotizacionAnual, type NogGrupo,
 } from "@/lib/adjudicacion/types";
 
 interface Props { consolidaciones: Consolidacion[]; canEdit: boolean; }
@@ -215,6 +216,13 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
   const [fechaEvento, setFechaEvento] = useState(c.fecha_evento ?? fechaGuatemala());
   const [referencia,  setReferencia]  = useState(c.referencia ?? "");
 
+  // Compra Directa recurrente: si el NOG que se escribe ya está registrado
+  // (ver Contrato y Cotizaciones/NOG), se ofrece enviarla directo a
+  // Presupuesto sin repetir Junta/Acta cada mes.
+  const [nogGrupo,     setNogGrupo]     = useState<NogGrupo | null>(null);
+  const [nogBuscando,  setNogBuscando]  = useState(false);
+  const [nogBuscado,   setNogBuscado]   = useState(""); // último NOG por el que ya se preguntó, para no repetir la búsqueda
+
   const [cotizaciones,   setCotizaciones]   = useState<CotizacionServicio[]>([]);
   const [cotizLoading,   setCotizLoading]   = useState(false);
   const [cotizId,        setCotizId]        = useState<number | null>(null);
@@ -258,6 +266,53 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     const res = await guardarCompraDirectaEvento(c.id, { nog: nog.trim(), fecha_evento: fechaEvento });
     setLoading(false);
     if ("error" in res) return setError(res.error);
+    buscarNog();
+  }
+
+  // Se pregunta al salir del campo NOG si ese número ya está registrado
+  // (compra recurrente aprobada un mes anterior) — si es nuevo, no pasa nada
+  // y sigue el flujo manual de siempre (oferentes + Junta).
+  async function buscarNog() {
+    const n = nog.trim();
+    if (!n || n === nogBuscado) return;
+    setNogBuscado(n);
+    setNogBuscando(true);
+    const res = await buscarNogPorNumero(n);
+    setNogBuscando(false);
+    setNogGrupo(res);
+  }
+
+  // Cruce por código de insumo — igual que prefillPreciosDesdeCotizacionAnual,
+  // pero acá no se "rellenan" campos: si falta alguno, el atajo no se ofrece
+  // y sigue el flujo manual (agregar oferente) tal cual.
+  const nogFaltantes = nogGrupo
+    ? c.precios.filter(p => !nogGrupo.items.some(i => i.codigo_igss === p.codigo_igss && i.precio != null)).map(p => p.nombre)
+    : [];
+  const nogListoParaUsar = nogGrupo != null && c.precios.length > 0 && nogFaltantes.length === 0;
+  const nogTotalPreview = (() => {
+    if (!nogListoParaUsar || !nogGrupo) return null;
+    let bruto = 0;
+    let todosExentos = true;
+    for (const p of c.precios) {
+      const linea = nogGrupo.items.find(i => i.codigo_igss === p.codigo_igss);
+      if (!linea || linea.precio == null) return null;
+      bruto += p.cantidad * linea.precio;
+      if (!linea.exento_iva) todosExentos = false;
+    }
+    return todosExentos ? bruto : bruto * 0.88;
+  })();
+
+  async function handleConfirmarNog() {
+    setLoading(true); setError(""); setLimitExceeded(false);
+    const res = await confirmarCompraDirectaConNog(c.id, nog.trim());
+    setLoading(false);
+    if ("limitExceeded" in res) { setLimitExceeded(true); setError(res.error); return; }
+    if ("error" in res) return setError(res.error);
+    onDone({
+      estado: "Enviado a Presupuesto", destino: "presupuesto", tipo_compra: tipoCompra,
+      nog: nog.trim(), proveedor_nombre: nogGrupo?.proveedor_nombre, proveedor_nit: nogGrupo?.proveedor_nit ?? undefined,
+      total: nogTotalPreview ?? c.total,
+    });
   }
 
   async function handleAddOferente(data: {
@@ -505,13 +560,37 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> NOG</label>
-                  <input className="input font-mono" value={nog} onChange={e => setNog(e.target.value)} onBlur={guardarEvento} />
+                  <div className="relative">
+                    <input className="input font-mono" value={nog}
+                      onChange={e => { setNog(e.target.value); setNogGrupo(null); setNogBuscado(""); }}
+                      onBlur={guardarEvento} />
+                    {nogBuscando && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-600 animate-spin" />}
+                  </div>
                 </div>
                 <div>
                   <label className="label flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Fecha del evento</label>
                   <input className="input" type="date" value={fechaEvento} onChange={e => setFechaEvento(e.target.value)} onBlur={guardarEvento} />
                 </div>
               </div>
+
+              {nogGrupo && (
+                <div className={`rounded-xl px-4 py-3 text-sm border ${nogListoParaUsar ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
+                  <p className="font-semibold text-gray-900">{nogGrupo.proveedor_nombre}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">NOG {nogGrupo.nog} — precio ya aprobado anteriormente</p>
+                  {nogListoParaUsar ? (
+                    <p className="text-xs text-green-700 mt-1.5">
+                      Todos los insumos tienen precio registrado — total: <strong>{nogTotalPreview != null ? Q(nogTotalPreview) : "—"}</strong>.
+                      Se puede enviar directo a Presupuesto, sin pasar por Junta Adjudicadora.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-amber-700 mt-1.5">
+                      Este NOG no tiene precio registrado para: {nogFaltantes.join(", ")}. Agrega el oferente a mano
+                      abajo, o corrige el registro en Contrato y Cotizaciones/NOG.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div>
                 <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Oferentes</p>
                 <OferentesEditor oferentes={oferentes} maxOferentes={MAX_OFERENTES} editable
@@ -861,6 +940,12 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
         {!limitExceeded && (
           <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
             <button onClick={onClose} className="btn-secondary">Cancelar</button>
+            {tipoCompra === "Compra Directa" && nogListoParaUsar && (
+              <button onClick={handleConfirmarNog} disabled={loading}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors">
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Usar este NOG — enviar a Presupuesto
+              </button>
+            )}
             {tipoCompra === "Compra Directa" && (
               <button onClick={finalizarEnviar} disabled={loading || oferentes.length === 0} className="btn-primary disabled:opacity-50">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />} Enviar a Junta

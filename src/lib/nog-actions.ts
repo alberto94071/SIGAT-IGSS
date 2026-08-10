@@ -3,9 +3,54 @@ import { db } from "@/lib/db";
 import { nogRegistros, catalogoCompras } from "@/lib/schema";
 import { and, eq, ilike, or, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
+import type { NogGrupo } from "./adjudicacion/types";
 
 export async function listarNogs() {
   return db.select().from(nogRegistros).orderBy(sql`created_at DESC`);
+}
+
+function agruparPorNog(filas: (typeof nogRegistros.$inferSelect)[]): NogGrupo[] {
+  const mapa = new Map<string, NogGrupo>();
+  for (const f of filas) {
+    if (!mapa.has(f.nog)) {
+      mapa.set(f.nog, {
+        nog: f.nog, proveedor_id: f.proveedor_id, proveedor_nit: f.proveedor_nit, proveedor_nombre: f.proveedor_nombre,
+        items: [],
+      });
+    }
+    mapa.get(f.nog)!.items.push({
+      codigo_igss: f.insumo_codigo_igss, subproducto: f.subproducto, insumo_nombre: f.insumo_nombre,
+      precio: f.precio, exento_iva: f.exento_iva,
+    });
+  }
+  return [...mapa.values()];
+}
+
+// Búsqueda en tiempo real de NOGs ya registrados, por número o proveedor —
+// mismo patrón que buscarCotizacionAnualPorTexto. Se usa para reconocer una
+// compra recurrente (ej. arrendamiento mensual) y ofrecer el atajo de
+// enviarla directo a Presupuesto (ver confirmarCompraDirectaConNog).
+export async function buscarNogPorTexto(q: string): Promise<NogGrupo[]> {
+  const session = await auth();
+  if (!session) return [];
+  const query = q.trim();
+  if (query.length < 2) return [];
+  const filas = await db.select().from(nogRegistros).where(
+    or(ilike(nogRegistros.nog, `%${query}%`), ilike(nogRegistros.proveedor_nombre, `%${query}%`))
+  ).orderBy(sql`created_at DESC`).limit(60);
+  return agruparPorNog(filas);
+}
+
+// Búsqueda exacta por número de NOG — se usa al escribir el NOG completo en
+// el asistente de Compra Directa.
+export async function buscarNogPorNumero(nog: string): Promise<NogGrupo | null> {
+  const session = await auth();
+  if (!session) return null;
+  const n = nog.trim();
+  if (!n) return null;
+  const filas = await db.select().from(nogRegistros).where(eq(nogRegistros.nog, n));
+  if (filas.length === 0) return null;
+  return agruparPorNog(filas)[0];
 }
 
 export async function buscarInsumosParaNog(q: string) {

@@ -4,7 +4,7 @@ import { fechaHoraGuatemala } from "@/lib/date-utils";
 import { db } from "@/lib/db";
 import {
   consolidaciones, oferentes, oferentePrecios, cotizacionesServicio, siafCompras, siafComprasItems,
-  cotizacionesAnuales, cotizacionesAnualesItems, catalogoCompras,
+  cotizacionesAnuales, cotizacionesAnualesItems, catalogoCompras, nogRegistros,
 } from "@/lib/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
@@ -103,6 +103,94 @@ export async function guardarCompraDirectaEvento(consolidacionId: number, data: 
     return { ok: true };
   } catch {
     return { error: "Error al guardar el NOG" };
+  }
+}
+
+// Compra Directa recurrente (ej. arrendamiento mensual) cuyo NOG ya quedó
+// registrado en Contrato y Cotizaciones/NOG — al aprobarse la primera vez
+// (ver aprobarActa en actas-adjudicacion-actions.ts, que deja el catálogo de
+// NOG actualizado), los meses siguientes se envían directo a Presupuesto sin
+// volver a pasar por Junta Adjudicadora ni Acta, igual que Contrato Abierto
+// (adjudicarDirecto). No hay presupuesto que verificar más allá del límite
+// legal del tipo de compra — el precio viene ya aprobado del catálogo.
+export async function confirmarCompraDirectaConNog(consolidacionId: number, nog: string): Promise<
+  { ok: true } | { error: string; limitExceeded?: true }
+> {
+  try {
+    const check = await requireCompras();
+    if ("error" in check) return check;
+
+    const [con] = await db.select().from(consolidaciones).where(eq(consolidaciones.id, consolidacionId)).limit(1);
+    if (!con) return { error: "No se encontró la consolidación" };
+    if (con.tipo_compra !== "Compra Directa") return { error: "Esta acción solo aplica a Compra Directa" };
+    if (con.estado !== "Pendiente adjudicación" && con.estado !== "Rechazado por Junta")
+      return { error: "Esta consolidación ya no está disponible para adjudicar" };
+
+    const n = nog.trim();
+    if (!n) return { error: "El NOG es obligatorio" };
+
+    const registros = await db.select().from(nogRegistros).where(eq(nogRegistros.nog, n));
+    if (registros.length === 0) return { error: `No hay ningún NOG registrado con el número ${n}` };
+
+    const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
+    if (renglones.length === 0) return { error: "Esta consolidación no tiene insumos" };
+
+    const porInsumo = new Map(registros.map(r => [`${r.insumo_codigo_igss}::${r.subproducto}`, r]));
+    const faltantes: string[] = [];
+    let bruto = 0;
+    const itemsConPrecio: { codigo_igss: string | null; subproducto: string; precio_unitario: number; exento_iva: boolean }[] = [];
+    for (const r of renglones) {
+      const linea = porInsumo.get(`${r.codigo_igss}::${r.subproducto}`);
+      if (!linea || linea.precio == null) { faltantes.push(r.nombre); continue; }
+      bruto += r.cantidad * linea.precio;
+      itemsConPrecio.push({ codigo_igss: r.codigo_igss, subproducto: r.subproducto, precio_unitario: linea.precio, exento_iva: linea.exento_iva });
+    }
+    if (faltantes.length > 0) {
+      return { error: `El NOG ${n} no tiene precio registrado para: ${faltantes.join(", ")}. Completa el precio a mano o corrígelo en Contrato y Cotizaciones/NOG.` };
+    }
+
+    const todosExentos = itemsConPrecio.every(i => i.exento_iva);
+    const total = todosExentos ? bruto : bruto * 0.88;
+    const limite = LIMITE_POR_TIPO["Compra Directa"];
+    if (total > limite) {
+      return { error: `El total Q${total.toFixed(2)} supera el límite de Q${limite.toLocaleString("es-GT")} para Compra Directa`, limitExceeded: true as const };
+    }
+
+    const siafIds = (await db.select({ id: siafCompras.id }).from(siafCompras).where(eq(siafCompras.consolidacion_id, consolidacionId))).map(s => s.id);
+    const rawItems = siafIds.length > 0
+      ? await db.select().from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds))
+      : [];
+    for (const item of itemsConPrecio) {
+      const filas = rawItems.filter(r => r.codigo_igss === item.codigo_igss && r.subproducto === item.subproducto);
+      for (const fila of filas) {
+        const filaBruto = fila.cantidad_solicitada * item.precio_unitario;
+        const montoNeto = item.exento_iva ? filaBruto : filaBruto * 0.88;
+        await db.update(siafComprasItems).set({
+          precio_unitario: item.precio_unitario, item_exento_iva: item.exento_iva, monto_neto: montoNeto,
+        }).where(eq(siafComprasItems.id, fila.id));
+      }
+    }
+
+    const primero = registros[0];
+    await db.delete(oferentes).where(eq(oferentes.consolidacion_id, consolidacionId));
+    const [ofrt] = await db.insert(oferentes).values({
+      consolidacion_id: consolidacionId, proveedor_id: primero.proveedor_id,
+      nit: primero.proveedor_nit ?? "", nombre: primero.proveedor_nombre,
+      costo: bruto, exento_iva: todosExentos, orden: 0, creado_por: check.uid,
+    }).returning();
+
+    await db.update(consolidaciones).set({
+      nog: n,
+      proveedor_id: primero.proveedor_id, proveedor_nit: primero.proveedor_nit, proveedor_nombre: primero.proveedor_nombre,
+      oferente_ganador_id: ofrt.id, exento_iva: todosExentos, total,
+      razon_adjudicacion: `Repetición del NOG ${n} — mismo proveedor y precio ya aprobados anteriormente.`,
+      destino: "presupuesto", estado: "Enviado a Presupuesto",
+      motivo_rechazo: null, rechazado_por: null, rechazado_en: null,
+    }).where(eq(consolidaciones.id, consolidacionId));
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al confirmar la Compra Directa con el NOG" };
   }
 }
 

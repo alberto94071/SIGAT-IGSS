@@ -4,7 +4,7 @@ import { fechaHoraGuatemala } from "@/lib/date-utils";
 import { db } from "@/lib/db";
 import {
   actasAdjudicacion, consolidaciones, oferentes, oferentePrecios, siafCompras, siafComprasItems,
-  cotizacionesServicio,
+  cotizacionesServicio, nogRegistros,
 } from "@/lib/schema";
 import { eq, inArray, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
@@ -121,6 +121,31 @@ export async function aprobarActa(actaId: number): Promise<{ ok: true } | { erro
           await db.update(siafComprasItems).set({
             precio_unitario: linea.precio_unitario, item_exento_iva: ganador.exento_iva, monto_neto: montoNeto,
           }).where(eq(siafComprasItems.id, fila.id));
+        }
+      }
+
+      // Compra Directa con NOG: deja el precio recién aprobado guardado en
+      // el catálogo de NOG (reemplazando lo que hubiera antes con ese mismo
+      // número) — así el próximo mes, para la misma compra recurrente (ej.
+      // arrendamiento), Compras puede enviarla directo a Presupuesto sin
+      // pasar de nuevo por Junta/Acta (ver confirmarCompraDirectaConNog en
+      // compras-actions.ts).
+      if (tipo === "Compra Directa" && con.nog?.trim()) {
+        const nogTrim = con.nog.trim();
+        await db.delete(nogRegistros).where(eq(nogRegistros.nog, nogTrim));
+        for (const linea of precios) {
+          const filas = rawItems.filter(r => r.codigo_igss === linea.codigo_igss && r.subproducto === linea.subproducto);
+          if (filas.length === 0) continue;
+          const cantidadTotal = filas.reduce((sum, f) => sum + f.cantidad_solicitada, 0);
+          const bruto = cantidadTotal * linea.precio_unitario;
+          const totalNeto = ganador.exento_iva ? bruto : bruto * 0.88;
+          await db.insert(nogRegistros).values({
+            nog: nogTrim,
+            proveedor_id: ganador.proveedor_id, proveedor_nit: ganador.nit, proveedor_nombre: ganador.nombre,
+            insumo_nombre: filas[0].nombre, insumo_codigo_igss: linea.codigo_igss, subproducto: linea.subproducto,
+            cantidad_autorizada: cantidadTotal, precio: linea.precio_unitario, exento_iva: ganador.exento_iva,
+            total: totalNeto, creado_por: check.uid,
+          });
         }
       }
     }
