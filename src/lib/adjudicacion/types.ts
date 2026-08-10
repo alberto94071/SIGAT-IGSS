@@ -91,6 +91,20 @@ export type Consolidacion = {
   oferentes: Oferente[];
 };
 
+// Un NOG registrado en Contrato y Cotizaciones/NOG puede cubrir varios
+// insumos (una fila por insumo en nog_registros) — se agrupan bajo su
+// número de NOG para poder cruzarlos de una vez contra los insumos de una
+// consolidación de Compra Directa (ver buscarNogPorNumero/PorTexto).
+export type NogGrupoItem = {
+  codigo_igss: string | null; subproducto: string | null; insumo_nombre: string;
+  precio: number | null; exento_iva: boolean;
+};
+export type NogGrupo = {
+  nog: string;
+  proveedor_id: number | null; proveedor_nit: string | null; proveedor_nombre: string;
+  items: NogGrupoItem[];
+};
+
 export type Proveedor = { id: number; nit: string | null; nombre: string; telefono: string | null };
 
 export const TIPOS = ["Compra Directa", "Baja Cuantía", "Contrato Abierto", "Casos de Excepción"] as const;
