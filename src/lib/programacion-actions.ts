@@ -24,6 +24,20 @@ async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   return { uid: Number(session.user.id) };
 }
 
+// Aprobar/rechazar Reprogramaciones queda solo para Administrador y
+// Administrador Máster — un operador puede solicitarlas pero no aprobarlas.
+// Ver también ProgramacionClient.tsx, que ni siquiera muestra la opción
+// "Reprogramaciones pendientes" a quien no tenga uno de estos dos roles.
+async function requireAdminPresupuesto(): Promise<{ error: string } | { uid: number }> {
+  const moduloCheck = await requireModuloAccessAction("mod_presupuesto");
+  if ("error" in moduloCheck) return moduloCheck;
+  const session = await auth();
+  if (session?.user.rol !== "admin" && session?.user.rol !== "superadmin") {
+    return { error: "Solo un Administrador puede aprobar o rechazar Reprogramaciones" };
+  }
+  return moduloCheck;
+}
+
 export type SubproductoDisponible = {
   renglon: number;
   descripcion: string;
@@ -284,7 +298,7 @@ function ventanaAprobacionProgramacionAbierta(updatedAt: string | null): boolean
  * se aprueba fila por fila — ver aprobarLote.
  */
 export async function aprobarEntrada(id: number): Promise<{ ok: true } | { error: string }> {
-  const check = await requireModuloAccessAction("mod_presupuesto");
+  const check = await requireAdminPresupuesto();
   if ("error" in check) return check;
 
   const [fila] = await db.select({
@@ -305,7 +319,7 @@ export async function aprobarEntrada(id: number): Promise<{ ok: true } | { error
 
 /** Rechaza una entrada de Programación mientras siga "Solicitado" — solo quien tenga acceso a mod_presupuesto. Reprogramación se rechaza por lote — ver rechazarLote. */
 export async function rechazarEntrada(id: number): Promise<{ ok: true } | { error: string }> {
-  const check = await requireModuloAccessAction("mod_presupuesto");
+  const check = await requireAdminPresupuesto();
   if ("error" in check) return check;
 
   const [fila] = await db.select({ estado: programacionEntradas.estado, origen: programacionEntradas.origen })
@@ -424,9 +438,9 @@ export async function solicitarLote(loteId: number): Promise<{ ok: true } | { er
   return { ok: true };
 }
 
-/** Aprueba un lote completo de Reprogramación — solo quien tenga acceso a mod_presupuesto, y solo dentro de la ventana (primeros 5 días hábiles de cada mes). Aprueba todas sus filas juntas. */
+/** Aprueba un lote completo de Reprogramación — solo Administrador/Administrador Máster, y solo dentro de la ventana (primeros 5 días hábiles de cada mes). Aprueba todas sus filas juntas. */
 export async function aprobarLote(loteId: number): Promise<{ ok: true } | { error: string }> {
-  const check = await requireModuloAccessAction("mod_presupuesto");
+  const check = await requireAdminPresupuesto();
   if ("error" in check) return check;
 
   const [lote] = await db.select({ estado: reprogramacionLotes.estado }).from(reprogramacionLotes).where(eq(reprogramacionLotes.id, loteId)).limit(1);
@@ -448,9 +462,9 @@ export async function aprobarLote(loteId: number): Promise<{ ok: true } | { erro
   return { ok: true };
 }
 
-/** Rechaza un lote completo — solo quien tenga acceso a mod_presupuesto. No lo elimina: lo regresa entero a Borrador para que se pueda corregir la fila mala (fila por fila) y volver a solicitar, sin perder las demás. */
+/** Rechaza un lote completo — solo Administrador/Administrador Máster. No lo elimina: lo regresa entero a Borrador para que se pueda corregir la fila mala (fila por fila) y volver a solicitar, sin perder las demás. */
 export async function rechazarLote(loteId: number): Promise<{ ok: true } | { error: string }> {
-  const check = await requireModuloAccessAction("mod_presupuesto");
+  const check = await requireAdminPresupuesto();
   if ("error" in check) return check;
 
   const [lote] = await db.select({ estado: reprogramacionLotes.estado }).from(reprogramacionLotes).where(eq(reprogramacionLotes.id, loteId)).limit(1);

@@ -5,6 +5,7 @@ import { ArrowLeft, CheckCircle2, CheckCircle, ClipboardList, RefreshCw, XCircle
 import { CUATRIMESTRES } from "@/lib/programacion-constants";
 import { fechaGuatemala } from "@/lib/date-utils";
 import { mesDelCuatrimestreYaPaso } from "@/lib/programacion-fechas";
+import { type Rol } from "@/lib/permisos";
 import {
   buscarRenglones, getSubproductosDeRenglon, getGrupos, getProgramadoDelGrupo,
   getEntradas, guardarEntrada, aprobarEntrada, rechazarEntrada, eliminarEntrada,
@@ -32,7 +33,12 @@ type FilaEdicion = {
   ok: boolean;
 };
 
-export default function ProgramacionClient() {
+export default function ProgramacionClient({ rol }: { rol: Rol }) {
+  // Aprobar/rechazar Reprogramaciones queda solo para Administrador y
+  // Administrador Máster — a un operador/consulta ni se le muestra la
+  // opción "Reprogramaciones pendientes" (ver también aprobarLote/
+  // rechazarLote en programacion-actions.ts, que lo exigen del lado servidor).
+  const puedeAprobar = rol === "admin" || rol === "superadmin";
   const [modo, setModo] = useState<Modo | null>(null);
   const [cuatrimestre, setCuatrimestre] = useState<number | null>(null);
 
@@ -169,14 +175,16 @@ export default function ProgramacionClient() {
             <h2 className="text-lg font-bold text-gray-900">Reprogramación</h2>
             <p className="text-sm text-gray-500 mt-1">Asignar o cambiar el monto de un renglón dentro de un cuatrimestre ya en curso — se puede solicitar cualquier día, aunque el renglón no tuviera nada programado todavía.</p>
           </button>
-          <button
-            onClick={() => setModo("aprobaciones")}
-            className="flex-1 sm:max-w-xs bg-white border-2 border-teal-200 hover:border-teal-500 rounded-2xl p-8 shadow-sm transition-colors text-left"
-          >
-            <ClipboardCheck className="w-8 h-8 text-teal-600 mb-3" />
-            <h2 className="text-lg font-bold text-gray-900">Reprogramaciones pendientes</h2>
-            <p className="text-sm text-gray-500 mt-1">Aprobar o rechazar, lote por lote, las Reprogramaciones ya solicitadas — solo del 1er al 5to día hábil de cada mes.</p>
-          </button>
+          {puedeAprobar && (
+            <button
+              onClick={() => setModo("aprobaciones")}
+              className="flex-1 sm:max-w-xs bg-white border-2 border-teal-200 hover:border-teal-500 rounded-2xl p-8 shadow-sm transition-colors text-left"
+            >
+              <ClipboardCheck className="w-8 h-8 text-teal-600 mb-3" />
+              <h2 className="text-lg font-bold text-gray-900">Reprogramaciones pendientes</h2>
+              <p className="text-sm text-gray-500 mt-1">Aprobar o rechazar, lote por lote, las Reprogramaciones ya solicitadas — solo del 1er al 5to día hábil de cada mes.</p>
+            </button>
+          )}
         </div>
       </div>
     );
@@ -451,22 +459,26 @@ export default function ProgramacionClient() {
                         <td className="px-3 py-2">
                           {esSolicitado && (
                             <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => ejecutarAccionEntrada(e.id, aprobarEntrada)}
-                                disabled={a?.cargando}
-                                title="Aprobar"
-                                className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-50"
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => ejecutarAccionEntrada(e.id, rechazarEntrada)}
-                                disabled={a?.cargando}
-                                title="Rechazar"
-                                className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50"
-                              >
-                                <XCircle className="w-4 h-4" />
-                              </button>
+                              {puedeAprobar && (
+                                <>
+                                  <button
+                                    onClick={() => ejecutarAccionEntrada(e.id, aprobarEntrada)}
+                                    disabled={a?.cargando}
+                                    title="Aprobar"
+                                    className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-50"
+                                  >
+                                    <CheckCircle className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => ejecutarAccionEntrada(e.id, rechazarEntrada)}
+                                    disabled={a?.cargando}
+                                    title="Rechazar"
+                                    className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                  >
+                                    <XCircle className="w-4 h-4" />
+                                  </button>
+                                </>
+                              )}
                               <button
                                 onClick={() => ejecutarAccionEntrada(e.id, eliminarEntrada)}
                                 disabled={a?.cargando}
