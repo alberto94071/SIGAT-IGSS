@@ -5,7 +5,9 @@ import {
   FileText, X, Loader2, AlertTriangle, CheckCircle2, XCircle,
   Printer, Plus, Gavel,
 } from "lucide-react";
-import { generarActa, aprobarActa, rechazarActa } from "@/lib/adjudicacion/actas-adjudicacion-actions";
+import {
+  generarActa, aprobarActa, rechazarActa, type DestinoRechazoActa,
+} from "@/lib/adjudicacion/actas-adjudicacion-actions";
 
 type Acta = {
   id: number; consolidacion_id: number;
@@ -167,7 +169,13 @@ export default function ActaClient({ rows: init, canEdit }: Props) {
         <RechazarOVerModal
           acta={motivoModal}
           onClose={() => setMotivoModal(null)}
-          onRechazado={acta => { updateActa(acta.consolidacion_id, acta); setMotivoModal(null); }}
+          onRechazado={consolidacionId => {
+            // El acta rechazada ya se devolvió a una etapa anterior — la
+            // consolidación deja de estar "Adjudicado" y esta fila
+            // desaparece de la lista (misma lógica que al aprobar).
+            setRows(p => p.filter(r => r.consolidacion.id !== consolidacionId));
+            setMotivoModal(null);
+          }}
         />
       )}
     </div>
@@ -241,27 +249,46 @@ function GenerarActaModal({ consolidacion: c, onClose, onCreado }: {
   );
 }
 
+const OPCIONES_DESTINO: { value: DestinoRechazoActa; label: string; detalle: string }[] = [
+  {
+    value: "junta",
+    label: "Junta Adjudicadora",
+    detalle: "La Junta vuelve a evaluar el mismo expediente (mismos oferentes y tipo de compra).",
+  },
+  {
+    value: "adjudicacion",
+    label: "Compras / Adjudicación",
+    detalle: "Compras corrige el oferente o el tipo de compra desde cero — se borran los oferentes actuales.",
+  },
+  {
+    value: "consolidacion",
+    label: "Consolidación",
+    detalle: "Deshace la consolidación por completo; las solicitudes A-01 SIAF quedan libres para armar una nueva.",
+  },
+];
+
 function RechazarOVerModal({ acta, onClose, onRechazado }: {
-  acta: Acta; onClose: () => void; onRechazado: (acta: Acta) => void;
+  acta: Acta; onClose: () => void; onRechazado: (consolidacionId: number) => void;
 }) {
   const soloVer = acta.estado === "Rechazada";
   const [motivo, setMotivo] = useState("");
+  const [destino, setDestino] = useState<DestinoRechazoActa>("adjudicacion");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function handleRechazar() {
     if (!motivo.trim()) return setError("El motivo del rechazo es obligatorio");
     setLoading(true); setError("");
-    const res = await rechazarActa(acta.id, motivo.trim());
+    const res = await rechazarActa(acta.id, motivo.trim(), destino);
     setLoading(false);
     if ("error" in res) return setError(res.error);
-    onRechazado({ ...acta, estado: "Rechazada", motivo_rechazo: motivo.trim() });
+    onRechazado(acta.consolidacion_id);
   }
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
           <h2 className="font-semibold text-gray-900 flex items-center gap-2">
             <XCircle className="w-4 h-4 text-red-600" /> {soloVer ? "Acta rechazada" : "Rechazar acta"}
           </h2>
@@ -274,10 +301,29 @@ function RechazarOVerModal({ acta, onClose, onRechazado }: {
             </p>
           ) : (
             <>
-              <label className="label">Motivo del rechazo <span className="text-red-500 font-semibold">*</span></label>
-              <textarea className="input min-h-[90px] resize-none text-sm"
-                placeholder="Explica por qué se rechaza esta acta…"
-                value={motivo} onChange={e => setMotivo(e.target.value)} autoFocus />
+              <div>
+                <label className="label">¿Hasta dónde se devuelve? <span className="text-red-500 font-semibold">*</span></label>
+                <div className="space-y-1.5">
+                  {OPCIONES_DESTINO.map(o => (
+                    <label key={o.value}
+                      className={`flex items-start gap-2.5 p-2.5 border rounded-lg cursor-pointer transition-colors ${
+                        destino === o.value ? "border-red-300 bg-red-50" : "border-gray-200 hover:bg-gray-50"}`}>
+                      <input type="radio" name="destino" className="mt-0.5" checked={destino === o.value}
+                        onChange={() => setDestino(o.value)} />
+                      <span>
+                        <span className="block text-sm font-medium text-gray-900">{o.label}</span>
+                        <span className="block text-xs text-gray-500">{o.detalle}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="label">Motivo del rechazo <span className="text-red-500 font-semibold">*</span></label>
+                <textarea className="input min-h-[90px] resize-none text-sm"
+                  placeholder="Explica por qué se rechaza esta acta…"
+                  value={motivo} onChange={e => setMotivo(e.target.value)} autoFocus />
+              </div>
             </>
           )}
           {error && (
@@ -286,7 +332,7 @@ function RechazarOVerModal({ acta, onClose, onRechazado }: {
             </div>
           )}
         </div>
-        <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100 sticky bottom-0 bg-white">
           <button onClick={onClose} className="btn-secondary">{soloVer ? "Cerrar" : "Cancelar"}</button>
           {!soloVer && (
             <button onClick={handleRechazar} disabled={loading || !motivo.trim()}

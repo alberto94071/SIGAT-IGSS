@@ -2,7 +2,10 @@
 import { fechaHoraGuatemala } from "@/lib/date-utils";
 
 import { db } from "@/lib/db";
-import { actasAdjudicacion, consolidaciones, oferentes, oferentePrecios, siafCompras, siafComprasItems } from "@/lib/schema";
+import {
+  actasAdjudicacion, consolidaciones, oferentes, oferentePrecios, siafCompras, siafComprasItems,
+  cotizacionesServicio,
+} from "@/lib/schema";
 import { eq, inArray, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { crearNotificacion } from "@/lib/notificaciones";
@@ -156,7 +159,32 @@ export async function getActasHistorial() {
     .filter((r): r is { acta: typeof r.acta; consolidacion: NonNullable<typeof r.consolidacion> } => r.consolidacion != null);
 }
 
-export async function rechazarActa(actaId: number, motivo: string): Promise<{ ok: true } | { error: string }> {
+export type DestinoRechazoActa = "junta" | "adjudicacion" | "consolidacion";
+
+const LABEL_DESTINO: Record<DestinoRechazoActa, string> = {
+  junta:         "Junta Adjudicadora",
+  adjudicacion:  "Compras/Adjudicación",
+  consolidacion: "Consolidación",
+};
+
+const RUTA_DESTINO: Record<DestinoRechazoActa, string> = {
+  junta:         "/junta-adjudicadora/adjudicacion",
+  adjudicacion:  "/compras/adjudicacion",
+  consolidacion: "/compras/consolidacion",
+};
+
+// Rechazar el Acta ahora sí devuelve la consolidación hasta la etapa que
+// elija quien rechaza — antes solo marcaba el acta como "Rechazada" y la
+// dejaba ahí, sin mover nada. No hay presupuesto que revertir en este punto:
+// el Pre-Compromiso se reserva al aprobar la solicitud A-01 SIAF (mucho
+// antes) y no se vuelve a tocar hasta que se aprueba el Compromiso — un paso
+// muy posterior al que un Acta puede llegar (ver aprobarCompromiso en
+// compromiso-actions.ts). Por eso, sin importar el destino elegido acá, solo
+// se deshacen datos de adjudicación (oferentes, consolidación, cotización),
+// nunca presupuesto_renglones.
+export async function rechazarActa(
+  actaId: number, motivo: string, destino: DestinoRechazoActa
+): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireJunta();
     if ("error" in check) return check;
@@ -167,22 +195,72 @@ export async function rechazarActa(actaId: number, motivo: string): Promise<{ ok
     const [acta] = await db.select().from(actasAdjudicacion).where(eq(actasAdjudicacion.id, actaId)).limit(1);
     if (!acta) return { error: "No se encontró el acta" };
     if (!acta.previsualizada) return { error: "Debes previsualizar el acta antes de rechazarla" };
-    if (acta.estado !== "Generada") return { error: "Esta acta ya fue procesada" };
+
+    // Se valida sobre el estado de la CONSOLIDACIÓN (no del acta) para poder
+    // corregir también actas que quedaron "Rechazada" con el comportamiento
+    // anterior — su consolidación sigue en "Adjudicado", igual de atascada.
+    const [con] = await db.select().from(consolidaciones).where(eq(consolidaciones.id, acta.consolidacion_id)).limit(1);
+    if (!con) return { error: "No se encontró la consolidación del acta" };
+    if (con.estado !== "Adjudicado") return { error: "Esta acta ya fue procesada" };
 
     const ahora = fechaHoraGuatemala();
-    await db.update(actasAdjudicacion).set({
-      estado: "Rechazada", motivo_rechazo: trimmed, rechazado_por: check.uid, rechazado_en: ahora,
-    }).where(eq(actasAdjudicacion.id, actaId));
+    const nota = `${ahora}: Acta rechazada — devuelta a ${LABEL_DESTINO[destino]} — ${trimmed}`;
+    const historial = con.historial_devoluciones ? `${con.historial_devoluciones}\n${nota}` : nota;
+
+    if (destino === "junta") {
+      // La Junta vuelve a evaluar el mismo expediente (mismos oferentes,
+      // mismo tipo de compra) — Compras solo tiene que reenviarlo, sin
+      // rearmar nada. oferente_ganador_id se limpia para dejar la
+      // consolidación en el mismo estado que un rechazo normal de Junta
+      // (rechazarJunta), donde todavía no hay un ganador elegido.
+      await db.delete(actasAdjudicacion).where(eq(actasAdjudicacion.id, actaId));
+      await db.update(consolidaciones).set({
+        estado: "Rechazado por Junta",
+        oferente_ganador_id: null,
+        motivo_rechazo: trimmed, rechazado_por: check.uid, rechazado_en: ahora,
+        historial_devoluciones: historial,
+      }).where(eq(consolidaciones.id, con.id));
+    } else if (destino === "adjudicacion") {
+      // Compras corrige oferente/tipo de compra desde cero.
+      await db.delete(actasAdjudicacion).where(eq(actasAdjudicacion.id, actaId));
+      await db.update(consolidaciones).set({ oferente_ganador_id: null }).where(eq(consolidaciones.id, con.id));
+      await db.delete(oferentes).where(eq(oferentes.consolidacion_id, con.id));
+      await db.update(cotizacionesServicio)
+        .set({ usado: false, usado_en_consolidacion_id: null })
+        .where(eq(cotizacionesServicio.usado_en_consolidacion_id, con.id));
+      await db.update(consolidaciones).set({
+        estado: "Pendiente adjudicación",
+        destino: null, tipo_compra: null, regularizado: null,
+        proveedor_id: null, proveedor_nit: null, proveedor_nombre: null,
+        exento_iva: false, total: null, monto_bruto: null,
+        numero_adjudicacion: null, razon_adjudicacion: null,
+        cotizacion_anual_id: null,
+        motivo_rechazo: null, rechazado_por: null, rechazado_en: null,
+        historial_devoluciones: historial,
+      }).where(eq(consolidaciones.id, con.id));
+    } else {
+      // Deshace la consolidación por completo: libera las solicitudes A-01
+      // SIAF (vuelven a "Aprobado", listas para consolidarse de nuevo) y
+      // borra la consolidación — oferentes, precios y el acta se van en
+      // cascada (mismo patrón que rechazarEnAdjudicacion).
+      await db.update(siafCompras)
+        .set({ estado: "Aprobado", consolidacion_id: null })
+        .where(eq(siafCompras.consolidacion_id, con.id));
+      await db.update(cotizacionesServicio)
+        .set({ usado: false, usado_en_consolidacion_id: null })
+        .where(eq(cotizacionesServicio.usado_en_consolidacion_id, con.id));
+      await db.delete(consolidaciones).where(eq(consolidaciones.id, con.id));
+    }
 
     if (acta.generado_por) {
       await crearNotificacion({
         usuario_id:      acta.generado_por,
         tipo:            "acta_rechazada",
-        titulo:          `Acta ${acta.no_acta} rechazada`,
+        titulo:          `Acta ${acta.no_acta} rechazada — devuelta a ${LABEL_DESTINO[destino]}`,
         mensaje:         trimmed,
-        ruta:            `/junta-adjudicadora/acta`,
-        referencia_tipo: "actas_adjudicacion",
-        referencia_id:   actaId,
+        ruta:            RUTA_DESTINO[destino],
+        referencia_tipo: "consolidaciones",
+        referencia_id:   con.id,
       });
     }
 
