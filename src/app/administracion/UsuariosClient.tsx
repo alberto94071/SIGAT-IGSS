@@ -5,7 +5,7 @@ import {
   X, Check, Eye, EyeOff, AlertTriangle
 } from "lucide-react";
 import {
-  PERMISOS_DEFAULT, ROL_LABELS, ROL_COLORS,
+  PERMISOS_DEFAULT, ROL_LABELS, ROL_COLORS, ROLES_GESTIONABLES_POR_ADMIN,
   type Rol, type Permisos
 } from "@/lib/permisos";
 import {
@@ -48,11 +48,20 @@ const MODULOS_LAUNCHER: { key: keyof Permisos; label: string }[] = [
 
 interface Props {
   usuarios:      Usuario[];
-  isSuperAdmin:  boolean;
+  rol:           Rol;
   currentUserId: number;
 }
 
-export default function UsuariosClient({ usuarios: init, isSuperAdmin, currentUserId }: Props) {
+export default function UsuariosClient({ usuarios: init, rol, currentUserId }: Props) {
+  const isSuperAdmin   = rol === "superadmin";
+  // Un "admin" puede crear/editar usuarios, pero solo de nivel operador/
+  // consulta — nunca otros administradores ni el Administrador Máster, y
+  // nunca los "accesos" (permisos por módulo), que quedan exclusivos del
+  // máster.
+  const canManageUsers = isSuperAdmin || rol === "admin";
+  const rolesAsignables = isSuperAdmin ? (Object.keys(ROL_LABELS) as Rol[]) : ROLES_GESTIONABLES_POR_ADMIN;
+  const puedeGestionar = (u: Usuario) => isSuperAdmin || ROLES_GESTIONABLES_POR_ADMIN.includes(u.rol);
+
   const [lista,       setLista]       = useState(init);
   const [modal,       setModal]       = useState<"crear" | "editar" | "permisos" | "reset" | null>(null);
   const [selected,    setSelected]    = useState<Usuario | null>(null);
@@ -151,7 +160,7 @@ export default function UsuariosClient({ usuarios: init, isSuperAdmin, currentUs
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">{lista.length} usuarios en el sistema</p>
         </div>
-        {isSuperAdmin && (
+        {canManageUsers && (
           <button onClick={openCrear} className="btn-primary">
             <Plus className="w-4 h-4" /> Nuevo usuario
           </button>
@@ -167,7 +176,7 @@ export default function UsuariosClient({ usuarios: init, isSuperAdmin, currentUs
               <th className="px-4 py-3 text-left">Rol</th>
               <th className="px-4 py-3 text-left">Estado</th>
               <th className="px-4 py-3 text-left">Último ingreso</th>
-              {isSuperAdmin && <th className="px-4 py-3 text-right">Acciones</th>}
+              {canManageUsers && <th className="px-4 py-3 text-right">Acciones</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -205,34 +214,40 @@ export default function UsuariosClient({ usuarios: init, isSuperAdmin, currentUs
                     ? new Date(u.last_login).toLocaleDateString("es-GT", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
                     : "Nunca"}
                 </td>
-                {isSuperAdmin && (
+                {canManageUsers && (
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => openEditar(u)}
-                        title="Editar"
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => openPermisos(u)}
-                        title="Permisos"
-                        className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors">
-                        <ShieldCheck className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => openReset(u)}
-                        title="Restablecer contraseña"
-                        className="p-1.5 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors">
-                        <KeyRound className="w-4 h-4" />
-                      </button>
-                      {u.id !== currentUserId && (
-                        <button onClick={() => handleToggle(u)}
-                          title={u.activo ? "Deshabilitar" : "Habilitar"}
-                          className={`p-1.5 rounded-lg transition-colors ${u.activo
-                            ? "text-gray-400 hover:text-red-600 hover:bg-red-50"
-                            : "text-gray-400 hover:text-green-600 hover:bg-green-50"}`}>
-                          <Power className="w-4 h-4" />
+                    {puedeGestionar(u) ? (
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => openEditar(u)}
+                          title="Editar"
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                          <Pencil className="w-4 h-4" />
                         </button>
-                      )}
-                    </div>
+                        {isSuperAdmin && (
+                          <button onClick={() => openPermisos(u)}
+                            title="Permisos"
+                            className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors">
+                            <ShieldCheck className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button onClick={() => openReset(u)}
+                          title="Restablecer contraseña"
+                          className="p-1.5 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors">
+                          <KeyRound className="w-4 h-4" />
+                        </button>
+                        {u.id !== currentUserId && (
+                          <button onClick={() => handleToggle(u)}
+                            title={u.activo ? "Deshabilitar" : "Habilitar"}
+                            className={`p-1.5 rounded-lg transition-colors ${u.activo
+                              ? "text-gray-400 hover:text-red-600 hover:bg-red-50"
+                              : "text-gray-400 hover:text-green-600 hover:bg-green-50"}`}>
+                            <Power className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-right text-xs text-gray-300" title="Solo el Administrador Máster puede gestionar esta cuenta">—</p>
+                    )}
                   </td>
                 )}
               </tr>
@@ -263,10 +278,13 @@ export default function UsuariosClient({ usuarios: init, isSuperAdmin, currentUs
             <div>
               <label className="label">Rol</label>
               <select className="input" value={rolForm} onChange={e => applyRolDefaults(e.target.value as Rol)}>
-                {(Object.keys(ROL_LABELS) as Rol[]).map(r => (
+                {rolesAsignables.map(r => (
                   <option key={r} value={r}>{ROL_LABELS[r]}</option>
                 ))}
               </select>
+              {!isSuperAdmin && (
+                <p className="text-xs text-gray-400 mt-1">Solo el Administrador Máster puede asignar el rol de Administrador.</p>
+              )}
             </div>
             {modal === "crear" && (
               <div>

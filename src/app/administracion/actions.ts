@@ -4,11 +4,23 @@ import { usuarios, auditLog } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
-import { type Rol, type Permisos } from "@/lib/permisos";
+import { type Rol, type Permisos, ROLES_GESTIONABLES_POR_ADMIN } from "@/lib/permisos";
 
 async function getMe() {
   const session = await auth();
   return session ? { id: Number(session.user.id), rol: session.user.rol as Rol } : null;
+}
+
+async function getRolDe(id: number): Promise<Rol | null> {
+  const [row] = await db.select({ rol: usuarios.rol }).from(usuarios).where(eq(usuarios.id, id)).limit(1);
+  return (row?.rol as Rol) ?? null;
+}
+
+// Un "admin" solo puede tocar cuentas operador/consulta, y solo puede dejar
+// el rol resultante en operador/consulta (nunca ascender a admin/superadmin
+// ni tocar una cuenta que ya es admin/superadmin).
+function puedeGestionarUsuarios(me: { rol: Rol }): boolean {
+  return me.rol === "superadmin" || me.rol === "admin";
 }
 
 export async function crearUsuario(data: {
@@ -16,7 +28,10 @@ export async function crearUsuario(data: {
 }) {
   try {
     const me = await getMe();
-    if (!me || me.rol !== "superadmin") return { error: "Sin permiso" };
+    if (!me || !puedeGestionarUsuarios(me)) return { error: "Sin permiso" };
+    if (me.rol === "admin" && !ROLES_GESTIONABLES_POR_ADMIN.includes(data.rol)) {
+      return { error: "Solo el Administrador Máster puede crear administradores" };
+    }
 
     const hash = await bcrypt.hash(data.password, 12);
     const [nuevo] = await db.insert(usuarios).values({
@@ -47,7 +62,14 @@ export async function editarUsuario(data: {
 }) {
   try {
     const me = await getMe();
-    if (!me || me.rol !== "superadmin") return { error: "Sin permiso" };
+    if (!me || !puedeGestionarUsuarios(me)) return { error: "Sin permiso" };
+    if (me.rol === "admin") {
+      const rolActual = await getRolDe(data.id);
+      if (!rolActual || !ROLES_GESTIONABLES_POR_ADMIN.includes(rolActual)) return { error: "Sin permiso" };
+      if (!ROLES_GESTIONABLES_POR_ADMIN.includes(data.rol)) {
+        return { error: "Solo el Administrador Máster puede asignar el rol de administrador" };
+      }
+    }
 
     await db.update(usuarios)
       .set({ nombre: data.nombre, email: data.email, rol: data.rol, updated_at: new Date().toISOString() })
@@ -70,7 +92,11 @@ export async function editarUsuario(data: {
 export async function resetPassword(data: { id: number; password: string }) {
   try {
     const me = await getMe();
-    if (!me || me.rol !== "superadmin") return { error: "Sin permiso" };
+    if (!me || !puedeGestionarUsuarios(me)) return { error: "Sin permiso" };
+    if (me.rol === "admin") {
+      const rolActual = await getRolDe(data.id);
+      if (!rolActual || !ROLES_GESTIONABLES_POR_ADMIN.includes(rolActual)) return { error: "Sin permiso" };
+    }
     if (data.password.length < 8) return { error: "La contraseña debe tener al menos 8 caracteres" };
 
     const hash = await bcrypt.hash(data.password, 12);
@@ -95,7 +121,11 @@ export async function resetPassword(data: { id: number; password: string }) {
 export async function toggleActivo(data: { id: number; activo: boolean }) {
   try {
     const me = await getMe();
-    if (!me || me.rol !== "superadmin") return { error: "Sin permiso" };
+    if (!me || !puedeGestionarUsuarios(me)) return { error: "Sin permiso" };
+    if (me.rol === "admin") {
+      const rolActual = await getRolDe(data.id);
+      if (!rolActual || !ROLES_GESTIONABLES_POR_ADMIN.includes(rolActual)) return { error: "Sin permiso" };
+    }
 
     await db.update(usuarios)
       .set({ activo: data.activo, updated_at: new Date().toISOString() })
@@ -115,6 +145,8 @@ export async function toggleActivo(data: { id: number; activo: boolean }) {
   }
 }
 
+// Los "accesos" (permisos por módulo) son configuración del Administrador
+// Máster — un admin no los toca, aunque sí pueda crear/editar usuarios.
 export async function guardarPermisos(data: { id: number; permisos: Permisos }) {
   try {
     const me = await getMe();
