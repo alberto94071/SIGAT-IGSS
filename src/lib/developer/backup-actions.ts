@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
+import { auth } from "@/lib/auth";
 import { MASTER_PASSWORD } from "./master-password";
 import {
   configuracion, usuarios, catalogoInsumos, catalogo182, catalogoCompras, catalogoSubproductos,
@@ -9,8 +10,8 @@ import {
   servicios, friFondoRotativo, movimientosBanco, cajaChica, auditLog, pasajesTarifario,
   cotizacionesServicio, cotizacionesAnuales, actasNegociacion, notificaciones, nogRegistros,
   viaticoLiquidaciones, programacionEntradas, pasajesSolicitudes, requisicionesBodega, valesCajaChica,
-  consolidaciones, siafCompras, reprogramaciones, modificacionesPresupuestarias, ordenesCompra,
-  pagos, fondoRotativoPagos, cotizacionesAnualesItems, actasAdjudicacion, consolidacionPrecios,
+  consolidaciones, siafCompras, reprogramacionLotes, reprogramaciones, modificacionesPresupuestarias,
+  ordenesCompra, pagos, fondoRotativoPagos, cotizacionesAnualesItems, actasAdjudicacion, consolidacionPrecios,
   oferentes, siafComprasItems, programacionCompromisos, requisicionBodegaItems, polizas,
   oferentePrecios, pasajesPagos,
 } from "@/lib/schema";
@@ -51,6 +52,7 @@ const TABLAS = [
   { nombre: "vales_caja_chica", tabla: valesCajaChica },
   { nombre: "consolidaciones", tabla: consolidaciones },
   { nombre: "siaf_compras", tabla: siafCompras },
+  { nombre: "reprogramacion_lotes", tabla: reprogramacionLotes },
   { nombre: "reprogramaciones", tabla: reprogramaciones },
   { nombre: "modificaciones_presupuestarias", tabla: modificacionesPresupuestarias },
   { nombre: "ordenes_compra", tabla: ordenesCompra },
@@ -86,6 +88,20 @@ function esTablaInexistente(e: unknown): boolean {
   return typeof e === "object" && e !== null && "code" in e && (e as { code?: string }).code === RELATION_NOT_FOUND;
 }
 
+async function generarBackupData(): Promise<BackupData> {
+  const tablas: Record<string, Record<string, unknown>[]> = {};
+  const omitidas: string[] = [];
+  for (const { nombre, tabla } of TABLAS) {
+    try {
+      tablas[nombre] = await db.select().from(tabla as never);
+    } catch (e) {
+      if (!esTablaInexistente(e)) throw e;
+      omitidas.push(nombre);
+    }
+  }
+  return { version: 1, generado_en: new Date().toISOString(), tablas, omitidas };
+}
+
 /**
  * Respaldo completo del sistema: exporta el contenido íntegro de todas las
  * tablas (catálogos, usuarios, configuración, y toda la operación
@@ -96,17 +112,19 @@ function esTablaInexistente(e: unknown): boolean {
 export async function exportarBackup(password: string): Promise<{ ok: true; data: BackupData } | { error: string }> {
   if (password !== MASTER_PASSWORD) return { error: "Contraseña incorrecta." };
   try {
-    const tablas: Record<string, Record<string, unknown>[]> = {};
-    const omitidas: string[] = [];
-    for (const { nombre, tabla } of TABLAS) {
-      try {
-        tablas[nombre] = await db.select().from(tabla as never);
-      } catch (e) {
-        if (!esTablaInexistente(e)) throw e;
-        omitidas.push(nombre);
-      }
-    }
-    return { ok: true, data: { version: 1, generado_en: new Date().toISOString(), tablas, omitidas } };
+    return { ok: true, data: await generarBackupData() };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Error al generar el respaldo" };
+  }
+}
+
+// Mismo respaldo, pero para el Administrador Máster (rol "superadmin") desde
+// dentro de la aplicación — ver src/app/administracion/reiniciar.
+export async function exportarBackupComoSuperadmin(): Promise<{ ok: true; data: BackupData } | { error: string }> {
+  const session = await auth();
+  if (!session || session.user.rol !== "superadmin") return { error: "Sin permiso" };
+  try {
+    return { ok: true, data: await generarBackupData() };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Error al generar el respaldo" };
   }

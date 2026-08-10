@@ -7,7 +7,7 @@ import {
   FileCheck, BookOpen, BarChart3, FileText, Users, Settings, LogOut,
   ChevronLeft, Gavel, ShoppingCart, MapPin, Receipt, Calculator,
   Archive, Library, FileSignature, Hash, LayoutGrid, TrendingUp,
-  Layers, Route, Scale, Coins, Ticket,
+  Layers, Route, Scale, Coins, Ticket, RotateCcw,
 } from "lucide-react";
 import { type Rol, ROL_LABELS } from "@/lib/permisos";
 import clsx from "clsx";
@@ -40,6 +40,7 @@ const ICONS: Record<string, React.ReactNode> = {
   Scale:           <Scale           className="w-4 h-4" />,
   Coins:           <Coins           className="w-4 h-4" />,
   Ticket:          <Ticket          className="w-4 h-4" />,
+  RotateCcw:       <RotateCcw       className="w-4 h-4" />,
 };
 
 interface Props {

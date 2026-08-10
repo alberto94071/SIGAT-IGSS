@@ -20,12 +20,10 @@ export default async function AdministracionPage() {
     .from(usuarios)
     .orderBy(usuarios.id);
 
-  const isSuperAdmin = rol === "superadmin";
-
   return (
     <UsuariosClient
       usuarios={lista as any}
-      isSuperAdmin={isSuperAdmin}
+      rol={rol}
       currentUserId={Number(session.user.id)}
     />
   );

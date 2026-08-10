@@ -1,5 +1,11 @@
 export type Rol = "superadmin" | "admin" | "operador" | "consulta";
 
+// Roles que un "admin" (no máster) puede administrar en Usuarios — el día a
+// día del personal operativo. Crear/editar administradores u otros máster,
+// y tocar los accesos (permisos por módulo), sigue siendo exclusivo del
+// Administrador Máster (superadmin). Ver administracion/actions.ts.
+export const ROLES_GESTIONABLES_POR_ADMIN: Rol[] = ["operador", "consulta"];
+
 export interface Permisos {
   // ── Fondo Rotativo interno ──
   servicios:    boolean;
