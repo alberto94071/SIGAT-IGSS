@@ -10,6 +10,16 @@ import { and } from "drizzle-orm";
 import { requiereDab60, cuatrimestreDeFecha } from "@/lib/programacion-constants";
 import { fechaGuatemala, fechaHoraGuatemala } from "@/lib/date-utils";
 
+// Igual que PresupuestoExcedidoEnTransaccion en presupuesto-disponible.ts —
+// permite distinguir, en el catch de aprobarCompromiso, "se quedó sin
+// Pre-Compromiso en la re-verificación dentro de la transacción" de
+// cualquier otro error inesperado.
+class PreCompromisoInsuficienteEnTransaccion extends Error {
+  constructor(public renglon: number, public subproducto: string, public disponible: number, public requerido: number) {
+    super("pre_compromiso_insuficiente_en_transaccion");
+  }
+}
+
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
   if (!session) return { error: "No autorizado" };
@@ -119,6 +129,21 @@ export async function aprobarCompromiso(ordenId: number): Promise<{ ok: true } |
       await tx.update(ordenesCompra).set({ estado: siguienteEstado }).where(eq(ordenesCompra.id, ordenId));
 
       for (const r of renglones) {
+        // Re-verifica el Pre-Compromiso con la fila bloqueada (FOR UPDATE)
+        // justo antes de escribir — el chequeo de "faltantes" de arriba se
+        // hizo fuera de la transacción y pudo quedar desactualizado si otra
+        // aprobación al mismo renglón se coló entre medio.
+        const [vivo] = await tx.select({ pre_compromiso: presupuestoRenglones.pre_compromiso })
+          .from(presupuestoRenglones).where(and(
+            eq(presupuestoRenglones.renglon, r.renglon as number),
+            eq(presupuestoRenglones.subproducto, r.subproducto),
+            eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+          )).for("update").limit(1);
+        const disponibleAhora = vivo?.pre_compromiso ?? 0;
+        if (r.total > disponibleAhora + 0.01) {
+          throw new PreCompromisoInsuficienteEnTransaccion(r.renglon as number, r.subproducto, disponibleAhora, r.total);
+        }
+
         await tx.update(presupuestoRenglones).set({
           pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) - ${r.total}`,
           compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) + ${r.total}`,
@@ -155,7 +180,11 @@ export async function aprobarCompromiso(ordenId: number): Promise<{ ok: true } |
     });
 
     return { ok: true };
-  } catch {
+  } catch (e) {
+    if (e instanceof PreCompromisoInsuficienteEnTransaccion) {
+      const faltante = e.requerido - e.disponible;
+      return { error: `La programación no es suficiente: renglón ${e.renglon} / ${e.subproducto} (disponible Q${e.disponible.toLocaleString("es-GT", { minimumFractionDigits: 2 })}, faltan Q${faltante.toLocaleString("es-GT", { minimumFractionDigits: 2 })}). Solicita una Reprogramación antes de aprobar.` };
+    }
     return { error: "Error al aprobar el compromiso" };
   }
 }

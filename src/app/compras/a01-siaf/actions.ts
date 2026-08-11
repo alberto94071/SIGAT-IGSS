@@ -6,7 +6,7 @@ import { siafCompras, siafComprasItems, catalogoCompras, consolidaciones, presup
 import { eq, and, sql, inArray, desc } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { crearNotificacion } from "@/lib/notificaciones";
-import { verificarPresupuestoDisponible, mensajePresupuestoExcedido } from "@/lib/presupuesto-disponible";
+import { verificarPresupuestoDisponible, mensajePresupuestoExcedido, getDisponibleTx, PresupuestoExcedidoEnTransaccion } from "@/lib/presupuesto-disponible";
 
 // Todo ítem de un SIAF debe existir en el PAC (Catálogo de Compras) — si el
 // catalogo_id que mandó el cliente ya no existe o fue desactivado, no se
@@ -322,6 +322,14 @@ export async function aprobarSolicitud(id: number): Promise<{ ok: true } | { err
     await db.transaction(async (tx) => {
       if (montos) {
         for (const { renglon, subproducto, monto } of montos.values()) {
+          // Re-verifica el disponible con la fila bloqueada (FOR UPDATE) justo
+          // antes de escribir — el chequeo de arriba (verificarPresupuestoDisponible)
+          // se hizo fuera de la transacción y pudo quedar desactualizado si otra
+          // aprobación al mismo renglón se coló entre medio.
+          const disponible = await getDisponibleTx(tx, renglon, subproducto);
+          if (monto > disponible + 0.01) {
+            throw new PresupuestoExcedidoEnTransaccion({ renglon, subproducto, disponible, requerido: monto });
+          }
           await tx.update(presupuestoRenglones)
             .set({ pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${monto}` })
             .where(and(
@@ -335,7 +343,8 @@ export async function aprobarSolicitud(id: number): Promise<{ ok: true } | { err
     });
 
     return { ok: true };
-  } catch {
+  } catch (e) {
+    if (e instanceof PresupuestoExcedidoEnTransaccion) return { error: await mensajePresupuestoExcedido([e.detalle]) };
     return { error: "Error al aprobar la solicitud" };
   }
 }

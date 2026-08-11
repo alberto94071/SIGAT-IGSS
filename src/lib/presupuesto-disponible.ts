@@ -113,6 +113,52 @@ export async function getSaldoRenglon(renglon: number, subproducto: string): Pro
   return { disponible, programadoAcumulado, noEjecutado, saldo: disponible - programadoAcumulado - noEjecutado };
 }
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Igual que getDisponible, pero con SELECT ... FOR UPDATE dentro de una
+// transacción — bloquea la fila hasta que la transacción termine, así que si
+// dos aprobaciones contra el mismo renglón llegan al mismo tiempo, la
+// segunda espera a que la primera termine de escribir antes de leer, en vez
+// de las dos leyendo el mismo saldo desactualizado y las dos pasando la
+// validación (lo que dejaría el renglón sobregirado). Debe llamarse SIEMPRE
+// justo antes de escribir el mismo delta dentro de la misma transacción —
+// llamarla y no usar el resultado no protege nada.
+export async function getDisponibleTx(tx: Tx, renglon: number, subproducto: string): Promise<number> {
+  const base = PRESUPUESTO_DATA.find(r => r.renglon === renglon && r.subProducto === subproducto);
+  const vigente = base?.vigente ?? 0;
+
+  const [vivo] = await tx.select({
+    modificacion_ingru:           presupuestoRenglones.modificacion_ingru,
+    modificacion_entre_renglones: presupuestoRenglones.modificacion_entre_renglones,
+    modificacion_ampliacion:      presupuestoRenglones.modificacion_ampliacion,
+    pre_compromiso:               presupuestoRenglones.pre_compromiso,
+    compromiso:                   presupuestoRenglones.compromiso,
+    devengado:                    presupuestoRenglones.devengado,
+    devengado_regularizado:       presupuestoRenglones.devengado_regularizado,
+    no_ejecutado:                 presupuestoRenglones.no_ejecutado,
+  }).from(presupuestoRenglones).where(and(
+    eq(presupuestoRenglones.renglon, renglon),
+    eq(presupuestoRenglones.subproducto, subproducto),
+    eq(presupuestoRenglones.ejercicio_fiscal, EJERCICIO_FISCAL),
+  )).for("update").limit(1);
+
+  const modificaciones =
+    (vivo?.modificacion_ingru ?? 0) + (vivo?.modificacion_entre_renglones ?? 0) + (vivo?.modificacion_ampliacion ?? 0);
+  const usado =
+    (vivo?.pre_compromiso ?? 0) + (vivo?.compromiso ?? 0) + (vivo?.devengado ?? 0) +
+    (vivo?.devengado_regularizado ?? 0) + (vivo?.no_ejecutado ?? 0);
+
+  return vigente + modificaciones - usado;
+}
+
+// Error especial para que aprobarSolicitud/aprobarCompromiso puedan
+// distinguir "se quedó sin presupuesto en la re-verificación dentro de la
+// transacción" de cualquier otro error inesperado, y devolver el mensaje
+// correcto al usuario en vez de un genérico "Error al aprobar".
+export class PresupuestoExcedidoEnTransaccion extends Error {
+  constructor(public detalle: PresupuestoExcedido) { super("presupuesto_excedido_en_transaccion"); }
+}
+
 export type RenglonSubproducto = { renglon: number; subproducto: string; monto: number };
 export type PresupuestoExcedido = { renglon: number; subproducto: string; disponible: number; requerido: number };
 

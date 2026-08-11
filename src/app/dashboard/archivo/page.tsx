@@ -2,6 +2,6 @@ import { getArchivoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos
 import ArchivoFondoRotativoClient from "./ArchivoFondoRotativoClient";
 
 export default async function ArchivoFondoRotativoPage() {
-  const pagos = await getArchivoFondoRotativo();
-  return <ArchivoFondoRotativoClient pagos={pagos} />;
+  const { pagos, hasMore } = await getArchivoFondoRotativo(0);
+  return <ArchivoFondoRotativoClient pagos={pagos} hasMore={hasMore} />;
 }

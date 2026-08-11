@@ -1,8 +1,8 @@
 "use client";
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { Archive, Search, Printer } from "lucide-react";
-import type { PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import { Archive, Search, Printer, Loader2 } from "lucide-react";
+import { getArchivoFondoRotativo, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -16,9 +16,12 @@ const ESTADO_STYLE: Record<string, string> = {
   "Reintegrado":             "bg-green-100 text-green-700",
 };
 
-interface Props { pagos: PagoFondoRotativo[]; }
+interface Props { pagos: PagoFondoRotativo[]; hasMore: boolean; }
 
-export default function ArchivoFondoRotativoClient({ pagos }: Props) {
+export default function ArchivoFondoRotativoClient({ pagos: pagosIniciales, hasMore: hasMoreInicial }: Props) {
+  const [pagos, setPagos] = useState(pagosIniciales);
+  const [hasMore, setHasMore] = useState(hasMoreInicial);
+  const [cargandoMas, setCargandoMas] = useState(false);
   const [query, setQuery] = useState("");
 
   const q = query.toLowerCase().trim();
@@ -28,6 +31,17 @@ export default function ArchivoFondoRotativoClient({ pagos }: Props) {
     `${p.serie_factura}-${p.no_factura}`.toLowerCase().includes(q)
   ), [pagos, q]);
 
+  async function cargarMas() {
+    setCargandoMas(true);
+    try {
+      const { pagos: siguientes, hasMore: quedaMas } = await getArchivoFondoRotativo(pagos.length);
+      setPagos(p => [...p, ...siguientes]);
+      setHasMore(quedaMas);
+    } finally {
+      setCargandoMas(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -35,14 +49,21 @@ export default function ArchivoFondoRotativoClient({ pagos }: Props) {
           <Archive className="w-5 h-5" /> Fondo Rotativo — Archivo
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Todo lo que ya generó su SIAF-04 queda aquí para siempre — {pagos.length} registro(s) en total.
+          Todo lo que ya generó su SIAF-04 queda aquí para siempre — {pagos.length}{hasMore ? "+" : ""} registro(s) cargado(s).
         </p>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input className="input pl-9" placeholder="Buscar por No. A-04, proveedor, factura…"
-          value={query} onChange={e => setQuery(e.target.value)} />
+      <div>
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input className="input pl-9" placeholder="Buscar por No. A-04, proveedor, factura…"
+            value={query} onChange={e => setQuery(e.target.value)} />
+        </div>
+        {hasMore && (
+          <p className="text-xs text-gray-400 mt-1">
+            La búsqueda solo alcanza lo ya cargado — usa &quot;Cargar más&quot; para traer registros anteriores.
+          </p>
+        )}
       </div>
 
       <div className="card overflow-hidden">
@@ -99,6 +120,15 @@ export default function ArchivoFondoRotativoClient({ pagos }: Props) {
             </div>
           )}
         </div>
+        {hasMore && (
+          <div className="flex justify-center py-4 border-t border-gray-100">
+            <button onClick={cargarMas} disabled={cargandoMas}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50">
+              {cargandoMas ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {cargandoMas ? "Cargando…" : "Cargar más"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

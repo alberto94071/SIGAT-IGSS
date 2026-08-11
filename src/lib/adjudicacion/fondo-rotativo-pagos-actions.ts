@@ -104,9 +104,19 @@ export async function getLibroBancos(): Promise<PagoFondoRotativo[]> {
 // Historial completo de Fondo Rotativo — toda consolidación que ya generó su
 // SIAF-04, sin importar en qué parte del flujo (Pagos, Bancos, Liquidación o
 // Libro Caja Chica) haya quedado. Aquí solo se puede volver a ver/imprimir el SIAF-04.
-export async function getArchivoFondoRotativo(): Promise<PagoFondoRotativo[]> {
-  const rows = await db.select().from(fondoRotativoPagos).orderBy(sql`id DESC`);
-  return conDetalle(rows);
+//
+// Nunca se borra, así que crece para siempre — se pagina por lotes (más
+// recientes primero) en vez de traer toda la tabla de un jalón. Pide un
+// registro de más para saber si queda algo atrás sin otra consulta.
+// (Un archivo "use server" solo puede exportar funciones async.)
+const ARCHIVO_FONDO_ROTATIVO_PAGE_SIZE = 50;
+
+export async function getArchivoFondoRotativo(offset: number = 0): Promise<{ pagos: PagoFondoRotativo[]; hasMore: boolean }> {
+  const limit = ARCHIVO_FONDO_ROTATIVO_PAGE_SIZE;
+  const rows = await db.select().from(fondoRotativoPagos).orderBy(sql`id DESC`).limit(limit + 1).offset(offset);
+  const hasMore = rows.length > limit;
+  const pagos = await conDetalle(rows.slice(0, limit));
+  return { pagos, hasMore };
 }
 
 export type TipoDocumentoPago = "Factura" | "Vale" | "Formulario";

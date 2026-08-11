@@ -5,6 +5,14 @@ import { db } from "@/lib/db";
 import { usuarios } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 
+// Bloqueo temporal tras varios intentos fallidos seguidos — sin esto, un
+// atacante puede probar contraseñas contra un email conocido sin límite
+// (fuerza bruta). Se guarda en la fila del usuario (no en memoria del
+// proceso) para que el bloqueo sea real en un despliegue serverless, donde
+// cada request puede caer en una instancia distinta.
+const MAX_INTENTOS_FALLIDOS = 5;
+const BLOQUEO_MS = 15 * 60 * 1000;
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
@@ -26,16 +34,28 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (!user || !user.activo) return null;
 
+        if (user.bloqueado_hasta && new Date(user.bloqueado_hasta).getTime() > Date.now()) {
+          return null;
+        }
+
         const valid = await bcrypt.compare(
           credentials.password as string,
           user.password_hash
         );
-        if (!valid) return null;
+        if (!valid) {
+          const intentos = user.intentos_fallidos + 1;
+          await db.update(usuarios).set(
+            intentos >= MAX_INTENTOS_FALLIDOS
+              ? { intentos_fallidos: 0, bloqueado_hasta: new Date(Date.now() + BLOQUEO_MS).toISOString() }
+              : { intentos_fallidos: intentos }
+          ).where(eq(usuarios.id, user.id));
+          return null;
+        }
 
-        // Update last_login
+        // Update last_login y limpiar cualquier racha de intentos fallidos previa
         await db
           .update(usuarios)
-          .set({ last_login: new Date().toISOString() })
+          .set({ last_login: new Date().toISOString(), intentos_fallidos: 0, bloqueado_hasta: null })
           .where(eq(usuarios.id, user.id));
 
         return {

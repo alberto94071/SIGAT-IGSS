@@ -189,17 +189,17 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
     precio_unitario:     siafComprasItems.precio_unitario,
   }).from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds));
 
-  const [unidades, codigos] = await Promise.all([unidadMedidaLookupMap(), codigoLookupMap()]);
+  // Un solo query para el catálogo completo (misma tabla que ya carga
+  // renglonLookupMap) en vez de una consulta por ítem — antes esto era un
+  // N+1 clásico: una solicitud consolidada con muchos insumos distintos
+  // disparaba una consulta a catalogo_compras por cada uno.
+  const [unidades, codigos, renglones] = await Promise.all([unidadMedidaLookupMap(), codigoLookupMap(), renglonLookupMap()]);
 
   const grupos = new Map<string, GrupoRenglon>();
   for (const item of items) {
-    let renglon: number | null = null;
-    if (item.codigo_igss != null) {
-      const [cat] = await db.select({ renglon: catalogoCompras.renglon }).from(catalogoCompras)
-        .where(and(eq(catalogoCompras.codigo_igss, item.codigo_igss), eq(catalogoCompras.subproducto, item.subproducto)))
-        .limit(1);
-      renglon = cat?.renglon ?? null;
-    }
+    const renglon = item.codigo_igss != null
+      ? renglones.get(`${item.codigo_igss}::${item.subproducto}`) ?? null
+      : null;
     const key = `${item.codigo_igss}::${item.subproducto}`;
     const itemTotal = item.cantidad_solicitada * (item.precio_unitario ?? 0);
     const existente = grupos.get(key);
