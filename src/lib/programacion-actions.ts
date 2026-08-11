@@ -28,14 +28,14 @@ async function requireEdit(): Promise<{ error: string } | { uid: number }> {
 // Administrador Máster — un operador puede solicitarlas pero no aprobarlas.
 // Ver también ProgramacionClient.tsx, que ni siquiera muestra la opción
 // "Reprogramaciones pendientes" a quien no tenga uno de estos dos roles.
-async function requireAdminPresupuesto(): Promise<{ error: string } | { uid: number }> {
+async function requireAdminPresupuesto(): Promise<{ error: string } | { uid: number; esMaster: boolean }> {
   const moduloCheck = await requireModuloAccessAction("mod_presupuesto");
   if ("error" in moduloCheck) return moduloCheck;
   const session = await auth();
   if (session?.user.rol !== "admin" && session?.user.rol !== "superadmin") {
     return { error: "Solo un Administrador puede aprobar o rechazar Reprogramaciones" };
   }
-  return moduloCheck;
+  return { ...moduloCheck, esMaster: session.user.rol === "superadmin" };
 }
 
 export type SubproductoDisponible = {
@@ -296,8 +296,14 @@ function ventanaAprobacionProgramacionAbierta(updatedAt: string | null): boolean
  * mod_presupuesto, y solo dentro de su ventana de aprobación (abre el 6to
  * día hábil del mes en que se creó, sin límite después). Reprogramación no
  * se aprueba fila por fila — ver aprobarLote.
+ *
+ * Único caso especial: el Administrador Máster (superadmin) puede aprobar
+ * cualquier día del año, sin ventana — pero si está fuera de fecha, primero
+ * se le devuelve `fueraDeVentana` para que el cliente le muestre una
+ * confirmación ("no estás en fechas permitidas, ¿de verdad deseas
+ * continuar?"); solo al reintentar con `forzar: true` se aprueba de una vez.
  */
-export async function aprobarEntrada(id: number): Promise<{ ok: true } | { error: string }> {
+export async function aprobarEntrada(id: number, forzar = false): Promise<{ ok: true } | { error: string; fueraDeVentana?: true }> {
   const check = await requireAdminPresupuesto();
   if ("error" in check) return check;
 
@@ -310,7 +316,12 @@ export async function aprobarEntrada(id: number): Promise<{ ok: true } | { error
   if (fila.origen === "reprogramacion") return { error: "Esta Reprogramación se aprueba junto con todo su lote — ve a Reprogramaciones pendientes." };
   if (fila.estado !== "Solicitado") return { error: "Esta entrada ya no está pendiente de aprobación" };
   if (!ventanaAprobacionProgramacionAbierta(fila.updated_at)) {
-    return { error: "Todavía no se puede aprobar esta entrada — espera a que abra su ventana de aprobación." };
+    if (!check.esMaster) {
+      return { error: "Todavía no se puede aprobar esta entrada — espera a que abra su ventana de aprobación." };
+    }
+    if (!forzar) {
+      return { error: "Estás fuera de las fechas permitidas para aprobar esta entrada. ¿De verdad deseas continuar?", fueraDeVentana: true };
+    }
   }
 
   await db.update(programacionEntradas).set({ estado: "Aprobado" }).where(eq(programacionEntradas.id, id));
@@ -438,8 +449,17 @@ export async function solicitarLote(loteId: number): Promise<{ ok: true } | { er
   return { ok: true };
 }
 
-/** Aprueba un lote completo de Reprogramación — solo Administrador/Administrador Máster, y solo dentro de la ventana (primeros 5 días hábiles de cada mes). Aprueba todas sus filas juntas. */
-export async function aprobarLote(loteId: number): Promise<{ ok: true } | { error: string }> {
+/**
+ * Aprueba un lote completo de Reprogramación — solo Administrador/Administrador
+ * Máster, y solo dentro de la ventana (primeros 5 días hábiles de cada mes).
+ * Aprueba todas sus filas juntas.
+ *
+ * Único caso especial: el Administrador Máster (superadmin) puede aprobar
+ * cualquier día del año, sin ventana — pero si está fuera de fecha, primero
+ * se le devuelve `fueraDeVentana` para que el cliente le muestre una
+ * confirmación; solo al reintentar con `forzar: true` se aprueba de una vez.
+ */
+export async function aprobarLote(loteId: number, forzar = false): Promise<{ ok: true } | { error: string; fueraDeVentana?: true }> {
   const check = await requireAdminPresupuesto();
   if ("error" in check) return check;
 
@@ -447,7 +467,12 @@ export async function aprobarLote(loteId: number): Promise<{ ok: true } | { erro
   if (!lote) return { error: "No existe ese lote" };
   if (lote.estado !== "Solicitado") return { error: "Este lote ya no está pendiente de aprobación" };
   if (!ventanaAprobacionReprogramacionAbierta(fechaGuatemala())) {
-    return { error: "Las Reprogramaciones solo se pueden aprobar durante los primeros 5 días hábiles de cada mes." };
+    if (!check.esMaster) {
+      return { error: "Las Reprogramaciones solo se pueden aprobar durante los primeros 5 días hábiles de cada mes." };
+    }
+    if (!forzar) {
+      return { error: "Estás fuera de las fechas permitidas para aprobar este lote. ¿De verdad deseas continuar?", fueraDeVentana: true };
+    }
   }
 
   await db.update(programacionEntradas).set({ estado: "Aprobado" }).where(and(
