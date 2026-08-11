@@ -146,6 +146,24 @@ export default function ProgramacionClient({ rol }: { rol: Rol }) {
     }
   };
 
+  // Solo el Administrador Máster puede aprobar fuera de la ventana de fecha
+  // permitida — el servidor se lo permite, pero primero le devuelve
+  // `fueraDeVentana` para que confirme aquí antes de forzarlo (ver
+  // aprobarEntrada en programacion-actions.ts).
+  const aprobarEntradaConConfirmacion = async (id: number) => {
+    setAccionesEntrada(prev => ({ ...prev, [id]: { cargando: true, error: null } }));
+    let res = await aprobarEntrada(id);
+    if ("error" in res && res.fueraDeVentana && window.confirm(`${res.error}\n\nSe registrará que se aprobó fuera de las fechas permitidas.`)) {
+      res = await aprobarEntrada(id, true);
+    }
+    if ("error" in res) {
+      setAccionesEntrada(prev => ({ ...prev, [id]: { cargando: false, error: res.error } }));
+    } else {
+      setAccionesEntrada(prev => ({ ...prev, [id]: { cargando: false, error: null } }));
+      if (cuatrimestre !== null) recargarCuatrimestre(cuatrimestre, grupos);
+    }
+  };
+
   const cuatrimestreInfo = cuatrimestre !== null ? CUATRIMESTRES.find(c => c.id === cuatrimestre)! : null;
 
   // ── Paso 1: elegir Programación o Reprogramación ──
@@ -462,7 +480,7 @@ export default function ProgramacionClient({ rol }: { rol: Rol }) {
                               {puedeAprobar && (
                                 <>
                                   <button
-                                    onClick={() => ejecutarAccionEntrada(e.id, aprobarEntrada)}
+                                    onClick={() => aprobarEntradaConConfirmacion(e.id)}
                                     disabled={a?.cargando}
                                     title="Aprobar"
                                     className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-50"
@@ -1011,9 +1029,21 @@ function LotesPendientesView({ onVolverMenu }: { onVolverMenu: () => void }) {
   const recargar = useCallback(() => { getLotesPendientes().then(setLotes); }, []);
   useEffect(() => { recargar(); }, [recargar]);
 
+  // Solo el Administrador Máster puede aprobar fuera de la ventana de fecha
+  // permitida — el servidor se lo permite, pero primero le devuelve
+  // `fueraDeVentana` para que confirme aquí antes de forzarlo (ver
+  // aprobarLote en programacion-actions.ts).
   const ejecutar = async (loteId: number, accion: "aprobar" | "rechazar") => {
     setAcciones(prev => ({ ...prev, [loteId]: { cargando: accion, error: null } }));
-    const res = await (accion === "aprobar" ? aprobarLote(loteId) : rechazarLote(loteId));
+    let res: { ok: true } | { error: string; fueraDeVentana?: true };
+    if (accion === "aprobar") {
+      res = await aprobarLote(loteId);
+      if ("error" in res && res.fueraDeVentana && window.confirm(`${res.error}\n\nSe registrará que se aprobó fuera de las fechas permitidas.`)) {
+        res = await aprobarLote(loteId, true);
+      }
+    } else {
+      res = await rechazarLote(loteId);
+    }
     if ("error" in res) {
       setAcciones(prev => ({ ...prev, [loteId]: { cargando: null, error: res.error } }));
     } else {
