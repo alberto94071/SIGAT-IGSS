@@ -2,13 +2,20 @@
 import { db } from "@/lib/db";
 import { pasajesAfiliados } from "@/lib/schema";
 import { eq, or, ilike, sql } from "drizzle-orm";
+import { auth } from "@/lib/auth";
 
 // Base de afiliados IGSS — compartida por cualquier módulo que necesite buscar
 // un afiliado por número de afiliación o nombre (Caja Chica/Solicitud Pasaje,
 // futuros módulos de Viáticos, etc.). Solo lectura desde la app: se carga por
 // importación (ver scripts/migrate-pasajes.mjs).
+//
+// Trae datos personales (nombre + DPI) — exige sesión en las tres funciones,
+// aunque no se restrinja a un módulo específico (varios módulos la comparten
+// legítimamente).
 
 export async function buscarAfiliadoPorAfiliacion(afiliacion: string) {
+  const session = await auth();
+  if (!session) return null;
   const a = afiliacion.trim();
   if (!a) return null;
   const [row] = await db.select().from(pasajesAfiliados).where(eq(pasajesAfiliados.afiliacion, a)).limit(1);
@@ -18,6 +25,8 @@ export async function buscarAfiliadoPorAfiliacion(afiliacion: string) {
 // Búsqueda por número de afiliación (prefijo) o nombre — usada por el picker
 // en los formularios. Server-side porque la tabla tiene ~3000 filas.
 export async function buscarAfiliados(query: string) {
+  const session = await auth();
+  if (!session) return [];
   const q = query.trim();
   if (q.length < 2) return [];
   return db.select().from(pasajesAfiliados)
@@ -31,6 +40,8 @@ export async function buscarAfiliados(query: string) {
 }
 
 export async function contarAfiliados(): Promise<number> {
+  const session = await auth();
+  if (!session) return 0;
   const res = await db.execute(sql`SELECT COUNT(*)::int AS n FROM pasajes_afiliados`);
   return Number((res.rows[0] as any).n) || 0;
 }

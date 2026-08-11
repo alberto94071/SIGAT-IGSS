@@ -110,6 +110,8 @@ async function generarBackupData(): Promise<BackupData> {
  * restaurarBackup para regresar el sistema exactamente a este punto.
  */
 export async function exportarBackup(password: string): Promise<{ ok: true; data: BackupData } | { error: string }> {
+  const session = await auth();
+  if (!session || session.user.rol !== "superadmin") return { error: "Sin permiso" };
   if (password !== MASTER_PASSWORD) return { error: "Contraseña incorrecta." };
   try {
     return { ok: true, data: await generarBackupData() };
@@ -139,6 +141,8 @@ export async function exportarBackupComoSuperadmin(): Promise<{ ok: true; data: 
  * nuevos no choquen con los restaurados.
  */
 export async function restaurarBackup(password: string, backup: BackupData): Promise<{ ok: true; omitidas: string[] } | { error: string }> {
+  const session = await auth();
+  if (!session || session.user.rol !== "superadmin") return { error: "Sin permiso" };
   if (password !== MASTER_PASSWORD) return { error: "Contraseña incorrecta." };
   if (!backup || backup.version !== 1 || !backup.tablas) return { error: "El archivo de respaldo no es válido" };
 

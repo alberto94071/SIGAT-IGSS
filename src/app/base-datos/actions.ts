@@ -23,6 +23,7 @@ export async function crearInsumo(data: {
 }) {
   const session = await auth();
   if (!session) return { error: "No autorizado" };
+  if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
   const [row] = await db.insert(baseDatosCentral).values({ ...data, activo: true }).returning();
   revalidatePath("/base-datos/insumos");
   return { registro: row };
@@ -41,6 +42,7 @@ export async function editarInsumo(id: number, data: {
 }) {
   const session = await auth();
   if (!session) return { error: "No autorizado" };
+  if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
   await db.update(baseDatosCentral)
     .set({ ...data, updated_at: sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')` })
     .where(eq(baseDatosCentral.id, id));
@@ -51,6 +53,7 @@ export async function editarInsumo(id: number, data: {
 export async function eliminarInsumo(id: number) {
   const session = await auth();
   if (!session) return { error: "No autorizado" };
+  if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
   await db.delete(baseDatosCentral).where(eq(baseDatosCentral.id, id));
   revalidatePath("/base-datos/insumos");
   return { ok: true };
@@ -64,6 +67,7 @@ export async function getSubproductos() {
 export async function crearSubproducto(nombre: string) {
   const session = await auth();
   if (!session) return { error: "No autorizado" };
+  if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
   try {
     const [row] = await db.insert(catalogoSubproductos).values({ nombre, activo: true }).returning();
     revalidatePath("/base-datos/subproductos");
@@ -76,6 +80,7 @@ export async function crearSubproducto(nombre: string) {
 export async function editarSubproducto(id: number, nombre: string) {
   const session = await auth();
   if (!session) return { error: "No autorizado" };
+  if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
   try {
     await db.update(catalogoSubproductos).set({ nombre }).where(eq(catalogoSubproductos.id, id));
     revalidatePath("/base-datos/subproductos");
@@ -88,6 +93,7 @@ export async function editarSubproducto(id: number, nombre: string) {
 export async function toggleSubproducto(id: number, activo: boolean) {
   const session = await auth();
   if (!session) return { error: "No autorizado" };
+  if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
   await db.update(catalogoSubproductos).set({ activo }).where(eq(catalogoSubproductos.id, id));
   revalidatePath("/base-datos/subproductos");
   return { ok: true };
@@ -108,6 +114,7 @@ export async function crearProveedor(data: {
 }) {
   const session = await auth();
   if (!session) return { error: "No autorizado" };
+  if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
   const [row] = await db.insert(proveedores).values({ ...data, activo: true }).returning();
   revalidatePath("/base-datos/proveedores");
   return { proveedor: row };
@@ -123,6 +130,7 @@ export async function editarProveedor(id: number, data: {
 }) {
   const session = await auth();
   if (!session) return { error: "No autorizado" };
+  if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
   await db.update(proveedores)
     .set({ ...data, updated_at: sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')` })
     .where(eq(proveedores.id, id));
@@ -133,6 +141,7 @@ export async function editarProveedor(id: number, data: {
 export async function toggleProveedor(id: number, activo: boolean) {
   const session = await auth();
   if (!session) return { error: "No autorizado" };
+  if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
   await db.update(proveedores).set({ activo }).where(eq(proveedores.id, id));
   revalidatePath("/base-datos/proveedores");
   return { ok: true };

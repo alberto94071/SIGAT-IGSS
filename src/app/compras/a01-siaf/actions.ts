@@ -188,6 +188,105 @@ export async function actualizarEstado(id: number, estado: string) {
 // aproximado de cuánto se va comprometiendo por renglón. Solo se aplica la
 // primera vez que la solicitud queda Aprobada, para no duplicar el monto si
 // se rechaza y se vuelve a aprobar después.
+type ItemSiaf = {
+  catalogo_id: number | null; nombre: string; codigo_igss: string | null;
+  subproducto: string; cantidad_solicitada: number;
+};
+type MontoPorRenglon = { renglon: number; subproducto: string; monto: number };
+
+// Cruza cada ítem del SIAF con el catálogo (para su renglón) y con la
+// cotización anual vigente si existe (si no, cae al precio estimado del
+// catálogo), y agrupa el monto resultante por renglón/subproducto. Usada
+// tanto para reservar Pre-Compromiso al aprobar como para liberarlo al
+// rechazar/eliminar una solicitud que ya lo había reservado — mismo cálculo
+// en los dos sentidos, para que lo que se resta sea exactamente lo que se
+// había sumado.
+async function calcularMontosPorRenglonSiaf(items: ItemSiaf[]): Promise<
+  { montos: Map<string, MontoPorRenglon> } | { error: string }
+> {
+  const montosPorGrupo = new Map<string, MontoPorRenglon>();
+  const sinCatalogo: string[] = [];
+  const sinPrecio: string[] = [];
+  for (const item of items) {
+    const queryCond = item.catalogo_id
+      ? eq(catalogoCompras.id, item.catalogo_id)
+      : (item.codigo_igss != null
+          ? and(eq(catalogoCompras.codigo_igss, item.codigo_igss), eq(catalogoCompras.subproducto, item.subproducto))
+          : eq(catalogoCompras.nombre, item.nombre));
+
+    const [cat] = await db.select({ renglon: catalogoCompras.renglon, precio_estimado: catalogoCompras.precio_estimado })
+      .from(catalogoCompras)
+      .where(queryCond)
+      .limit(1);
+    // No puede aprobarse (ni reservar presupuesto) un ítem que ya no
+    // existe en el PAC o que no tiene renglón asignado ahí.
+    if (!cat || cat.renglon == null) { sinCatalogo.push(item.nombre); continue; }
+
+    let precioUnitario = cat.precio_estimado;
+    if (item.codigo_igss != null) {
+      const [cotiz] = await db.select({
+        precio_unitario: cotizacionesAnualesItems.precio_unitario,
+        exento_iva:      cotizacionesAnualesItems.exento_iva,
+      })
+        .from(cotizacionesAnualesItems)
+        .innerJoin(cotizacionesAnuales, eq(cotizacionesAnualesItems.cotizacion_anual_id, cotizacionesAnuales.id))
+        .where(and(
+          eq(cotizacionesAnualesItems.codigo_igss, item.codigo_igss),
+          eq(cotizacionesAnuales.anio, 2026),
+        ))
+        .orderBy(desc(cotizacionesAnualesItems.id))
+        .limit(1);
+      if (cotiz) {
+        precioUnitario = cotiz.exento_iva ? cotiz.precio_unitario : cotiz.precio_unitario * 0.88;
+      }
+    }
+    // Sin precio no se puede calcular el monto a reservar contra
+    // presupuesto — tampoco se puede dejar pasar en silencio.
+    if (precioUnitario == null) { sinPrecio.push(item.nombre); continue; }
+
+    const monto = item.cantidad_solicitada * precioUnitario;
+    const key = `${cat.renglon}::${item.subproducto}::${item.nombre}`;
+    const existente = montosPorGrupo.get(key);
+    if (existente) existente.monto += monto;
+    else montosPorGrupo.set(key, { renglon: cat.renglon, subproducto: item.subproducto, monto });
+  }
+
+  if (sinCatalogo.length > 0) {
+    return { error: `Estos insumos ya no existen en el PAC (Catálogo de Compras): ${sinCatalogo.join(", ")}.` };
+  }
+  if (sinPrecio.length > 0) {
+    return { error: `Estos insumos no tienen precio estimado en el PAC, no se puede calcular su monto: ${sinPrecio.join(", ")}.` };
+  }
+  return { montos: montosPorGrupo };
+}
+
+// Libera el Pre-Compromiso que aprobarSolicitud había reservado — se llama
+// al rechazar o eliminar una solicitud que ya estaba Aprobada (ver
+// rechazarSolicitud/eliminarSolicitud), para que esa plata no se quede
+// reservada para siempre sin ninguna compra real detrás.
+async function liberarPresupuestoAplicado(id: number): Promise<void> {
+  const items = await db.select({
+    catalogo_id:         siafComprasItems.catalogo_id,
+    nombre:              siafComprasItems.nombre,
+    codigo_igss:         siafComprasItems.codigo_igss,
+    subproducto:         siafComprasItems.subproducto,
+    cantidad_solicitada: siafComprasItems.cantidad_solicitada,
+  }).from(siafComprasItems).where(eq(siafComprasItems.solicitud_id, id));
+
+  const resultado = await calcularMontosPorRenglonSiaf(items);
+  if ("error" in resultado) return; // si ya no se puede recalcular (catálogo cambió), no hay forma segura de revertir
+
+  for (const { renglon, subproducto, monto } of resultado.montos.values()) {
+    await db.update(presupuestoRenglones)
+      .set({ pre_compromiso: sql`GREATEST(COALESCE(${presupuestoRenglones.pre_compromiso}, 0) - ${monto}, 0)` })
+      .where(and(
+        eq(presupuestoRenglones.renglon, renglon),
+        eq(presupuestoRenglones.subproducto, subproducto),
+        eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+      ));
+  }
+}
+
 export async function aprobarSolicitud(id: number): Promise<{ ok: true } | { error: string }> {
   try {
     const [sol] = await db.select({ id: siafCompras.id, anio: siafCompras.anio, presupuesto_aplicado: siafCompras.presupuesto_aplicado })
@@ -208,68 +307,17 @@ export async function aprobarSolicitud(id: number): Promise<{ ok: true } | { err
         return { error: mensajePacExcedido(excedidosPac) };
       }
 
-      const montosPorGrupo = new Map<string, { renglon: number; subproducto: string; monto: number }>();
-      const sinCatalogo: string[] = [];
-      const sinPrecio: string[] = [];
-      for (const item of items) {
-        const queryCond = item.catalogo_id
-          ? eq(catalogoCompras.id, item.catalogo_id)
-          : (item.codigo_igss != null
-              ? and(eq(catalogoCompras.codigo_igss, item.codigo_igss), eq(catalogoCompras.subproducto, item.subproducto))
-              : eq(catalogoCompras.nombre, item.nombre));
-
-        const [cat] = await db.select({ renglon: catalogoCompras.renglon, precio_estimado: catalogoCompras.precio_estimado })
-          .from(catalogoCompras)
-          .where(queryCond)
-          .limit(1);
-        // No puede aprobarse (ni reservar presupuesto) un ítem que ya no
-        // existe en el PAC o que no tiene renglón asignado ahí.
-        if (!cat || cat.renglon == null) { sinCatalogo.push(item.nombre); continue; }
-
-        let precioUnitario = cat.precio_estimado;
-        if (item.codigo_igss != null) {
-          const [cotiz] = await db.select({
-            precio_unitario: cotizacionesAnualesItems.precio_unitario,
-            exento_iva:      cotizacionesAnualesItems.exento_iva,
-          })
-            .from(cotizacionesAnualesItems)
-            .innerJoin(cotizacionesAnuales, eq(cotizacionesAnualesItems.cotizacion_anual_id, cotizacionesAnuales.id))
-            .where(and(
-              eq(cotizacionesAnualesItems.codigo_igss, item.codigo_igss),
-              eq(cotizacionesAnuales.anio, 2026),
-            ))
-            .orderBy(desc(cotizacionesAnualesItems.id))
-            .limit(1);
-          if (cotiz) {
-            precioUnitario = cotiz.exento_iva ? cotiz.precio_unitario : cotiz.precio_unitario * 0.88;
-          }
-        }
-        // Sin precio no se puede calcular el monto a reservar contra
-        // presupuesto — tampoco se puede dejar pasar en silencio.
-        if (precioUnitario == null) { sinPrecio.push(item.nombre); continue; }
-
-        const monto = item.cantidad_solicitada * precioUnitario;
-        const key = `${cat.renglon}::${item.subproducto}::${item.nombre}`;
-        const existente = montosPorGrupo.get(key);
-        if (existente) existente.monto += monto;
-        else montosPorGrupo.set(key, { renglon: cat.renglon, subproducto: item.subproducto, monto });
-      }
-
-      if (sinCatalogo.length > 0) {
-        return { error: `Estos insumos ya no existen en el PAC (Catálogo de Compras): ${sinCatalogo.join(", ")}. Corrígelos antes de aprobar.` };
-      }
-      if (sinPrecio.length > 0) {
-        return { error: `Estos insumos no tienen precio estimado en el PAC, no se puede calcular cuánto reservar de presupuesto: ${sinPrecio.join(", ")}.` };
-      }
+      const resultado = await calcularMontosPorRenglonSiaf(items);
+      if ("error" in resultado) return { error: `${resultado.error} Corrígelos antes de aprobar.` };
 
       const excedidos = await verificarPresupuestoDisponible(
-        Array.from(montosPorGrupo.values()).map(g => ({ renglon: g.renglon, subproducto: g.subproducto, monto: g.monto }))
+        Array.from(resultado.montos.values()).map(g => ({ renglon: g.renglon, subproducto: g.subproducto, monto: g.monto }))
       );
       if (excedidos.length > 0) {
         return { error: await mensajePresupuestoExcedido(excedidos) };
       }
 
-      for (const { renglon, subproducto, monto } of montosPorGrupo.values()) {
+      for (const { renglon, subproducto, monto } of resultado.montos.values()) {
         await db.update(presupuestoRenglones)
           .set({ pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${monto}` })
           .where(and(
@@ -294,16 +342,31 @@ export async function rechazarSolicitud(id: number, motivo: string) {
 
     const [sol] = await db.select().from(siafCompras).where(eq(siafCompras.id, id)).limit(1);
     if (!sol) return { error: "Solicitud no encontrada" };
+    // Más allá de "Aprobado" el SIAF ya se consolidó y sigue su propio
+    // camino (Adjudicación, Junta/Acta, Compromiso...) con sus propias
+    // formas de rechazo/devolución — rechazarlo aquí ya no tendría efecto
+    // real sobre esas etapas, así que ni se ofrece.
+    if (sol.estado !== "Borrador" && sol.estado !== "Aprobado") {
+      return { error: "Esta solicitud ya fue consolidada — ya no se puede rechazar desde SIAF." };
+    }
+
+    // Si ya estaba Aprobada, había reservado Pre-Compromiso al aprobarse —
+    // hay que liberarlo, si no se queda apartado para siempre sin ninguna
+    // compra real detrás.
+    if (sol.presupuesto_aplicado) {
+      await liberarPresupuestoAplicado(id);
+    }
 
     const session = await auth();
     const uid = session ? Number(session.user.id) : null;
     const ahora = fechaHoraGuatemala();
 
     await db.update(siafCompras).set({
-      estado:         "Rechazado",
-      motivo_rechazo: trimmed,
-      rechazado_por:  uid,
-      rechazado_en:   ahora,
+      estado:               "Rechazado",
+      motivo_rechazo:       trimmed,
+      rechazado_por:        uid,
+      rechazado_en:         ahora,
+      presupuesto_aplicado: false,
     }).where(eq(siafCompras.id, id));
 
     if (sol.creado_por) {
@@ -326,6 +389,16 @@ export async function rechazarSolicitud(id: number, motivo: string) {
 
 export async function eliminarSolicitud(id: number) {
   try {
+    // Solo mientras sigue en Borrador (no reservó nada todavía) — una vez
+    // Aprobada ya apartó Pre-Compromiso y tiene historial que conservar; para
+    // esa se usa Rechazar (sí libera la plata y deja el motivo registrado)
+    // en vez de borrarla sin dejar rastro.
+    const [sol] = await db.select({ estado: siafCompras.estado }).from(siafCompras).where(eq(siafCompras.id, id)).limit(1);
+    if (!sol) return { error: "Solicitud no encontrada" };
+    if (sol.estado !== "Borrador") {
+      return { error: "Esta solicitud ya no está en Borrador — recházala en vez de eliminarla, así queda el motivo registrado y se libera el presupuesto reservado." };
+    }
+
     await db.delete(siafCompras).where(eq(siafCompras.id, id));
     return { ok: true };
   } catch {

@@ -1,12 +1,16 @@
 import { db } from "@/lib/db";
 import { pagos, configuracion } from "@/lib/schema";
 import { eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 import PrintButtons from "@/components/PrintButtons";
 
 export default async function DAB60PrintPage({
   searchParams,
 }: { searchParams: Promise<{ id?: string }> }) {
+  const session = await auth();
+  if (!session) redirect("/login");
+
   const { id } = await searchParams;
   if (!id) notFound();
 

@@ -1,7 +1,16 @@
 import { NextResponse } from 'next/server';
 import { db, sql } from '@/lib/db';
+import { auth } from '@/lib/auth';
 
+// Migración puntual de esquema (columnas legadas del catálogo) — antes
+// alcanzable por cualquier cuenta con sesión, sin verificar rol. Solo
+// Administrador Máster puede ejecutarla; las sentencias son idempotentes
+// (IF EXISTS) así que no hay problema si ya se aplicó antes.
 export async function GET() {
+  const session = await auth();
+  if (!session || session.user.rol !== "superadmin") {
+    return NextResponse.json({ success: false, error: "No autorizado" }, { status: 403 });
+  }
   try {
     // 1. Drop the existing constraint
     await db.execute(sql`ALTER TABLE siaf_compras_items DROP CONSTRAINT IF EXISTS "siaf_compras_items_catalogo_id_fkey"`);

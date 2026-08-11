@@ -17,11 +17,19 @@ async function esPagoGrupo100(consolidacionId: number): Promise<boolean> {
 // cliente) — se refleja en Ejecución/Regularizado con lo que el propio
 // Fondo Rotativo ya decidió y ejecutó: en el momento en que se registra la
 // forma de pago (cheque emitido o vale asignado), no antes.
+//
+// Regularizado nunca pasa por Compromiso (que es el único otro lugar que
+// libera Pre-Compromiso) — así que hay que liberarlo aquí mismo, o el monto
+// que se reservó al aprobar el SIAF (a01-siaf/actions.ts) se queda contando
+// como "usado" para siempre además de lo recién sumado a
+// devengado_regularizado, inflando el "usado" real de cada renglón
+// Regularizado de forma permanente.
 async function reflejarEnEjecucion(consolidacionId: number): Promise<void> {
   const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
   for (const r of renglones) {
     await db.update(presupuestoRenglones).set({
       devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) + ${r.total}`,
+      pre_compromiso: sql`GREATEST(COALESCE(${presupuestoRenglones.pre_compromiso}, 0) - ${r.total}, 0)`,
     }).where(and(
       eq(presupuestoRenglones.renglon, r.renglon as number),
       eq(presupuestoRenglones.subproducto, r.subproducto),

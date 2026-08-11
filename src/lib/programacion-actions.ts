@@ -536,6 +536,10 @@ export async function guardarModificacion(input: GuardarModificacionInput): Prom
 
   const valor = input.valor || 0;
 
+  // Solo se reutiliza una fila que siga "Solicitado" (todavía es un borrador
+  // sin decidir) — una ya Aprobada o Rechazada se deja intacta como historial
+  // y esta captura nueva se guarda en una fila aparte, para no perder el
+  // rastro de lo que ya se resolvió antes para este mismo renglón/tipo.
   const [existente] = await db.select({ id: modificacionesPresupuestarias.id })
     .from(modificacionesPresupuestarias)
     .where(and(
@@ -543,6 +547,7 @@ export async function guardarModificacion(input: GuardarModificacionInput): Prom
       eq(modificacionesPresupuestarias.tipo, input.tipo),
       eq(modificacionesPresupuestarias.renglon, input.renglon),
       eq(modificacionesPresupuestarias.subproducto, input.subProducto),
+      eq(modificacionesPresupuestarias.estado, "Solicitado"),
     )).limit(1);
 
   if (existente) {

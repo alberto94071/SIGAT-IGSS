@@ -1,12 +1,16 @@
 import { db } from "@/lib/db";
 import { movimientosBanco, pagos, configuracion } from "@/lib/schema";
 import { eq, sum } from "drizzle-orm";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 import PrintButtons from "@/components/PrintButtons";
 
 export default async function BaucherPrintPage({
   searchParams,
 }: { searchParams: Promise<{ cheque?: string }> }) {
+  const session = await auth();
+  if (!session) redirect("/login");
+
   const { cheque } = await searchParams;
   if (!cheque) notFound();
 

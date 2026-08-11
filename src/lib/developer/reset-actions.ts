@@ -63,19 +63,27 @@ async function truncarDatosTransaccionales() {
       modificacion_ingru = 0,
       modificacion_entre_renglones = 0,
       modificacion_ampliacion = 0,
+      no_ejecutado = 0,
       saldo_disponible = COALESCE(saldo_presupuestario, saldo_disponible)
   `);
 
   await db.execute(sql`UPDATE siaf_seq SET valor = 1`);
 
   // El saldo en caja del Fondo Rotativo vuelve al monto total una vez que
-  // se borran vales, pagos y FRIs pendientes de reintegro.
-  await db.execute(sql`UPDATE configuracion SET efectivo_caja = monto_fondo_rotativo`);
+  // se borran vales, pagos y FRIs pendientes de reintegro. El marcador de
+  // cierre de cuatrimestre también se limpia — si no, procesarCierreCuatrimestres
+  // (cierre-cuatrimestre.ts) "recuerda" haber cerrado cuatrimestres del ciclo
+  // anterior y se salta el cierre de esos mismos números en el ciclo nuevo.
+  await db.execute(sql`UPDATE configuracion SET efectivo_caja = monto_fondo_rotativo, ultimo_cuatrimestre_cerrado = NULL`);
 }
 
 // Reinicio desde la ruta de desarrollador (/developer/peligro/reset),
-// protegido con la clave compartida del programador.
+// protegido con la clave compartida del programador Y con sesión de
+// Administrador Máster — la clave por sí sola ya no basta (queda expuesta
+// en el código fuente del repositorio), así que el rol es la barrera real.
 export async function executeDatabaseReset(password: string): Promise<{ ok: true } | { error: string }> {
+  const session = await auth();
+  if (!session || session.user.rol !== "superadmin") return { error: "Sin permiso" };
   if (password !== MASTER_PASSWORD) {
     return { error: "Contraseña incorrecta." };
   }

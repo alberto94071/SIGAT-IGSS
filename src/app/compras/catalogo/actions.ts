@@ -10,6 +10,15 @@ async function checkAuth() {
   return s;
 }
 
+// Para las acciones de escritura (crear/editar/activar/eliminar) — el rol
+// "consulta" es de solo lectura en todo el resto del sistema y aquí se le
+// había quedado sin bloquear.
+async function checkAuthEdit() {
+  const s = await checkAuth();
+  if (s.user.rol === "consulta") throw new Error("No tienes permiso para esta acción");
+  return s;
+}
+
 export type InsumoCentralAgrupado = {
   codigo: string; nombre: string; descripcion_igss: string | null; renglon: number | null;
 };
@@ -99,7 +108,7 @@ export async function crearInsumoCompras(data: InsumoComprasInput): Promise<
   { insumo: typeof catalogoCompras.$inferSelect } | { error: string }
 > {
   try {
-    await checkAuth();
+    await checkAuthEdit();
     if (!data.nombre.trim()) return { error: "El nombre es obligatorio" };
     if (!data.subproducto.trim()) return { error: "El subproducto es obligatorio" };
     if (!(data.cantidad > 0)) return { error: "Ingresa una cantidad válida" };
@@ -119,7 +128,7 @@ export async function crearInsumoCompras(data: InsumoComprasInput): Promise<
 
 export async function editarInsumoCompras(id: number, data: InsumoComprasInput): Promise<{ ok: true } | { error: string }> {
   try {
-    await checkAuth();
+    await checkAuthEdit();
     if (!data.nombre.trim()) return { error: "El nombre es obligatorio" };
     if (!data.subproducto.trim()) return { error: "El subproducto es obligatorio" };
     if (!(data.cantidad > 0)) return { error: "Ingresa una cantidad válida" };
@@ -137,7 +146,7 @@ export async function editarInsumoCompras(id: number, data: InsumoComprasInput):
 
 export async function toggleInsumoCompras(id: number, activo: boolean): Promise<{ ok: true } | { error: string }> {
   try {
-    await checkAuth();
+    await checkAuthEdit();
     await db.update(catalogoCompras).set({ activo }).where(eq(catalogoCompras.id, id));
     return { ok: true };
   } catch {
@@ -147,7 +156,7 @@ export async function toggleInsumoCompras(id: number, activo: boolean): Promise<
 
 export async function eliminarInsumoCompras(id: number): Promise<{ ok: true } | { error: string }> {
   try {
-    await checkAuth();
+    await checkAuthEdit();
     await db.delete(catalogoCompras).where(eq(catalogoCompras.id, id));
     return { ok: true };
   } catch (e: any) {

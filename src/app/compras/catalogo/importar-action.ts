@@ -2,6 +2,7 @@
 import * as XLSX from "xlsx";
 import { db } from "@/lib/db";
 import { catalogoCompras } from "@/lib/schema";
+import { auth } from "@/lib/auth";
 function celdaTexto(v: unknown): string {
   return v == null ? "" : String(v).trim();
 }
@@ -14,6 +15,10 @@ function celdaNumero(v: unknown): number | null {
 
 export async function importarPac2026(formData: FormData) {
   try {
+    const session = await auth();
+    if (!session) return { error: "No autorizado" };
+    if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
+
     const file = formData.get("file") as File;
     if (!file) return { error: "No se proporcionó ningún archivo" };
     
