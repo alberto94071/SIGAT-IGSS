@@ -686,8 +686,10 @@ export type TransferenciaInput = {
   motivo?: string;
 };
 
-async function sumarModificacionEntreRenglones(renglon: number, subProducto: string, delta: number): Promise<void> {
-  const [existente] = await db.select({ id: presupuestoRenglones.id })
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function sumarModificacionEntreRenglones(tx: Tx, renglon: number, subProducto: string, delta: number): Promise<void> {
+  const [existente] = await tx.select({ id: presupuestoRenglones.id })
     .from(presupuestoRenglones)
     .where(and(
       eq(presupuestoRenglones.ejercicio_fiscal, EJERCICIO),
@@ -696,12 +698,12 @@ async function sumarModificacionEntreRenglones(renglon: number, subProducto: str
     )).limit(1);
 
   if (existente) {
-    await db.update(presupuestoRenglones).set({
+    await tx.update(presupuestoRenglones).set({
       modificacion_entre_renglones: sql`COALESCE(${presupuestoRenglones.modificacion_entre_renglones}, 0) + ${delta}`,
     }).where(eq(presupuestoRenglones.id, existente.id));
   } else {
     const base = PRESUPUESTO_DATA.find(r => r.renglon === renglon && r.subProducto === subProducto);
-    await db.insert(presupuestoRenglones).values({
+    await tx.insert(presupuestoRenglones).values({
       ejercicio_fiscal: EJERCICIO,
       renglon, subproducto: subProducto,
       nombre: base?.descripcion ?? "",
@@ -782,10 +784,12 @@ export async function aprobarTransferencia(id: number): Promise<{ ok: true } | {
     };
   }
 
-  await sumarModificacionEntreRenglones(fila.renglon_origen, fila.subproducto_origen, -fila.monto);
-  await sumarModificacionEntreRenglones(fila.renglon_destino, fila.subproducto_destino, fila.monto);
+  await db.transaction(async (tx) => {
+    await sumarModificacionEntreRenglones(tx, fila.renglon_origen, fila.subproducto_origen, -fila.monto);
+    await sumarModificacionEntreRenglones(tx, fila.renglon_destino, fila.subproducto_destino, fila.monto);
+    await tx.update(reprogramaciones).set({ estado: "Aprobado" }).where(eq(reprogramaciones.id, id));
+  });
 
-  await db.update(reprogramaciones).set({ estado: "Aprobado" }).where(eq(reprogramaciones.id, id));
   return { ok: true };
 }
 

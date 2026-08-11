@@ -107,61 +107,68 @@ export async function aprobarActa(actaId: number): Promise<{ ok: true } | { erro
     // es lo que después usa Compras/Órdenes para mostrar el precio al elegir
     // PPR/presentación (ver getConsolidacionesPendientesOrden).
     const precios = await db.select().from(oferentePrecios).where(eq(oferentePrecios.oferente_id, ganador.id));
-    if (precios.length > 0) {
-      const siafIds = (await db.select({ id: siafCompras.id }).from(siafCompras)
-        .where(eq(siafCompras.consolidacion_id, acta.consolidacion_id))).map(s => s.id);
-      const rawItems = siafIds.length > 0
-        ? await db.select().from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds))
-        : [];
-      for (const linea of precios) {
-        const filas = rawItems.filter(r => r.codigo_igss === linea.codigo_igss && r.subproducto === linea.subproducto);
-        for (const fila of filas) {
-          const bruto = fila.cantidad_solicitada * linea.precio_unitario;
-          const montoNeto = ganador.exento_iva ? bruto : bruto * 0.88;
-          await db.update(siafComprasItems).set({
-            precio_unitario: linea.precio_unitario, item_exento_iva: ganador.exento_iva, monto_neto: montoNeto,
-          }).where(eq(siafComprasItems.id, fila.id));
-        }
-      }
+    const siafIds = (await db.select({ id: siafCompras.id }).from(siafCompras)
+      .where(eq(siafCompras.consolidacion_id, acta.consolidacion_id))).map(s => s.id);
+    const rawItems = siafIds.length > 0
+      ? await db.select().from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds))
+      : [];
 
-      // Compra Directa con NOG: deja el precio recién aprobado guardado en
-      // el catálogo de NOG (reemplazando lo que hubiera antes con ese mismo
-      // número) — así el próximo mes, para la misma compra recurrente (ej.
-      // arrendamiento), Compras puede enviarla directo a Presupuesto sin
-      // pasar de nuevo por Junta/Acta (ver confirmarCompraDirectaConNog en
-      // compras-actions.ts).
-      if (tipo === "Compra Directa" && con.nog?.trim()) {
-        const nogTrim = con.nog.trim();
-        await db.delete(nogRegistros).where(eq(nogRegistros.nog, nogTrim));
+    // Todo lo que dispara aprobarActa (precios copiados a siaf_compras_items,
+    // el catálogo de NOG, el estado del acta y el de la consolidación) va en
+    // una sola transacción — si falla a la mitad, no debe quedar el acta a
+    // medio aprobar con solo parte del precio actualizado.
+    const ahora = fechaHoraGuatemala();
+    await db.transaction(async (tx) => {
+      if (precios.length > 0) {
         for (const linea of precios) {
           const filas = rawItems.filter(r => r.codigo_igss === linea.codigo_igss && r.subproducto === linea.subproducto);
-          if (filas.length === 0) continue;
-          const cantidadTotal = filas.reduce((sum, f) => sum + f.cantidad_solicitada, 0);
-          const bruto = cantidadTotal * linea.precio_unitario;
-          const totalNeto = ganador.exento_iva ? bruto : bruto * 0.88;
-          await db.insert(nogRegistros).values({
-            nog: nogTrim,
-            proveedor_id: ganador.proveedor_id, proveedor_nit: ganador.nit, proveedor_nombre: ganador.nombre,
-            insumo_nombre: filas[0].nombre, insumo_codigo_igss: linea.codigo_igss, subproducto: linea.subproducto,
-            cantidad_autorizada: cantidadTotal, precio: linea.precio_unitario, exento_iva: ganador.exento_iva,
-            total: totalNeto, creado_por: check.uid,
-          });
+          for (const fila of filas) {
+            const bruto = fila.cantidad_solicitada * linea.precio_unitario;
+            const montoNeto = ganador.exento_iva ? bruto : bruto * 0.88;
+            await tx.update(siafComprasItems).set({
+              precio_unitario: linea.precio_unitario, item_exento_iva: ganador.exento_iva, monto_neto: montoNeto,
+            }).where(eq(siafComprasItems.id, fila.id));
+          }
+        }
+
+        // Compra Directa con NOG: deja el precio recién aprobado guardado en
+        // el catálogo de NOG (reemplazando lo que hubiera antes con ese mismo
+        // número) — así el próximo mes, para la misma compra recurrente (ej.
+        // arrendamiento), Compras puede enviarla directo a Presupuesto sin
+        // pasar de nuevo por Junta/Acta (ver confirmarCompraDirectaConNog en
+        // compras-actions.ts).
+        if (tipo === "Compra Directa" && con.nog?.trim()) {
+          const nogTrim = con.nog.trim();
+          await tx.delete(nogRegistros).where(eq(nogRegistros.nog, nogTrim));
+          for (const linea of precios) {
+            const filas = rawItems.filter(r => r.codigo_igss === linea.codigo_igss && r.subproducto === linea.subproducto);
+            if (filas.length === 0) continue;
+            const cantidadTotal = filas.reduce((sum, f) => sum + f.cantidad_solicitada, 0);
+            const bruto = cantidadTotal * linea.precio_unitario;
+            const totalNeto = ganador.exento_iva ? bruto : bruto * 0.88;
+            await tx.insert(nogRegistros).values({
+              nog: nogTrim,
+              proveedor_id: ganador.proveedor_id, proveedor_nit: ganador.nit, proveedor_nombre: ganador.nombre,
+              insumo_nombre: filas[0].nombre, insumo_codigo_igss: linea.codigo_igss, subproducto: linea.subproducto,
+              cantidad_autorizada: cantidadTotal, precio: linea.precio_unitario, exento_iva: ganador.exento_iva,
+              total: totalNeto, creado_por: check.uid,
+            });
+          }
         }
       }
-    }
 
-    const ahora = fechaHoraGuatemala();
-    await db.update(actasAdjudicacion).set({
-      estado: "Aprobada", aprobado_por: check.uid, aprobado_en: ahora,
-    }).where(eq(actasAdjudicacion.id, actaId));
+      await tx.update(actasAdjudicacion).set({
+        estado: "Aprobada", aprobado_por: check.uid, aprobado_en: ahora,
+      }).where(eq(actasAdjudicacion.id, actaId));
 
-    await db.update(consolidaciones).set({
-      acta_aprobada: true,
-      exento_iva: ganador.exento_iva,
-      total,
-      destino: "presupuesto",
-      estado: "Enviado a Presupuesto",
-    }).where(eq(consolidaciones.id, acta.consolidacion_id));
+      await tx.update(consolidaciones).set({
+        acta_aprobada: true,
+        exento_iva: ganador.exento_iva,
+        total,
+        destino: "presupuesto",
+        estado: "Enviado a Presupuesto",
+      }).where(eq(consolidaciones.id, acta.consolidacion_id));
+    });
 
     return { ok: true };
   } catch {

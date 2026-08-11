@@ -106,25 +106,32 @@ export async function aprobarDevengado(ordenId: number): Promise<{ ok: true } | 
       .from(consolidaciones).where(eq(consolidaciones.id, orden.consolidacion_id)).limit(1);
     const esRegularizado = con?.regularizado === true;
 
-    await db.update(ordenesCompra).set({
-      estado: "Completada",
-      estado_devengado: "Enviado",
-    }).where(eq(ordenesCompra.id, ordenId));
-
     const renglones = await gruposRenglonDeConsolidacion(orden.consolidacion_id);
-    for (const r of renglones) {
-      const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
-      await db.update(presupuestoRenglones).set({
-        compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${r.total}`,
-        ...(esRegularizado
-          ? { devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) + ${montoDevengado}` }
-          : { devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) + ${montoDevengado}` }),
-      }).where(and(
-        eq(presupuestoRenglones.renglon, r.renglon as number),
-        eq(presupuestoRenglones.subproducto, r.subproducto),
-        eq(presupuestoRenglones.ejercicio_fiscal, 2026)
-      ));
-    }
+
+    // Dejar la orden "Completada" y mover Compromiso → Devengado en cada
+    // renglón va todo junto en una sola transacción — mismo motivo que en
+    // aprobarCompromiso: si falla a la mitad, no debe quedar la orden
+    // marcada como completada con el presupuesto solo parcialmente movido.
+    await db.transaction(async (tx) => {
+      await tx.update(ordenesCompra).set({
+        estado: "Completada",
+        estado_devengado: "Enviado",
+      }).where(eq(ordenesCompra.id, ordenId));
+
+      for (const r of renglones) {
+        const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
+        await tx.update(presupuestoRenglones).set({
+          compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${r.total}`,
+          ...(esRegularizado
+            ? { devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) + ${montoDevengado}` }
+            : { devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) + ${montoDevengado}` }),
+        }).where(and(
+          eq(presupuestoRenglones.renglon, r.renglon as number),
+          eq(presupuestoRenglones.subproducto, r.subproducto),
+          eq(presupuestoRenglones.ejercicio_fiscal, 2026)
+        ));
+      }
+    });
 
     return { ok: true };
   } catch {

@@ -19,12 +19,14 @@ import { cuatrimestreDeFecha } from "@/lib/programacion-constants";
 import { EJERCICIO_FISCAL } from "@/lib/presupuesto-disponible";
 import { PRESUPUESTO_DATA } from "@/lib/presupuesto-general-data";
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 function marca(cuatrimestre: number): string {
   return `${EJERCICIO_FISCAL}-${cuatrimestre}`;
 }
 
-async function acumularNoEjecutado(renglon: number, subproducto: string, monto: number): Promise<void> {
-  const [existente] = await db.select({ id: presupuestoRenglones.id })
+async function acumularNoEjecutado(tx: Tx, renglon: number, subproducto: string, monto: number): Promise<void> {
+  const [existente] = await tx.select({ id: presupuestoRenglones.id })
     .from(presupuestoRenglones)
     .where(and(
       eq(presupuestoRenglones.ejercicio_fiscal, EJERCICIO_FISCAL),
@@ -33,12 +35,12 @@ async function acumularNoEjecutado(renglon: number, subproducto: string, monto: 
     )).limit(1);
 
   if (existente) {
-    await db.update(presupuestoRenglones).set({
+    await tx.update(presupuestoRenglones).set({
       no_ejecutado: sql`COALESCE(${presupuestoRenglones.no_ejecutado}, 0) + ${monto}`,
     }).where(eq(presupuestoRenglones.id, existente.id));
   } else {
     const base = PRESUPUESTO_DATA.find(r => r.renglon === renglon && r.subProducto === subproducto);
-    await db.insert(presupuestoRenglones).values({
+    await tx.insert(presupuestoRenglones).values({
       ejercicio_fiscal: EJERCICIO_FISCAL,
       renglon, subproducto,
       nombre: base?.descripcion ?? "",
@@ -48,8 +50,14 @@ async function acumularNoEjecutado(renglon: number, subproducto: string, monto: 
   }
 }
 
-async function cerrarCuatrimestre(cuatrimestre: number): Promise<void> {
-  const comprometido = await db.select({
+// Todo el cierre de un cuatrimestre (acumular no_ejecutado + trasladar lo
+// comprometido + marcar Caducado + avanzar el marcador de
+// ultimo_cuatrimestre_cerrado) va en una sola transacción — si se
+// interrumpe a la mitad, procesarCierreCuatrimestres reintenta desde el
+// mismo cuatrimestre en vez de reprocesarlo ya a medias (lo que duplicaría
+// no_ejecutado y el traslado al siguiente cuatrimestre).
+async function cerrarCuatrimestre(tx: Tx, cuatrimestre: number): Promise<void> {
+  const comprometido = await tx.select({
     renglon:     programacionEntradas.renglon,
     subproducto: programacionEntradas.subproducto,
     tipo:        programacionEntradas.tipo,
@@ -72,7 +80,7 @@ async function cerrarCuatrimestre(cuatrimestre: number): Promise<void> {
   // Cuánto se había Programado (Aprobado) en total este cuatrimestre, por
   // renglón + sub-producto (ambos tipos juntos) — es la base para calcular
   // cuánto de eso NO se llegó a comprometer (No Ejecutado).
-  const programadoDelCuatrimestre = await db.select({
+  const programadoDelCuatrimestre = await tx.select({
     renglon:     programacionEntradas.renglon,
     subproducto: programacionEntradas.subproducto,
     mes1:        programacionEntradas.mes1,
@@ -103,7 +111,7 @@ async function cerrarCuatrimestre(cuatrimestre: number): Promise<void> {
     const comprometidoAqui = comprometidoPorClaveSimple.get(clave) ?? 0;
     const noEjecutado = totalProgramado - comprometidoAqui;
     if (noEjecutado > 0.01) {
-      await acumularNoEjecutado(Number(renglonStr), subproducto, noEjecutado);
+      await acumularNoEjecutado(tx, Number(renglonStr), subproducto, noEjecutado);
     }
   }
 
@@ -111,7 +119,7 @@ async function cerrarCuatrimestre(cuatrimestre: number): Promise<void> {
   if (siguiente <= 3) {
     for (const { renglon, subproducto, tipo, monto } of porClave.values()) {
       if (monto <= 0) continue;
-      const [existente] = await db.select({ id: programacionEntradas.id }).from(programacionEntradas).where(and(
+      const [existente] = await tx.select({ id: programacionEntradas.id }).from(programacionEntradas).where(and(
         eq(programacionEntradas.ejercicio_fiscal, EJERCICIO_FISCAL),
         eq(programacionEntradas.cuatrimestre, siguiente),
         eq(programacionEntradas.renglon, renglon),
@@ -120,11 +128,11 @@ async function cerrarCuatrimestre(cuatrimestre: number): Promise<void> {
       )).limit(1);
 
       if (existente) {
-        await db.update(programacionEntradas).set({
+        await tx.update(programacionEntradas).set({
           mes1: sql`${programacionEntradas.mes1} + ${monto}`,
         }).where(eq(programacionEntradas.id, existente.id));
       } else {
-        await db.insert(programacionEntradas).values({
+        await tx.insert(programacionEntradas).values({
           ejercicio_fiscal: EJERCICIO_FISCAL,
           cuatrimestre: siguiente,
           renglon, subproducto, tipo,
@@ -140,7 +148,7 @@ async function cerrarCuatrimestre(cuatrimestre: number): Promise<void> {
   // getEjecucionData) — lo que no se comprometió ya quedó registrado en
   // no_ejecutado arriba, así que perderlo aquí no reduce el Saldo dos veces
   // ni lo libera de más.
-  await db.update(programacionEntradas).set({ estado: "Caducado" }).where(and(
+  await tx.update(programacionEntradas).set({ estado: "Caducado" }).where(and(
     eq(programacionEntradas.ejercicio_fiscal, EJERCICIO_FISCAL),
     eq(programacionEntradas.cuatrimestre, cuatrimestre),
     sql`${programacionEntradas.estado} != 'Caducado'`,
@@ -157,7 +165,9 @@ export async function procesarCierreCuatrimestres(): Promise<void> {
     : 0;
 
   for (let c = yaCerradoHasta + 1; c < cuatrimestreActual; c++) {
-    await cerrarCuatrimestre(c);
-    await db.update(configuracion).set({ ultimo_cuatrimestre_cerrado: marca(c) });
+    await db.transaction(async (tx) => {
+      await cerrarCuatrimestre(tx, c);
+      await tx.update(configuracion).set({ ultimo_cuatrimestre_cerrado: marca(c) });
+    });
   }
 }
