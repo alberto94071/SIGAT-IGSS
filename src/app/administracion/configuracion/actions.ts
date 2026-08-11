@@ -18,6 +18,7 @@ export async function guardarConfiguracion(data: any) {
           nombre_unidad:        data.nombre_unidad,
           codigo_unidad:        data.codigo_unidad,
           codigo_contable:      data.codigo_contable,
+          codigo_centro_costo:  data.codigo_centro_costo,
           municipio:            data.municipio,
           monto_fondo_rotativo: Number(data.monto_fondo_rotativo),
           efectivo_caja:        Number(data.efectivo_caja),

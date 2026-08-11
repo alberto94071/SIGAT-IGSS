@@ -9,6 +9,9 @@ export const configuracion = pgTable("configuracion", {
   nombre_unidad:        text("nombre_unidad").notNull().default("Consultorio de Tacaná, Departamento de San Marcos"),
   codigo_unidad:        text("codigo_unidad").notNull().default("412"),
   codigo_contable:      text("codigo_contable").notNull().default("12.07.04"),
+  // Va directo a la "Clave Administrativa" del DAB-60 (ver
+  // src/app/almacen/dab-60/[id]/imprimir/page.tsx) — siempre se imprime ahí.
+  codigo_centro_costo:  text("codigo_centro_costo").notNull().default("222498"),
   municipio:            text("municipio").notNull().default("Tacaná, San Marcos"),
   monto_fondo_rotativo: doublePrecision("monto_fondo_rotativo").notNull().default(15000.00),
   efectivo_caja:        doublePrecision("efectivo_caja").notNull().default(0.00),
