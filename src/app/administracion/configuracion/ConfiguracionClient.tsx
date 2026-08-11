@@ -6,7 +6,7 @@ import { crearFirmante, editarFirmante, eliminarFirmante, toggleFirmante } from 
 
 type Config = {
   id: number;
-  nombre_unidad: string; codigo_unidad: string; codigo_contable: string;
+  nombre_unidad: string; codigo_unidad: string; codigo_contable: string; codigo_centro_costo: string;
   municipio: string; monto_fondo_rotativo: number; efectivo_caja: number;
   ejercicio_fiscal: number; nombre_responsable: string; numero_empleado_resp: string;
   nombre_solicitante: string; numero_empleado_sol: string; resolucion_fondo: string;
@@ -117,6 +117,8 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
           <Field label="Código unidad ejecutora" k="codigo_unidad" />
           <Field label="Código contable" k="codigo_contable" />
         </div>
+        <Field label="Código de Centro de Costo" k="codigo_centro_costo"
+          helper="Se imprime siempre como Clave Administrativa en el DAB-60." />
         <Field label="Municipio / departamento" k="municipio" />
         <Field label="Ejercicio fiscal" k="ejercicio_fiscal" type="number" />
       </section>
