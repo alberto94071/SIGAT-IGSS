@@ -364,9 +364,12 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
   const [guardado, setGuardado] = useState(false);
   const hojaRef = useRef<HTMLDivElement>(null);
 
+  // El fondo se ve siempre en pantalla (para previsualizar cómo va a quedar
+  // el recibo real) — solo se oculta al imprimir (.no-print), nunca sale en
+  // el papel.
   useLayoutEffect(() => {
-    if (verPosiciones && !fondo) getFondoDab60().then(setFondo);
-  }, [verPosiciones, fondo]);
+    if (!fondo) getFondoDab60().then(setFondo);
+  }, [fondo]);
 
   const onChangePos = useCallback((id: string, next: Pos) => {
     setPos(p => ({ ...p, [id]: next }));
@@ -469,7 +472,7 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
 
       <div id="print-wrapper">
         <div id="hoja" ref={hojaRef} style={{ fontFamily: FONT, color: "#000" }}>
-          {verPosiciones && fondo && (
+          {fondo && (
             <img src={fondo} alt="" className="no-print" style={{
               position: "absolute", inset: 0, width: "100%", height: "100%",
               objectFit: "fill", opacity: 0.55, pointerEvents: "none",
