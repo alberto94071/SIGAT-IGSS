@@ -108,44 +108,51 @@ export async function aprobarCompromiso(ordenId: number): Promise<{ ok: true } |
     const necesitaDab60 = renglones.some(r => requiereDab60(r.renglon));
     const siguienteEstado = necesitaDab60 ? "Pendiente DAB-60" : "En Devengado";
 
-    await db.update(ordenesCompra).set({ estado: siguienteEstado }).where(eq(ordenesCompra.id, ordenId));
-
     const cuatrimestreActual = cuatrimestreDeFecha(fechaGuatemala());
 
-    for (const r of renglones) {
-      await db.update(presupuestoRenglones).set({
-        pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) - ${r.total}`,
-        compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) + ${r.total}`,
-        saldo_disponible: sql`COALESCE(${presupuestoRenglones.saldo_disponible}, 0) - ${r.total}`
-      }).where(and(
-        eq(presupuestoRenglones.renglon, r.renglon as number),
-        eq(presupuestoRenglones.subproducto, r.subproducto),
-        eq(presupuestoRenglones.ejercicio_fiscal, 2026)
-      ));
+    // Mover Pre-Compromiso → Compromiso en cada renglón, dejar la orden en
+    // su siguiente estado y anotar el ledger de caducidad va todo junto en
+    // una sola transacción — si algo falla a la mitad (ej. entre dos
+    // renglones), Postgres deshace todo solo en vez de dejar el presupuesto
+    // descuadrado entre renglones de la misma orden.
+    await db.transaction(async (tx) => {
+      await tx.update(ordenesCompra).set({ estado: siguienteEstado }).where(eq(ordenesCompra.id, ordenId));
 
-      // Ledger para la caducidad de cuatrimestre (ver cierre-cuatrimestre.ts):
-      // el Compromiso solo aplica a Órdenes de Compra (Normal), nunca a Fondo
-      // Rotativo. Si no hay una entrada de Programación vigente para este
-      // renglón/sub-producto en el cuatrimestre actual, no hay nada que
-      // registrar (no se podrá trasladar, que es lo correcto).
-      const [entrada] = await db.select({ id: programacionEntradas.id })
-        .from(programacionEntradas).where(and(
-          eq(programacionEntradas.ejercicio_fiscal, 2026),
-          eq(programacionEntradas.cuatrimestre, cuatrimestreActual),
-          eq(programacionEntradas.renglon, r.renglon as number),
-          eq(programacionEntradas.subproducto, r.subproducto),
-          eq(programacionEntradas.tipo, "normal"),
-        )).limit(1);
+      for (const r of renglones) {
+        await tx.update(presupuestoRenglones).set({
+          pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) - ${r.total}`,
+          compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) + ${r.total}`,
+          saldo_disponible: sql`COALESCE(${presupuestoRenglones.saldo_disponible}, 0) - ${r.total}`
+        }).where(and(
+          eq(presupuestoRenglones.renglon, r.renglon as number),
+          eq(presupuestoRenglones.subproducto, r.subproducto),
+          eq(presupuestoRenglones.ejercicio_fiscal, 2026)
+        ));
 
-      if (entrada) {
-        await db.insert(programacionCompromisos).values({
-          programacion_entrada_id: entrada.id,
-          orden_id: ordenId,
-          no_compromiso: orden.no_compromiso ?? "",
-          monto: r.total,
-        });
+        // Ledger para la caducidad de cuatrimestre (ver cierre-cuatrimestre.ts):
+        // el Compromiso solo aplica a Órdenes de Compra (Normal), nunca a Fondo
+        // Rotativo. Si no hay una entrada de Programación vigente para este
+        // renglón/sub-producto en el cuatrimestre actual, no hay nada que
+        // registrar (no se podrá trasladar, que es lo correcto).
+        const [entrada] = await tx.select({ id: programacionEntradas.id })
+          .from(programacionEntradas).where(and(
+            eq(programacionEntradas.ejercicio_fiscal, 2026),
+            eq(programacionEntradas.cuatrimestre, cuatrimestreActual),
+            eq(programacionEntradas.renglon, r.renglon as number),
+            eq(programacionEntradas.subproducto, r.subproducto),
+            eq(programacionEntradas.tipo, "normal"),
+          )).limit(1);
+
+        if (entrada) {
+          await tx.insert(programacionCompromisos).values({
+            programacion_entrada_id: entrada.id,
+            orden_id: ordenId,
+            no_compromiso: orden.no_compromiso ?? "",
+            monto: r.total,
+          });
+        }
       }
-    }
+    });
 
     return { ok: true };
   } catch {
@@ -218,53 +225,59 @@ export async function regresarACompromiso(ordenId: number, motivo?: string): Pro
       esRegularizado = con?.regularizado === true;
     }
 
-    for (const r of renglones) {
-      if (yaDevengado) {
-        const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
-        await db.update(presupuestoRenglones).set({
-          pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${r.total}`,
-          ...(esRegularizado
-            ? { devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) - ${montoDevengado}` }
-            : { devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) - ${montoDevengado}` }),
-        }).where(and(
-          eq(presupuestoRenglones.renglon, r.renglon as number),
-          eq(presupuestoRenglones.subproducto, r.subproducto),
-          eq(presupuestoRenglones.ejercicio_fiscal, 2026),
-        ));
-        // El Compromiso no se toca: aprobarDevengado ya lo había liberado
-        // (-r.total) y ahora se está deshaciendo también la aprobación del
-        // Compromiso (+r.total más abajo estaría de más) — se cancelan.
-      } else {
-        await db.update(presupuestoRenglones).set({
-          pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${r.total}`,
-          compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${r.total}`,
-          saldo_disponible: sql`COALESCE(${presupuestoRenglones.saldo_disponible}, 0) + ${r.total}`,
-        }).where(and(
-          eq(presupuestoRenglones.renglon, r.renglon as number),
-          eq(presupuestoRenglones.subproducto, r.subproducto),
-          eq(presupuestoRenglones.ejercicio_fiscal, 2026),
-        ));
-      }
-    }
-
-    // El compromiso de esta orden se está deshaciendo por completo (en las
-    // dos ramas de arriba) — el ledger de cierre de cuatrimestre ya no debe
-    // contarlo, o cierre-cuatrimestre.ts lo trasladaría igual al siguiente
-    // cuatrimestre aunque el compromiso ya no exista.
-    await db.delete(programacionCompromisos).where(eq(programacionCompromisos.orden_id, ordenId));
-
     const nota = `${fechaHoraGuatemala()}: Devuelta desde ${orden.estado} a Compromiso${motivo?.trim() ? ` — ${motivo.trim()}` : ""}`;
     const historial = orden.historial_devoluciones ? `${orden.historial_devoluciones}\n${nota}` : nota;
 
-    await db.update(ordenesCompra).set({
-      estado: "En Compromiso",
-      no_compromiso: null,
-      no_devengado: null,
-      fecha_envio_daf: null,
-      estado_devengado: null,
-      fecha_pago: null,
-      historial_devoluciones: historial,
-    }).where(eq(ordenesCompra.id, ordenId));
+    // Deshacer el presupuesto en todos los renglones, soltar el ledger de
+    // caducidad y regresar la orden va en una sola transacción — si falla a
+    // la mitad no debe quedar el presupuesto de unos renglones deshecho y el
+    // de otros no, ni la orden regresada sin que se deshiciera el presupuesto.
+    await db.transaction(async (tx) => {
+      for (const r of renglones) {
+        if (yaDevengado) {
+          const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
+          await tx.update(presupuestoRenglones).set({
+            pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${r.total}`,
+            ...(esRegularizado
+              ? { devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) - ${montoDevengado}` }
+              : { devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) - ${montoDevengado}` }),
+          }).where(and(
+            eq(presupuestoRenglones.renglon, r.renglon as number),
+            eq(presupuestoRenglones.subproducto, r.subproducto),
+            eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+          ));
+          // El Compromiso no se toca: aprobarDevengado ya lo había liberado
+          // (-r.total) y ahora se está deshaciendo también la aprobación del
+          // Compromiso (+r.total más abajo estaría de más) — se cancelan.
+        } else {
+          await tx.update(presupuestoRenglones).set({
+            pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${r.total}`,
+            compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${r.total}`,
+            saldo_disponible: sql`COALESCE(${presupuestoRenglones.saldo_disponible}, 0) + ${r.total}`,
+          }).where(and(
+            eq(presupuestoRenglones.renglon, r.renglon as number),
+            eq(presupuestoRenglones.subproducto, r.subproducto),
+            eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+          ));
+        }
+      }
+
+      // El compromiso de esta orden se está deshaciendo por completo (en las
+      // dos ramas de arriba) — el ledger de cierre de cuatrimestre ya no debe
+      // contarlo, o cierre-cuatrimestre.ts lo trasladaría igual al siguiente
+      // cuatrimestre aunque el compromiso ya no exista.
+      await tx.delete(programacionCompromisos).where(eq(programacionCompromisos.orden_id, ordenId));
+
+      await tx.update(ordenesCompra).set({
+        estado: "En Compromiso",
+        no_compromiso: null,
+        no_devengado: null,
+        fecha_envio_daf: null,
+        estado_devengado: null,
+        fecha_pago: null,
+        historial_devoluciones: historial,
+      }).where(eq(ordenesCompra.id, ordenId));
+    });
 
     return { ok: true };
   } catch {
@@ -307,31 +320,34 @@ export async function regresarADab60(ordenId: number, motivo?: string): Promise<
     const esRegularizado = con?.regularizado === true;
 
     const renglones = await gruposRenglonDeConsolidacion(orden.consolidacion_id);
-    for (const r of renglones) {
-      const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
-      await db.update(presupuestoRenglones).set({
-        compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) + ${r.total}`,
-        ...(esRegularizado
-          ? { devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) - ${montoDevengado}` }
-          : { devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) - ${montoDevengado}` }),
-      }).where(and(
-        eq(presupuestoRenglones.renglon, r.renglon as number),
-        eq(presupuestoRenglones.subproducto, r.subproducto),
-        eq(presupuestoRenglones.ejercicio_fiscal, 2026),
-      ));
-    }
 
     const nota = `${fechaHoraGuatemala()}: Devuelta desde Completada (rechazada por la DAF) a Almacén/DAB-60${motivo?.trim() ? ` — ${motivo.trim()}` : ""}`;
     const historial = orden.historial_devoluciones ? `${orden.historial_devoluciones}\n${nota}` : nota;
 
-    await db.update(ordenesCompra).set({
-      estado: "DAB-60 Pendiente Aprobación",
-      no_devengado: null,
-      fecha_envio_daf: null,
-      estado_devengado: null,
-      fecha_pago: null,
-      historial_devoluciones: historial,
-    }).where(eq(ordenesCompra.id, ordenId));
+    await db.transaction(async (tx) => {
+      for (const r of renglones) {
+        const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
+        await tx.update(presupuestoRenglones).set({
+          compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) + ${r.total}`,
+          ...(esRegularizado
+            ? { devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) - ${montoDevengado}` }
+            : { devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) - ${montoDevengado}` }),
+        }).where(and(
+          eq(presupuestoRenglones.renglon, r.renglon as number),
+          eq(presupuestoRenglones.subproducto, r.subproducto),
+          eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+        ));
+      }
+
+      await tx.update(ordenesCompra).set({
+        estado: "DAB-60 Pendiente Aprobación",
+        no_devengado: null,
+        fecha_envio_daf: null,
+        estado_devengado: null,
+        fecha_pago: null,
+        historial_devoluciones: historial,
+      }).where(eq(ordenesCompra.id, ordenId));
+    });
 
     return { ok: true };
   } catch {
@@ -386,73 +402,81 @@ export async function regresarOrdenAAdjudicacion(ordenId: number, motivo?: strin
     // deshacer eso Y la aprobación del propio Compromiso (+r.total) se
     // cancelan, así que ahí solo se toca Devengado y Pre-Compromiso. Si no
     // había llegado a Devengado, el Compromiso sí se deshace por completo.
-    for (const r of renglones) {
-      if (yaDevengado) {
-        const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
-        await db.update(presupuestoRenglones).set({
-          pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${r.total}`,
-          devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) - ${montoDevengado}`,
-        }).where(and(
-          eq(presupuestoRenglones.renglon, r.renglon as number),
-          eq(presupuestoRenglones.subproducto, r.subproducto),
-          eq(presupuestoRenglones.ejercicio_fiscal, 2026),
-        ));
-      } else {
-        await db.update(presupuestoRenglones).set({
-          pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${r.total}`,
-          compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${r.total}`,
-          saldo_disponible: sql`COALESCE(${presupuestoRenglones.saldo_disponible}, 0) + ${r.total}`,
-        }).where(and(
-          eq(presupuestoRenglones.renglon, r.renglon as number),
-          eq(presupuestoRenglones.subproducto, r.subproducto),
-          eq(presupuestoRenglones.ejercicio_fiscal, 2026),
-        ));
-      }
-    }
-
-    await db.delete(programacionCompromisos).where(eq(programacionCompromisos.orden_id, ordenId));
-
     const notaOrden = `${fechaHoraGuatemala()}: Devuelta desde ${orden.estado} a Compras/Adjudicación${motivo?.trim() ? ` — ${motivo.trim()}` : ""}`;
     const historialOrden = orden.historial_devoluciones ? `${orden.historial_devoluciones}\n${notaOrden}` : notaOrden;
-
-    await db.update(ordenesCompra).set({
-      estado: "Anulada",
-      dab60_anulado: orden.dab60_generado_en != null,
-      no_devengado: null,
-      fecha_envio_daf: null,
-      estado_devengado: null,
-      fecha_pago: null,
-      historial_devoluciones: historialOrden,
-    }).where(eq(ordenesCompra.id, ordenId));
-
-    // El Acta tiene consolidacion_id único — hay que borrarla para poder
-    // volver a generar una nueva al re-adjudicar. oferente_ganador_id
-    // referencia oferentes.id sin cascade — hay que soltarlo antes de poder
-    // borrar los oferentes.
-    await db.update(consolidaciones).set({ oferente_ganador_id: null }).where(eq(consolidaciones.id, orden.consolidacion_id));
-    await db.delete(actasAdjudicacion).where(eq(actasAdjudicacion.consolidacion_id, orden.consolidacion_id));
-    await db.delete(oferentes).where(eq(oferentes.consolidacion_id, orden.consolidacion_id));
-    await db.update(cotizacionesServicio)
-      .set({ usado: false, usado_en_consolidacion_id: null })
-      .where(eq(cotizacionesServicio.usado_en_consolidacion_id, orden.consolidacion_id));
 
     const [con] = await db.select({ historial_devoluciones: consolidaciones.historial_devoluciones })
       .from(consolidaciones).where(eq(consolidaciones.id, orden.consolidacion_id)).limit(1);
     const notaCon = `${fechaHoraGuatemala()}: Devuelta desde Presupuesto/Compromiso-Devengado a Compras/Adjudicación${motivo?.trim() ? ` — ${motivo.trim()}` : ""}`;
     const historialCon = con?.historial_devoluciones ? `${con.historial_devoluciones}\n${notaCon}` : notaCon;
 
-    await db.update(consolidaciones).set({
-      estado: "Pendiente adjudicación",
-      destino: null,
-      tipo_compra: null,
-      regularizado: null,
-      proveedor_id: null, proveedor_nit: null, proveedor_nombre: null,
-      exento_iva: false, total: null, monto_bruto: null,
-      numero_adjudicacion: null, razon_adjudicacion: null,
-      cotizacion_anual_id: null,
-      motivo_rechazo: null, rechazado_por: null, rechazado_en: null,
-      historial_devoluciones: historialCon,
-    }).where(eq(consolidaciones.id, orden.consolidacion_id));
+    // Deshacer el presupuesto, anular la orden y regresar toda la
+    // consolidación (incluyendo borrar Acta/oferentes y liberar la
+    // cotización) a Compras/Adjudicación va en una sola transacción — hay
+    // demasiados pasos encadenados aquí como para arriesgarse a que uno
+    // falle y deje la orden anulada con la consolidación todavía apuntando
+    // al acta/oferentes que se supone que ya no existen.
+    await db.transaction(async (tx) => {
+      for (const r of renglones) {
+        if (yaDevengado) {
+          const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
+          await tx.update(presupuestoRenglones).set({
+            pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${r.total}`,
+            devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) - ${montoDevengado}`,
+          }).where(and(
+            eq(presupuestoRenglones.renglon, r.renglon as number),
+            eq(presupuestoRenglones.subproducto, r.subproducto),
+            eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+          ));
+        } else {
+          await tx.update(presupuestoRenglones).set({
+            pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${r.total}`,
+            compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${r.total}`,
+            saldo_disponible: sql`COALESCE(${presupuestoRenglones.saldo_disponible}, 0) + ${r.total}`,
+          }).where(and(
+            eq(presupuestoRenglones.renglon, r.renglon as number),
+            eq(presupuestoRenglones.subproducto, r.subproducto),
+            eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+          ));
+        }
+      }
+
+      await tx.delete(programacionCompromisos).where(eq(programacionCompromisos.orden_id, ordenId));
+
+      await tx.update(ordenesCompra).set({
+        estado: "Anulada",
+        dab60_anulado: orden.dab60_generado_en != null,
+        no_devengado: null,
+        fecha_envio_daf: null,
+        estado_devengado: null,
+        fecha_pago: null,
+        historial_devoluciones: historialOrden,
+      }).where(eq(ordenesCompra.id, ordenId));
+
+      // El Acta tiene consolidacion_id único — hay que borrarla para poder
+      // volver a generar una nueva al re-adjudicar. oferente_ganador_id
+      // referencia oferentes.id sin cascade — hay que soltarlo antes de poder
+      // borrar los oferentes.
+      await tx.update(consolidaciones).set({ oferente_ganador_id: null }).where(eq(consolidaciones.id, orden.consolidacion_id));
+      await tx.delete(actasAdjudicacion).where(eq(actasAdjudicacion.consolidacion_id, orden.consolidacion_id));
+      await tx.delete(oferentes).where(eq(oferentes.consolidacion_id, orden.consolidacion_id));
+      await tx.update(cotizacionesServicio)
+        .set({ usado: false, usado_en_consolidacion_id: null })
+        .where(eq(cotizacionesServicio.usado_en_consolidacion_id, orden.consolidacion_id));
+
+      await tx.update(consolidaciones).set({
+        estado: "Pendiente adjudicación",
+        destino: null,
+        tipo_compra: null,
+        regularizado: null,
+        proveedor_id: null, proveedor_nit: null, proveedor_nombre: null,
+        exento_iva: false, total: null, monto_bruto: null,
+        numero_adjudicacion: null, razon_adjudicacion: null,
+        cotizacion_anual_id: null,
+        motivo_rechazo: null, rechazado_por: null, rechazado_en: null,
+        historial_devoluciones: historialCon,
+      }).where(eq(consolidaciones.id, orden.consolidacion_id));
+    });
 
     return { ok: true };
   } catch {

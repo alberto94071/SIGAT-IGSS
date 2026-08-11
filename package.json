@@ -14,6 +14,7 @@
     "@auth/core": "^0.37.2",
     "@neondatabase/serverless": "^0.10.4",
     "bcryptjs": "^2.4.3",
+    "bufferutil": "^4.1.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.38.3",
@@ -24,6 +25,8 @@
     "react-dom": "^19.0.0",
     "recharts": "^2.15.0",
     "tailwind-merge": "^2.6.0",
+    "utf-8-validate": "^6.0.6",
+    "ws": "^8.21.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -31,6 +34,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/ws": "^8.18.1",
     "autoprefixer": "^10.0.1",
     "drizzle-kit": "^0.30.1",
     "eslint": "^8",

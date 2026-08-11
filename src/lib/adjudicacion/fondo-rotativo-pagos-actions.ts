@@ -24,10 +24,12 @@ async function esPagoGrupo100(consolidacionId: number): Promise<boolean> {
 // como "usado" para siempre además de lo recién sumado a
 // devengado_regularizado, inflando el "usado" real de cada renglón
 // Regularizado de forma permanente.
-async function reflejarEnEjecucion(consolidacionId: number): Promise<void> {
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function reflejarEnEjecucion(tx: Tx, consolidacionId: number): Promise<void> {
   const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
   for (const r of renglones) {
-    await db.update(presupuestoRenglones).set({
+    await tx.update(presupuestoRenglones).set({
       devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) + ${r.total}`,
       pre_compromiso: sql`GREATEST(COALESCE(${presupuestoRenglones.pre_compromiso}, 0) - ${r.total}, 0)`,
     }).where(and(
@@ -128,17 +130,19 @@ export async function registrarFormaPagoCheque(id: number, data: {
 
     const esGrupo100 = await esPagoGrupo100(pago.consolidacion_id);
 
-    await db.update(fondoRotativoPagos).set({
-      forma_pago: "cheque",
-      numero_cheque: data.numero_cheque.trim(),
-      fecha_emision_cheque: data.fecha_emision_cheque,
-      tipo_documento_pago: data.tipo_documento_pago,
-      nit_beneficiario: data.nit_beneficiario.trim(),
-      destinatario_nombre: data.destinatario_nombre.trim(),
-      estado: esGrupo100 ? "Pendiente FRI" : "Enviado a Bancos",
-    }).where(eq(fondoRotativoPagos.id, id));
+    await db.transaction(async (tx) => {
+      await tx.update(fondoRotativoPagos).set({
+        forma_pago: "cheque",
+        numero_cheque: data.numero_cheque.trim(),
+        fecha_emision_cheque: data.fecha_emision_cheque,
+        tipo_documento_pago: data.tipo_documento_pago,
+        nit_beneficiario: data.nit_beneficiario.trim(),
+        destinatario_nombre: data.destinatario_nombre.trim(),
+        estado: esGrupo100 ? "Pendiente FRI" : "Enviado a Bancos",
+      }).where(eq(fondoRotativoPagos.id, id));
 
-    await reflejarEnEjecucion(pago.consolidacion_id);
+      await reflejarEnEjecucion(tx, pago.consolidacion_id);
+    });
 
     return { ok: true };
   } catch {
@@ -197,15 +201,17 @@ export async function registrarFormaPagoEfectivo(id: number, data: {
 
     const esGrupo100 = await esPagoGrupo100(pago.consolidacion_id);
 
-    await db.update(fondoRotativoPagos).set({
-      forma_pago: "efectivo",
-      fecha_pago: data.fecha_pago,
-      numero_vale: String(vale.numero).padStart(7, "0"),
-      vale_id: vale.id,
-      estado: esGrupo100 ? "Pendiente FRI" : "Enviado a Liquidación",
-    }).where(eq(fondoRotativoPagos.id, id));
+    await db.transaction(async (tx) => {
+      await tx.update(fondoRotativoPagos).set({
+        forma_pago: "efectivo",
+        fecha_pago: data.fecha_pago,
+        numero_vale: String(vale.numero).padStart(7, "0"),
+        vale_id: vale.id,
+        estado: esGrupo100 ? "Pendiente FRI" : "Enviado a Liquidación",
+      }).where(eq(fondoRotativoPagos.id, id));
 
-    await reflejarEnEjecucion(pago.consolidacion_id);
+      await reflejarEnEjecucion(tx, pago.consolidacion_id);
+    });
 
     return { ok: true };
   } catch {

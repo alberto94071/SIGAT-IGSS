@@ -260,11 +260,13 @@ async function calcularMontosPorRenglonSiaf(items: ItemSiaf[]): Promise<
   return { montos: montosPorGrupo };
 }
 
-// Libera el Pre-Compromiso que aprobarSolicitud había reservado — se llama
-// al rechazar o eliminar una solicitud que ya estaba Aprobada (ver
-// rechazarSolicitud/eliminarSolicitud), para que esa plata no se quede
-// reservada para siempre sin ninguna compra real detrás.
-async function liberarPresupuestoAplicado(id: number): Promise<void> {
+// Calcula (sin escribir nada todavía) cuánto habría que devolver del
+// Pre-Compromiso que aprobarSolicitud había reservado — se usa al rechazar
+// o eliminar una solicitud que ya estaba Aprobada (ver
+// rechazarSolicitud/eliminarSolicitud), para aplicarlo dentro de la misma
+// transacción que cambia el estado, y que esa plata no se quede reservada
+// para siempre sin ninguna compra real detrás.
+async function calcularReversionPresupuestoAplicado(id: number): Promise<Map<string, MontoPorRenglon> | null> {
   const items = await db.select({
     catalogo_id:         siafComprasItems.catalogo_id,
     nombre:              siafComprasItems.nombre,
@@ -274,17 +276,8 @@ async function liberarPresupuestoAplicado(id: number): Promise<void> {
   }).from(siafComprasItems).where(eq(siafComprasItems.solicitud_id, id));
 
   const resultado = await calcularMontosPorRenglonSiaf(items);
-  if ("error" in resultado) return; // si ya no se puede recalcular (catálogo cambió), no hay forma segura de revertir
-
-  for (const { renglon, subproducto, monto } of resultado.montos.values()) {
-    await db.update(presupuestoRenglones)
-      .set({ pre_compromiso: sql`GREATEST(COALESCE(${presupuestoRenglones.pre_compromiso}, 0) - ${monto}, 0)` })
-      .where(and(
-        eq(presupuestoRenglones.renglon, renglon),
-        eq(presupuestoRenglones.subproducto, subproducto),
-        eq(presupuestoRenglones.ejercicio_fiscal, 2026),
-      ));
-  }
+  if ("error" in resultado) return null; // si ya no se puede recalcular (catálogo cambió), no hay forma segura de revertir
+  return resultado.montos;
 }
 
 export async function aprobarSolicitud(id: number): Promise<{ ok: true } | { error: string }> {
@@ -293,6 +286,7 @@ export async function aprobarSolicitud(id: number): Promise<{ ok: true } | { err
       .from(siafCompras).where(eq(siafCompras.id, id)).limit(1);
     if (!sol) return { error: "Solicitud no encontrada" };
 
+    let montos: Map<string, MontoPorRenglon> | null = null;
     if (!sol.presupuesto_aplicado) {
       const items = await db.select({
         catalogo_id:         siafComprasItems.catalogo_id,
@@ -317,18 +311,29 @@ export async function aprobarSolicitud(id: number): Promise<{ ok: true } | { err
         return { error: await mensajePresupuestoExcedido(excedidos) };
       }
 
-      for (const { renglon, subproducto, monto } of resultado.montos.values()) {
-        await db.update(presupuestoRenglones)
-          .set({ pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${monto}` })
-          .where(and(
-            eq(presupuestoRenglones.renglon, renglon),
-            eq(presupuestoRenglones.subproducto, subproducto),
-            eq(presupuestoRenglones.ejercicio_fiscal, 2026),
-          ));
-      }
+      montos = resultado.montos;
     }
 
-    await db.update(siafCompras).set({ estado: "Aprobado", presupuesto_aplicado: true }).where(eq(siafCompras.id, id));
+    // Reservar Pre-Compromiso en cada renglón y dejar el SIAF "Aprobado" va
+    // todo junto en una sola transacción — si algo falla a la mitad (ej. se
+    // corta la conexión entre dos renglones), Postgres deshace todo solo en
+    // vez de dejar presupuesto reservado sin que el SIAF quede Aprobado (lo
+    // que duplicaría la reserva en un reintento) o viceversa.
+    await db.transaction(async (tx) => {
+      if (montos) {
+        for (const { renglon, subproducto, monto } of montos.values()) {
+          await tx.update(presupuestoRenglones)
+            .set({ pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${monto}` })
+            .where(and(
+              eq(presupuestoRenglones.renglon, renglon),
+              eq(presupuestoRenglones.subproducto, subproducto),
+              eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+            ));
+        }
+      }
+      await tx.update(siafCompras).set({ estado: "Aprobado", presupuesto_aplicado: true }).where(eq(siafCompras.id, id));
+    });
+
     return { ok: true };
   } catch {
     return { error: "Error al aprobar la solicitud" };
@@ -353,21 +358,37 @@ export async function rechazarSolicitud(id: number, motivo: string) {
     // Si ya estaba Aprobada, había reservado Pre-Compromiso al aprobarse —
     // hay que liberarlo, si no se queda apartado para siempre sin ninguna
     // compra real detrás.
-    if (sol.presupuesto_aplicado) {
-      await liberarPresupuestoAplicado(id);
-    }
+    const montosARevertir = sol.presupuesto_aplicado
+      ? await calcularReversionPresupuestoAplicado(id)
+      : null;
 
     const session = await auth();
     const uid = session ? Number(session.user.id) : null;
     const ahora = fechaHoraGuatemala();
 
-    await db.update(siafCompras).set({
-      estado:               "Rechazado",
-      motivo_rechazo:       trimmed,
-      rechazado_por:        uid,
-      rechazado_en:         ahora,
-      presupuesto_aplicado: false,
-    }).where(eq(siafCompras.id, id));
+    // Liberar el Pre-Compromiso y dejar el SIAF "Rechazado" va todo junto en
+    // una sola transacción — si algo falla a la mitad, no debe quedar la
+    // plata liberada sin que el rechazo se haya registrado (o viceversa).
+    await db.transaction(async (tx) => {
+      if (montosARevertir) {
+        for (const { renglon, subproducto, monto } of montosARevertir.values()) {
+          await tx.update(presupuestoRenglones)
+            .set({ pre_compromiso: sql`GREATEST(COALESCE(${presupuestoRenglones.pre_compromiso}, 0) - ${monto}, 0)` })
+            .where(and(
+              eq(presupuestoRenglones.renglon, renglon),
+              eq(presupuestoRenglones.subproducto, subproducto),
+              eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+            ));
+        }
+      }
+      await tx.update(siafCompras).set({
+        estado:               "Rechazado",
+        motivo_rechazo:       trimmed,
+        rechazado_por:        uid,
+        rechazado_en:         ahora,
+        presupuesto_aplicado: false,
+      }).where(eq(siafCompras.id, id));
+    });
 
     if (sol.creado_por) {
       await crearNotificacion({
