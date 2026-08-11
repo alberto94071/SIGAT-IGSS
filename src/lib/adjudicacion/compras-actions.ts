@@ -12,7 +12,7 @@ import { crearNotificacion } from "@/lib/notificaciones";
 import { TIPOS, MAX_OFERENTES, REFERENCIA_LABEL, LIMITE_POR_TIPO, type TipoCompra } from "./types";
 import { verificarLimiteInsumos, mensajeLimiteExcedido } from "./limite-baja-cuantia";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
-import { verificarProgramadoPorTipo, mensajeProgramadoExcedido } from "@/lib/presupuesto-disponible";
+import { verificarPresupuestoDisponible, mensajePresupuestoExcedido } from "@/lib/presupuesto-disponible";
 
 async function requireCompras(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -634,8 +634,9 @@ export async function registrarRegularizado(consolidacionId: number, data: {
     // Regularizado nunca pasa por Pre-Compromiso/Compromiso — va directo a
     // Devengado Regularizado (ver reflejarEnEjecucion en
     // fondo-rotativo-pagos-actions.ts) sin que nada más valide antes que
-    // haya presupuesto. Por eso se valida aquí, contra el Programado
-    // Regularizado del cuatrimestre vigente de cada renglón.
+    // haya presupuesto. Por eso se valida aquí, contra el presupuesto
+    // disponible real de cada renglón (Vigente − ya reservado/ejecutado en
+    // cualquier etapa — ver getDisponible en presupuesto-disponible.ts).
     const montosPorRenglon = new Map<string, { renglon: number; subproducto: string; monto: number }>();
     for (const grupo of data.items) {
       if (!grupo.codigo_igss) continue;
@@ -651,9 +652,9 @@ export async function registrarRegularizado(consolidacionId: number, data: {
       if (existente) existente.monto += montoNeto;
       else montosPorRenglon.set(key, { renglon: cat.renglon, subproducto: grupo.subproducto, monto: montoNeto });
     }
-    const excedidosProgramado = await verificarProgramadoPorTipo(Array.from(montosPorRenglon.values()), "regularizado");
-    if (excedidosProgramado.length > 0) {
-      return { error: mensajeProgramadoExcedido(excedidosProgramado, "regularizado") };
+    const excedidos = await verificarPresupuestoDisponible(Array.from(montosPorRenglon.values()));
+    if (excedidos.length > 0) {
+      return { error: await mensajePresupuestoExcedido(excedidos) };
     }
 
     for (const act of actualizaciones) {
