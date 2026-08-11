@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { EJECUCION_DATA } from "@/lib/ejecucion-data";
 import { fechaGuatemala } from "@/lib/date-utils";
 import { cuatrimestreDeFecha } from "@/lib/programacion-constants";
+import { requireModuloAccessAction } from "@/lib/modulo-access";
 
 export type EjecucionRow = {
   renglon: number;
@@ -54,6 +55,9 @@ export type EjecucionRow = {
  *   presupuesto-disponible.ts, misma fórmula).
  */
 export async function getEjecucionData(): Promise<EjecucionRow[]> {
+  const check = await requireModuloAccessAction("mod_presupuesto");
+  if ("error" in check) return [];
+
   const cuatrimestreVigente = cuatrimestreDeFecha(fechaGuatemala());
 
   const [entradas, renglonesVivos] = await Promise.all([
