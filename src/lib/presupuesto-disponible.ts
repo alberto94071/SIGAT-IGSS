@@ -2,8 +2,6 @@ import { db } from "@/lib/db";
 import { programacionEntradas, presupuestoRenglones } from "@/lib/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { PRESUPUESTO_DATA } from "@/lib/presupuesto-general-data";
-import { fechaGuatemala } from "@/lib/date-utils";
-import { cuatrimestreDeFecha } from "@/lib/programacion-constants";
 
 // Mismo ejercicio fiscal hardcodeado que usa el resto del módulo de
 // Presupuesto (programacion-actions.ts, ejecucion-actions.ts,
@@ -12,36 +10,31 @@ import { cuatrimestreDeFecha } from "@/lib/programacion-constants";
 export const EJERCICIO_FISCAL = 2026;
 
 export type Disponible = {
-  programado: number;
+  vigente: number;
   modificaciones: number;
   usado: number;
   disponible: number;
 };
 
-// Presupuesto real disponible de un renglón+sub-producto: lo Aprobado en
-// Programación/Reprogramación del CUATRIMESTRE VIGENTE únicamente (Normal +
-// Regularizado sumados — a la fecha de aprobar un SIAF todavía no se sabe si
-// terminará siendo Normal o Regularizado) más las modificaciones
-// presupuestarias (Ingru + transferencias + Ampliación), menos lo que ya
-// está reservado o ejecutado en cualquier etapa (Pre-Compromiso, Compromiso,
-// Devengado). No se puede usar por adelantado lo programado para un
-// cuatrimestre futuro, ni lo que quedó de uno ya cerrado (eso ya caducó o
-// pasó a no_ejecutado) — regla confirmada con el cliente: sin Programación/
-// Reprogramación Aprobada del cuatrimestre vigente, no se puede hacer nada,
-// aunque haya saldo en otros cuatrimestres.
+// Presupuesto real disponible de un renglón+sub-producto: el Vigente del año
+// (más modificaciones presupuestarias: Ingru + transferencias + Ampliación)
+// menos lo que ya está reservado o ejecutado en cualquier etapa
+// (Pre-Compromiso, Compromiso, Devengado normal y regularizado) y lo
+// Caducado sin comprometer (no_ejecutado — perdido hasta que se libere, ver
+// cierre-cuatrimestre.ts / liberarNoEjecutado).
+//
+// Regla confirmada con el cliente (2026-08-11): esto YA NO depende de
+// cuánto se haya Programado/Reprogramado para el cuatrimestre vigente. Un
+// insumo puede ser urgente (ej. agua para un consultorio) y no hay por qué
+// bloquear el SIAF/Compromiso solo porque Programación no alcanzó a
+// cubrirlo a tiempo, mientras el renglón todavía tenga Vigente real sin
+// gastar — la disciplina de Programación/Reprogramación sigue existiendo
+// para planear el flujo de caja mes a mes, pero ya no bloquea una compra
+// real si hay plata real. Si de verdad no alcanza el Vigente (contando lo
+// ya reservado/ejecutado), aquí sí se bloquea.
 export async function getDisponible(renglon: number, subproducto: string): Promise<Disponible> {
-  const cuatrimestreVigente = cuatrimestreDeFecha(fechaGuatemala());
-
-  const [entradasRow] = await db.select({
-    total: sql<number>`COALESCE(SUM(${programacionEntradas.mes1} + ${programacionEntradas.mes2} + ${programacionEntradas.mes3} + ${programacionEntradas.mes4}), 0)`,
-  }).from(programacionEntradas).where(and(
-    eq(programacionEntradas.ejercicio_fiscal, EJERCICIO_FISCAL),
-    eq(programacionEntradas.renglon, renglon),
-    eq(programacionEntradas.subproducto, subproducto),
-    eq(programacionEntradas.cuatrimestre, cuatrimestreVigente),
-    eq(programacionEntradas.estado, "Aprobado"),
-  ));
-  const programado = Number(entradasRow?.total ?? 0);
+  const base = PRESUPUESTO_DATA.find(r => r.renglon === renglon && r.subProducto === subproducto);
+  const vigente = base?.vigente ?? 0;
 
   const [vivo] = await db.select({
     modificacion_ingru:           presupuestoRenglones.modificacion_ingru,
@@ -51,6 +44,7 @@ export async function getDisponible(renglon: number, subproducto: string): Promi
     compromiso:                   presupuestoRenglones.compromiso,
     devengado:                    presupuestoRenglones.devengado,
     devengado_regularizado:       presupuestoRenglones.devengado_regularizado,
+    no_ejecutado:                 presupuestoRenglones.no_ejecutado,
   }).from(presupuestoRenglones).where(and(
     eq(presupuestoRenglones.renglon, renglon),
     eq(presupuestoRenglones.subproducto, subproducto),
@@ -60,9 +54,10 @@ export async function getDisponible(renglon: number, subproducto: string): Promi
   const modificaciones =
     (vivo?.modificacion_ingru ?? 0) + (vivo?.modificacion_entre_renglones ?? 0) + (vivo?.modificacion_ampliacion ?? 0);
   const usado =
-    (vivo?.pre_compromiso ?? 0) + (vivo?.compromiso ?? 0) + (vivo?.devengado ?? 0) + (vivo?.devengado_regularizado ?? 0);
+    (vivo?.pre_compromiso ?? 0) + (vivo?.compromiso ?? 0) + (vivo?.devengado ?? 0) +
+    (vivo?.devengado_regularizado ?? 0) + (vivo?.no_ejecutado ?? 0);
 
-  return { programado, modificaciones, usado, disponible: programado + modificaciones - usado };
+  return { vigente, modificaciones, usado, disponible: vigente + modificaciones - usado };
 }
 
 export type Saldo = {
@@ -82,7 +77,8 @@ export type Saldo = {
  * caduca sin comprometer tampoco — ver no_ejecutado / cierre-cuatrimestre.ts
  * y liberarNoEjecutado en presupuesto-general-actions.ts). No debe
  * confundirse con getDisponible(), que es un cálculo distinto usado para
- * aprobar SIAF (programado − ya reservado/ejecutado).
+ * aprobar SIAF/Compromiso (Vigente − ya reservado/ejecutado en cualquier
+ * etapa, sin importar si está Programado o no).
  */
 export async function getSaldoRenglon(renglon: number, subproducto: string): Promise<Saldo> {
   const base = PRESUPUESTO_DATA.find(r => r.renglon === renglon && r.subProducto === subproducto);
@@ -145,71 +141,5 @@ export async function mensajePresupuestoExcedido(excedidos: PresupuestoExcedido[
   const detalle = excedidos.map(e =>
     `renglón ${e.renglon} / ${e.subproducto} (disponible Q${e.disponible.toLocaleString("es-GT", { minimumFractionDigits: 2 })}, se necesitan Q${e.requerido.toLocaleString("es-GT", { minimumFractionDigits: 2 })})`
   ).join("; ");
-  return `No hay presupuesto programado suficiente para: ${detalle}. Ve a Presupuesto/Programación para programar o reprogramar antes de aprobar.`;
-}
-
-// A diferencia de getDisponible() (que suma Normal + Regularizado porque al
-// aprobar un SIAF todavía no se sabe cuál de los dos terminará siendo), acá
-// ya se conoce el tipo — Baja Cuantía/Casos de Excepción se ramifican en
-// Normal (pasa por Compromiso) o Regularizado (va directo a Fondo Rotativo,
-// nunca toca Pre-Compromiso/Compromiso) desde "Iniciar Adjudicación". Por
-// eso el check se hace por separado contra el Programado de ESE tipo en el
-// cuatrimestre vigente — mismo "Saldo Programado Normal/Regularizado" que ya
-// se muestra en /presupuesto/ejecucion: Programado del tipo menos lo ya
-// Ejecutado (Devengado) de ese mismo tipo (confirmado con el cliente: no
-// resta Compromiso, solo lo ya devengado).
-export async function getDisponiblePorTipo(renglon: number, subproducto: string, tipo: "normal" | "regularizado"): Promise<Disponible> {
-  const cuatrimestreVigente = cuatrimestreDeFecha(fechaGuatemala());
-
-  const [entradasRow] = await db.select({
-    total: sql<number>`COALESCE(SUM(${programacionEntradas.mes1} + ${programacionEntradas.mes2} + ${programacionEntradas.mes3} + ${programacionEntradas.mes4}), 0)`,
-  }).from(programacionEntradas).where(and(
-    eq(programacionEntradas.ejercicio_fiscal, EJERCICIO_FISCAL),
-    eq(programacionEntradas.renglon, renglon),
-    eq(programacionEntradas.subproducto, subproducto),
-    eq(programacionEntradas.cuatrimestre, cuatrimestreVigente),
-    eq(programacionEntradas.estado, "Aprobado"),
-    eq(programacionEntradas.tipo, tipo),
-  ));
-  const programado = Number(entradasRow?.total ?? 0);
-
-  const [vivo] = await db.select({
-    devengado:               presupuestoRenglones.devengado,
-    devengado_regularizado: presupuestoRenglones.devengado_regularizado,
-  }).from(presupuestoRenglones).where(and(
-    eq(presupuestoRenglones.renglon, renglon),
-    eq(presupuestoRenglones.subproducto, subproducto),
-    eq(presupuestoRenglones.ejercicio_fiscal, EJERCICIO_FISCAL),
-  )).limit(1);
-
-  const usado = tipo === "normal" ? (vivo?.devengado ?? 0) : (vivo?.devengado_regularizado ?? 0);
-
-  return { programado, modificaciones: 0, usado, disponible: programado - usado };
-}
-
-export async function verificarProgramadoPorTipo(
-  items: RenglonSubproducto[], tipo: "normal" | "regularizado",
-): Promise<PresupuestoExcedido[]> {
-  const porClave = new Map<string, RenglonSubproducto>();
-  for (const item of items) {
-    const key = `${item.renglon}::${item.subproducto}`;
-    const existente = porClave.get(key);
-    if (existente) existente.monto += item.monto;
-    else porClave.set(key, { ...item });
-  }
-
-  const excedidos: PresupuestoExcedido[] = [];
-  for (const { renglon, subproducto, monto } of porClave.values()) {
-    const { disponible } = await getDisponiblePorTipo(renglon, subproducto, tipo);
-    if (monto > disponible + 0.01) excedidos.push({ renglon, subproducto, disponible, requerido: monto });
-  }
-  return excedidos;
-}
-
-export function mensajeProgramadoExcedido(excedidos: PresupuestoExcedido[], tipo: "normal" | "regularizado"): string {
-  const tipoLabel = tipo === "normal" ? "Normal" : "Regularizado";
-  const detalle = excedidos.map(e =>
-    `renglón ${e.renglon} / ${e.subproducto} (Programado ${tipoLabel} disponible Q${e.disponible.toLocaleString("es-GT", { minimumFractionDigits: 2 })}, se necesitan Q${e.requerido.toLocaleString("es-GT", { minimumFractionDigits: 2 })})`
-  ).join("; ");
-  return `No hay Programado ${tipoLabel} suficiente para: ${detalle}. Ve a Presupuesto/Programación para programar ${tipoLabel} de este cuatrimestre.`;
+  return `No hay presupuesto disponible para: ${detalle}. Ya no queda Vigente libre en este renglón — hace falta una Ampliación presupuestaria o una Transferencia desde otro renglón con Saldo.`;
 }

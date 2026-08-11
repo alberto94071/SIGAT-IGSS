@@ -9,7 +9,6 @@ import { presupuestoRenglones, programacionEntradas, programacionCompromisos } f
 import { and } from "drizzle-orm";
 import { requiereDab60, cuatrimestreDeFecha } from "@/lib/programacion-constants";
 import { fechaGuatemala, fechaHoraGuatemala } from "@/lib/date-utils";
-import { verificarProgramadoPorTipo, mensajeProgramadoExcedido } from "@/lib/presupuesto-disponible";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -102,20 +101,6 @@ export async function aprobarCompromiso(ordenId: number): Promise<{ ok: true } |
     }
     if (faltantes.length > 0) {
       return { error: `La programación no es suficiente: ${faltantes.join("; ")}. Solicita una Reprogramación antes de aprobar.` };
-    }
-
-    // Toda orden que llega a Compromiso es "Normal" (Regularizado nunca
-    // genera Orden de Compra) — además del Pre-Compromiso reservado arriba,
-    // se valida que exista Programado NORMAL suficiente en el cuatrimestre
-    // vigente para ese renglón: el Pre-Compromiso combinado (Normal +
-    // Regularizado, reservado al aprobar el SIAF) puede alcanzar aunque el
-    // tipo específico que se terminó eligiendo no tenga Programado propio.
-    const excedidosProgramado = await verificarProgramadoPorTipo(
-      renglones.map(r => ({ renglon: r.renglon as number, subproducto: r.subproducto, monto: r.total })),
-      "normal",
-    );
-    if (excedidosProgramado.length > 0) {
-      return { error: mensajeProgramadoExcedido(excedidosProgramado, "normal") };
     }
 
     // Insumos (renglones 200-299/300-399, salvo servicios 261/266/295) pasan
