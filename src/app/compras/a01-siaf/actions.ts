@@ -25,6 +25,57 @@ async function validarItemsEnPac(items: { catalogo_id: number }[]): Promise<stri
   return null;
 }
 
+type ItemPacExcedido = { nombre: string; disponible: number; requerido: number };
+
+// Cantidad todavía disponible en el PAC para un insumo (código IGSS +
+// subproducto) del año dado: la cantidad autorizada en el catálogo, menos lo
+// que ya está pedido en otros SIAF del mismo año que no estén Rechazados
+// (Borrador o Aprobado — un Borrador también aparta cantidad, para que dos
+// solicitudes en trámite a la vez no se pisen entre sí). Excluye la propia
+// solicitud que se está aprobando, para no restarse a sí misma dos veces.
+async function verificarPacDisponible(
+  items: { codigo_igss: string | null; subproducto: string; nombre: string; cantidad_solicitada: number }[],
+  anio: number, solicitudIdActual: number,
+): Promise<ItemPacExcedido[]> {
+  const porClave = new Map<string, { codigo_igss: string; subproducto: string; nombre: string; monto: number }>();
+  for (const item of items) {
+    if (!item.codigo_igss) continue; // sin código IGSS no hay con qué cruzar la cantidad del PAC
+    const key = `${item.codigo_igss}::${item.subproducto}`;
+    const existente = porClave.get(key);
+    if (existente) existente.monto += item.cantidad_solicitada;
+    else porClave.set(key, { codigo_igss: item.codigo_igss, subproducto: item.subproducto, nombre: item.nombre, monto: item.cantidad_solicitada });
+  }
+
+  const excedidos: ItemPacExcedido[] = [];
+  for (const { codigo_igss, subproducto, nombre, monto } of porClave.values()) {
+    const [cat] = await db.select({ cantidad: catalogoCompras.cantidad }).from(catalogoCompras)
+      .where(and(eq(catalogoCompras.codigo_igss, codigo_igss), eq(catalogoCompras.subproducto, subproducto))).limit(1);
+    // Sin cantidad configurada en el PAC para este insumo no hay límite que
+    // verificar (no es lo mismo que "cero disponible") — se deja pasar.
+    if (cat?.cantidad == null) continue;
+    const autorizado = cat.cantidad;
+
+    const res = await db.execute(sql`
+      SELECT COALESCE(SUM(sci.cantidad_solicitada), 0) AS total
+      FROM siaf_compras_items sci
+      JOIN siaf_compras sc ON sc.id = sci.solicitud_id
+      WHERE sci.codigo_igss = ${codigo_igss} AND sci.subproducto = ${subproducto}
+        AND sc.anio = ${anio} AND sc.estado != 'Rechazado' AND sc.id != ${solicitudIdActual}
+    `);
+    const yaReservado = Number((res.rows[0] as any).total) || 0;
+    const disponible = autorizado - yaReservado;
+    if (monto > disponible + 0.01) excedidos.push({ nombre, disponible, requerido: monto });
+  }
+  return excedidos;
+}
+
+function mensajePacExcedido(excedidos: ItemPacExcedido[]): string {
+  const detalle = excedidos.map(e =>
+    `${e.nombre} (disponible en el PAC: ${e.disponible.toLocaleString("es-GT")}, se necesitan: ${e.requerido.toLocaleString("es-GT")})`
+  ).join("; ");
+  return `No hay cantidad disponible en el PAC (Catálogo de Compras) para: ${detalle}. Amplía la cantidad autorizada en el catálogo antes de aprobar.`;
+}
+
 export async function getNextSiafNumeroCompras(): Promise<number> {
   const year = new Date().getFullYear();
   const result = await db.execute(
@@ -139,7 +190,7 @@ export async function actualizarEstado(id: number, estado: string) {
 // se rechaza y se vuelve a aprobar después.
 export async function aprobarSolicitud(id: number): Promise<{ ok: true } | { error: string }> {
   try {
-    const [sol] = await db.select({ id: siafCompras.id, presupuesto_aplicado: siafCompras.presupuesto_aplicado })
+    const [sol] = await db.select({ id: siafCompras.id, anio: siafCompras.anio, presupuesto_aplicado: siafCompras.presupuesto_aplicado })
       .from(siafCompras).where(eq(siafCompras.id, id)).limit(1);
     if (!sol) return { error: "Solicitud no encontrada" };
 
@@ -151,6 +202,11 @@ export async function aprobarSolicitud(id: number): Promise<{ ok: true } | { err
         subproducto:         siafComprasItems.subproducto,
         cantidad_solicitada: siafComprasItems.cantidad_solicitada,
       }).from(siafComprasItems).where(eq(siafComprasItems.solicitud_id, id));
+
+      const excedidosPac = await verificarPacDisponible(items, sol.anio, id);
+      if (excedidosPac.length > 0) {
+        return { error: mensajePacExcedido(excedidosPac) };
+      }
 
       const montosPorGrupo = new Map<string, { renglon: number; subproducto: string; monto: number }>();
       const sinCatalogo: string[] = [];
