@@ -1,5 +1,6 @@
 "use client";
 import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { BookOpen, Search, Plus, X, Loader2, ChevronLeft, ChevronRight, ChevronDown, Download, Edit2, Trash2, CheckCircle2 } from "lucide-react";
 import { crearInsumoCompras, editarInsumoCompras, eliminarInsumoCompras, buscarInsumosCentral, type InsumoCentralAgrupado } from "./actions";
 import { importarPac2026 } from "./importar-action";
@@ -30,6 +31,7 @@ const PAGE_SIZES = [10, 25, 50] as const;
 interface Props { insumos: Insumo[]; }
 
 export default function CatalogoComprasClient({ insumos: init }: Props) {
+  const router = useRouter();
   const [insumos, setInsumos] = useState(init);
   const [query, setQuery] = useState("");
   const [pageSize, setPageSize] = useState<number>(25);
@@ -37,6 +39,13 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
   const [modal, setModal] = useState(false);
   const [editingInsumo, setEditingInsumo] = useState<Insumo | null>(null);
   const [importando, setImportando] = useState(false);
+
+  // insumos vive en estado local (para que crear/editar/eliminar un insumo
+  // se sienta instantáneo) — pero tras reemplazar todo el catálogo
+  // (importarPac2026 + router.refresh) hay que resincronizarlo con lo que
+  // trae el server component, o la lista en pantalla se queda con los datos
+  // viejos hasta que alguien recargue la página a mano.
+  useEffect(() => { setInsumos(init); }, [init]);
 
   async function handleImportar(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -50,9 +59,11 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
     const res = await importarPac2026(formData);
     setImportando(false);
     e.target.value = ""; // Reset input
-    
-    if (res.error) alert("Error al importar: " + res.error);
-    else alert("¡Catálogo importado con éxito!");
+
+    if ("error" in res) { alert("Error al importar: " + res.error); return; }
+    if (res.advertencia) alert(res.advertencia);
+    else alert(`¡Catálogo importado con éxito! (${res.importadas.toLocaleString("es-GT")} insumos)`);
+    router.refresh();
   }
 
   const filtered = useMemo(() => {
