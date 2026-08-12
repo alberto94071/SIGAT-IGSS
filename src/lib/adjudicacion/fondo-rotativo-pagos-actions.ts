@@ -27,11 +27,20 @@ async function esPagoGrupo100(consolidacionId: number): Promise<boolean> {
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 async function reflejarEnEjecucion(tx: Tx, consolidacionId: number): Promise<void> {
+  const [con] = await tx.select({ exento_iva: consolidaciones.exento_iva })
+    .from(consolidaciones).where(eq(consolidaciones.id, consolidacionId)).limit(1);
+  const exentoIva = con?.exento_iva ?? false;
+
   const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
   for (const r of renglones) {
+    // Neto de IVA, igual que aprobarDevengado (la vía Normal) — pre_compromiso
+    // y devengado_regularizado tienen que moverse en la misma unidad que el
+    // resto de presupuesto_renglones, o "Regularizado" queda inflado por el
+    // 12% del IVA frente a "Normal" en el reporte de Ejecución.
+    const montoNeto = exentoIva ? r.total : r.total * 0.88;
     await tx.update(presupuestoRenglones).set({
-      devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) + ${r.total}`,
-      pre_compromiso: sql`GREATEST(COALESCE(${presupuestoRenglones.pre_compromiso}, 0) - ${r.total}, 0)`,
+      devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) + ${montoNeto}`,
+      pre_compromiso: sql`GREATEST(COALESCE(${presupuestoRenglones.pre_compromiso}, 0) - ${montoNeto}, 0)`,
     }).where(and(
       eq(presupuestoRenglones.renglon, r.renglon as number),
       eq(presupuestoRenglones.subproducto, r.subproducto),
