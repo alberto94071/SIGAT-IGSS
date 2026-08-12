@@ -1037,3 +1037,20 @@ export const dab60Posiciones = pgTable("dab60_posiciones", {
   width:  doublePrecision("width"),
   height: doublePrecision("height"),
 });
+
+// ─── Posiciones de campos de otros formularios pre-impresos (Vale de Caja
+// Chica, Cheque/Baucher) ──────────────────────────────────────────────────────
+// Misma idea que dab60Posiciones, pero genérica para varios documentos a la
+// vez (columna "documento": "vale" | "cheque", ...) en vez de una tabla nueva
+// por cada formulario.
+export const posicionesImpresion = pgTable("posiciones_impresion", {
+  id:        serial("id").primaryKey(),
+  documento: text("documento").notNull(),
+  campo:     text("campo").notNull(),
+  top:       doublePrecision("top").notNull(),
+  left:      doublePrecision("left").notNull(),
+  width:     doublePrecision("width"),
+  height:    doublePrecision("height"),
+}, table => ({
+  documentoCampoUnico: uniqueIndex("posiciones_impresion_documento_campo_idx").on(table.documento, table.campo),
+}));

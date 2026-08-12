@@ -1,6 +1,8 @@
 "use client";
-import { OverlayPrint } from "@/components/overlay-print/OverlayPrint";
-import OverlayField from "@/components/overlay-print/OverlayField";
+import { useState, useCallback, useRef, useLayoutEffect } from "react";
+import { guardarPosicionesImpresion, getFondoImpresion } from "@/lib/impresion-posiciones-actions";
+import { Campo, CAMPO_POSICIONABLE_CSS, type Pos } from "@/components/print-posiciones/CampoPosicionable";
+import { PosicionesToolbar, HojaConFondo, HOJA_CON_FONDO_CSS } from "@/components/print-posiciones/PosicionesToolbar";
 
 type Vale = {
   numero: number; tipo: string; motivo: string; monto: number; monto_autorizado: number | null;
@@ -13,7 +15,11 @@ interface Props {
   montoEnLetras: string;
   municipio: string;
   codigoContable: string;
+  posicionesGuardadas: Record<string, Pos>;
 }
+
+const HOJA_W_MM = 215.9;
+const HOJA_H_MM = 279.4;
 
 function fechaCorta(iso: string | null): string {
   if (!iso) return "";
@@ -28,27 +34,119 @@ function partesFecha(iso: string | null): { dia: string; mes: string; anio: stri
 
 const TIPO_LABEL: Record<string, string> = { pasajes: "Vale de Pago de Pasajes", gastos_varios: "Vale de Gastos Varios" };
 
-export default function ImprimirVoucherClient({ vale: v, montoEnLetras, municipio, codigoContable }: Props) {
+// Posiciones por defecto (mm) — arrancan de las coordenadas que ya se usaban
+// en el sistema anterior de ajuste fino (OverlayField, en pulgadas), solo
+// convertidas a mm; se afinan y guardan desde el modo "Ver posiciones".
+const POS_DEFAULT: Record<string, Pos> = {
+  numero_cheque: { top: 5.6,   left: 154.9, width: 38, height: 5 },
+  lugar_fecha:   { top: 19.8,  left: 50.8,  width: 110, height: 5 },
+  monto_cheque:  { top: 19.8,  left: 161.3, width: 30, height: 5 },
+  destinatario:  { top: 29.2,  left: 50.8,  width: 150, height: 5 },
+  monto_letras:  { top: 36.8,  left: 40.6,  width: 163, height: 6 },
+  cuenta_no:     { top: 96.0,  left: 15.2,  width: 25, height: 5 },
+  concepto:      { top: 96.0,  left: 43.2,  width: 99, height: 5 },
+  monto_stub:    { top: 96.0,  left: 148.6, width: 22, height: 5 },
+  solicitante:   { top: 199.4, left: 14.0,  width: 38, height: 5 },
+  jefe:          { top: 199.4, left: 104.1, width: 48, height: 5 },
+  dia:           { top: 199.4, left: 191.8, width: 6,  height: 5 },
+  mes:           { top: 199.4, left: 199.4, width: 6,  height: 5 },
+  anio:          { top: 199.4, left: 207.0, width: 9,  height: 5 },
+};
+
+const FIELD_LABELS: Record<string, string> = {
+  numero_cheque: "No. de cheque",
+  lugar_fecha:   "Lugar y fecha",
+  monto_cheque:  "Monto (Q., cuerpo del cheque)",
+  destinatario:  "Pago a la orden de",
+  monto_letras:  "Suma de (en letras)",
+  cuenta_no:     "Cuenta No. (voucher)",
+  concepto:      "Concepto (voucher)",
+  monto_stub:    "Monto (voucher, debe/haber)",
+  solicitante:   "Nombre del solicitante",
+  jefe:          "Nombre del Jefe",
+  dia:           "Día",
+  mes:           "Mes",
+  anio:          "Año",
+};
+
+export default function ImprimirVoucherClient({
+  vale: v, montoEnLetras, municipio, codigoContable, posicionesGuardadas,
+}: Props) {
+  const [verPosiciones, setVerPosiciones] = useState(false);
+  const [pos, setPos] = useState<Record<string, Pos>>({ ...POS_DEFAULT, ...posicionesGuardadas });
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [fondo, setFondo] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const [guardado, setGuardado] = useState(false);
+  const hojaRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (!fondo) getFondoImpresion("cheque").then(setFondo);
+  }, [fondo]);
+
+  const onChangePos = useCallback((id: string, next: Pos) => {
+    setPos(p => ({ ...p, [id]: next }));
+  }, []);
+  const onTextChange = useCallback((id: string, texto: string) => {
+    setOverrides(o => ({ ...o, [id]: texto }));
+  }, []);
+
+  async function guardarPosiciones() {
+    setGuardando(true);
+    await guardarPosicionesImpresion("cheque", pos);
+    setGuardando(false);
+    setGuardado(true);
+    setTimeout(() => setGuardado(false), 2000);
+  }
+  function restablecerPosiciones() {
+    setPos({ ...POS_DEFAULT });
+  }
+
   const monto = v.monto_autorizado ?? v.monto;
+  const montoTxt = monto.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const { dia, mes, anio } = partesFecha(v.fecha_emision);
 
+  const campo = (id: string, textoDefault: string, opts?: { style?: React.CSSProperties }) => {
+    const texto = overrides[id] ?? textoDefault;
+    return (
+      <Campo
+        id={id} texto={texto} hojaRef={hojaRef} hojaWMm={HOJA_W_MM} hojaHMm={HOJA_H_MM}
+        pos={pos[id] ?? POS_DEFAULT[id]} onChange={onChangePos}
+        editable={verPosiciones} style={opts?.style} label={FIELD_LABELS[id] ?? id}
+        onTextChange={onTextChange}
+      />
+    );
+  };
+
   return (
-    <OverlayPrint storageKey="overlay-offset-voucher" title={`Voucher — Cheque ${v.numero_cheque}`}>
-      <OverlayField top={0.22} left={6.1} width={1.5} align="right" bold mono>{v.numero_cheque}</OverlayField>
-      <OverlayField top={0.78} left={2.0} width={4.3}>{municipio}, {fechaCorta(v.fecha_emision)}</OverlayField>
-      <OverlayField top={0.78} left={6.35} width={1.2} align="right" bold>{monto.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</OverlayField>
-      <OverlayField top={1.15} left={2.0} width={5.9}>{v.destinatario_cheque}</OverlayField>
-      <OverlayField top={1.45} left={1.6} width={6.4} size={8.5}>{montoEnLetras}</OverlayField>
+    <>
+      <PosicionesToolbar
+        titulo={`Voucher — Cheque ${v.numero_cheque}`}
+        verPosiciones={verPosiciones} onToggleVer={() => setVerPosiciones(p => !p)}
+        onRestablecer={restablecerPosiciones} onGuardar={guardarPosiciones}
+        guardando={guardando} guardado={guardado}
+      />
 
-      <OverlayField top={3.78} left={0.6} width={1.0} align="center" size={8}>{codigoContable}</OverlayField>
-      <OverlayField top={3.78} left={1.7} width={3.9} size={8.5}>{TIPO_LABEL[v.tipo] ?? v.tipo} No. {String(v.numero).padStart(7, "0")} — {v.motivo}</OverlayField>
-      <OverlayField top={3.78} left={5.85} width={0.85} align="right" mono size={8.5}>{monto.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</OverlayField>
+      <HojaConFondo hojaRef={hojaRef} fondo={fondo}>
+        {campo("numero_cheque", v.numero_cheque ?? "", { style: { textAlign: "right", fontWeight: "bold", fontFamily: "monospace" } })}
+        {campo("lugar_fecha", `${municipio}, ${fechaCorta(v.fecha_emision)}`)}
+        {campo("monto_cheque", montoTxt, { style: { textAlign: "right", fontWeight: "bold" } })}
+        {campo("destinatario", v.destinatario_cheque ?? "")}
+        {campo("monto_letras", montoEnLetras, { style: { fontSize: "8.5pt" } })}
 
-      <OverlayField top={7.85} left={0.55} width={1.5} size={7.5}>{v.solicitante_nombre}</OverlayField>
-      <OverlayField top={7.85} left={4.1} width={1.9} size={7.5}>{v.jefe_nombre}</OverlayField>
-      <OverlayField top={7.85} left={7.55} width={0.2} align="center" size={7.5}>{dia}</OverlayField>
-      <OverlayField top={7.85} left={7.85} width={0.2} align="center" size={7.5}>{mes}</OverlayField>
-      <OverlayField top={7.85} left={8.15} width={0.35} align="center" size={7.5}>{anio}</OverlayField>
-    </OverlayPrint>
+        {campo("cuenta_no", codigoContable, { style: { textAlign: "center", fontSize: "8pt" } })}
+        {campo("concepto", `${TIPO_LABEL[v.tipo] ?? v.tipo} No. ${String(v.numero).padStart(7, "0")} — ${v.motivo}`, { style: { fontSize: "8.5pt" } })}
+        {campo("monto_stub", montoTxt, { style: { textAlign: "right", fontFamily: "monospace", fontSize: "8.5pt" } })}
+
+        {campo("solicitante", v.solicitante_nombre, { style: { fontSize: "7.5pt" } })}
+        {campo("jefe", v.jefe_nombre, { style: { fontSize: "7.5pt" } })}
+        {campo("dia", dia, { style: { textAlign: "center", fontSize: "7.5pt" } })}
+        {campo("mes", mes, { style: { textAlign: "center", fontSize: "7.5pt" } })}
+        {campo("anio", anio, { style: { textAlign: "center", fontSize: "7.5pt" } })}
+      </HojaConFondo>
+
+      <style>{HOJA_CON_FONDO_CSS}</style>
+      {verPosiciones && <style>{CAMPO_POSICIONABLE_CSS}</style>}
+    </>
   );
 }
