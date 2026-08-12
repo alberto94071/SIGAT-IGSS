@@ -10,6 +10,16 @@ import { and } from "drizzle-orm";
 import { requiereDab60, cuatrimestreDeFecha } from "@/lib/programacion-constants";
 import { fechaGuatemala, fechaHoraGuatemala } from "@/lib/date-utils";
 
+// Igual que PresupuestoExcedidoEnTransaccion en presupuesto-disponible.ts —
+// permite distinguir, en el catch de aprobarCompromiso, "se quedó sin
+// Pre-Compromiso en la re-verificación dentro de la transacción" de
+// cualquier otro error inesperado.
+class PreCompromisoInsuficienteEnTransaccion extends Error {
+  constructor(public renglon: number, public subproducto: string, public disponible: number, public requerido: number) {
+    super("pre_compromiso_insuficiente_en_transaccion");
+  }
+}
+
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
   if (!session) return { error: "No autorizado" };
@@ -78,12 +88,19 @@ export async function aprobarCompromiso(ordenId: number): Promise<{ ok: true } |
       estado: ordenesCompra.estado,
       consolidacion_id: ordenesCompra.consolidacion_id,
       no_compromiso: ordenesCompra.no_compromiso,
+      exento_iva: ordenesCompra.exento_iva,
     }).from(ordenesCompra)
       .where(eq(ordenesCompra.id, ordenId)).limit(1);
     if (!orden) return { error: "No se encontró la orden" };
     if (orden.estado !== "Compromiso Solicitado") return { error: "Esta orden no está pendiente de aprobación de Compromiso" };
 
     const renglones = await gruposRenglonDeConsolidacion(orden.consolidacion_id);
+    // Pre-Compromiso se reservó neto de IVA (ver calcularMontosPorRenglonSiaf
+    // en a01-siaf/actions.ts) — Compromiso tiene que moverse en la misma
+    // unidad, si no la comparación siempre falla por exactamente el 12% del
+    // IVA en cualquier compra que no sea exenta (mismo criterio que ya usa
+    // aprobarDevengado al mover Compromiso → Devengado).
+    const montoNeto = (r: { total: number }) => orden.exento_iva ? r.total : r.total * 0.88;
 
     const faltantes: string[] = [];
     for (const r of renglones) {
@@ -94,13 +111,14 @@ export async function aprobarCompromiso(ordenId: number): Promise<{ ok: true } |
           eq(presupuestoRenglones.ejercicio_fiscal, 2026),
         )).limit(1);
       const disponible = vivo?.pre_compromiso ?? 0;
-      if (r.total > disponible + 0.01) {
-        const faltante = r.total - disponible;
+      const requerido = montoNeto(r);
+      if (requerido > disponible + 0.01) {
+        const faltante = requerido - disponible;
         faltantes.push(`renglón ${r.renglon} / ${r.subproducto} (disponible Q${disponible.toLocaleString("es-GT", { minimumFractionDigits: 2 })}, faltan Q${faltante.toLocaleString("es-GT", { minimumFractionDigits: 2 })})`);
       }
     }
     if (faltantes.length > 0) {
-      return { error: `La programación no es suficiente: ${faltantes.join("; ")}. Solicita una Reprogramación antes de aprobar.` };
+      return { error: `No hay presupuesto disponible para: ${faltantes.join("; ")}. Ya no queda Vigente libre en este renglón — hace falta una Ampliación presupuestaria o una Transferencia desde otro renglón con Saldo.` };
     }
 
     // Insumos (renglones 200-299/300-399, salvo servicios 261/266/295) pasan
@@ -119,10 +137,26 @@ export async function aprobarCompromiso(ordenId: number): Promise<{ ok: true } |
       await tx.update(ordenesCompra).set({ estado: siguienteEstado }).where(eq(ordenesCompra.id, ordenId));
 
       for (const r of renglones) {
+        // Re-verifica el Pre-Compromiso con la fila bloqueada (FOR UPDATE)
+        // justo antes de escribir — el chequeo de "faltantes" de arriba se
+        // hizo fuera de la transacción y pudo quedar desactualizado si otra
+        // aprobación al mismo renglón se coló entre medio.
+        const [vivo] = await tx.select({ pre_compromiso: presupuestoRenglones.pre_compromiso })
+          .from(presupuestoRenglones).where(and(
+            eq(presupuestoRenglones.renglon, r.renglon as number),
+            eq(presupuestoRenglones.subproducto, r.subproducto),
+            eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+          )).for("update").limit(1);
+        const disponibleAhora = vivo?.pre_compromiso ?? 0;
+        const requerido = montoNeto(r);
+        if (requerido > disponibleAhora + 0.01) {
+          throw new PreCompromisoInsuficienteEnTransaccion(r.renglon as number, r.subproducto, disponibleAhora, requerido);
+        }
+
         await tx.update(presupuestoRenglones).set({
-          pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) - ${r.total}`,
-          compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) + ${r.total}`,
-          saldo_disponible: sql`COALESCE(${presupuestoRenglones.saldo_disponible}, 0) - ${r.total}`
+          pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) - ${requerido}`,
+          compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) + ${requerido}`,
+          saldo_disponible: sql`COALESCE(${presupuestoRenglones.saldo_disponible}, 0) - ${requerido}`
         }).where(and(
           eq(presupuestoRenglones.renglon, r.renglon as number),
           eq(presupuestoRenglones.subproducto, r.subproducto),
@@ -155,7 +189,11 @@ export async function aprobarCompromiso(ordenId: number): Promise<{ ok: true } |
     });
 
     return { ok: true };
-  } catch {
+  } catch (e) {
+    if (e instanceof PreCompromisoInsuficienteEnTransaccion) {
+      const faltante = e.requerido - e.disponible;
+      return { error: `No hay presupuesto disponible para: renglón ${e.renglon} / ${e.subproducto} (disponible Q${e.disponible.toLocaleString("es-GT", { minimumFractionDigits: 2 })}, faltan Q${faltante.toLocaleString("es-GT", { minimumFractionDigits: 2 })}). Ya no queda Vigente libre en este renglón — hace falta una Ampliación presupuestaria o una Transferencia desde otro renglón con Saldo.` };
+    }
     return { error: "Error al aprobar el compromiso" };
   }
 }
@@ -235,9 +273,12 @@ export async function regresarACompromiso(ordenId: number, motivo?: string): Pro
     await db.transaction(async (tx) => {
       for (const r of renglones) {
         if (yaDevengado) {
+          // pre_compromiso/compromiso/devengado se mueven neto de IVA (ver
+          // aprobarCompromiso/aprobarDevengado) — deshacerlos tiene que usar
+          // ese mismo monto neto, no el bruto r.total.
           const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
           await tx.update(presupuestoRenglones).set({
-            pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${r.total}`,
+            pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${montoDevengado}`,
             ...(esRegularizado
               ? { devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) - ${montoDevengado}` }
               : { devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) - ${montoDevengado}` }),
@@ -247,13 +288,15 @@ export async function regresarACompromiso(ordenId: number, motivo?: string): Pro
             eq(presupuestoRenglones.ejercicio_fiscal, 2026),
           ));
           // El Compromiso no se toca: aprobarDevengado ya lo había liberado
-          // (-r.total) y ahora se está deshaciendo también la aprobación del
-          // Compromiso (+r.total más abajo estaría de más) — se cancelan.
+          // (-montoDevengado) y ahora se está deshaciendo también la
+          // aprobación del Compromiso (+montoDevengado más abajo estaría de
+          // más) — se cancelan.
         } else {
+          const montoNeto = orden.exento_iva ? r.total : r.total * 0.88;
           await tx.update(presupuestoRenglones).set({
-            pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${r.total}`,
-            compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${r.total}`,
-            saldo_disponible: sql`COALESCE(${presupuestoRenglones.saldo_disponible}, 0) + ${r.total}`,
+            pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${montoNeto}`,
+            compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${montoNeto}`,
+            saldo_disponible: sql`COALESCE(${presupuestoRenglones.saldo_disponible}, 0) + ${montoNeto}`,
           }).where(and(
             eq(presupuestoRenglones.renglon, r.renglon as number),
             eq(presupuestoRenglones.subproducto, r.subproducto),
@@ -326,9 +369,12 @@ export async function regresarADab60(ordenId: number, motivo?: string): Promise<
 
     await db.transaction(async (tx) => {
       for (const r of renglones) {
+        // Compromiso se mueve neto de IVA, igual que en aprobarDevengado —
+        // deshacer ese mismo paso tiene que usar el mismo montoDevengado, no
+        // el bruto r.total.
         const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
         await tx.update(presupuestoRenglones).set({
-          compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) + ${r.total}`,
+          compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) + ${montoDevengado}`,
           ...(esRegularizado
             ? { devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) - ${montoDevengado}` }
             : { devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) - ${montoDevengado}` }),
@@ -419,9 +465,10 @@ export async function regresarOrdenAAdjudicacion(ordenId: number, motivo?: strin
     await db.transaction(async (tx) => {
       for (const r of renglones) {
         if (yaDevengado) {
+          // Mismo criterio neto-de-IVA que aprobarCompromiso/aprobarDevengado.
           const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
           await tx.update(presupuestoRenglones).set({
-            pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${r.total}`,
+            pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${montoDevengado}`,
             devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) - ${montoDevengado}`,
           }).where(and(
             eq(presupuestoRenglones.renglon, r.renglon as number),
@@ -429,10 +476,11 @@ export async function regresarOrdenAAdjudicacion(ordenId: number, motivo?: strin
             eq(presupuestoRenglones.ejercicio_fiscal, 2026),
           ));
         } else {
+          const montoNeto = orden.exento_iva ? r.total : r.total * 0.88;
           await tx.update(presupuestoRenglones).set({
-            pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${r.total}`,
-            compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${r.total}`,
-            saldo_disponible: sql`COALESCE(${presupuestoRenglones.saldo_disponible}, 0) + ${r.total}`,
+            pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${montoNeto}`,
+            compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${montoNeto}`,
+            saldo_disponible: sql`COALESCE(${presupuestoRenglones.saldo_disponible}, 0) + ${montoNeto}`,
           }).where(and(
             eq(presupuestoRenglones.renglon, r.renglon as number),
             eq(presupuestoRenglones.subproducto, r.subproducto),

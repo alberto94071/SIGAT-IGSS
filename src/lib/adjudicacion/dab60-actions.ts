@@ -78,13 +78,25 @@ export async function getOrdenesDab60PendienteAprobacion() {
 
 // Órdenes que ya pasaron por Almacén/DAB-60 (sin importar en qué etapa vayan
 // después) — para consulta histórica y reimpresión en Almacén/Archivo.
-export async function getOrdenesArchivadasAlmacen() {
-  const ordenes = await db.select().from(ordenesCompra)
+// El archivo de almacén nunca se borra, así que crece para siempre — se
+// pagina por lotes (más reciente primero) en vez de traer y procesar toda
+// la tabla en cada visita. Pide un registro de más para saber si queda algo
+// atrás sin otra consulta. (Un archivo "use server" solo puede exportar
+// funciones async.)
+const ARCHIVO_ALMACEN_PAGE_SIZE = 50;
+
+export async function getOrdenesArchivadasAlmacen(offset: number = 0) {
+  const limit = ARCHIVO_ALMACEN_PAGE_SIZE;
+  const pagina = await db.select().from(ordenesCompra)
     .where(isNotNull(ordenesCompra.dab60_generado_en))
-    .orderBy(sql`dab60_generado_en DESC`);
-  return Promise.all(ordenes.map(async o => ({
+    .orderBy(sql`dab60_generado_en DESC`)
+    .limit(limit + 1).offset(offset);
+  const hasMore = pagina.length > limit;
+  const ordenesPagina = pagina.slice(0, limit);
+  const ordenes = await Promise.all(ordenesPagina.map(async o => ({
     ...o, renglones: await gruposRenglonDeConsolidacion(o.consolidacion_id),
   })));
+  return { ordenes, hasMore };
 }
 
 export type Dab60Data = {

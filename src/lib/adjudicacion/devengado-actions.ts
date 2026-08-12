@@ -119,9 +119,12 @@ export async function aprobarDevengado(ordenId: number): Promise<{ ok: true } | 
       }).where(eq(ordenesCompra.id, ordenId));
 
       for (const r of renglones) {
+        // Compromiso también se mueve neto de IVA (ver aprobarCompromiso) —
+        // usa el mismo montoDevengado que ya se calcula para el destino, no
+        // el bruto r.total, o queda descuadrado por el 12% del IVA.
         const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
         await tx.update(presupuestoRenglones).set({
-          compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${r.total}`,
+          compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${montoDevengado}`,
           ...(esRegularizado
             ? { devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) + ${montoDevengado}` }
             : { devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) + ${montoDevengado}` }),

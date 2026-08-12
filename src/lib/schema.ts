@@ -67,6 +67,11 @@ export const usuarios = pgTable("usuarios", {
   created_at:     text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   updated_at:     text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   last_login:     text("last_login"),
+  // Bloqueo temporal por intentos de contraseña fallidos (ver auth.ts) — se
+  // reinicia en cada login exitoso. bloqueado_hasta queda null mientras no
+  // haya bloqueo activo.
+  intentos_fallidos: integer("intentos_fallidos").notNull().default(0),
+  bloqueado_hasta:   text("bloqueado_hasta"),
 });
 
 // ─── Catálogo de insumos (hoja Cod) ──────────────────────────────────────────
@@ -640,7 +645,14 @@ export const presupuestoRenglones = pgTable("presupuesto_renglones", {
   // Saldo hasta que se libere explícitamente.
   no_ejecutado:                doublePrecision("no_ejecutado").notNull().default(0),
   created_at:           text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
-});
+}, table => ({
+  // Todo el sistema lee/escribe este ledger por (ejercicio_fiscal, renglon,
+  // subproducto), nunca por id — sin este índice, un bug o una carrera podría
+  // insertar una fila duplicada para el mismo renglón y partir su saldo en
+  // dos sin que ninguna consulta lo note.
+  ejercicioRenglonSubproductoUnico: uniqueIndex("presupuesto_renglones_ejercicio_renglon_subproducto_idx")
+    .on(table.ejercicio_fiscal, table.renglon, table.subproducto),
+}));
 
 // ─── Reprogramación por lote ──────────────────────────────────────────────
 // Agrupa varias filas de programacionEntradas en una sola solicitud, para
@@ -1025,3 +1037,20 @@ export const dab60Posiciones = pgTable("dab60_posiciones", {
   width:  doublePrecision("width"),
   height: doublePrecision("height"),
 });
+
+// ─── Posiciones de campos de otros formularios pre-impresos (Vale de Caja
+// Chica, Cheque/Baucher) ──────────────────────────────────────────────────────
+// Misma idea que dab60Posiciones, pero genérica para varios documentos a la
+// vez (columna "documento": "vale" | "cheque", ...) en vez de una tabla nueva
+// por cada formulario.
+export const posicionesImpresion = pgTable("posiciones_impresion", {
+  id:        serial("id").primaryKey(),
+  documento: text("documento").notNull(),
+  campo:     text("campo").notNull(),
+  top:       doublePrecision("top").notNull(),
+  left:      doublePrecision("left").notNull(),
+  width:     doublePrecision("width"),
+  height:    doublePrecision("height"),
+}, table => ({
+  documentoCampoUnico: uniqueIndex("posiciones_impresion_documento_campo_idx").on(table.documento, table.campo),
+}));

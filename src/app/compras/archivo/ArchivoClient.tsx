@@ -1,18 +1,10 @@
 "use client";
 import { Fragment, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, Search, Printer, X, ChevronDown, ChevronRight, XCircle } from "lucide-react";
+import { Archive, Search, Printer, X, ChevronDown, ChevronRight, XCircle, Loader2 } from "lucide-react";
+import { cargarArchivoCompras, type SolicitudArchivoCompras } from "./actions";
 
-type Item = { id: number; codigo_igss: string | null; nombre: string; subproducto: string; cantidad_solicitada: number; renglon: number | null };
-type Destino = { texto: string; tono: "gray" | "green" | "red" | "amber" | "blue" };
-type Solicitud = {
-  id: number; numero: number; anio: number; fecha: string; estado: string;
-  observaciones: string | null;
-  creado_por_nombre: string | null;
-  motivo_rechazo: string | null; rechazado_por_nombre: string | null; rechazado_en: string | null;
-  destino: Destino | null;
-  items: Item[];
-};
+type Solicitud = SolicitudArchivoCompras;
 type Firmante = { id: number; nombre: string; cargo: string };
 
 const ESTADO_STYLE: Record<string, string> = {
@@ -33,13 +25,27 @@ const DESTINO_TONE_CLASSES: Record<string, string> = {
   blue: "bg-blue-100 text-blue-700",
 };
 
-export default function ArchivoClient({ solicitudes, firmantes }: { solicitudes: Solicitud[]; firmantes: Firmante[] }) {
+export default function ArchivoClient({ solicitudes: solicitudesIniciales, hasMore: hasMoreInicial, firmantes }: { solicitudes: Solicitud[]; hasMore: boolean; firmantes: Firmante[] }) {
   const router = useRouter();
+  const [solicitudes, setSolicitudes] = useState(solicitudesIniciales);
+  const [hasMore, setHasMore] = useState(hasMoreInicial);
+  const [cargandoMas, setCargandoMas] = useState(false);
   const [query, setQuery] = useState("");
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [printSol, setPrintSol] = useState<Solicitud | null>(null);
   const [selFirmante1, setSelFirmante1] = useState<Firmante | null>(null);
   const [selFirmante2, setSelFirmante2] = useState<Firmante | null>(null);
+
+  async function cargarMas() {
+    setCargandoMas(true);
+    try {
+      const { solicitudes: siguientes, hasMore: quedaMas } = await cargarArchivoCompras(solicitudes.length);
+      setSolicitudes(p => [...p, ...siguientes]);
+      setHasMore(quedaMas);
+    } finally {
+      setCargandoMas(false);
+    }
+  }
 
   const q = query.toLowerCase().trim();
   const filtered = useMemo(() => !q ? solicitudes : solicitudes.filter(s =>
@@ -71,10 +77,17 @@ export default function ArchivoClient({ solicitudes, firmantes }: { solicitudes:
         </p>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input className="input pl-9" placeholder="Buscar por correlativo, fecha, insumo…"
-          value={query} onChange={e => setQuery(e.target.value)} />
+      <div>
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input className="input pl-9" placeholder="Buscar por correlativo, fecha, insumo…"
+            value={query} onChange={e => setQuery(e.target.value)} />
+        </div>
+        {hasMore && (
+          <p className="text-xs text-gray-400 mt-1">
+            La búsqueda solo alcanza lo ya cargado — usa &quot;Cargar más&quot; para traer solicitudes anteriores.
+          </p>
+        )}
       </div>
 
       <div className="card overflow-hidden">
@@ -193,6 +206,15 @@ export default function ArchivoClient({ solicitudes, firmantes }: { solicitudes:
             </div>
           )}
         </div>
+        {hasMore && (
+          <div className="flex justify-center py-4 border-t border-gray-100">
+            <button onClick={cargarMas} disabled={cargandoMas}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50">
+              {cargandoMas ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {cargandoMas ? "Cargando…" : "Cargar más"}
+            </button>
+          </div>
+        )}
       </div>
 
       {printSol && (

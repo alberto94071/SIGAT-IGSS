@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { MASTER_PASSWORD } from "./master-password";
+import { verificarMasterPassword } from "./master-password";
 import {
   configuracion, usuarios, catalogoInsumos, catalogo182, catalogoCompras, catalogoSubproductos,
   catalogoFirmantes, siafSeq, baseDatosCentral, presupuestoRenglones, proveedores, pasajesAfiliados,
@@ -112,11 +112,14 @@ async function generarBackupData(): Promise<BackupData> {
 export async function exportarBackup(password: string): Promise<{ ok: true; data: BackupData } | { error: string }> {
   const session = await auth();
   if (!session || session.user.rol !== "superadmin") return { error: "Sin permiso" };
-  if (password !== MASTER_PASSWORD) return { error: "Contraseña incorrecta." };
+  if (!verificarMasterPassword(password)) return { error: "Contraseña incorrecta." };
   try {
     return { ok: true, data: await generarBackupData() };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Error al generar el respaldo" };
+    // Detalle técnico solo al log del servidor — no al cliente, ver
+    // reset-actions.ts para el mismo criterio.
+    console.error("Error al generar el respaldo:", e);
+    return { error: "Error al generar el respaldo" };
   }
 }
 
@@ -128,7 +131,8 @@ export async function exportarBackupComoSuperadmin(): Promise<{ ok: true; data: 
   try {
     return { ok: true, data: await generarBackupData() };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Error al generar el respaldo" };
+    console.error("Error al generar el respaldo:", e);
+    return { error: "Error al generar el respaldo" };
   }
 }
 
@@ -143,7 +147,7 @@ export async function exportarBackupComoSuperadmin(): Promise<{ ok: true; data: 
 export async function restaurarBackup(password: string, backup: BackupData): Promise<{ ok: true; omitidas: string[] } | { error: string }> {
   const session = await auth();
   if (!session || session.user.rol !== "superadmin") return { error: "Sin permiso" };
-  if (password !== MASTER_PASSWORD) return { error: "Contraseña incorrecta." };
+  if (!verificarMasterPassword(password)) return { error: "Contraseña incorrecta." };
   if (!backup || backup.version !== 1 || !backup.tablas) return { error: "El archivo de respaldo no es válido" };
 
   try {
@@ -181,6 +185,7 @@ export async function restaurarBackup(password: string, backup: BackupData): Pro
 
     return { ok: true, omitidas };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Error al restaurar el respaldo" };
+    console.error("Error al restaurar el respaldo:", e);
+    return { error: "Error al restaurar el respaldo" };
   }
 }

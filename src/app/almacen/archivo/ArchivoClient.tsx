@@ -1,8 +1,9 @@
 "use client";
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { Archive, Search, Printer } from "lucide-react";
+import { Archive, Search, Printer, Loader2 } from "lucide-react";
 import RenglonBadges from "@/components/RenglonBadges";
+import { getOrdenesArchivadasAlmacen } from "@/lib/adjudicacion/dab60-actions";
 
 type Orden = {
   id: number; numero: number; anio: number;
@@ -24,7 +25,10 @@ const ESTADO_STYLE: Record<string, string> = {
   "Anulada":                     "bg-red-100 text-red-700",
 };
 
-export default function ArchivoClient({ ordenes }: { ordenes: Orden[] }) {
+export default function ArchivoClient({ ordenes: ordenesIniciales, hasMore: hasMoreInicial }: { ordenes: Orden[]; hasMore: boolean }) {
+  const [ordenes, setOrdenes] = useState(ordenesIniciales);
+  const [hasMore, setHasMore] = useState(hasMoreInicial);
+  const [cargandoMas, setCargandoMas] = useState(false);
   const [query, setQuery] = useState("");
 
   const q = query.toLowerCase().trim();
@@ -36,6 +40,17 @@ export default function ArchivoClient({ ordenes }: { ordenes: Orden[] }) {
     o.renglones.some(r => r.nombre.toLowerCase().includes(q))
   ), [ordenes, q]);
 
+  async function cargarMas() {
+    setCargandoMas(true);
+    try {
+      const { ordenes: siguientes, hasMore: quedaMas } = await getOrdenesArchivadasAlmacen(ordenes.length);
+      setOrdenes(p => [...p, ...siguientes]);
+      setHasMore(quedaMas);
+    } finally {
+      setCargandoMas(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -43,14 +58,21 @@ export default function ArchivoClient({ ordenes }: { ordenes: Orden[] }) {
           <Archive className="w-5 h-5" /> Almacén — Archivo
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Historial de órdenes que ya pasaron por DAB-60 ({ordenes.length}).
+          Historial de órdenes que ya pasaron por DAB-60 ({ordenes.length}{hasMore ? "+" : ""}).
         </p>
       </div>
 
-      <div className="relative">
-        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-        <input className="input pl-9" placeholder="Buscar por orden, proveedor, factura, No. Devengado o insumo…"
-          value={query} onChange={e => setQuery(e.target.value)} />
+      <div>
+        <div className="relative">
+          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input className="input pl-9" placeholder="Buscar por orden, proveedor, factura, No. Devengado o insumo…"
+            value={query} onChange={e => setQuery(e.target.value)} />
+        </div>
+        {hasMore && (
+          <p className="text-xs text-gray-400 mt-1">
+            La búsqueda solo alcanza lo ya cargado — usa &quot;Cargar más&quot; para traer órdenes anteriores.
+          </p>
+        )}
       </div>
 
       <div className="card overflow-hidden">
@@ -117,6 +139,15 @@ export default function ArchivoClient({ ordenes }: { ordenes: Orden[] }) {
             </div>
           )}
         </div>
+        {hasMore && (
+          <div className="flex justify-center py-4 border-t border-gray-100">
+            <button onClick={cargarMas} disabled={cargandoMas}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50">
+              {cargandoMas ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {cargandoMas ? "Cargando…" : "Cargar más"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

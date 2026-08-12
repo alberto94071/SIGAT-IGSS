@@ -282,11 +282,15 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     setNogGrupo(res);
   }
 
-  // Cruce por código de insumo — igual que prefillPreciosDesdeCotizacionAnual,
-  // pero acá no se "rellenan" campos: si falta alguno, el atajo no se ofrece
-  // y sigue el flujo manual (agregar oferente) tal cual.
+  // Cruce por código de insumo + subproducto — igual que
+  // confirmarCompraDirectaConNog en compras-actions.ts (que es el que de
+  // verdad decide si el NOG sirve). Cruzar solo por código_igss no alcanza:
+  // muchos insumos sin código real comparten el mismo marcador "S/C" (ver
+  // SIN_CODIGO en renglon-utils.ts — ej. Arrendamiento, Energía Eléctrica,
+  // Agua), así que sin el subproducto la vista previa podía mostrar "sin
+  // costo" para un insumo que en el fondo sí tenía precio registrado.
   const nogFaltantes = nogGrupo
-    ? c.precios.filter(p => !nogGrupo.items.some(i => i.codigo_igss === p.codigo_igss && i.precio != null)).map(p => p.nombre)
+    ? c.precios.filter(p => !nogGrupo.items.some(i => i.codigo_igss === p.codigo_igss && i.subproducto === p.subproducto && i.precio != null)).map(p => p.nombre)
     : [];
   const nogListoParaUsar = nogGrupo != null && c.precios.length > 0 && nogFaltantes.length === 0;
   const nogTotalPreview = (() => {
@@ -294,7 +298,7 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     let bruto = 0;
     let todosExentos = true;
     for (const p of c.precios) {
-      const linea = nogGrupo.items.find(i => i.codigo_igss === p.codigo_igss);
+      const linea = nogGrupo.items.find(i => i.codigo_igss === p.codigo_igss && i.subproducto === p.subproducto);
       if (!linea || linea.precio == null) return null;
       bruto += p.cantidad * linea.precio;
       if (!linea.exento_iva) todosExentos = false;
@@ -714,7 +718,19 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                     <div>
                       <label className="label">Nombre de cotización anual</label>
                       <CotizacionAnualAutocomplete
-                        onSelect={cot => { setCotizAnualFound(cot); setCotizAnualError(""); if (cot) prefillPreciosDesdeCotizacionAnual(cot); }}
+                        onSelect={cot => {
+                          setCotizAnualFound(cot); setCotizAnualError("");
+                          if (cot) {
+                            prefillPreciosDesdeCotizacionAnual(cot);
+                            // La cotización ya trae el proveedor (se ve en el
+                            // recuadro verde de abajo) — sin esto, el NIT
+                            // seguía pidiéndose vacío aunque ya se hubiera
+                            // elegido la cotización, dando la impresión de
+                            // que no se guardó nada.
+                            setRgNit(cot.proveedor_nit ?? "");
+                            setRgNombre(cot.proveedor_nombre);
+                          }
+                        }}
                       />
                       {cotizAnualError && <p className="text-xs text-red-600 mt-1">{cotizAnualError}</p>}
                       {cotizAnualFound && (

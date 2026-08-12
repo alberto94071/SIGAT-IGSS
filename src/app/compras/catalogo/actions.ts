@@ -104,6 +104,16 @@ async function validarCodigoCentral(codigo: string): Promise<string | null> {
   return existe ? null : `El código "${codigo}" no existe en Base de Datos Central`;
 }
 
+// Código de Postgres para "viola una restricción única" — catalogo_compras
+// tiene un índice único en (codigo_igss, subproducto) (ver schema.ts). Sin
+// esto, intentar agregar el mismo código+subproducto dos veces se veía como
+// un "Error al crear el insumo" genérico, sin decir por qué.
+const UNIQUE_VIOLATION = "23505";
+
+function esCodigoSubproductoDuplicado(e: unknown): boolean {
+  return typeof e === "object" && e !== null && "code" in e && (e as { code?: string }).code === UNIQUE_VIOLATION;
+}
+
 export async function crearInsumoCompras(data: InsumoComprasInput): Promise<
   { insumo: typeof catalogoCompras.$inferSelect } | { error: string }
 > {
@@ -121,7 +131,10 @@ export async function crearInsumoCompras(data: InsumoComprasInput): Promise<
       activo: true,
     }).returning();
     return { insumo: row };
-  } catch {
+  } catch (e) {
+    if (esCodigoSubproductoDuplicado(e)) {
+      return { error: `Ya existe un insumo en el catálogo con el código "${data.codigo_igss}" y el subproducto "${data.subproducto.trim()}".` };
+    }
     return { error: "Error al crear el insumo" };
   }
 }
@@ -139,7 +152,10 @@ export async function editarInsumoCompras(id: number, data: InsumoComprasInput):
 
     await db.update(catalogoCompras).set(toValues(data)).where(eq(catalogoCompras.id, id));
     return { ok: true };
-  } catch {
+  } catch (e) {
+    if (esCodigoSubproductoDuplicado(e)) {
+      return { error: `Ya existe otro insumo en el catálogo con el código "${data.codigo_igss}" y el subproducto "${data.subproducto.trim()}".` };
+    }
     return { error: "Error al editar" };
   }
 }

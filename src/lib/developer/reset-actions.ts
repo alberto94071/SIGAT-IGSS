@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { MASTER_PASSWORD } from "./master-password";
+import { verificarMasterPassword } from "./master-password";
 
 // Todo lo que se genera al USAR el sistema (compras, presupuesto, fondo
 // rotativo, viáticos, pasajes, etc). No incluye catálogos, configuración,
@@ -84,14 +84,18 @@ async function truncarDatosTransaccionales() {
 export async function executeDatabaseReset(password: string): Promise<{ ok: true } | { error: string }> {
   const session = await auth();
   if (!session || session.user.rol !== "superadmin") return { error: "Sin permiso" };
-  if (password !== MASTER_PASSWORD) {
+  if (!verificarMasterPassword(password)) {
     return { error: "Contraseña incorrecta." };
   }
   try {
     await truncarDatosTransaccionales();
     return { ok: true };
-  } catch (e: any) {
-    return { error: e.message || "Error al reiniciar la base de datos" };
+  } catch (e) {
+    // El detalle técnico (nombres de tabla, mensaje crudo de Postgres, etc.)
+    // solo va al log del servidor — al cliente no, aunque quien lo pida ya
+    // sea superadmin, para no filtrar detalles internos de la base de datos.
+    console.error("Error al reiniciar la base de datos:", e);
+    return { error: "Error al reiniciar la base de datos" };
   }
 }
 
@@ -104,7 +108,8 @@ export async function reiniciarSistemaComoSuperadmin(): Promise<{ ok: true } | {
   try {
     await truncarDatosTransaccionales();
     return { ok: true };
-  } catch (e: any) {
-    return { error: e.message || "Error al reiniciar la base de datos" };
+  } catch (e) {
+    console.error("Error al reiniciar la base de datos:", e);
+    return { error: "Error al reiniciar la base de datos" };
   }
 }
