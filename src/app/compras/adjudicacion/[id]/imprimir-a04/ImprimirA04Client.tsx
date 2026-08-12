@@ -34,6 +34,15 @@ const TB = "1.5px solid #333";
 const R = "8px";
 const C = "#000";
 
+// Defensa contra código PPR guardado con un "-null" colgado (dato viejo de
+// antes de que la selección de PPR sin código real usara el id de Base de
+// Datos Central en vez del código_ppr crudo) — mejor mostrar "—" que
+// imprimir literalmente la palabra "null" en un documento oficial.
+function codigoPprMostrar(v: string | null | undefined): string {
+  const s = v?.trim();
+  return !s || /-?null$/i.test(s) ? "—" : s;
+}
+
 const METODOS = ["Baja Cuantía", "Compra Directa", "Contrato Abierto", "Casos de Excepción"] as const;
 const METODO_LABEL: Record<string, string> = {
   "Baja Cuantía": "BAJA CUANTÍA", "Compra Directa": "COMPRA DIRECTA",
@@ -94,7 +103,7 @@ export default function ImprimirA04Client({
         const total = r.total;
         const ivaFila = c.exento_iva ? 0 : total * 0.12;
         return {
-          codigoPpr: r.codigo_ppr ?? "—",
+          codigoPpr: codigoPprMostrar(r.codigo_ppr),
           renglonNum: r.renglon != null ? String(r.renglon) : "—",
           descripcion: r.nombre.toUpperCase(),
           unidad: r.unidad_medida ?? "—",
@@ -104,7 +113,7 @@ export default function ImprimirA04Client({
         };
       })
     : [{
-        codigoPpr: renglon?.codigo_ppr ?? "—",
+        codigoPpr: codigoPprMostrar(renglon?.codigo_ppr),
         renglonNum: renglon?.renglon != null ? String(renglon.renglon) : "—",
         descripcion: (c.a04_descripcion || renglon?.nombre || "—").toUpperCase(),
         unidad: c.a04_unidad_medida ?? renglon?.unidad_medida ?? "—",
