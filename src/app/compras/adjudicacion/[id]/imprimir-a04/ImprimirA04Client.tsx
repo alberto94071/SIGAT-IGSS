@@ -29,7 +29,8 @@ interface Props {
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const FONT = "Arial, Helvetica, sans-serif";
-const B = "1.5px solid #1a1a1a";
+const B = "2px solid #1a1a1a";
+const TB = "1.5px solid #333";
 const R = "8px";
 const C = "#000";
 
@@ -244,43 +245,55 @@ export default function ImprimirA04Client({
               &nbsp;&nbsp;Serie: <V minWidth="50px">{c.a04_dte_serie ?? null}</V>
               &nbsp;&nbsp;de fecha: <V minWidth="80px">{c.a04_dte_fecha ?? null}</V>
             </p>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "8pt" }}>
+            <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", fontSize: "8pt" }}>
+              <colgroup>
+                <col style={{ width: "7%" }} />
+                <col style={{ width: "7%" }} />
+                <col style={{ width: "6%" }} />
+                <col style={{ width: "27%" }} />
+                <col style={{ width: "8%" }} />
+                <col style={{ width: "7%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "8%" }} />
+                <col style={{ width: "10%" }} />
+              </colgroup>
               <thead>
                 <tr>
-                  <th style={{ border: "1px solid #333", padding: "4px" }}>No. Pedido</th>
-                  <th style={{ border: "1px solid #333", padding: "4px" }}>Código PpR</th>
-                  <th style={{ border: "1px solid #333", padding: "4px" }}>Renglón</th>
-                  <th style={{ border: "1px solid #333", padding: "4px" }}>Descripción</th>
-                  <th style={{ border: "1px solid #333", padding: "4px" }}>Unidad de Medida</th>
-                  <th style={{ border: "1px solid #333", padding: "4px" }}>Cantidad</th>
-                  <th style={{ border: "1px solid #333", padding: "4px" }}>Precio Unitario</th>
-                  <th style={{ border: "1px solid #333", padding: "4px" }}>Total</th>
-                  <th style={{ border: "1px solid #333", padding: "4px" }}>(-) IVA</th>
-                  <th style={{ border: "1px solid #333", padding: "4px" }}>Liquido</th>
+                  <th style={{ border: TB, padding: "4px" }}>No. Pedido</th>
+                  <th style={{ border: TB, padding: "4px" }}>Código PpR</th>
+                  <th style={{ border: TB, padding: "4px" }}>Renglón</th>
+                  <th style={{ border: TB, padding: "4px" }}>Descripción</th>
+                  <th style={{ border: TB, padding: "4px" }}>Unidad de Medida</th>
+                  <th style={{ border: TB, padding: "4px" }}>Cantidad</th>
+                  <th style={{ border: TB, padding: "4px" }}>Precio Unitario</th>
+                  <th style={{ border: TB, padding: "4px" }}>Total</th>
+                  <th style={{ border: TB, padding: "4px" }}>(-) IVA</th>
+                  <th style={{ border: TB, padding: "4px" }}>Liquido</th>
                 </tr>
               </thead>
               <tbody>
                 {filas.map((f, i) => (
                   <tr key={i}>
-                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{c.a04_no_pedido ?? "—"}</td>
-                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{f.codigoPpr}</td>
-                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{f.renglonNum}</td>
-                    <td style={{ border: "1px solid #333", padding: "6px" }}>
+                    <td style={{ border: TB, padding: "4px", textAlign: "center" }}>{c.a04_no_pedido ?? "—"}</td>
+                    <td style={{ border: TB, padding: "4px", textAlign: "center" }}>{f.codigoPpr}</td>
+                    <td style={{ border: TB, padding: "4px", textAlign: "center" }}>{f.renglonNum}</td>
+                    <td style={{ border: TB, padding: "6px", wordBreak: "break-word" }}>
                       <p style={{ margin: 0, fontWeight: "bold" }}>{f.descripcion}</p>
                     </td>
-                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{f.unidad}</td>
-                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "center" }}>{f.cantidad}</td>
-                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "right" }}>{Q(f.precioUnitario)}</td>
-                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "right" }}>{Q(f.total)}</td>
-                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "right" }}>{Q(f.iva)}</td>
-                    <td style={{ border: "1px solid #333", padding: "4px", textAlign: "right" }}>{Q(f.liquido)}</td>
+                    <td style={{ border: TB, padding: "4px", textAlign: "center" }}>{f.unidad}</td>
+                    <td style={{ border: TB, padding: "4px", textAlign: "center" }}>{f.cantidad}</td>
+                    <td style={{ border: TB, padding: "4px", textAlign: "right" }}>{Q(f.precioUnitario)}</td>
+                    <td style={{ border: TB, padding: "4px", textAlign: "right" }}>{Q(f.total)}</td>
+                    <td style={{ border: TB, padding: "4px", textAlign: "right" }}>{Q(f.iva)}</td>
+                    <td style={{ border: TB, padding: "4px", textAlign: "right" }}>{Q(f.liquido)}</td>
                   </tr>
                 ))}
                 <tr>
-                  <td colSpan={7} style={{ border: "1px solid #333", padding: "4px", textAlign: "right", fontWeight: "bold" }}>Totales</td>
-                  <td style={{ border: "1px solid #333", padding: "4px", textAlign: "right", fontWeight: "bold" }}>{Q(montoBruto)}</td>
-                  <td style={{ border: "1px solid #333", padding: "4px", textAlign: "right", fontWeight: "bold" }}>{Q(iva)}</td>
-                  <td style={{ border: "1px solid #333", padding: "4px", textAlign: "right", fontWeight: "bold" }}>{Q(liquido)}</td>
+                  <td colSpan={7} style={{ border: TB, padding: "4px", textAlign: "right", fontWeight: "bold" }}>Totales</td>
+                  <td style={{ border: TB, padding: "4px", textAlign: "right", fontWeight: "bold" }}>{Q(montoBruto)}</td>
+                  <td style={{ border: TB, padding: "4px", textAlign: "right", fontWeight: "bold" }}>{Q(iva)}</td>
+                  <td style={{ border: TB, padding: "4px", textAlign: "right", fontWeight: "bold" }}>{Q(liquido)}</td>
                 </tr>
               </tbody>
             </table>
