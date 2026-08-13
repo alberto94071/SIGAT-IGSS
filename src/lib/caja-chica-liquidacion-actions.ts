@@ -1,7 +1,9 @@
 "use server";
+import { fechaGuatemala } from "@/lib/date-utils";
+
 import { db } from "@/lib/db";
 import { fondoRotativoPagos, pasajesPagos, polizas, valesCajaChica } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { eq, or, isNotNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { conDetalle, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 
@@ -19,6 +21,11 @@ export async function getLiquidacionesPendientes(): Promise<PagoFondoRotativo[]>
   return conDetalle(rows);
 }
 
+// Al pagar aquí, el pago no se queda "Liquidado" como punto final — sigue de
+// largo a Fondo Rotativo/Pago-FRI, a esperar que se conforme en un FRI junto
+// con el resto de pagos pendientes de reintegro (mismo destino que ya tenían
+// los pagos de grupo 100-199). fecha_liquidacion_caja_chica queda como la
+// marca de que este pago sí pasó por Caja Chica, para el Libro de Caja Chica.
 export async function liquidarPago(id: number): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireEdit();
@@ -28,16 +35,23 @@ export async function liquidarPago(id: number): Promise<{ ok: true } | { error: 
     if (!pago) return { error: "No se encontró el registro" };
     if (pago.estado !== "Enviado a Liquidación") return { error: "Este pago no está pendiente de liquidar" };
 
-    await db.update(fondoRotativoPagos).set({ estado: "Liquidado" }).where(eq(fondoRotativoPagos.id, id));
+    await db.update(fondoRotativoPagos).set({
+      estado: "Pendiente FRI",
+      fecha_liquidacion_caja_chica: fechaGuatemala(),
+    }).where(eq(fondoRotativoPagos.id, id));
     return { ok: true };
   } catch {
     return { error: "Error al liquidar el pago" };
   }
 }
 
-// Libro de Caja Chica — pagos en efectivo ya liquidados.
+// Libro de Caja Chica — pagos en efectivo ya pagados por Caja Chica, sin
+// importar si ya avanzaron a Pendiente FRI/En FRI/Reintegrado. Incluye
+// también los pocos registros históricos que quedaron en "Liquidado" de
+// antes de este cambio (cuando ese sí era el estado final).
 export async function getLibroCajaChica(): Promise<PagoFondoRotativo[]> {
-  const rows = await db.select().from(fondoRotativoPagos).where(eq(fondoRotativoPagos.estado, "Liquidado"));
+  const rows = await db.select().from(fondoRotativoPagos)
+    .where(or(eq(fondoRotativoPagos.estado, "Liquidado"), isNotNull(fondoRotativoPagos.fecha_liquidacion_caja_chica)));
   return conDetalle(rows);
 }
 

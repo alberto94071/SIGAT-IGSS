@@ -2,10 +2,11 @@
 import { fechaHoraGuatemala } from "@/lib/date-utils";
 
 import { db } from "@/lib/db";
-import { ordenesCompra, dab60Posiciones } from "@/lib/schema";
+import { ordenesCompra, dab60Posiciones, fondoRotativoPagos } from "@/lib/schema";
 import { eq, sql, isNotNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
+import { conDetalle, type PagoFondoRotativo } from "./fondo-rotativo-pagos-actions";
 import { readFile } from "fs/promises";
 import path from "path";
 
@@ -172,5 +173,57 @@ export async function aprobarDab60(ordenId: number): Promise<{ ok: true } | { er
     return { ok: true };
   } catch {
     return { error: "Error al aprobar el DAB-60" };
+  }
+}
+
+// ─── DAB-60 para Fondo Rotativo (Regularizado) ───────────────────────────────
+// Mismo criterio que la vía Normal (requiereDab60, grupos 200/300 excepto
+// 261/266/295) pero sin etapa de aprobación separada: llenar el DAB-60 aquí
+// ya manda el pago directo a Fondo Rotativo/Pagos — ver generarSiaf04 en
+// siaf04-actions.ts para dónde se decide si un pago pasa por esta bandeja.
+
+export async function getPagosFondoRotativoEnDab60(): Promise<PagoFondoRotativo[]> {
+  const rows = await db.select().from(fondoRotativoPagos).where(eq(fondoRotativoPagos.estado, "Pendiente DAB-60")).orderBy(sql`id ASC`);
+  return conDetalle(rows);
+}
+
+export type Dab60DataFr = {
+  no_recibo_almacen: string; serie_recibo_almacen: string; encargado_almacen: string;
+  fecha_ingreso_producto: string; lote: string; fecha_vencimiento: string;
+  marca: string; modelo: string; serie: string;
+};
+
+export async function generarDab60FondoRotativo(pagoId: number, data: Dab60DataFr): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireEdit();
+    if ("error" in check) return check;
+
+    if (!data.no_recibo_almacen.trim() || !data.serie_recibo_almacen.trim())
+      return { error: "El No. y la Serie de Recibo de Almacén son obligatorios" };
+    if (!data.encargado_almacen.trim())
+      return { error: "El nombre del Encargado de Almacén es obligatorio" };
+
+    const [pago] = await db.select({ estado: fondoRotativoPagos.estado }).from(fondoRotativoPagos)
+      .where(eq(fondoRotativoPagos.id, pagoId)).limit(1);
+    if (!pago) return { error: "No se encontró el registro" };
+    if (pago.estado !== "Pendiente DAB-60") return { error: "Este registro ya fue procesado en DAB-60" };
+
+    await db.update(fondoRotativoPagos).set({
+      dab60_no_recibo_almacen:      data.no_recibo_almacen.trim(),
+      dab60_serie_recibo_almacen:   data.serie_recibo_almacen.trim(),
+      dab60_encargado_almacen:      data.encargado_almacen.trim(),
+      dab60_fecha_ingreso_producto: data.fecha_ingreso_producto.trim() || null,
+      dab60_lote:                   data.lote.trim() || null,
+      dab60_fecha_vencimiento:      data.fecha_vencimiento.trim() || null,
+      dab60_marca:                  data.marca.trim() || null,
+      dab60_modelo:                 data.modelo.trim() || null,
+      dab60_serie:                  data.serie.trim() || null,
+      dab60_generado_en:            fechaHoraGuatemala(),
+      estado:                       "Pendiente forma de pago",
+    }).where(eq(fondoRotativoPagos.id, pagoId));
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al generar el DAB-60" };
   }
 }

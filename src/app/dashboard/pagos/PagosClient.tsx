@@ -3,7 +3,7 @@ import { fechaGuatemala } from "@/lib/date-utils";
 
 import { useState } from "react";
 import { Wallet, Loader2, CheckCircle2, X, Banknote, Coins, Undo2 } from "lucide-react";
-import { registrarFormaPagoCheque, registrarFormaPagoEfectivo, devolverPagoASiaf04, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import { registrarFormaPagoCheque, registrarFormaPagoEfectivo, elegirChequeDirecto, devolverPagoASiaf04, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 import { getValesGastosVariosDisponibles } from "@/lib/vale-actions";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -131,11 +131,13 @@ function FormaPagoModal({ pago, onClose, onDone }: {
   async function handleConfirmar() {
     setLoading(true); setError("");
     const res = forma === "cheque"
-      ? await registrarFormaPagoCheque(pago.id, {
-          numero_cheque: numeroCheque.trim(), fecha_emision_cheque: fechaEmisionCheque,
-          tipo_documento_pago: tipoDocumentoPago as "Factura" | "Vale" | "Formulario",
-          nit_beneficiario: nitBeneficiario.trim(), destinatario_nombre: nombreBeneficiario.trim(),
-        })
+      ? pago.es_grupo_100
+        ? await registrarFormaPagoCheque(pago.id, {
+            numero_cheque: numeroCheque.trim(), fecha_emision_cheque: fechaEmisionCheque,
+            tipo_documento_pago: tipoDocumentoPago as "Factura" | "Vale" | "Formulario",
+            nit_beneficiario: nitBeneficiario.trim(), destinatario_nombre: nombreBeneficiario.trim(),
+          })
+        : await elegirChequeDirecto(pago.id)
       : await registrarFormaPagoEfectivo(pago.id, { fecha_pago: fechaPago, vale_id: valeId! });
     setLoading(false);
     if ("error" in res) { setError(res.error); return; }
@@ -166,7 +168,7 @@ function FormaPagoModal({ pago, onClose, onDone }: {
             </div>
           )}
 
-          {forma === "cheque" && (
+          {forma === "cheque" && pago.es_grupo_100 && (
             <div className="space-y-3">
               <div>
                 <label className="label">No. de cheque</label>
@@ -193,6 +195,13 @@ function FormaPagoModal({ pago, onClose, onDone }: {
                 <input className="input" value={nombreBeneficiario} onChange={e => setNombreBeneficiario(e.target.value)} />
               </div>
             </div>
+          )}
+
+          {forma === "cheque" && !pago.es_grupo_100 && (
+            <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5">
+              Este pago se enviará directo a <strong>Fondo Rotativo/Bancos</strong> — ahí se completa el número de
+              cheque, el monto y el resto de los datos para imprimir el Voucher.
+            </p>
           )}
 
           {forma === "efectivo" && (
@@ -233,11 +242,16 @@ function FormaPagoModal({ pago, onClose, onDone }: {
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
           {forma !== null && <button onClick={() => setForma(null)} className="btn-secondary">Atrás</button>}
           <button onClick={onClose} className="btn-secondary">Cancelar</button>
-          {forma === "cheque" && (
+          {forma === "cheque" && pago.es_grupo_100 && (
             <button onClick={handleConfirmar}
               disabled={loading || !numeroCheque.trim() || !fechaEmisionCheque || !tipoDocumentoPago || !nitBeneficiario.trim() || !nombreBeneficiario.trim()}
               className="btn-primary disabled:opacity-50">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />} Confirmar pago
+            </button>
+          )}
+          {forma === "cheque" && !pago.es_grupo_100 && (
+            <button onClick={handleConfirmar} disabled={loading} className="btn-primary disabled:opacity-50">
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />} Enviar a Bancos
             </button>
           )}
           {forma === "efectivo" && (

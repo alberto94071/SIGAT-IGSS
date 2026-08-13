@@ -1,10 +1,11 @@
-import { getOrdenesEnDab, getOrdenesDab60PendienteAprobacion } from "@/lib/adjudicacion/dab60-actions";
+import { getOrdenesEnDab, getOrdenesDab60PendienteAprobacion, getPagosFondoRotativoEnDab60 } from "@/lib/adjudicacion/dab60-actions";
 import Dab60Client from "./Dab60Client";
 
 export default async function Dab60Page() {
-  const [ordenes, pendientesAprobacion] = await Promise.all([
+  const [ordenes, pendientesAprobacion, pagosFondoRotativo] = await Promise.all([
     getOrdenesEnDab(),
     getOrdenesDab60PendienteAprobacion(),
+    getPagosFondoRotativoEnDab60(),
   ]);
-  return <Dab60Client ordenes={ordenes} pendientesAprobacion={pendientesAprobacion} />;
+  return <Dab60Client ordenes={ordenes} pendientesAprobacion={pendientesAprobacion} pagosFondoRotativo={pagosFondoRotativo} />;
 }

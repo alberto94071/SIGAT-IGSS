@@ -63,10 +63,16 @@ export type PagoFondoRotativo = {
   destinatario_nombre: string | null; tipo_documento_pago: string | null; nit_beneficiario: string | null;
   fecha_pago: string | null; numero_vale: string | null;
   vale_id: number | null; vale_solicitante_nombre: string | null;
+  monto_cheque: number | null; monto_letras: string | null; concepto_voucher: string | null;
   estado: string;
   numero_a04: number | null; anio_a04: number | null;
   total: number | null; tipo_compra: string | null;
   fri_id: number | null; fri_numero: number | null; fri_anio: number | null;
+  // true si TODOS los renglones de esta compra son 100-199 — ver esGrupo100 en
+  // programacion-constants.ts. Determina si Fondo Rotativo/Pagos pide los
+  // datos completos de cheque ahí mismo (grupo 100, va directo a Pendiente
+  // FRI) o los deja para completar en Fondo Rotativo/Bancos (grupo 200/300).
+  es_grupo_100: boolean;
 };
 
 export async function conDetalle(rows: (typeof fondoRotativoPagos.$inferSelect)[]): Promise<PagoFondoRotativo[]> {
@@ -86,7 +92,7 @@ export async function conDetalle(rows: (typeof fondoRotativoPagos.$inferSelect)[
   const consMap = new Map(cons.map(c => [c.id, c]));
   const valeMap = new Map(vales.map(v => [v.id, v]));
   const friMap = new Map(fris.map(f => [f.id, f]));
-  return rows.map(r => {
+  return Promise.all(rows.map(async r => {
     const c = consMap.get(r.consolidacion_id);
     const vale = r.vale_id != null ? valeMap.get(r.vale_id) : undefined;
     const fri = r.fri_id != null ? friMap.get(r.fri_id) : undefined;
@@ -96,8 +102,9 @@ export async function conDetalle(rows: (typeof fondoRotativoPagos.$inferSelect)[
       total: c?.total ?? null, tipo_compra: c?.tipo_compra ?? null,
       vale_solicitante_nombre: vale?.solicitante_nombre ?? null,
       fri_numero: fri?.numero ?? null, fri_anio: fri?.anio ?? null,
+      es_grupo_100: await esPagoGrupo100(r.consolidacion_id),
     };
-  });
+  }));
 }
 
 export async function getPagosPendientesFormaPago(): Promise<PagoFondoRotativo[]> {
@@ -166,6 +173,83 @@ export async function registrarFormaPagoCheque(id: number, data: {
     return { ok: true };
   } catch {
     return { error: "Error al registrar el pago con cheque" };
+  }
+}
+
+// Elegir "Cheque" en Pagos para un pago que NO es grupo 100 ya no pide
+// ningún dato ahí — solo manda el registro a Fondo Rotativo/Bancos. El
+// número de cheque, monto, cantidad (en letras) y el resto de los datos del
+// Voucher se completan después en Bancos (ver completarVoucherBancos), que
+// es donde también se imprime. Los pagos de grupo 100 siguen usando
+// registrarFormaPagoCheque de una vez (van directo a Pendiente FRI, no pasan
+// por Bancos).
+export async function elegirChequeDirecto(id: number): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireCompras();
+    if ("error" in check) return check;
+
+    const [pago] = await db.select().from(fondoRotativoPagos).where(eq(fondoRotativoPagos.id, id)).limit(1);
+    if (!pago) return { error: "No se encontró el registro" };
+    if (pago.estado !== "Pendiente forma de pago") return { error: "Este registro ya tiene forma de pago asignada" };
+
+    const esGrupo100 = await esPagoGrupo100(pago.consolidacion_id);
+    if (esGrupo100) return { error: "Este pago es de renglón 100-199 — usa el formulario completo (va a Pago/FRI)" };
+
+    await db.transaction(async (tx) => {
+      await tx.update(fondoRotativoPagos).set({
+        forma_pago: "cheque",
+        estado: "Enviado a Bancos",
+      }).where(eq(fondoRotativoPagos.id, id));
+
+      await reflejarEnEjecucion(tx, pago.consolidacion_id);
+    });
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al enviar el pago a Bancos" };
+  }
+}
+
+// Completa (o corrige) los datos de cheque/Voucher de un pago ya en Fondo
+// Rotativo/Bancos — número de cheque, monto, cantidad en letras y el resto
+// de los datos para imprimir el Voucher. No cambia el estado: "Enviado a
+// Bancos" ya es terminal para este pago; una vez con numero_cheque se puede
+// (re)imprimir el Voucher cuantas veces haga falta.
+export async function completarVoucherBancos(id: number, data: {
+  numero_cheque: string; fecha_emision_cheque: string;
+  tipo_documento_pago: TipoDocumentoPago; nit_beneficiario: string; destinatario_nombre: string;
+  monto_cheque: number; monto_letras: string; concepto_voucher: string;
+}): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireCompras();
+    if ("error" in check) return check;
+    if (!data.numero_cheque.trim() || !data.fecha_emision_cheque)
+      return { error: "No. de cheque y fecha de emisión son obligatorios" };
+    if (!data.tipo_documento_pago) return { error: "Selecciona el tipo de documento" };
+    if (!data.nit_beneficiario.trim()) return { error: "El NIT del beneficiario es obligatorio" };
+    if (!data.destinatario_nombre.trim()) return { error: "El nombre del beneficiario es obligatorio" };
+    if (!(data.monto_cheque > 0)) return { error: "Ingresa un monto válido" };
+    if (!data.monto_letras.trim()) return { error: "La cantidad en letras es obligatoria" };
+
+    const [pago] = await db.select({ estado: fondoRotativoPagos.estado }).from(fondoRotativoPagos)
+      .where(eq(fondoRotativoPagos.id, id)).limit(1);
+    if (!pago) return { error: "No se encontró el registro" };
+    if (pago.estado !== "Enviado a Bancos") return { error: "Este pago no está en Fondo Rotativo/Bancos" };
+
+    await db.update(fondoRotativoPagos).set({
+      numero_cheque: data.numero_cheque.trim(),
+      fecha_emision_cheque: data.fecha_emision_cheque,
+      tipo_documento_pago: data.tipo_documento_pago,
+      nit_beneficiario: data.nit_beneficiario.trim(),
+      destinatario_nombre: data.destinatario_nombre.trim(),
+      monto_cheque: data.monto_cheque,
+      monto_letras: data.monto_letras.trim(),
+      concepto_voucher: data.concepto_voucher.trim() || null,
+    }).where(eq(fondoRotativoPagos.id, id));
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al completar los datos del Voucher" };
   }
 }
 

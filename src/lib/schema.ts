@@ -202,8 +202,36 @@ export const fondoRotativoPagos = pgTable("fondo_rotativo_pagos", {
   fecha_pago:            text("fecha_pago"),
   numero_vale:           text("numero_vale"),
   vale_id:               integer("vale_id").references((): AnyPgColumn => valesCajaChica.id),
-  // 'Pendiente forma de pago' → (cheque, renglón 200/300) 'Enviado a Bancos'
-  //                          → (efectivo, renglón 200/300) 'Enviado a Liquidación' → 'Liquidado'
+  // Marca que este pago ya pasó por Caja Chica/Pagos (liquidarPago) — se usa
+  // para el Libro de Caja Chica en vez de un estado terminal, porque ahora
+  // el pago sigue de largo hacia Pendiente FRI (ver caja-chica-liquidacion-actions.ts).
+  fecha_liquidacion_caja_chica: text("fecha_liquidacion_caja_chica"),
+  // DAB-60 (solo si algún renglón de la consolidación requiere pasar por
+  // Almacén — ver requiereDab60 en programacion-constants.ts). A diferencia
+  // de ordenesCompra, no hay etapa de aprobación separada: al llenarlo con
+  // generarDab60FondoRotativo (dab60-actions.ts) pasa directo a "Pendiente
+  // forma de pago". No hace falta no_factura/serie_factura/fecha_emision
+  // propios — ya se conocen desde el SIAF-04 (no_factura/serie_factura/
+  // fecha_emision_factura arriba).
+  dab60_no_recibo_almacen:      text("dab60_no_recibo_almacen"),
+  dab60_serie_recibo_almacen:   text("dab60_serie_recibo_almacen"),
+  dab60_encargado_almacen:      text("dab60_encargado_almacen"),
+  dab60_fecha_ingreso_producto: text("dab60_fecha_ingreso_producto"),
+  dab60_lote:                   text("dab60_lote"),
+  dab60_fecha_vencimiento:      text("dab60_fecha_vencimiento"),
+  dab60_marca:                  text("dab60_marca"),
+  dab60_modelo:                 text("dab60_modelo"),
+  dab60_serie:                  text("dab60_serie"),
+  dab60_generado_en:            text("dab60_generado_en"),
+  // Voucher/Cheque (Fondo Rotativo/Bancos) — se completan ahí, no al elegir
+  // "Cheque" en Pagos (que ahora solo envía el registro a Bancos sin pedir
+  // datos). monto_letras es la "Cantidad" en letras del cheque/voucher.
+  monto_cheque:          doublePrecision("monto_cheque"),
+  monto_letras:          text("monto_letras"),
+  concepto_voucher:      text("concepto_voucher"),
+  // 'Pendiente forma de pago' → [si aplica DAB-60: primero 'Pendiente DAB-60' → 'Pendiente forma de pago']
+  //                          → (cheque, renglón 200/300) 'Enviado a Bancos' (datos de cheque/voucher se completan ahí)
+  //                          → (efectivo, renglón 200/300) 'Enviado a Liquidación' → (Caja Chica paga) 'Pendiente FRI'
   //                          → (renglón 100-199, cheque o efectivo) 'Pendiente FRI' → 'En FRI' → 'Reintegrado'
   estado:                text("estado").notNull().default("Pendiente forma de pago"),
   fri_id:                integer("fri_id").references(() => friFondoRotativo.id),

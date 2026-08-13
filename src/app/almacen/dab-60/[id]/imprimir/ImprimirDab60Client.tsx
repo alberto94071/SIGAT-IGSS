@@ -25,6 +25,11 @@ type Datos = {
 interface Props {
   orden: Orden; renglones: Renglon[]; datos: Datos;
   posicionesGuardadas: Record<string, Pos>;
+  // Por defecto el encabezado en pantalla muestra "OC-XXX/AAAA" (Orden de
+  // Compra) — Fondo Rotativo no tiene número de orden, así que su página de
+  // impresión pasa este override (ej. "A-04 4/2026") en su lugar. Solo
+  // afecta el título mostrado en pantalla, no el papel impreso.
+  tituloOverride?: string;
 }
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -353,7 +358,7 @@ function ColumnaCampo({
   );
 }
 
-export default function ImprimirDab60Client({ orden: o, renglones, datos, posicionesGuardadas }: Props) {
+export default function ImprimirDab60Client({ orden: o, renglones, datos, posicionesGuardadas, tituloOverride }: Props) {
   const router = useRouter();
   const [verPosiciones, setVerPosiciones] = useState(false);
   const [pos, setPos] = useState<Record<string, Pos>>({ ...POS_DEFAULT, ...posicionesGuardadas });
@@ -399,7 +404,7 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
     setPos({ ...POS_DEFAULT });
   }
 
-  const numeroOrden = `OC-${String(o.numero).padStart(3, "0")}/${o.anio}`;
+  const numeroOrden = tituloOverride ?? `OC-${String(o.numero).padStart(3, "0")}/${o.anio}`;
 
   const cantidades       = renglones.map(r => r.cantidad.toLocaleString("es-GT"));
   const unidades         = renglones.map(r => r.unidad_medida ?? "");
