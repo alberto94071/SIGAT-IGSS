@@ -7,6 +7,7 @@ import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { getPendientesPorDestino } from "./actions";
 import { gruposRenglonDeConsolidacion, getPprsPorItems, clavePprDeItem, guardarPprSeleccion } from "./renglon-utils";
+import { requiereDab60 } from "@/lib/programacion-constants";
 import type { Consolidacion } from "./types";
 
 async function requireCompras(): Promise<{ error: string } | { uid: number }> {
@@ -68,12 +69,19 @@ export async function generarSiaf04(consolidacionId: number, data: {
       a04_dte_numero: noFactura, a04_dte_serie: serie, a04_dte_fecha: data.fecha_emision,
     }).where(eq(consolidaciones.id, consolidacionId));
 
+    // Si algún renglón de esta compra Regularizada requiere pasar por
+    // Almacén (mismo criterio que la vía Normal — grupos 200/300 excepto
+    // 261/266/295), primero se queda en Almacén/DAB-60 antes de llegar a
+    // Fondo Rotativo/Pagos — ver generarDab60FondoRotativo en dab60-actions.ts.
+    const necesitaDab60 = renglones.some(r => requiereDab60(r.renglon));
+
     await db.insert(fondoRotativoPagos).values({
       consolidacion_id: consolidacionId,
       no_factura: noFactura, serie_factura: serie, fecha_emision_factura: data.fecha_emision,
       destinatario_nombre: con.proveedor_nombre,
       nit_beneficiario: con.proveedor_nit,
       creado_por: check.uid,
+      estado: necesitaDab60 ? "Pendiente DAB-60" : "Pendiente forma de pago",
     });
 
     return { ok: true };
