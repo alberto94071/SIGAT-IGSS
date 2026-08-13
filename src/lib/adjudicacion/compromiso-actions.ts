@@ -9,6 +9,7 @@ import { presupuestoRenglones, programacionEntradas, programacionCompromisos } f
 import { and } from "drizzle-orm";
 import { requiereDab60, cuatrimestreDeFecha } from "@/lib/programacion-constants";
 import { fechaGuatemala, fechaHoraGuatemala } from "@/lib/date-utils";
+import { getDisponible, getDisponibleTx } from "@/lib/presupuesto-disponible";
 
 // Igual que PresupuestoExcedidoEnTransaccion en presupuesto-disponible.ts —
 // permite distinguir, en el catch de aprobarCompromiso, "se quedó sin
@@ -74,10 +75,14 @@ export async function registrarCompromiso(ordenId: number, noCompromiso: string)
  * aquí se mueve Pre-Compromiso → Compromiso y la orden puede avanzar a
  * Almacén/DAB-60 o Devengado; antes de esto queda bloqueada.
  *
- * Antes de mover nada, valida que cada renglón/sub-producto todavía tenga
- * suficiente Pre-Compromiso reservado para cubrir el monto actual — puede
- * haber cambiado desde que se aprobó el SIAF (ej. el precio se ajustó ya
- * adjudicado) y por eso no basta con lo que ya se validó en ese momento.
+ * Antes de mover nada, valida presupuesto disponible con el mismo criterio
+ * que ya usa la aprobación del SIAF (getDisponible: Vigente + Modificaciones
+ * menos todo lo usado en cualquier etapa) — no basta con mirar el
+ * Pre-Compromiso de este renglón/sub-producto solo, porque esa bolsa se
+ * comparte entre todos los SIAF pendientes del mismo renglón/sub-producto
+ * (Normal y Fondo Rotativo) y puede no alcanzarle a esta orden en particular
+ * aunque sobre Vigente real sin gastar (regla confirmada con el cliente
+ * 2026-08-11, la misma que ya rige a01-siaf/actions.ts).
  */
 export async function aprobarCompromiso(ordenId: number): Promise<{ ok: true } | { error: string }> {
   try {
@@ -104,13 +109,7 @@ export async function aprobarCompromiso(ordenId: number): Promise<{ ok: true } |
 
     const faltantes: string[] = [];
     for (const r of renglones) {
-      const [vivo] = await db.select({ pre_compromiso: presupuestoRenglones.pre_compromiso })
-        .from(presupuestoRenglones).where(and(
-          eq(presupuestoRenglones.renglon, r.renglon as number),
-          eq(presupuestoRenglones.subproducto, r.subproducto),
-          eq(presupuestoRenglones.ejercicio_fiscal, 2026),
-        )).limit(1);
-      const disponible = vivo?.pre_compromiso ?? 0;
+      const { disponible } = await getDisponible(r.renglon as number, r.subproducto);
       const requerido = montoNeto(r);
       if (requerido > disponible + 0.01) {
         const faltante = requerido - disponible;
@@ -137,17 +136,11 @@ export async function aprobarCompromiso(ordenId: number): Promise<{ ok: true } |
       await tx.update(ordenesCompra).set({ estado: siguienteEstado }).where(eq(ordenesCompra.id, ordenId));
 
       for (const r of renglones) {
-        // Re-verifica el Pre-Compromiso con la fila bloqueada (FOR UPDATE)
-        // justo antes de escribir — el chequeo de "faltantes" de arriba se
-        // hizo fuera de la transacción y pudo quedar desactualizado si otra
-        // aprobación al mismo renglón se coló entre medio.
-        const [vivo] = await tx.select({ pre_compromiso: presupuestoRenglones.pre_compromiso })
-          .from(presupuestoRenglones).where(and(
-            eq(presupuestoRenglones.renglon, r.renglon as number),
-            eq(presupuestoRenglones.subproducto, r.subproducto),
-            eq(presupuestoRenglones.ejercicio_fiscal, 2026),
-          )).for("update").limit(1);
-        const disponibleAhora = vivo?.pre_compromiso ?? 0;
+        // Re-verifica con la fila bloqueada (FOR UPDATE) justo antes de
+        // escribir — el chequeo de "faltantes" de arriba se hizo fuera de la
+        // transacción y pudo quedar desactualizado si otra aprobación al
+        // mismo renglón se coló entre medio.
+        const disponibleAhora = await getDisponibleTx(tx, r.renglon as number, r.subproducto);
         const requerido = montoNeto(r);
         if (requerido > disponibleAhora + 0.01) {
           throw new PreCompromisoInsuficienteEnTransaccion(r.renglon as number, r.subproducto, disponibleAhora, requerido);
