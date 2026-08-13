@@ -146,8 +146,25 @@ export async function aprobarCompromiso(ordenId: number): Promise<{ ok: true } |
           throw new PreCompromisoInsuficienteEnTransaccion(r.renglon as number, r.subproducto, disponibleAhora, requerido);
         }
 
+        // El Pre-Compromiso de un renglón/sub-producto es una bolsa
+        // compartida entre varios SIAF pendientes (ver getDisponible arriba)
+        // — puede que a esta orden en particular le toque menos de lo que
+        // necesita, aunque ya se confirmó que el renglón sí tiene Vigente
+        // real de sobra. En vez de dejar Pre-Compromiso en negativo (correcto
+        // en la suma total, pero confuso de ver en Ejecución), primero se
+        // "nivela" con lo que falta — ese faltante sale del mismo Vigente
+        // real ya validado arriba — y de ahí se mueve el monto completo a
+        // Compromiso.
+        const [filaActual] = await tx.select({ pre_compromiso: presupuestoRenglones.pre_compromiso })
+          .from(presupuestoRenglones).where(and(
+            eq(presupuestoRenglones.renglon, r.renglon as number),
+            eq(presupuestoRenglones.subproducto, r.subproducto),
+            eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+          )).limit(1);
+        const nivelacion = Math.max(0, requerido - (filaActual?.pre_compromiso ?? 0));
+
         await tx.update(presupuestoRenglones).set({
-          pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) - ${requerido}`,
+          pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${nivelacion} - ${requerido}`,
           compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) + ${requerido}`,
           saldo_disponible: sql`COALESCE(${presupuestoRenglones.saldo_disponible}, 0) - ${requerido}`
         }).where(and(
