@@ -1,9 +1,10 @@
 "use client";
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Search, Plus, X, Loader2, ChevronLeft, ChevronRight, ChevronDown, Download, Edit2, Trash2, CheckCircle2 } from "lucide-react";
+import { BookOpen, Search, Plus, X, Loader2, ChevronLeft, ChevronRight, ChevronDown, Download, Edit2, Trash2, CheckCircle2, HelpCircle, AlertTriangle, XCircle } from "lucide-react";
 import { crearInsumoCompras, editarInsumoCompras, eliminarInsumoCompras, buscarInsumosCentral, type InsumoCentralAgrupado } from "./actions";
 import { importarPac2026 } from "./importar-action";
+import { COLUMNAS_PAC } from "./pac-columnas";
 
 type Insumo = {
   id: number;
@@ -39,6 +40,10 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
   const [modal, setModal] = useState(false);
   const [editingInsumo, setEditingInsumo] = useState<Insumo | null>(null);
   const [importando, setImportando] = useState(false);
+  const [mostrarInstructivo, setMostrarInstructivo] = useState(false);
+  const [resultadoImport, setResultadoImport] = useState<
+    { tipo: "ok"; importadas: number } | { tipo: "advertencia"; importadas: number; mensaje: string } | { tipo: "error"; mensaje: string } | null
+  >(null);
 
   // insumos vive en estado local (para que crear/editar/eliminar un insumo
   // se sienta instantáneo) — pero tras reemplazar todo el catálogo
@@ -60,9 +65,9 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
     setImportando(false);
     e.target.value = ""; // Reset input
 
-    if ("error" in res) { alert("Error al importar: " + res.error); return; }
-    if (res.advertencia) alert(res.advertencia);
-    else alert(`¡Catálogo importado con éxito! (${res.importadas.toLocaleString("es-GT")} insumos)`);
+    if ("error" in res) { setResultadoImport({ tipo: "error", mensaje: res.error ?? "Error desconocido al importar el archivo." }); return; }
+    if (res.advertencia) setResultadoImport({ tipo: "advertencia", importadas: res.importadas, mensaje: res.advertencia });
+    else setResultadoImport({ tipo: "ok", importadas: res.importadas });
     router.refresh();
   }
 
@@ -125,6 +130,10 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
               onChange={e => setQuery(e.target.value)}
             />
           </div>
+          <button type="button" onClick={() => setMostrarInstructivo(true)}
+            className="btn-secondary shrink-0 text-gray-600" title="Cómo debe estar armado el archivo del PAC">
+            <HelpCircle className="w-4 h-4" /> Instructivo
+          </button>
           <label className={`btn-secondary shrink-0 text-brand-600 ${importando ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
             {importando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             {importando ? "Importando..." : "Importar PAC 2026"}
@@ -241,6 +250,140 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
       </div>
 
       {modal && <InsumoModal insumo={editingInsumo} onClose={() => { setModal(false); setEditingInsumo(null); }} onCreado={handleCreado} />}
+      {mostrarInstructivo && <InstructivoPacModal onClose={() => setMostrarInstructivo(false)} />}
+      {resultadoImport && <ResultadoImportarModal resultado={resultadoImport} onClose={() => setResultadoImport(null)} onVerInstructivo={() => { setResultadoImport(null); setMostrarInstructivo(true); }} />}
+    </div>
+  );
+}
+
+function InstructivoPacModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+          <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+            <HelpCircle className="w-4 h-4 text-brand-600" /> Cómo debe estar armado el archivo del PAC
+          </h2>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X className="w-4 h-4" /></button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4 text-sm text-gray-700">
+          <p>
+            El archivo debe ser un Excel (<strong>.xlsx</strong> o <strong>.xls</strong>) con una sola hoja de datos:
+            la <strong>primera fila</strong> son los títulos de columna, y cada fila de abajo es un insumo del catálogo.
+          </p>
+
+          <div className="rounded-xl border border-gray-200 overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="table-header">
+                  <th className="px-3 py-2 text-left">Columna</th>
+                  <th className="px-3 py-2 text-center">¿Obligatoria?</th>
+                  <th className="px-3 py-2 text-left">Qué lleva</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {COLUMNAS_PAC.map(c => (
+                  <tr key={c.clave}>
+                    <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{c.nombres[0]}</td>
+                    <td className="px-3 py-2 text-center">
+                      {c.obligatoria
+                        ? <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700">Sí</span>
+                        : <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-500">No</span>}
+                    </td>
+                    <td className="px-3 py-2 text-gray-600">{c.descripcion}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <p className="text-xs text-gray-500">
+            El sistema reconoce el título de columna aunque tenga mayúsculas/minúsculas distintas o texto extra alrededor
+            (ej. <span className="font-mono">&quot;Nombre Genérico, Forma, Concentración y Presentación&quot;</span> también sirve para la columna Nombre) —
+            pero si no encuentra alguna de las 4 obligatorias, el archivo no se importa y te avisa cuál falta.
+          </p>
+
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 space-y-1.5">
+            <p className="font-semibold text-amber-800 flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4" /> Código IGSS + Sub-Producto deben ser únicos
+            </p>
+            <p className="text-amber-800 text-xs leading-relaxed">
+              No puede haber dos filas distintas (distinto nombre o renglón) con el mismo Código IGSS y el mismo Sub-Producto —
+              el sistema usa esa combinación para saber a qué renglón pertenece cada insumo en el resto del sistema (SIAF, compras, presupuesto).
+              Esto pasa seguido con insumos que comparten el código <span className="font-mono">&quot;S/C&quot;</span> (sin código propio,
+              como servicios varios) bajo el mismo sub-producto genérico — si eso pasa, dale a cada uno un sub-producto distinto en el PAC antes de subirlo.
+              Las filas que choquen quedan afuera de la importación y se listan en el aviso, para que las corrijas y vuelvas a subir el archivo.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+            <p className="font-semibold text-red-800 flex items-center gap-1.5 text-xs">
+              <XCircle className="w-3.5 h-3.5" /> Importante: subir el PAC reemplaza TODO el catálogo actual
+            </p>
+            <p className="text-red-800 text-xs mt-1">
+              Al importar se borra el catálogo completo y se reemplaza con lo que traiga el archivo — asegúrate de subir el PAC
+              completo del año, no un archivo parcial o solo con los insumos nuevos.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+          <button onClick={onClose} className="btn-primary">Entendido</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ResultadoImportarModal({ resultado, onClose, onVerInstructivo }: {
+  resultado: { tipo: "ok"; importadas: number } | { tipo: "advertencia"; importadas: number; mensaje: string } | { tipo: "error"; mensaje: string };
+  onClose: () => void;
+  onVerInstructivo: () => void;
+}) {
+  const config = {
+    ok:          { icon: CheckCircle2, color: "text-green-600", bg: "bg-green-50", border: "border-green-200", titulo: "Catálogo importado con éxito" },
+    advertencia: { icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200", titulo: "Catálogo importado, con avisos" },
+    error:       { icon: XCircle, color: "text-red-600", bg: "bg-red-50", border: "border-red-200", titulo: "No se pudo importar el archivo" },
+  }[resultado.tipo];
+  const Icon = config.icon;
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+          <h2 className={`font-semibold flex items-center gap-2 ${config.color}`}>
+            <Icon className="w-5 h-5" /> {config.titulo}
+          </h2>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X className="w-4 h-4" /></button>
+        </div>
+
+        <div className="px-5 py-4 space-y-3">
+          {resultado.tipo === "ok" && (
+            <p className="text-sm text-gray-700">Se importaron <strong>{resultado.importadas.toLocaleString("es-GT")}</strong> insumos.</p>
+          )}
+          {resultado.tipo === "advertencia" && (
+            <>
+              <p className="text-sm text-gray-700">Se importaron <strong>{resultado.importadas.toLocaleString("es-GT")}</strong> insumos.</p>
+              <div className={`rounded-xl border ${config.border} ${config.bg} px-3 py-2.5 text-xs text-gray-700 whitespace-pre-line max-h-64 overflow-y-auto`}>
+                {resultado.mensaje}
+              </div>
+            </>
+          )}
+          {resultado.tipo === "error" && (
+            <div className={`rounded-xl border ${config.border} ${config.bg} px-3 py-2.5 text-sm text-red-800 whitespace-pre-line`}>
+              {resultado.mensaje}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+          {resultado.tipo === "error" && (
+            <button onClick={onVerInstructivo} className="btn-secondary">Ver instructivo</button>
+          )}
+          <button onClick={onClose} className="btn-primary">Cerrar</button>
+        </div>
+      </div>
     </div>
   );
 }
