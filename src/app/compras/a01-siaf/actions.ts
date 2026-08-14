@@ -208,10 +208,16 @@ async function calcularMontosPorRenglonSiaf(items: ItemSiaf[]): Promise<
   const sinCatalogo: string[] = [];
   const sinPrecio: string[] = [];
   for (const item of items) {
+    // Sin catalogo_id (ej. después de un reimport del PAC, que borra y
+    // recarga catalogo_compras y deja este FK en null) hay que volver a
+    // ubicar la fila por texto — el nombre entra en la condición porque el
+    // PAC reutiliza un mismo sub-producto para varios insumos sin código
+    // real, así que codigo_igss+subproducto solos podrían resolver a
+    // cualquiera de ellos.
     const queryCond = item.catalogo_id
       ? eq(catalogoCompras.id, item.catalogo_id)
       : (item.codigo_igss != null
-          ? and(eq(catalogoCompras.codigo_igss, item.codigo_igss), eq(catalogoCompras.subproducto, item.subproducto))
+          ? and(eq(catalogoCompras.codigo_igss, item.codigo_igss), eq(catalogoCompras.subproducto, item.subproducto), eq(catalogoCompras.nombre, item.nombre))
           : eq(catalogoCompras.nombre, item.nombre));
 
     const [cat] = await db.select({ renglon: catalogoCompras.renglon, precio_estimado: catalogoCompras.precio_estimado })

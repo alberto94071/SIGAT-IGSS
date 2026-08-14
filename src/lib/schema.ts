@@ -302,12 +302,15 @@ export const catalogoCompras = pgTable("catalogo_compras", {
   activo:                  boolean("activo").notNull().default(true),
   created_at:              text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 }, table => ({
-  // Un mismo insumo (codigo_igss) no puede aparecer dos veces bajo el mismo
-  // sub-producto con renglón distinto — el control de presupuesto por
-  // renglón+sub-producto (ver presupuesto-disponible.ts) confía en que esta
-  // combinación resuelve siempre al mismo renglón. Postgres no choca por
+  // El PAC de Guatemala reutiliza un mismo Sub-Producto como "cajón" genérico
+  // para varios servicios sin código real (ej. "S/C" + 001-001-0001 agrupa
+  // Energía, Agua, Teléfono...), cada uno con nombre y renglón propios — por
+  // eso Código+Sub-Producto solos no alcanzan como identidad de un insumo, se
+  // agrega el nombre. El control de presupuesto por renglón+sub-producto (ver
+  // presupuesto-disponible.ts) sigue funcionando porque cruza por esta misma
+  // terna (ver renglon-utils.ts / a01-siaf/actions.ts). Postgres no choca por
   // NULL (varios insumos sin código real pueden compartir subproducto).
-  codigoSubproductoUnico: uniqueIndex("catalogo_compras_codigo_subproducto_idx").on(table.codigo_igss, table.subproducto),
+  codigoSubproductoUnico: uniqueIndex("catalogo_compras_codigo_subproducto_idx").on(table.codigo_igss, table.subproducto, table.nombre),
 }));
 
 // ─── Catálogo de subproductos (controlado por superadmin) ────────────────────
