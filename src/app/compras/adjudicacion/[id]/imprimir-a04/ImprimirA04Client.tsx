@@ -2,6 +2,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft, ChevronDown, X } from "lucide-react";
+import { montoIva } from "@/lib/iva-utils";
+import { PRESUPUESTO_DATA } from "@/lib/presupuesto-general-data";
+
+// Nombre oficial del renglón (ej. 113 → "TELEFONÍA") para la línea en
+// negrita de la Descripción — mismo criterio que el A-04 SIAF real del
+// IGSS, que separa la categoría del renglón (negrita) del detalle propio
+// del insumo (texto normal) debajo.
+const NOMBRE_RENGLON = new Map(PRESUPUESTO_DATA.map(r => [r.renglon, r.descripcion]));
 
 type Consolidacion = {
   id: number; tipo_compra: string | null;
@@ -17,7 +25,7 @@ type Renglon = {
   renglon: number | null; codigo_ppr: string | null; nombre: string;
   cantidad: number; total: number; unidad_medida: string | null;
 };
-type Firmante = { id: number; nombre: string; cargo: string };
+type Firmante = { id: number; nombre: string; cargo: string; unidad: string | null };
 
 interface Props {
   consolidacion: Consolidacion;
@@ -90,7 +98,7 @@ export default function ImprimirA04Client({
 
   const renglon = renglones[0];
   const montoBruto = c.monto_bruto ?? c.total ?? 0;
-  const iva = c.exento_iva ? 0 : montoBruto * 0.12;
+  const iva = c.exento_iva ? 0 : montoIva(montoBruto);
   const liquido = c.total ?? (montoBruto - iva);
 
   // Con un solo renglón se usa la descripción/cantidad/unidad capturadas a
@@ -101,10 +109,11 @@ export default function ImprimirA04Client({
   const filas = renglones.length > 1
     ? renglones.map(r => {
         const total = r.total;
-        const ivaFila = c.exento_iva ? 0 : total * 0.12;
+        const ivaFila = c.exento_iva ? 0 : montoIva(total);
         return {
           codigoPpr: codigoPprMostrar(r.codigo_ppr),
           renglonNum: r.renglon != null ? String(r.renglon) : "—",
+          categoria: (r.renglon != null ? NOMBRE_RENGLON.get(r.renglon) : null) ?? null,
           descripcion: r.nombre.toUpperCase(),
           unidad: r.unidad_medida ?? "—",
           cantidad: r.cantidad.toLocaleString("es-GT"),
@@ -115,6 +124,7 @@ export default function ImprimirA04Client({
     : [{
         codigoPpr: codigoPprMostrar(renglon?.codigo_ppr),
         renglonNum: renglon?.renglon != null ? String(renglon.renglon) : "—",
+        categoria: (renglon?.renglon != null ? NOMBRE_RENGLON.get(renglon.renglon) : null) ?? null,
         descripcion: (c.a04_descripcion || renglon?.nombre || "—").toUpperCase(),
         unidad: c.a04_unidad_medida ?? renglon?.unidad_medida ?? "—",
         cantidad: (c.a04_cantidad ?? renglon?.cantidad)?.toLocaleString("es-GT") ?? "—",
@@ -288,7 +298,8 @@ export default function ImprimirA04Client({
                     <td style={{ border: TB, padding: "4px", textAlign: "center" }}>{f.codigoPpr}</td>
                     <td style={{ border: TB, padding: "4px", textAlign: "center" }}>{f.renglonNum}</td>
                     <td style={{ border: TB, padding: "6px", wordBreak: "break-word" }}>
-                      <p style={{ margin: 0, fontWeight: "bold" }}>{f.descripcion}</p>
+                      {f.categoria && <p style={{ margin: 0, fontWeight: "bold" }}>{f.categoria}</p>}
+                      <p style={{ margin: 0 }}>{f.descripcion}</p>
                     </td>
                     <td style={{ border: TB, padding: "4px", textAlign: "center" }}>{f.unidad}</td>
                     <td style={{ border: TB, padding: "4px", textAlign: "center" }}>{f.cantidad}</td>
@@ -317,6 +328,7 @@ export default function ImprimirA04Client({
               }}>
                 <p style={{ margin: 0, fontWeight: "bold" }}>{firmantes[i]?.nombre || "—"}</p>
                 <p style={{ margin: "2px 0 0 0" }}>{firmantes[i]?.cargo || FIRMA_SLOTS[i]}</p>
+                {firmantes[i]?.unidad && <p style={{ margin: "2px 0 0 0" }}>{firmantes[i].unidad}</p>}
               </div>
             ))}
           </div>

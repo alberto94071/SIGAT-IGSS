@@ -13,7 +13,7 @@ type Config = {
   nombre_unidad_ejecutora?: string; centro_costo_nombre?: string;
   direccion_unidad?: string; justificacion_siaf?: string;
 };
-type Firmante = { id: number; nombre: string; cargo: string; activo: boolean };
+type Firmante = { id: number; nombre: string; cargo: string; unidad: string | null; activo: boolean };
 
 interface Props { config: Config; firmantes: Firmante[]; rol: string; }
 
@@ -32,6 +32,7 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
   const [editingF,     setEditingF]     = useState<Firmante | null>(null);
   const [fNombre,      setFNombre]      = useState("");
   const [fCargo,       setFCargo]       = useState("");
+  const [fUnidad,      setFUnidad]      = useState("");
   const [fSaving,      setFSaving]      = useState(false);
 
   function set(k: keyof Config, v: string | number) {
@@ -48,19 +49,19 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
   }
 
   function openNewFirmante() {
-    setEditingF(null); setFNombre(""); setFCargo(""); setFModal(true);
+    setEditingF(null); setFNombre(""); setFCargo(""); setFUnidad(""); setFModal(true);
   }
   function openEditFirmante(f: Firmante) {
-    setEditingF(f); setFNombre(f.nombre); setFCargo(f.cargo); setFModal(true);
+    setEditingF(f); setFNombre(f.nombre); setFCargo(f.cargo); setFUnidad(f.unidad ?? ""); setFModal(true);
   }
   async function handleSaveFirmante() {
     if (!fNombre.trim() || !fCargo.trim()) return;
     setFSaving(true);
     if (editingF) {
-      const res = await editarFirmante({ id: editingF.id, nombre: fNombre, cargo: fCargo });
+      const res = await editarFirmante({ id: editingF.id, nombre: fNombre, cargo: fCargo, unidad: fUnidad });
       if (res.firmante) setFirmantes(p => p.map(f => f.id === editingF.id ? { ...f, ...res.firmante } : f));
     } else {
-      const res = await crearFirmante({ nombre: fNombre, cargo: fCargo });
+      const res = await crearFirmante({ nombre: fNombre, cargo: fCargo, unidad: fUnidad });
       if (res.firmante) setFirmantes(p => [...p, res.firmante as Firmante]);
     }
     setFSaving(false); setFModal(false);
@@ -196,7 +197,7 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${f.activo ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50 opacity-60"}`}>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm text-gray-900 truncate">{f.nombre}</p>
-                  <p className="text-xs text-gray-500">{f.cargo}</p>
+                  <p className="text-xs text-gray-500">{f.cargo}{f.unidad ? ` — ${f.unidad}` : ""}</p>
                 </div>
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${f.activo ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
                   {f.activo ? "Activo" : "Inactivo"}
@@ -241,6 +242,12 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
                 <label className="label">Cargo / título</label>
                 <input className="input" placeholder='Analista "A"'
                   value={fCargo} onChange={e => setFCargo(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Unidad / oficina (opcional)</label>
+                <input className="input" placeholder="Ej. U.I.A.A.D.D.M. en el Municipio de Tejutla"
+                  value={fUnidad} onChange={e => setFUnidad(e.target.value)} />
+                <p className="text-xs text-gray-400 mt-1">Se imprime como tercera línea bajo el nombre y cargo en la Forma A-04 SIAF, si se llena.</p>
               </div>
             </div>
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">

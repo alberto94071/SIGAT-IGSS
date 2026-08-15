@@ -14,6 +14,7 @@ import { verificarLimiteInsumos, mensajeLimiteExcedido } from "./limite-baja-cua
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
 import { mensajePresupuestoExcedido, getDisponible } from "@/lib/presupuesto-disponible";
 import { calcularReversionPresupuestoAplicado } from "@/app/compras/a01-siaf/actions";
+import { netoDeIva } from "@/lib/iva-utils";
 
 async function requireCompras(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -170,7 +171,7 @@ export async function confirmarCompraDirectaConNog(consolidacionId: number, nog:
     }
 
     const todosExentos = itemsConPrecio.every(i => i.exento_iva);
-    const total = todosExentos ? bruto : bruto * 0.88;
+    const total = todosExentos ? bruto : netoDeIva(bruto);
     const limite = LIMITE_POR_TIPO["Compra Directa"];
     if (total > limite) {
       return { error: `El total Q${total.toFixed(2)} supera el límite de Q${limite.toLocaleString("es-GT")} para Compra Directa`, limitExceeded: true as const };
@@ -184,7 +185,7 @@ export async function confirmarCompraDirectaConNog(consolidacionId: number, nog:
       const filas = rawItems.filter(r => r.codigo_igss === item.codigo_igss && r.subproducto === item.subproducto && r.nombre === item.nombre);
       for (const fila of filas) {
         const filaBruto = fila.cantidad_solicitada * item.precio_unitario;
-        const montoNeto = item.exento_iva ? filaBruto : filaBruto * 0.88;
+        const montoNeto = item.exento_iva ? filaBruto : netoDeIva(filaBruto);
         await db.update(siafComprasItems).set({
           precio_unitario: item.precio_unitario, item_exento_iva: item.exento_iva, monto_neto: montoNeto,
         }).where(eq(siafComprasItems.id, fila.id));
@@ -388,7 +389,7 @@ export async function confirmarBajaCuantiaConCotizacionAnual(consolidacionId: nu
       const linea = item.codigo_igss ? precioPorCodigo.get(`${item.codigo_igss}::${item.nombre}`) : undefined;
       if (!linea) { faltantes.push(item.codigo_igss ?? item.nombre); continue; }
       const bruto = item.cantidad_solicitada * linea.precio_unitario;
-      const montoNeto = linea.exento_iva ? bruto : bruto * 0.88;
+      const montoNeto = linea.exento_iva ? bruto : netoDeIva(bruto);
       total += montoNeto;
       itemsConPrecio.push({ id: item.id, codigo_igss: item.codigo_igss!, nombre: item.nombre, precio_unitario: linea.precio_unitario, exento_iva: linea.exento_iva, monto_neto: montoNeto });
     }
@@ -477,7 +478,7 @@ export async function adjudicarDirecto(consolidacionId: number, data: {
       if (!renglon) return { error: "Uno de los insumos no pertenece a esta consolidación" };
       bruto += renglon.cantidad * item.precio_unitario;
     }
-    const total = data.exento_iva ? bruto : bruto * 0.88;
+    const total = data.exento_iva ? bruto : netoDeIva(bruto);
     const limite = LIMITE_POR_TIPO[tipo];
     if (total > limite) {
       return {
@@ -495,7 +496,7 @@ export async function adjudicarDirecto(consolidacionId: number, data: {
       const filas = rawItems.filter(r => mismoInsumo(r, grupo));
       for (const fila of filas) {
         const filaBruto = fila.cantidad_solicitada * grupo.precio_unitario;
-        const montoNeto = data.exento_iva ? filaBruto : filaBruto * 0.88;
+        const montoNeto = data.exento_iva ? filaBruto : netoDeIva(filaBruto);
         await db.update(siafComprasItems).set({
           precio_unitario: grupo.precio_unitario, item_exento_iva: data.exento_iva, monto_neto: montoNeto,
         }).where(eq(siafComprasItems.id, fila.id));
@@ -637,13 +638,13 @@ export async function registrarRegularizado(consolidacionId: number, data: {
       for (const fila of filas) {
         const bruto = fila.cantidad_solicitada * grupo.precio_unitario;
         monto_bruto += bruto;
-        const montoNeto = data.exento_iva ? bruto : bruto * 0.88;
+        const montoNeto = data.exento_iva ? bruto : netoDeIva(bruto);
         actualizaciones.push({ id: fila.id, codigo_igss: fila.codigo_igss, nombre: fila.nombre, precio_unitario: grupo.precio_unitario, monto_neto: montoNeto });
       }
     }
     if (actualizaciones.length === 0) return { error: "No se encontraron los insumos consolidados" };
 
-    const total = data.exento_iva ? monto_bruto : monto_bruto * 0.88;
+    const total = data.exento_iva ? monto_bruto : netoDeIva(monto_bruto);
 
     if (con.tipo_compra === "Baja Cuantía") {
       const excedidos = await verificarLimiteInsumos(
@@ -670,7 +671,7 @@ export async function registrarRegularizado(consolidacionId: number, data: {
       if (cat?.renglon == null) continue;
       const filas = rawItems.filter(r => mismoInsumo(r, grupo));
       const bruto = filas.reduce((s, f) => s + f.cantidad_solicitada * grupo.precio_unitario, 0);
-      const montoNeto = data.exento_iva ? bruto : bruto * 0.88;
+      const montoNeto = data.exento_iva ? bruto : netoDeIva(bruto);
       const key = `${cat.renglon}::${grupo.subproducto}`;
       const existente = montosPorRenglon.get(key);
       if (existente) existente.monto += montoNeto;

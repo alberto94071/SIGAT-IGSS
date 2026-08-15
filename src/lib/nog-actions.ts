@@ -4,6 +4,7 @@ import { nogRegistros, catalogoCompras } from "@/lib/schema";
 import { and, eq, ilike, or, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import type { NogGrupo } from "./adjudicacion/types";
+import { netoDeIva } from "./iva-utils";
 
 export async function listarNogs() {
   return db.select().from(nogRegistros).orderBy(sql`created_at DESC`);
@@ -92,7 +93,7 @@ export async function crearNog(data: {
     if (!(data.precio > 0)) return { error: "Ingresa un precio válido" };
 
     const bruto = data.cantidad_autorizada * data.precio;
-    const total = data.exento_iva ? bruto : bruto * 0.88;
+    const total = data.exento_iva ? bruto : netoDeIva(bruto);
 
     const [row] = await db.insert(nogRegistros).values({
       nog: data.nog.trim(),

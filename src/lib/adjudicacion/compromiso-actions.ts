@@ -8,6 +8,7 @@ import { gruposRenglonDeConsolidacion } from "./renglon-utils";
 import { trazabilidadPorConsolidaciones } from "./trazabilidad-utils";
 import { presupuestoRenglones, programacionEntradas, programacionCompromisos } from "@/lib/schema";
 import { and } from "drizzle-orm";
+import { netoDeIva } from "@/lib/iva-utils";
 import { requiereDab60, cuatrimestreDeFecha } from "@/lib/programacion-constants";
 import { fechaGuatemala, fechaHoraGuatemala } from "@/lib/date-utils";
 import { getDisponible, getDisponibleTx } from "@/lib/presupuesto-disponible";
@@ -110,7 +111,7 @@ export async function aprobarCompromiso(ordenId: number): Promise<{ ok: true } |
     // unidad, si no la comparación siempre falla por exactamente el 12% del
     // IVA en cualquier compra que no sea exenta (mismo criterio que ya usa
     // aprobarDevengado al mover Compromiso → Devengado).
-    const montoNeto = (r: { total: number }) => orden.exento_iva ? r.total : r.total * 0.88;
+    const montoNeto = (r: { total: number }) => orden.exento_iva ? r.total : netoDeIva(r.total);
 
     const faltantes: string[] = [];
     for (const r of renglones) {
@@ -291,7 +292,7 @@ export async function regresarACompromiso(ordenId: number, motivo?: string): Pro
           // pre_compromiso/compromiso/devengado se mueven neto de IVA (ver
           // aprobarCompromiso/aprobarDevengado) — deshacerlos tiene que usar
           // ese mismo monto neto, no el bruto r.total.
-          const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
+          const montoDevengado = orden.exento_iva ? r.total : netoDeIva(r.total);
           await tx.update(presupuestoRenglones).set({
             pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${montoDevengado}`,
             ...(esRegularizado
@@ -307,7 +308,7 @@ export async function regresarACompromiso(ordenId: number, motivo?: string): Pro
           // aprobación del Compromiso (+montoDevengado más abajo estaría de
           // más) — se cancelan.
         } else {
-          const montoNeto = orden.exento_iva ? r.total : r.total * 0.88;
+          const montoNeto = orden.exento_iva ? r.total : netoDeIva(r.total);
           await tx.update(presupuestoRenglones).set({
             pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${montoNeto}`,
             compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${montoNeto}`,
@@ -387,7 +388,7 @@ export async function regresarADab60(ordenId: number, motivo?: string): Promise<
         // Compromiso se mueve neto de IVA, igual que en aprobarDevengado —
         // deshacer ese mismo paso tiene que usar el mismo montoDevengado, no
         // el bruto r.total.
-        const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
+        const montoDevengado = orden.exento_iva ? r.total : netoDeIva(r.total);
         await tx.update(presupuestoRenglones).set({
           compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) + ${montoDevengado}`,
           ...(esRegularizado
@@ -481,7 +482,7 @@ export async function regresarOrdenAAdjudicacion(ordenId: number, motivo?: strin
       for (const r of renglones) {
         if (yaDevengado) {
           // Mismo criterio neto-de-IVA que aprobarCompromiso/aprobarDevengado.
-          const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
+          const montoDevengado = orden.exento_iva ? r.total : netoDeIva(r.total);
           await tx.update(presupuestoRenglones).set({
             pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${montoDevengado}`,
             devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) - ${montoDevengado}`,
@@ -491,7 +492,7 @@ export async function regresarOrdenAAdjudicacion(ordenId: number, motivo?: strin
             eq(presupuestoRenglones.ejercicio_fiscal, 2026),
           ));
         } else {
-          const montoNeto = orden.exento_iva ? r.total : r.total * 0.88;
+          const montoNeto = orden.exento_iva ? r.total : netoDeIva(r.total);
           await tx.update(presupuestoRenglones).set({
             pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${montoNeto}`,
             compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${montoNeto}`,

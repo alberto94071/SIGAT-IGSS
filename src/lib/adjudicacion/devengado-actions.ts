@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { requireModuloAccessAction } from "@/lib/modulo-access";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
 import { trazabilidadPorConsolidaciones } from "./trazabilidad-utils";
+import { netoDeIva } from "@/lib/iva-utils";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -129,7 +130,7 @@ export async function aprobarDevengado(ordenId: number): Promise<{ ok: true } | 
         // Compromiso también se mueve neto de IVA (ver aprobarCompromiso) —
         // usa el mismo montoDevengado que ya se calcula para el destino, no
         // el bruto r.total, o queda descuadrado por el 12% del IVA.
-        const montoDevengado = orden.exento_iva ? r.total : r.total * 0.88;
+        const montoDevengado = orden.exento_iva ? r.total : netoDeIva(r.total);
         await tx.update(presupuestoRenglones).set({
           compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${montoDevengado}`,
           ...(esRegularizado
