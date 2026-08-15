@@ -307,7 +307,7 @@ export default function ImprimirA04Client({
                   <td style={{ border: TB, padding: "14px 4px", textAlign: "center", fontWeight: "bold" }}>{c.a04_no_pedido ?? "—"}</td>
                   <td style={{ border: TB, padding: "14px 4px", textAlign: "center", fontWeight: "bold" }}>{f.codigoPpr}</td>
                   <td style={{ border: TB, padding: "14px 4px", textAlign: "center", fontWeight: "bold" }}>{f.renglonNum}</td>
-                  <td style={{ border: TB, padding: "14px 6px", wordBreak: "break-word" }}>
+                  <td style={{ border: TB, padding: "14px 6px", wordBreak: "break-word", textAlign: "center" }}>
                     {f.categoria && <p style={{ margin: 0, fontWeight: "bold" }}>{f.categoria}</p>}
                     <p style={{ margin: 0 }}>{f.descripcion}</p>
                   </td>
