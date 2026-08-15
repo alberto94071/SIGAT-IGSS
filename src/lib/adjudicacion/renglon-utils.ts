@@ -115,16 +115,20 @@ export async function guardarPprSeleccion(consolidacionId: number, seleccion: { 
   }
 }
 
-// Mapa completo codigo_igss::subproducto -> renglón, para anotar listas de
-// ítems ya cargadas sin hacer una consulta por ítem (mismo cruce que usa la
-// automatización de pre-compromiso, pero en un solo query).
+// Mapa completo codigo_igss::subproducto::nombre -> renglón, para anotar
+// listas de ítems ya cargadas sin hacer una consulta por ítem (mismo cruce
+// que usa la automatización de pre-compromiso, pero en un solo query). El
+// nombre es parte de la clave porque el PAC reutiliza un mismo sub-producto
+// para varios insumos sin código real (ver catalogoCompras en schema.ts) —
+// sin el nombre, dos insumos distintos bajo el mismo sub-producto pisarían
+// la entrada del otro en este mapa.
 export async function renglonLookupMap(): Promise<Map<string, number | null>> {
   const rows = await db.select({
     codigo_igss: catalogoCompras.codigo_igss, subproducto: catalogoCompras.subproducto,
-    renglon: catalogoCompras.renglon,
+    nombre: catalogoCompras.nombre, renglon: catalogoCompras.renglon,
   }).from(catalogoCompras);
   const map = new Map<string, number | null>();
-  for (const r of rows) map.set(`${r.codigo_igss}::${r.subproducto}`, r.renglon);
+  for (const r of rows) map.set(`${r.codigo_igss}::${r.subproducto}::${r.nombre}`, r.renglon);
   return map;
 }
 
@@ -198,7 +202,7 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
   const grupos = new Map<string, GrupoRenglon>();
   for (const item of items) {
     const renglon = item.codigo_igss != null
-      ? renglones.get(`${item.codigo_igss}::${item.subproducto}`) ?? null
+      ? renglones.get(`${item.codigo_igss}::${item.subproducto}::${item.nombre}`) ?? null
       : null;
     const key = `${item.codigo_igss}::${item.subproducto}`;
     const itemTotal = item.cantidad_solicitada * (item.precio_unitario ?? 0);

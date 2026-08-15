@@ -81,24 +81,35 @@ export async function importarPac2026(formData: FormData) {
       };
     }
 
-    const rows = data.slice(1).filter(r => r && r.some && r.some(c => c !== null && c !== ''));
+    // Se excluyen filas de resumen/totales al final del archivo (sin nombre,
+    // código ni sub-producto, pero con cantidad/monto llenos) — no son un
+    // insumo real y antes se colaban como una fila "sin Renglón".
+    const rows = data.slice(1).filter(r =>
+      r && r.some && r.some(c => c !== null && c !== '') &&
+      (celdaTexto(r[idxNombre]) || celdaTexto(r[idxCodigoIgss]) || celdaTexto(r[idxSubproducto]))
+    );
     if (rows.length === 0) {
       return { error: "El archivo tiene encabezado pero ninguna fila con datos debajo." };
     }
 
-    // catalogo_compras tiene un índice único en (codigo_igss, subproducto) —
-    // el resto del sistema (SIAF, PPR, presupuesto por renglón) confía en que
-    // esa combinación resuelve siempre a un solo renglón. Un mismo PAC puede
-    // traer dos filas con ese mismo par pero datos distintos (ej. varios
-    // servicios con código "S/C" bajo el mismo sub-producto genérico) — antes
-    // eso tumbaba el INSERT a medio archivo, y como el DELETE ya se había
-    // ejecutado, dejaba el catálogo incompleto para siempre hasta el próximo
-    // intento. Ahora se detecta ANTES de tocar la base de datos: una fila que
-    // sea copia exacta de otra ya vista se ignora sola; el resto de choques
-    // se dejan afuera y se reportan — no se les inventa un sub-producto a
-    // nombre del cliente, porque eso es una decisión de ellos.
+    // catalogo_compras tiene un índice único en (codigo_igss, subproducto,
+    // nombre) — el resto del sistema (SIAF, PPR, presupuesto por renglón)
+    // confía en que esa terna resuelve siempre a un solo renglón. El PAC de
+    // Guatemala reutiliza un mismo Sub-Producto como "cajón" genérico para
+    // varios servicios sin código real (ej. "S/C" bajo el mismo sub-producto
+    // agrupa Energía, Agua, Teléfono...), así que Código+Sub-Producto solos
+    // no bastan como identidad — el nombre es el que de verdad distingue un
+    // insumo de otro en esos casos. Un mismo PAC puede traer dos filas con
+    // esa misma terna pero renglón distinto (dato realmente contradictorio,
+    // no una convención) — antes cualquier choque tumbaba el INSERT a medio
+    // archivo, y como el DELETE ya se había ejecutado, dejaba el catálogo
+    // incompleto para siempre hasta el próximo intento. Ahora se detecta
+    // ANTES de tocar la base de datos: una fila que sea copia exacta de otra
+    // ya vista se ignora sola; el resto de choques se dejan afuera y se
+    // reportan — no se les inventa un renglón a nombre del cliente, porque
+    // eso es una decisión de ellos.
     type Fila = (typeof rows)[number];
-    const porClave = new Map<string, { nombre: string; renglon: unknown }>();
+    const porClave = new Map<string, { renglon: unknown }>();
     const filasValidas: Fila[] = [];
     const conflictos: string[] = [];
     // Filas que sí se importan pero con Renglón vacío/no numérico — quedan
@@ -113,17 +124,17 @@ export async function importarPac2026(formData: FormData) {
       const nombre = celdaTexto(r[idxNombre]) || "Sin nombre";
       const subproducto = celdaTexto(r[idxSubproducto]) || "000-000";
       const renglon = r[idxRenglon];
-      const clave = `${codigo}::${subproducto}`;
+      const clave = `${codigo}::${subproducto}::${nombre}`;
       const existente = porClave.get(clave);
       if (!existente) {
-        porClave.set(clave, { nombre, renglon });
+        porClave.set(clave, { renglon });
         filasValidas.push(r);
         if (celdaNumero(renglon) === null) filasSinRenglon++;
-      } else if (existente.nombre === nombre && existente.renglon === renglon) {
-        // Fila repetida tal cual (mismo nombre y renglón) — no hay nada que decidir, se ignora.
+      } else if (existente.renglon === renglon) {
+        // Fila repetida tal cual — no hay nada que decidir, se ignora.
       } else {
         conflictos.push(
-          `Código "${codigo}" / Sub-producto "${subproducto}": "${existente.nombre}" (renglón ${existente.renglon ?? "—"}) choca con "${nombre}" (renglón ${renglon ?? "—"}) — dale a uno de los dos un sub-producto distinto en el PAC.`
+          `Código "${codigo}" / Sub-producto "${subproducto}" / "${nombre}": renglón ${existente.renglon ?? "—"} choca con renglón ${renglon ?? "—"} — el mismo insumo no puede tener dos renglones distintos en el mismo PAC.`
         );
       }
     }
