@@ -192,7 +192,7 @@ type ItemSiaf = {
   catalogo_id: number | null; nombre: string; codigo_igss: string | null;
   subproducto: string; cantidad_solicitada: number;
 };
-type MontoPorRenglon = { renglon: number; subproducto: string; monto: number };
+export type MontoPorRenglon = { renglon: number; subproducto: string; monto: number };
 
 // Cruza cada ítem del SIAF con el catálogo (para su renglón) y con la
 // cotización anual vigente si existe (si no, cae al precio estimado del
@@ -230,16 +230,22 @@ async function calcularMontosPorRenglonSiaf(items: ItemSiaf[]): Promise<
 
     let precioUnitario = cat.precio_estimado;
     if (item.codigo_igss != null) {
+      // codigo_igss por sí solo no identifica el insumo cuando es "S/C"
+      // (varios insumos distintos — Agua, Energía, cada mes — comparten ese
+      // mismo código, ver catalogo_compras_codigo_subproducto_idx en
+      // schema.ts). Por eso se exige también el nombre exacto; si el código
+      // es único (no repetido en catalogoCompras) no hace falta el nombre,
+      // pero para "S/C" y similares evita tomar el precio de OTRO insumo.
+      const cond = item.codigo_igss === "S/C"
+        ? and(eq(cotizacionesAnualesItems.codigo_igss, item.codigo_igss), eq(cotizacionesAnualesItems.nombre, item.nombre))
+        : eq(cotizacionesAnualesItems.codigo_igss, item.codigo_igss);
       const [cotiz] = await db.select({
         precio_unitario: cotizacionesAnualesItems.precio_unitario,
         exento_iva:      cotizacionesAnualesItems.exento_iva,
       })
         .from(cotizacionesAnualesItems)
         .innerJoin(cotizacionesAnuales, eq(cotizacionesAnualesItems.cotizacion_anual_id, cotizacionesAnuales.id))
-        .where(and(
-          eq(cotizacionesAnualesItems.codigo_igss, item.codigo_igss),
-          eq(cotizacionesAnuales.anio, 2026),
-        ))
+        .where(and(cond, eq(cotizacionesAnuales.anio, 2026)))
         .orderBy(desc(cotizacionesAnualesItems.id))
         .limit(1);
       if (cotiz) {
@@ -272,7 +278,12 @@ async function calcularMontosPorRenglonSiaf(items: ItemSiaf[]): Promise<
 // rechazarSolicitud/eliminarSolicitud), para aplicarlo dentro de la misma
 // transacción que cambia el estado, y que esa plata no se quede reservada
 // para siempre sin ninguna compra real detrás.
-async function calcularReversionPresupuestoAplicado(id: number): Promise<Map<string, MontoPorRenglon> | null> {
+// Exportada además para uso desde compras-actions.ts (registrarRegularizado)
+// — necesita saber cuánto Pre-Compromiso ya está reservado por los SIAF de
+// una consolidación (reservado aquí al aprobar, pero que Regularizado no
+// libera hasta Fondo Rotativo/Pagos, ver reflejarEnEjecucion) para no
+// contarlo dos veces al verificar presupuesto disponible en Adjudicación.
+export async function calcularReversionPresupuestoAplicado(id: number): Promise<Map<string, MontoPorRenglon> | null> {
   const items = await db.select({
     catalogo_id:         siafComprasItems.catalogo_id,
     nombre:              siafComprasItems.nombre,

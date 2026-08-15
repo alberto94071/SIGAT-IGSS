@@ -177,8 +177,12 @@ export type GrupoRenglon = {
 };
 
 // Agrupa los insumos de los SIAF consolidados de una consolidación por
-// renglón + subproducto (mismo cruce con el catálogo que usa la automatización
-// de pre-compromiso al aprobar un SIAF).
+// renglón + subproducto + nombre (misma terna identidad que usa el resto del
+// código — ver catalogo_compras_codigo_subproducto_idx en schema.ts). No
+// alcanza con código+subproducto solos: el PAC reutiliza un mismo
+// subproducto para varios insumos "S/C" sin código real (ej. Agua y Energía
+// Eléctrica, cada mes, todos bajo el mismo subproducto) — agrupar sin el
+// nombre mezclaría esos insumos distintos en una sola fila.
 export async function gruposRenglonDeConsolidacion(consolidacionId: number): Promise<GrupoRenglon[]> {
   const siafIds = (await db.select({ id: siafCompras.id }).from(siafCompras)
     .where(eq(siafCompras.consolidacion_id, consolidacionId))).map(s => s.id);
@@ -204,7 +208,7 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
     const renglon = item.codigo_igss != null
       ? renglones.get(`${item.codigo_igss}::${item.subproducto}::${item.nombre}`) ?? null
       : null;
-    const key = `${item.codigo_igss}::${item.subproducto}`;
+    const key = `${item.codigo_igss}::${item.subproducto}::${item.nombre}`;
     const itemTotal = item.cantidad_solicitada * (item.precio_unitario ?? 0);
     const existente = grupos.get(key);
     if (existente) {

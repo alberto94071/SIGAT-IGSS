@@ -12,13 +12,29 @@ import { crearNotificacion } from "@/lib/notificaciones";
 import { TIPOS, MAX_OFERENTES, REFERENCIA_LABEL, LIMITE_POR_TIPO, type TipoCompra } from "./types";
 import { verificarLimiteInsumos, mensajeLimiteExcedido } from "./limite-baja-cuantia";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
-import { verificarPresupuestoDisponible, mensajePresupuestoExcedido } from "@/lib/presupuesto-disponible";
+import { mensajePresupuestoExcedido, getDisponible } from "@/lib/presupuesto-disponible";
+import { calcularReversionPresupuestoAplicado } from "@/app/compras/a01-siaf/actions";
 
 async function requireCompras(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
   if (!session) return { error: "No autorizado" };
   if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
   return { uid: Number(session.user.id) };
+}
+
+// codigo_igss+subproducto solos no bastan para identificar un insumo cuando
+// el código es "S/C" (sin código real) — varios insumos distintos (Agua,
+// Energía Eléctrica, cada mes...) comparten ese mismo código y subproducto
+// (ver catalogo_compras_codigo_subproducto_idx en schema.ts). Si el llamador
+// mandó el nombre, se cruza también por nombre para no mezclarlos; si no lo
+// mandó (llamadores viejos), se compara solo por código+subproducto como
+// antes — no empeora nada, pero tampoco lo arregla del todo.
+function mismoInsumo(
+  r: { codigo_igss: string | null; subproducto: string; nombre: string },
+  grupo: { codigo_igss: string | null; subproducto: string; nombre?: string },
+): boolean {
+  return r.codigo_igss === grupo.codigo_igss && r.subproducto === grupo.subproducto
+    && (grupo.nombre == null || r.nombre === grupo.nombre);
 }
 
 // Rechazo de Compras antes de enviar a Junta — distinto del rechazo de Junta
@@ -135,15 +151,19 @@ export async function confirmarCompraDirectaConNog(consolidacionId: number, nog:
     const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
     if (renglones.length === 0) return { error: "Esta consolidación no tiene insumos" };
 
-    const porInsumo = new Map(registros.map(r => [`${r.insumo_codigo_igss}::${r.subproducto}`, r]));
+    // codigo_igss+subproducto solos no bastan para cruzar con el NOG cuando
+    // es "S/C": varios insumos distintos (Agua, Energía, cada mes...)
+    // comparten ese mismo código y subproducto — se agrega el nombre para no
+    // aplicarle a un insumo el precio de otro.
+    const porInsumo = new Map(registros.map(r => [`${r.insumo_codigo_igss}::${r.subproducto}::${r.insumo_nombre}`, r]));
     const faltantes: string[] = [];
     let bruto = 0;
-    const itemsConPrecio: { codigo_igss: string | null; subproducto: string; precio_unitario: number; exento_iva: boolean }[] = [];
+    const itemsConPrecio: { codigo_igss: string | null; subproducto: string; nombre: string; precio_unitario: number; exento_iva: boolean }[] = [];
     for (const r of renglones) {
-      const linea = porInsumo.get(`${r.codigo_igss}::${r.subproducto}`);
+      const linea = porInsumo.get(`${r.codigo_igss}::${r.subproducto}::${r.nombre}`);
       if (!linea || linea.precio == null) { faltantes.push(r.nombre); continue; }
       bruto += r.cantidad * linea.precio;
-      itemsConPrecio.push({ codigo_igss: r.codigo_igss, subproducto: r.subproducto, precio_unitario: linea.precio, exento_iva: linea.exento_iva });
+      itemsConPrecio.push({ codigo_igss: r.codigo_igss, subproducto: r.subproducto, nombre: r.nombre, precio_unitario: linea.precio, exento_iva: linea.exento_iva });
     }
     if (faltantes.length > 0) {
       return { error: `El NOG ${n} no tiene precio registrado para: ${faltantes.join(", ")}. Completa el precio a mano o corrígelo en Contrato y Cotizaciones/NOG.` };
@@ -161,7 +181,7 @@ export async function confirmarCompraDirectaConNog(consolidacionId: number, nog:
       ? await db.select().from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds))
       : [];
     for (const item of itemsConPrecio) {
-      const filas = rawItems.filter(r => r.codigo_igss === item.codigo_igss && r.subproducto === item.subproducto);
+      const filas = rawItems.filter(r => r.codigo_igss === item.codigo_igss && r.subproducto === item.subproducto && r.nombre === item.nombre);
       for (const fila of filas) {
         const filaBruto = fila.cantidad_solicitada * item.precio_unitario;
         const montoNeto = item.exento_iva ? filaBruto : filaBruto * 0.88;
@@ -349,7 +369,10 @@ export async function confirmarBajaCuantiaConCotizacionAnual(consolidacionId: nu
 
     const lineas = await db.select().from(cotizacionesAnualesItems)
       .where(eq(cotizacionesAnualesItems.cotizacion_anual_id, cotizacionAnualId));
-    const precioPorCodigo = new Map(lineas.map(l => [l.codigo_igss, l]));
+    // codigo_igss solo no basta cuando es "S/C" — varios insumos distintos
+    // (Agua, Energía, cada mes...) lo comparten, así que también se cruza
+    // por nombre.
+    const precioPorCodigo = new Map(lineas.map(l => [`${l.codigo_igss}::${l.nombre}`, l]));
 
     const siafs = await db.select({ id: siafCompras.id }).from(siafCompras)
       .where(eq(siafCompras.consolidacion_id, consolidacionId));
@@ -360,14 +383,14 @@ export async function confirmarBajaCuantiaConCotizacionAnual(consolidacionId: nu
 
     const faltantes: string[] = [];
     let total = 0;
-    const itemsConPrecio: { id: number; codigo_igss: string; precio_unitario: number; exento_iva: boolean; monto_neto: number }[] = [];
+    const itemsConPrecio: { id: number; codigo_igss: string; nombre: string; precio_unitario: number; exento_iva: boolean; monto_neto: number }[] = [];
     for (const item of items) {
-      const linea = item.codigo_igss ? precioPorCodigo.get(item.codigo_igss) : undefined;
+      const linea = item.codigo_igss ? precioPorCodigo.get(`${item.codigo_igss}::${item.nombre}`) : undefined;
       if (!linea) { faltantes.push(item.codigo_igss ?? item.nombre); continue; }
       const bruto = item.cantidad_solicitada * linea.precio_unitario;
       const montoNeto = linea.exento_iva ? bruto : bruto * 0.88;
       total += montoNeto;
-      itemsConPrecio.push({ id: item.id, codigo_igss: item.codigo_igss!, precio_unitario: linea.precio_unitario, exento_iva: linea.exento_iva, monto_neto: montoNeto });
+      itemsConPrecio.push({ id: item.id, codigo_igss: item.codigo_igss!, nombre: item.nombre, precio_unitario: linea.precio_unitario, exento_iva: linea.exento_iva, monto_neto: montoNeto });
     }
     if (faltantes.length > 0)
       return { error: `La cotización ${cotAnual.numero} no tiene precio para: ${faltantes.join(", ")}` };
@@ -427,7 +450,7 @@ export async function adjudicarDirecto(consolidacionId: number, data: {
   proveedor_id: number | null; nit: string; nombre: string;
   exento_iva: boolean; referencia: string;
   numero_adjudicacion: string; razon_adjudicacion: string;
-  items: { codigo_igss: string | null; subproducto: string; precio_unitario: number }[];
+  items: { codigo_igss: string | null; nombre?: string; subproducto: string; precio_unitario: number }[];
 }): Promise<{ ok: true } | { error: string; limitExceeded?: true }> {
   try {
     const check = await requireCompras();
@@ -450,7 +473,7 @@ export async function adjudicarDirecto(consolidacionId: number, data: {
     const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
     let bruto = 0;
     for (const item of data.items) {
-      const renglon = renglones.find(r => r.codigo_igss === item.codigo_igss && r.subproducto === item.subproducto);
+      const renglon = renglones.find(r => mismoInsumo(r, item));
       if (!renglon) return { error: "Uno de los insumos no pertenece a esta consolidación" };
       bruto += renglon.cantidad * item.precio_unitario;
     }
@@ -469,7 +492,7 @@ export async function adjudicarDirecto(consolidacionId: number, data: {
       ? await db.select().from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds))
       : [];
     for (const grupo of data.items) {
-      const filas = rawItems.filter(r => r.codigo_igss === grupo.codigo_igss && r.subproducto === grupo.subproducto);
+      const filas = rawItems.filter(r => mismoInsumo(r, grupo));
       for (const fila of filas) {
         const filaBruto = fila.cantidad_solicitada * grupo.precio_unitario;
         const montoNeto = data.exento_iva ? filaBruto : filaBruto * 0.88;
@@ -557,7 +580,7 @@ export async function registrarRegularizado(consolidacionId: number, data: {
   nit: string; nombre: string; exento_iva: boolean;
   proveedor_direccion: string; proveedor_telefono: string;
   no_pedido: string; descripcion: string; unidad_medida: string; cantidad: number;
-  items: { codigo_igss: string | null; subproducto: string; precio_unitario: number }[];
+  items: { codigo_igss: string | null; nombre?: string; subproducto: string; precio_unitario: number }[];
   cotizacion_anual_id?: number; cotizacion_servicio_id?: number;
 }): Promise<{ ok: true } | { error: string; limitExceeded?: true }> {
   try {
@@ -600,21 +623,22 @@ export async function registrarRegularizado(consolidacionId: number, data: {
       }
     }
 
-    const siafIds = (await db.select({ id: siafCompras.id }).from(siafCompras)
-      .where(eq(siafCompras.consolidacion_id, consolidacionId))).map(s => s.id);
+    const siafsDeConsolidacion = await db.select({ id: siafCompras.id, presupuesto_aplicado: siafCompras.presupuesto_aplicado })
+      .from(siafCompras).where(eq(siafCompras.consolidacion_id, consolidacionId));
+    const siafIds = siafsDeConsolidacion.map(s => s.id);
     const rawItems = siafIds.length > 0
       ? await db.select().from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds))
       : [];
 
     let monto_bruto = 0;
-    const actualizaciones: { id: number; codigo_igss: string | null; precio_unitario: number; monto_neto: number }[] = [];
+    const actualizaciones: { id: number; codigo_igss: string | null; nombre: string; precio_unitario: number; monto_neto: number }[] = [];
     for (const grupo of data.items) {
-      const filas = rawItems.filter(r => r.codigo_igss === grupo.codigo_igss && r.subproducto === grupo.subproducto);
+      const filas = rawItems.filter(r => mismoInsumo(r, grupo));
       for (const fila of filas) {
         const bruto = fila.cantidad_solicitada * grupo.precio_unitario;
         monto_bruto += bruto;
         const montoNeto = data.exento_iva ? bruto : bruto * 0.88;
-        actualizaciones.push({ id: fila.id, codigo_igss: fila.codigo_igss, precio_unitario: grupo.precio_unitario, monto_neto: montoNeto });
+        actualizaciones.push({ id: fila.id, codigo_igss: fila.codigo_igss, nombre: fila.nombre, precio_unitario: grupo.precio_unitario, monto_neto: montoNeto });
       }
     }
     if (actualizaciones.length === 0) return { error: "No se encontraron los insumos consolidados" };
@@ -624,7 +648,7 @@ export async function registrarRegularizado(consolidacionId: number, data: {
     if (con.tipo_compra === "Baja Cuantía") {
       const excedidos = await verificarLimiteInsumos(
         actualizaciones.filter((a): a is typeof a & { codigo_igss: string } => a.codigo_igss != null)
-          .map(a => ({ codigo_igss: a.codigo_igss, monto_neto: a.monto_neto })),
+          .map(a => ({ codigo_igss: a.codigo_igss, nombre: a.nombre, monto_neto: a.monto_neto })),
         con.fecha, consolidacionId,
       );
       if (excedidos.length > 0) return { error: mensajeLimiteExcedido(excedidos), limitExceeded: true as const };
@@ -644,7 +668,7 @@ export async function registrarRegularizado(consolidacionId: number, data: {
         .where(and(eq(catalogoCompras.codigo_igss, grupo.codigo_igss), eq(catalogoCompras.subproducto, grupo.subproducto)))
         .limit(1);
       if (cat?.renglon == null) continue;
-      const filas = rawItems.filter(r => r.codigo_igss === grupo.codigo_igss && r.subproducto === grupo.subproducto);
+      const filas = rawItems.filter(r => mismoInsumo(r, grupo));
       const bruto = filas.reduce((s, f) => s + f.cantidad_solicitada * grupo.precio_unitario, 0);
       const montoNeto = data.exento_iva ? bruto : bruto * 0.88;
       const key = `${cat.renglon}::${grupo.subproducto}`;
@@ -652,7 +676,33 @@ export async function registrarRegularizado(consolidacionId: number, data: {
       if (existente) existente.monto += montoNeto;
       else montosPorRenglon.set(key, { renglon: cat.renglon, subproducto: grupo.subproducto, monto: montoNeto });
     }
-    const excedidos = await verificarPresupuestoDisponible(Array.from(montosPorRenglon.values()));
+
+    // El o los SIAF de esta consolidación ya reservaron Pre-Compromiso al
+    // aprobarse (aprobarSolicitud), y Regularizado no lo libera hasta Fondo
+    // Rotativo/Pagos (reflejarEnEjecucion) — bastante más adelante que este
+    // paso. Sin sumarlo de vuelta aquí, el disponible real de este mismo
+    // gasto se contaría dos veces: una como Pre-Compromiso ya reservado y
+    // otra en esta verificación, rechazando compras que sí caben en el
+    // presupuesto.
+    const yaReservado = new Map<string, number>();
+    for (const s of siafsDeConsolidacion) {
+      if (!s.presupuesto_aplicado) continue;
+      const montos = await calcularReversionPresupuestoAplicado(s.id);
+      if (!montos) continue;
+      for (const { renglon, subproducto, monto } of montos.values()) {
+        const key = `${renglon}::${subproducto}`;
+        yaReservado.set(key, (yaReservado.get(key) ?? 0) + monto);
+      }
+    }
+
+    const excedidos: { renglon: number; subproducto: string; disponible: number; requerido: number }[] = [];
+    for (const { renglon, subproducto, monto } of montosPorRenglon.values()) {
+      const { disponible } = await getDisponible(renglon, subproducto);
+      const disponibleAjustado = disponible + (yaReservado.get(`${renglon}::${subproducto}`) ?? 0);
+      if (monto > disponibleAjustado + 0.01) {
+        excedidos.push({ renglon, subproducto, disponible: disponibleAjustado, requerido: monto });
+      }
+    }
     if (excedidos.length > 0) {
       return { error: await mensajePresupuestoExcedido(excedidos) };
     }

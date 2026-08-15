@@ -553,14 +553,18 @@ export function LineasCotizacionAnual({ cotizacion, canEdit, onChange }: {
     if (!codigo.trim()) return setError("Selecciona un insumo");
     if (!(precioNum > 0)) return setError("Ingresa un precio unitario válido");
     setSaving(true); setError("");
+    // El nombre exacto elegido en el buscador viaja al servidor — codigo_igss
+    // solo no basta para identificar el insumo cuando es "S/C" (varios
+    // insumos distintos comparten ese mismo código, ej. Agua/Energía por mes).
+    const nombreElegido = insumoQuery.replace(/^.*—\s*/, "").trim() || undefined;
     const res = await agregarLineaCotizacionAnual(cotizacion.id, {
-      codigo_igss: codigo.trim(), precio_unitario: precioNum, exento_iva: exento,
+      codigo_igss: codigo.trim(), nombre: nombreElegido, precio_unitario: precioNum, exento_iva: exento,
     });
     setSaving(false);
     if ("error" in res) return setError(res.error);
     onChange([...cotizacion.items, {
       id: Date.now(), cotizacion_anual_id: cotizacion.id,
-      codigo_igss: codigo.trim(), nombre: insumoQuery.replace(/^.*—\s*/, "") || null,
+      codigo_igss: codigo.trim(), nombre: nombreElegido ?? null,
       precio_unitario: precioNum, exento_iva: exento,
     }]);
     setCodigo(""); setPrecio(""); setExento(false); setInsumoQuery(""); setAddingLine(false);
@@ -598,6 +602,7 @@ export function LineasCotizacionAnual({ cotizacion, canEdit, onChange }: {
         codigo_igss: celdaTexto(cells[0]),
         precio_unitario: celdaNumero(cells[1]) ?? 0,
         exento_iva: celdaBooleano(cells[2]),
+        nombre: celdaTexto(cells[3]) || undefined,
       }));
       const res = await agregarLineasCotizacionAnualBulk(cotizacion.id, lineas);
       setResumen({ agregadas: res.agregadas, errores: res.errores });
@@ -754,11 +759,11 @@ export function LineasCotizacionAnual({ cotizacion, canEdit, onChange }: {
       {excelOpen && (
         <div className="space-y-2">
           <ExcelDropzone
-            headers={["Código IGSS", "Precio unitario", "Exento IVA"]}
-            ejemplo={["SC-122080", 45.5, "NO"]}
+            headers={["Código IGSS", "Precio unitario", "Exento IVA", "Nombre del insumo"]}
+            ejemplo={["SC-122080", 45.5, "NO", ""]}
             templateFilename="plantilla-lineas-cotizacion.xlsx"
             onFile={handleFile}
-            hint='Exento IVA: escribe "SI" o "NO". Una fila = un insumo con su precio pactado.'
+            hint='Exento IVA: escribe "SI" o "NO". Nombre del insumo: solo obligatorio cuando el código es "S/C" u otro que se repita entre varios insumos distintos — copia el nombre tal como aparece en el catálogo. Una fila = un insumo con su precio pactado.'
           />
           {uploading && <p className="text-sm text-gray-500 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Procesando archivo…</p>}
           {excelError && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{excelError}</div>}
