@@ -7,6 +7,7 @@ import { eq, sql, isNotNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
 import { conDetalle, type PagoFondoRotativo } from "./fondo-rotativo-pagos-actions";
+import { trazabilidadPorConsolidaciones } from "./trazabilidad-utils";
 import { readFile } from "fs/promises";
 import path from "path";
 
@@ -61,8 +62,10 @@ export async function getFondoDab60(): Promise<string | null> {
 
 export async function getOrdenesEnDab() {
   const ordenes = await db.select().from(ordenesCompra).where(eq(ordenesCompra.estado, "Pendiente DAB-60")).orderBy(sql`created_at ASC`);
+  const trazMap = await trazabilidadPorConsolidaciones(ordenes.map(o => o.consolidacion_id));
   return Promise.all(ordenes.map(async o => ({
     ...o, renglones: await gruposRenglonDeConsolidacion(o.consolidacion_id),
+    traz: trazMap.get(o.consolidacion_id) ?? null,
   })));
 }
 
@@ -72,8 +75,10 @@ export async function getOrdenesEnDab() {
 // hasta Compromiso.
 export async function getOrdenesDab60PendienteAprobacion() {
   const ordenes = await db.select().from(ordenesCompra).where(eq(ordenesCompra.estado, "DAB-60 Pendiente Aprobación")).orderBy(sql`created_at ASC`);
+  const trazMap = await trazabilidadPorConsolidaciones(ordenes.map(o => o.consolidacion_id));
   return Promise.all(ordenes.map(async o => ({
     ...o, renglones: await gruposRenglonDeConsolidacion(o.consolidacion_id),
+    traz: trazMap.get(o.consolidacion_id) ?? null,
   })));
 }
 

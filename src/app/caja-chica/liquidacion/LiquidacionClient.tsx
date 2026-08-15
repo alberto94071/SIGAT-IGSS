@@ -1,16 +1,20 @@
 "use client";
 import { useState } from "react";
-import { FileCheck, Loader2, CheckCircle2, AlertTriangle, X } from "lucide-react";
+import { FileCheck, Loader2, CheckCircle2, AlertTriangle, X, ChevronDown, ChevronRight } from "lucide-react";
 import { liquidarValePasajes, liquidarValeGastosVarios } from "@/lib/vale-actions";
+import TrazabilidadPanel from "@/components/TrazabilidadPanel";
+import type { TrazabilidadConsolidacion } from "@/lib/adjudicacion/trazabilidad-utils";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 type Vale = { id: number; numero: number; monto: number; monto_autorizado: number | null };
 type UsoPasajes = { total: number; polizas: { id: number; numero: number; total: number }[] } | null;
+type PagoGastoVario = { id: number; destinatario_nombre: string | null; total: number | null; numero_a04: number | null; anio_a04: number | null; traz: TrazabilidadConsolidacion | null };
+type UsoGastosVarios = { total: number; pagos: PagoGastoVario[] } | null;
 
 interface Props {
   valePasajes: Vale | null; usoPasajes: UsoPasajes;
-  valeGastosVarios: Vale | null; usoGastosVarios: number | null;
+  valeGastosVarios: Vale | null; usoGastosVarios: UsoGastosVarios;
 }
 
 export default function LiquidacionClient({ valePasajes, usoPasajes, valeGastosVarios, usoGastosVarios }: Props) {
@@ -31,8 +35,8 @@ export default function LiquidacionClient({ valePasajes, usoPasajes, valeGastosV
           titulo="Vale de Pago de Pasajes"
           vale={valePasajes}
           totalUsado={usoPasajes?.total ?? 0}
-          detalle={usoPasajes?.polizas.map(p => `Póliza ${p.numero}: ${Q(p.total)}`) ?? []}
           liquidando={liquidandoValePasajes}
+          detallePasajes={usoPasajes?.polizas ?? []}
           onLiquidar={async (boleta) => {
             setLiquidandoValePasajes(true);
             const res = await liquidarValePasajes(valePasajes.id, boleta);
@@ -46,9 +50,9 @@ export default function LiquidacionClient({ valePasajes, usoPasajes, valeGastosV
         <ValeCard
           titulo="Vale de Gastos Varios"
           vale={valeGastosVarios}
-          totalUsado={usoGastosVarios ?? 0}
-          detalle={[]}
+          totalUsado={usoGastosVarios?.total ?? 0}
           liquidando={liquidandoValeGastos}
+          detallePagos={usoGastosVarios?.pagos ?? []}
           onLiquidar={async (boleta) => {
             setLiquidandoValeGastos(true);
             const res = await liquidarValeGastosVarios(valeGastosVarios.id, boleta);
@@ -62,27 +66,38 @@ export default function LiquidacionClient({ valePasajes, usoPasajes, valeGastosV
 }
 
 function ValeCard({
-  titulo, vale, totalUsado, detalle, liquidando, onLiquidar,
+  titulo, vale, totalUsado, liquidando, onLiquidar, detallePasajes, detallePagos,
 }: {
-  titulo: string; vale: Vale; totalUsado: number; detalle: string[]; liquidando: boolean;
+  titulo: string; vale: Vale; totalUsado: number; liquidando: boolean;
   onLiquidar: (boleta: { numero_boleta_deposito?: string; monto_boleta_deposito?: number }) => Promise<{ ok: true } | { error: string }>;
+  detallePasajes?: { id: number; numero: number; total: number }[];
+  detallePagos?: PagoGastoVario[];
 }) {
   const monto = vale.monto_autorizado ?? vale.monto;
   const disponible = monto - totalUsado;
   const [modal, setModal] = useState(false);
   const [liquidado, setLiquidado] = useState(false);
+  const [expandido, setExpandido] = useState(false);
+  const [expandedPago, setExpandedPago] = useState<number | null>(null);
+  const hayDetalle = (detallePasajes && detallePasajes.length > 0) || (detallePagos && detallePagos.length > 0);
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-sm font-semibold text-gray-900">{titulo} — Vale {String(vale.numero).padStart(7, "0")}</p>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Total: {Q(monto)} · Usado: {Q(totalUsado)} · Disponible: {Q(disponible)}
-          </p>
-          {detalle.length > 0 && (
-            <p className="text-[11px] text-gray-400 mt-1">{detalle.join(" · ")}</p>
+        <div
+          className={`flex items-start gap-2 ${hayDetalle ? "cursor-pointer" : ""}`}
+          onClick={() => hayDetalle && setExpandido(p => !p)}>
+          {hayDetalle && (
+            <span className="text-gray-400 mt-0.5">
+              {expandido ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            </span>
           )}
+          <div>
+            <p className="text-sm font-semibold text-gray-900">{titulo} — Vale {String(vale.numero).padStart(7, "0")}</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Total: {Q(monto)} · Usado: {Q(totalUsado)} · Disponible: {Q(disponible)}
+            </p>
+          </div>
         </div>
         {liquidado ? (
           <span className="flex items-center gap-1.5 text-sm text-green-700"><CheckCircle2 className="w-4 h-4" /> Liquidado</span>
@@ -93,6 +108,40 @@ function ValeCard({
           </button>
         )}
       </div>
+
+      {expandido && detallePasajes && detallePasajes.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-gray-100 space-y-1">
+          {detallePasajes.map(p => (
+            <p key={p.id} className="text-xs text-gray-600">Póliza {p.numero}: <span className="font-mono font-semibold">{Q(p.total)}</span></p>
+          ))}
+        </div>
+      )}
+
+      {expandido && detallePagos && detallePagos.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+          {detallePagos.map(p => {
+            const rowExpanded = expandedPago === p.id;
+            return (
+              <div key={p.id} className="rounded-lg border border-gray-100 overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={() => setExpandedPago(prev => prev === p.id ? null : p.id)}>
+                  <div className="flex items-center gap-2 text-xs text-gray-700">
+                    {rowExpanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}
+                    <span className="font-mono font-semibold">{p.numero_a04 != null ? `A-04 ${p.numero_a04}/${p.anio_a04}` : "—"}</span>
+                    <span className="text-gray-400">{p.destinatario_nombre ?? "—"}</span>
+                  </div>
+                  <span className="font-mono font-semibold text-gray-900">{p.total != null ? Q(p.total) : "—"}</span>
+                </div>
+                {rowExpanded && (
+                  <div className="px-3 py-2 bg-gray-50">
+                    <TrazabilidadPanel titulo={`Detalle de A-04 ${p.numero_a04 ?? ""}/${p.anio_a04 ?? ""}`} traz={p.traz} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {modal && (
         <LiquidarModal

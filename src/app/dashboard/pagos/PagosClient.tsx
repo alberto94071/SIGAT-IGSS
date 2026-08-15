@@ -5,6 +5,8 @@ import { useState } from "react";
 import { Wallet, Loader2, CheckCircle2, X, Banknote, Coins, Undo2 } from "lucide-react";
 import { registrarFormaPagoCheque, registrarFormaPagoEfectivo, elegirChequeDirecto, devolverPagoASiaf04, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 import { getValesGastosVariosDisponibles } from "@/lib/vale-actions";
+import ExpandableRow from "@/components/ExpandableRow";
+import TrazabilidadPanel from "@/components/TrazabilidadPanel";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -17,6 +19,7 @@ export default function PagosClient({ pagos: init }: Props) {
   const [modalFor, setModalFor] = useState<PagoFondoRotativo | null>(null);
   const [devolviendo, setDevolviendo] = useState<number | null>(null);
   const [rowError, setRowError] = useState<Record<number, string>>({});
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   async function handleDevolver(p: PagoFondoRotativo) {
     if (!confirm(`¿Devolver el A-04 SIAF ${p.numero_a04 ?? ""}/${p.anio_a04 ?? ""} a Fondo Rotativo/SIAF-04? Se borrarán los datos de factura ingresados y tendrás que volver a generarlo.`)) return;
@@ -51,6 +54,7 @@ export default function PagosClient({ pagos: init }: Props) {
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
+                <th className="px-4 py-3 w-8"></th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">No. A-04 SIAF</th>
                 <th className="px-4 py-3 text-left">Destinatario</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Factura</th>
@@ -60,7 +64,15 @@ export default function PagosClient({ pagos: init }: Props) {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {pagos.map(p => (
-                <tr key={p.id} className="hover:bg-gray-50">
+                <ExpandableRow key={p.id} colSpan={6}
+                  expanded={expandedId === p.id}
+                  onToggle={() => setExpandedId(prev => prev === p.id ? null : p.id)}
+                  rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
+                  detail={<TrazabilidadPanel
+                    titulo={`Detalle de A-04 SIAF ${p.numero_a04 != null ? `${p.numero_a04}/${p.anio_a04}` : ""}`}
+                    cadena={[{ label: "FRI", value: p.fri_numero != null ? `${p.fri_numero}/${p.fri_anio}` : null }]}
+                    traz={p.traz}
+                  />}>
                   <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
                     {p.numero_a04 != null ? `${p.numero_a04}/${p.anio_a04}` : "—"}
                   </td>
@@ -71,7 +83,7 @@ export default function PagosClient({ pagos: init }: Props) {
                   <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
                     {p.total != null ? Q(p.total) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                     <div className="flex flex-col items-end gap-1">
                       <div className="flex justify-end gap-1.5">
                         <button onClick={() => handleDevolver(p)} disabled={devolviendo === p.id}
@@ -86,7 +98,7 @@ export default function PagosClient({ pagos: init }: Props) {
                       {rowError[p.id] && <p className="text-[10px] text-red-600 max-w-[200px] text-right">{rowError[p.id]}</p>}
                     </div>
                   </td>
-                </tr>
+                </ExpandableRow>
               ))}
             </tbody>
           </table>

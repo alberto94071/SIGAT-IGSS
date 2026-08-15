@@ -5,6 +5,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
 import { esGrupo100 } from "@/lib/programacion-constants";
+import { trazabilidadPorConsolidaciones, type TrazabilidadConsolidacion } from "./trazabilidad-utils";
 
 // true si TODOS los renglones de la consolidación de este pago son 100-199 —
 // esos van a Pago/FRI en vez de Bancos/Caja Chica-Vale.
@@ -73,6 +74,7 @@ export type PagoFondoRotativo = {
   // datos completos de cheque ahí mismo (grupo 100, va directo a Pendiente
   // FRI) o los deja para completar en Fondo Rotativo/Bancos (grupo 200/300).
   es_grupo_100: boolean;
+  traz: TrazabilidadConsolidacion | null;
 };
 
 export async function conDetalle(rows: (typeof fondoRotativoPagos.$inferSelect)[]): Promise<PagoFondoRotativo[]> {
@@ -80,7 +82,7 @@ export async function conDetalle(rows: (typeof fondoRotativoPagos.$inferSelect)[
   const consIds = rows.map(r => r.consolidacion_id);
   const valeIds = rows.map(r => r.vale_id).filter((v): v is number => v != null);
   const friIds = rows.map(r => r.fri_id).filter((v): v is number => v != null);
-  const [cons, vales, fris] = await Promise.all([
+  const [cons, vales, fris, trazMap] = await Promise.all([
     db.select().from(consolidaciones).where(inArray(consolidaciones.id, consIds)),
     valeIds.length > 0
       ? db.select().from(valesCajaChica).where(inArray(valesCajaChica.id, valeIds))
@@ -88,6 +90,7 @@ export async function conDetalle(rows: (typeof fondoRotativoPagos.$inferSelect)[
     friIds.length > 0
       ? db.select().from(friFondoRotativo).where(inArray(friFondoRotativo.id, friIds))
       : Promise.resolve([]),
+    trazabilidadPorConsolidaciones(consIds),
   ]);
   const consMap = new Map(cons.map(c => [c.id, c]));
   const valeMap = new Map(vales.map(v => [v.id, v]));
@@ -103,6 +106,7 @@ export async function conDetalle(rows: (typeof fondoRotativoPagos.$inferSelect)[
       vale_solicitante_nombre: vale?.solicitante_nombre ?? null,
       fri_numero: fri?.numero ?? null, fri_anio: fri?.anio ?? null,
       es_grupo_100: await esPagoGrupo100(r.consolidacion_id),
+      traz: trazMap.get(r.consolidacion_id) ?? null,
     };
   }));
 }

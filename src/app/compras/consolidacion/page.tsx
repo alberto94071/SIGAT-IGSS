@@ -22,7 +22,7 @@ export default async function ConsolidacionPage() {
   const solicitudes = solicitudesList.map(s => ({
     ...s,
     items: itemsList.filter(i => i.solicitud_id === s.id).map(i => ({
-      ...i, renglon: renglonMap.get(`${i.codigo_igss}::${i.subproducto}`) ?? null,
+      ...i, renglon: renglonMap.get(`${i.codigo_igss}::${i.subproducto}::${i.nombre}`) ?? null,
     })),
   }));
 

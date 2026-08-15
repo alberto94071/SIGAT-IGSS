@@ -127,11 +127,41 @@ export default function Siaf04Client({ consolidaciones: init }: Props) {
                     </tr>
                     {expanded && (
                       <tr className="bg-brand-50/30">
-                        <td colSpan={6} className="px-6 py-4">
+                        <td colSpan={6} className="px-6 py-4 space-y-3">
                           <div className="space-y-1 text-xs text-gray-600">
                             <p><span className="font-semibold">IVA:</span> {c.exento_iva ? "Exento" : "Con descuento 12%"}</p>
                             <p><span className="font-semibold">SIAFs:</span> {c.siaf.map(s => `${s.numero}/${s.anio}`).join(", ")}</p>
+                            {c.pre_orden && <p><span className="font-semibold">Pre-Orden:</span> {c.pre_orden}</p>}
+                            {c.numero_adjudicacion && <p><span className="font-semibold">N° de adjudicación:</span> {c.numero_adjudicacion}</p>}
                           </div>
+                          {c.precios.length > 0 && (
+                            <div className="rounded-xl border border-gray-200 overflow-hidden">
+                              <table className="w-full text-xs">
+                                <thead><tr className="bg-gray-100">
+                                  <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">Código IGSS</th>
+                                  <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">PPR</th>
+                                  <th className="px-3 py-1.5 text-left font-semibold text-gray-600">Insumo</th>
+                                  <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">Subproducto</th>
+                                  <th className="px-3 py-1.5 text-left font-semibold text-gray-600">Renglón</th>
+                                  <th className="px-3 py-1.5 text-right font-semibold text-gray-600">Cant.</th>
+                                  <th className="px-3 py-1.5 text-right font-semibold text-gray-600">Precio</th>
+                                </tr></thead>
+                                <tbody className="divide-y divide-gray-100 bg-white">
+                                  {c.precios.map((p, i) => (
+                                    <tr key={i}>
+                                      <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{p.codigo_igss ?? "—"}</td>
+                                      <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{p.codigo_ppr ?? "—"}</td>
+                                      <td className="px-3 py-2 text-gray-900 font-medium">{p.nombre}</td>
+                                      <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{p.subproducto}</td>
+                                      <td className="px-3 py-2 tabular-nums text-gray-600">{p.renglon ?? "—"}</td>
+                                      <td className="px-3 py-2 text-right tabular-nums text-gray-600">{p.cantidad.toLocaleString("es-GT")}</td>
+                                      <td className="px-3 py-2 text-right tabular-nums text-gray-700">{p.precio_unitario != null ? Q(p.precio_unitario) : "—"}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )}

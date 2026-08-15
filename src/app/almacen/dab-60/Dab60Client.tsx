@@ -6,6 +6,9 @@ import { Archive, X, Loader2, Send, CheckCircle, Pencil, Printer, Wallet } from 
 import { generarDab60, aprobarDab60, generarDab60FondoRotativo, type Dab60Data, type Dab60DataFr } from "@/lib/adjudicacion/dab60-actions";
 import type { PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 import RenglonBadges from "@/components/RenglonBadges";
+import ExpandableRow from "@/components/ExpandableRow";
+import TrazabilidadPanel from "@/components/TrazabilidadPanel";
+import type { TrazabilidadConsolidacion } from "@/lib/adjudicacion/trazabilidad-utils";
 
 type Orden = {
   id: number; numero: number; anio: number;
@@ -16,6 +19,7 @@ type Orden = {
   fecha_emision: string | null; lote: string | null; fecha_vencimiento: string | null;
   marca: string | null; modelo: string | null; serie: string | null;
   renglones: { renglon: number | null; subproducto: string; nombre: string; cantidad: number }[];
+  traz: TrazabilidadConsolidacion | null;
 };
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -43,6 +47,9 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
   const [dabFor, setDabFor] = useState<Orden | null>(null);
   const [dabFrFor, setDabFrFor] = useState<PagoFondoRotativo | null>(null);
   const [acciones, setAcciones] = useState<Record<number, { cargando: boolean; error: string | null }>>({});
+  const [expandedOrden, setExpandedOrden] = useState<number | null>(null);
+  const [expandedPendiente, setExpandedPendiente] = useState<number | null>(null);
+  const [expandedFr, setExpandedFr] = useState<number | null>(null);
 
   async function handleAprobar(id: number) {
     setAcciones(prev => ({ ...prev, [id]: { cargando: true, error: null } }));
@@ -69,6 +76,7 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
+                <th className="px-4 py-3 w-8"></th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Orden</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">No. Compromiso</th>
                 <th className="px-4 py-3 text-left">Proveedor</th>
@@ -78,7 +86,15 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
             </thead>
             <tbody className="divide-y divide-gray-100">
               {ordenes.map(o => (
-                <tr key={o.id} className="hover:bg-gray-50">
+                <ExpandableRow key={o.id} colSpan={6}
+                  expanded={expandedOrden === o.id}
+                  onToggle={() => setExpandedOrden(p => p === o.id ? null : o.id)}
+                  rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
+                  detail={<TrazabilidadPanel
+                    titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}/${o.anio}`}
+                    cadena={[{ label: "No. Compromiso", value: o.no_compromiso }]}
+                    traz={o.traz}
+                  />}>
                   <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
                     OC-{String(o.numero).padStart(3, "0")}/{o.anio}
                   </td>
@@ -91,13 +107,13 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
                   <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
                     {o.total != null ? Q(o.total) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                     <button onClick={() => setDabFor(o)}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors ml-auto">
                       <Archive className="w-3 h-3" /> Generar DAB-60
                     </button>
                   </td>
-                </tr>
+                </ExpandableRow>
               ))}
             </tbody>
           </table>
@@ -122,6 +138,7 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
+                <th className="px-4 py-3 w-8"></th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Orden</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">No./Serie Recibo</th>
                 <th className="px-4 py-3 text-left">Proveedor</th>
@@ -133,7 +150,19 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
               {pendientesAprobacion.map(o => {
                 const a = acciones[o.id];
                 return (
-                  <tr key={o.id} className="hover:bg-gray-50">
+                  <ExpandableRow key={o.id} colSpan={6}
+                    expanded={expandedPendiente === o.id}
+                    onToggle={() => setExpandedPendiente(p => p === o.id ? null : o.id)}
+                    rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
+                    detail={<TrazabilidadPanel
+                      titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}/${o.anio}`}
+                      cadena={[
+                        { label: "No. Compromiso", value: o.no_compromiso },
+                        { label: "No./Serie Recibo", value: `${o.no_recibo_almacen ?? "—"} / ${o.serie_recibo_almacen ?? "—"}` },
+                        { label: "Encargado Almacén", value: o.encargado_almacen },
+                      ]}
+                      traz={o.traz}
+                    />}>
                     <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
                       OC-{String(o.numero).padStart(3, "0")}/{o.anio}
                     </td>
@@ -148,7 +177,7 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
                     <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
                       {o.total != null ? Q(o.total) : "—"}
                     </td>
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
                         <Link href={`/almacen/dab-60/${o.id}/imprimir`}
                           title="Imprimir"
@@ -167,7 +196,7 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
                       </div>
                       {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[220px] text-right ml-auto">{a.error}</p>}
                     </td>
-                  </tr>
+                  </ExpandableRow>
                 );
               })}
             </tbody>
@@ -195,6 +224,7 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
+                <th className="px-4 py-3 w-8"></th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">No. A-04 SIAF</th>
                 <th className="px-4 py-3 text-left">Destinatario</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Factura</th>
@@ -204,7 +234,18 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
             </thead>
             <tbody className="divide-y divide-gray-100">
               {pagosFondoRotativo.map(p => (
-                <tr key={p.id} className="hover:bg-gray-50">
+                <ExpandableRow key={p.id} colSpan={6}
+                  expanded={expandedFr === p.id}
+                  onToggle={() => setExpandedFr(prev => prev === p.id ? null : p.id)}
+                  rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
+                  detail={<TrazabilidadPanel
+                    titulo={`Detalle de A-04 SIAF ${p.numero_a04 != null ? `${p.numero_a04}/${p.anio_a04}` : ""}`}
+                    cadena={[
+                      { label: "FRI", value: p.fri_numero != null ? `${p.fri_numero}/${p.fri_anio}` : null },
+                      { label: "Factura", value: `${p.serie_factura}-${p.no_factura}` },
+                    ]}
+                    traz={p.traz}
+                  />}>
                   <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
                     {p.numero_a04 != null ? `${p.numero_a04}/${p.anio_a04}` : "—"}
                   </td>
@@ -217,13 +258,13 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
                   <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
                     {p.total != null ? Q(p.total) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                     <button onClick={() => setDabFrFor(p)}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors ml-auto">
                       <Archive className="w-3 h-3" /> Generar DAB-60
                     </button>
                   </td>
-                </tr>
+                </ExpandableRow>
               ))}
             </tbody>
           </table>

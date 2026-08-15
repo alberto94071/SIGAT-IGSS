@@ -7,7 +7,10 @@ import {
 } from "lucide-react";
 import { generarOrdenDeCompra, enviarOrdenAPresupuesto, getPprsParaRenglones, type ConsolidacionPendienteOrden } from "@/lib/adjudicacion/ordenes-actions";
 import type { PprOpcion, ItemParaPpr } from "@/lib/adjudicacion/renglon-utils";
+import type { TrazabilidadConsolidacion } from "@/lib/adjudicacion/trazabilidad-utils";
 import RenglonBadges from "@/components/RenglonBadges";
+import ExpandableRow from "@/components/ExpandableRow";
+import TrazabilidadPanel from "@/components/TrazabilidadPanel";
 import { useRouter } from "next/navigation";
 
 type OrdenGenerada = {
@@ -19,6 +22,7 @@ type OrdenGenerada = {
   exento_iva: boolean; total: number | null; estado: string;
   codigo_ppr: string | null; fecha_notificacion_proveedor: string | null;
   renglones: { renglon: number | null; subproducto: string; nombre: string; cantidad: number }[];
+  traz: TrazabilidadConsolidacion | null;
 };
 
 // Misma clave que clavePprDeItem en renglon-utils.ts (duplicada acá porque
@@ -73,6 +77,8 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
   const [generarFor, setGenerarFor] = useState<ConsolidacionPendienteOrden | null>(null);
   const [enviando, setEnviando] = useState<number | null>(null);
   const [rowError, setRowError] = useState<Record<number, string>>({});
+  const [expandedPendiente, setExpandedPendiente] = useState<number | null>(null);
+  const [expandedProceso, setExpandedProceso] = useState<number | null>(null);
   const router = useRouter();
 
   const q = query.toLowerCase().trim();
@@ -119,6 +125,7 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
+                  <th className="px-4 py-3 w-8"></th>
                   <th className="px-4 py-3 text-left whitespace-nowrap">Referencia</th>
                   <th className="px-4 py-3 text-left whitespace-nowrap">Tipo</th>
                   <th className="px-4 py-3 text-left">Proveedor</th>
@@ -128,7 +135,11 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {pendientesF.map(c => (
-                  <tr key={c.id} className="hover:bg-gray-50">
+                  <ExpandableRow key={c.id} colSpan={6}
+                    expanded={expandedPendiente === c.id}
+                    onToggle={() => setExpandedPendiente(p => p === c.id ? null : c.id)}
+                    rowClassName="border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                    detail={<TrazabilidadPanel titulo={`Detalle de ${correlativo(c)}`} traz={c.traz} />}>
                     <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">{correlativo(c)}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${TIPO_COLOR[c.tipo_compra ?? ""] ?? "bg-gray-100 text-gray-600"}`}>{c.tipo_compra ?? "—"}</span>
@@ -141,13 +152,13 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
                     <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
                       {c.total != null ? Q(c.total) : "—"}
                     </td>
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                       <button onClick={() => setGenerarFor(c)}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors ml-auto">
                         <ShoppingCart className="w-3 h-3" /> Generar Orden de Compra
                       </button>
                     </td>
-                  </tr>
+                  </ExpandableRow>
                 ))}
               </tbody>
             </table>
@@ -168,6 +179,7 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
+                  <th className="px-4 py-3 w-8"></th>
                   <th className="px-4 py-3 text-left whitespace-nowrap">Orden</th>
                   <th className="px-4 py-3 text-left whitespace-nowrap">Código IGSS completo</th>
                   <th className="px-4 py-3 text-left">Proveedor</th>
@@ -178,7 +190,15 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {enProcesoF.map(o => (
-                  <tr key={o.id} className="hover:bg-gray-50">
+                  <ExpandableRow key={o.id} colSpan={7}
+                    expanded={expandedProceso === o.id}
+                    onToggle={() => setExpandedProceso(p => p === o.id ? null : o.id)}
+                    rowClassName="border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                    detail={<TrazabilidadPanel
+                      titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}/${o.anio}`}
+                      cadena={[{ label: "N° Orden", value: `${o.numero}/${o.anio}` }]}
+                      traz={o.traz}
+                    />}>
                     <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
                       OC-{String(o.numero).padStart(3, "0")}/{o.anio}
                     </td>
@@ -194,7 +214,7 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
                     <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
                       {o.total != null ? Q(o.total) : "—"}
                     </td>
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                       <div className="flex flex-col items-end gap-1">
                         <button onClick={() => handleEnviar(o)} disabled={enviando === o.id}
                           className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
@@ -203,7 +223,7 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
                         {rowError[o.id] && <p className="text-[10px] text-red-600 max-w-[160px] text-right">{rowError[o.id]}</p>}
                       </div>
                     </td>
-                  </tr>
+                  </ExpandableRow>
                 ))}
               </tbody>
             </table>
@@ -304,6 +324,7 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
       codigo_ppr: codigoPpr,
       fecha_notificacion_proveedor: fechaNotificacion,
       renglones: c.renglones.map(r => ({ ...r, codigo_ppr: seleccion[keyDe(r)] ?? r.codigo_ppr })),
+      traz: null, // se completa al refrescar (router.refresh() en onGenerada)
     };
 
     onGenerada(newOrden);

@@ -8,14 +8,14 @@ export default async function CajaChicaLiquidacionPage() {
   ]);
 
   const usoPasajes = valePasajes && valePasajes.estado === "Activo" ? await getUsoValePasajes(valePasajes.id) : null;
-  const totalGastosVarios = valeGastosVarios && valeGastosVarios.estado === "Activo" ? await getUsoValeGastosVarios(valeGastosVarios.id) : null;
+  const usoGastosVarios = valeGastosVarios && valeGastosVarios.estado === "Activo" ? await getUsoValeGastosVarios(valeGastosVarios.id) : null;
 
   return (
     <LiquidacionClient
       valePasajes={valePasajes?.estado === "Activo" ? valePasajes : null}
       usoPasajes={usoPasajes}
       valeGastosVarios={valeGastosVarios?.estado === "Activo" ? valeGastosVarios : null}
-      usoGastosVarios={totalGastosVarios}
+      usoGastosVarios={usoGastosVarios}
     />
   );
 }

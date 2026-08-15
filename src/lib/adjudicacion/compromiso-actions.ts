@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { requireModuloAccessAction } from "@/lib/modulo-access";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
+import { trazabilidadPorConsolidaciones } from "./trazabilidad-utils";
 import { presupuestoRenglones, programacionEntradas, programacionCompromisos } from "@/lib/schema";
 import { and } from "drizzle-orm";
 import { requiereDab60, cuatrimestreDeFecha } from "@/lib/programacion-constants";
@@ -30,16 +31,20 @@ async function requireEdit(): Promise<{ error: string } | { uid: number }> {
 
 export async function getOrdenesEnCompromiso() {
   const ordenes = await db.select().from(ordenesCompra).where(eq(ordenesCompra.estado, "En Compromiso")).orderBy(sql`created_at ASC`);
+  const trazMap = await trazabilidadPorConsolidaciones(ordenes.map(o => o.consolidacion_id));
   return Promise.all(ordenes.map(async o => ({
     ...o, renglones: await gruposRenglonDeConsolidacion(o.consolidacion_id),
+    traz: trazMap.get(o.consolidacion_id) ?? null,
   })));
 }
 
 /** Órdenes con el No. de Compromiso ya registrado, esperando que Presupuesto lo apruebe. */
 export async function getOrdenesCompromisoSolicitado() {
   const ordenes = await db.select().from(ordenesCompra).where(eq(ordenesCompra.estado, "Compromiso Solicitado")).orderBy(sql`created_at ASC`);
+  const trazMap = await trazabilidadPorConsolidaciones(ordenes.map(o => o.consolidacion_id));
   return Promise.all(ordenes.map(async o => ({
     ...o, renglones: await gruposRenglonDeConsolidacion(o.consolidacion_id),
+    traz: trazMap.get(o.consolidacion_id) ?? null,
   })));
 }
 

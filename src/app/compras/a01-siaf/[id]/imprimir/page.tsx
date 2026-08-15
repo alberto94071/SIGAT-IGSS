@@ -33,7 +33,7 @@ export default async function ImprimirPage({ params, searchParams }: Props) {
   // descripción ocupa todo el ancho de la casilla.
   const renglones = await renglonLookupMap();
   const mostrarSubproducto = items.some(i =>
-    renglones.get(`${i.codigo_igss}::${i.subproducto}`) === 182
+    renglones.get(`${i.codigo_igss}::${i.subproducto}::${i.nombre}`) === 182
   );
 
   // Firmantes seleccionados vienen por query param: "1,3"

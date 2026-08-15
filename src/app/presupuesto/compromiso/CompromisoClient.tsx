@@ -3,12 +3,16 @@ import { useState } from "react";
 import { FileCheck, X, Loader2, AlertTriangle, Hash, CheckCircle, XCircle } from "lucide-react";
 import { registrarCompromiso, aprobarCompromiso, rechazarCompromiso } from "@/lib/adjudicacion/compromiso-actions";
 import RenglonBadges from "@/components/RenglonBadges";
+import ExpandableRow from "@/components/ExpandableRow";
+import TrazabilidadPanel from "@/components/TrazabilidadPanel";
+import type { TrazabilidadConsolidacion } from "@/lib/adjudicacion/trazabilidad-utils";
 
 type Orden = {
   id: number; numero: number; anio: number; tipo_compra: string;
   proveedor_nit: string | null; proveedor_nombre: string | null;
   total: number | null; codigo_ppr: string | null; no_compromiso: string | null;
   renglones: { renglon: number | null; subproducto: string; nombre: string; cantidad: number }[];
+  traz: TrazabilidadConsolidacion | null;
 };
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -18,6 +22,8 @@ export default function CompromisoClient({ ordenes: init, solicitadas: initSolic
   const [solicitadas, setSolicitadas] = useState(initSolicitadas);
   const [comprometerFor, setComprometerFor] = useState<Orden | null>(null);
   const [acciones, setAcciones] = useState<Record<number, { cargando: boolean; error: string | null }>>({});
+  const [expandedOrden, setExpandedOrden] = useState<number | null>(null);
+  const [expandedSolicitada, setExpandedSolicitada] = useState<number | null>(null);
 
   const ejecutarAccion = async (id: number, accion: (id: number) => Promise<{ ok: true } | { error: string }>) => {
     setAcciones(prev => ({ ...prev, [id]: { cargando: true, error: null } }));
@@ -44,6 +50,7 @@ export default function CompromisoClient({ ordenes: init, solicitadas: initSolic
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
+                <th className="px-4 py-3 w-8"></th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Orden</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Código PPR</th>
                 <th className="px-4 py-3 text-left max-w-xs">Proveedor</th>
@@ -53,7 +60,11 @@ export default function CompromisoClient({ ordenes: init, solicitadas: initSolic
             </thead>
             <tbody className="divide-y divide-gray-100">
               {ordenes.map(o => (
-                <tr key={o.id} className="hover:bg-gray-50">
+                <ExpandableRow key={o.id} colSpan={6}
+                  expanded={expandedOrden === o.id}
+                  onToggle={() => setExpandedOrden(p => p === o.id ? null : o.id)}
+                  rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
+                  detail={<TrazabilidadPanel titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}`} traz={o.traz} />}>
                   <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
                     OC-{String(o.numero).padStart(3, "0")}
                   </td>
@@ -66,13 +77,13 @@ export default function CompromisoClient({ ordenes: init, solicitadas: initSolic
                   <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
                     {o.total != null ? Q(o.total) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                     <button onClick={() => setComprometerFor(o)}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors ml-auto">
                       <FileCheck className="w-3 h-3" /> Comprometer
                     </button>
                   </td>
-                </tr>
+                </ExpandableRow>
               ))}
             </tbody>
           </table>
@@ -97,6 +108,7 @@ export default function CompromisoClient({ ordenes: init, solicitadas: initSolic
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
+                <th className="px-4 py-3 w-8"></th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Orden</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">No. Compromiso</th>
                 <th className="px-4 py-3 text-left max-w-xs">Proveedor</th>
@@ -108,7 +120,15 @@ export default function CompromisoClient({ ordenes: init, solicitadas: initSolic
               {solicitadas.map(o => {
                 const a = acciones[o.id];
                 return (
-                  <tr key={o.id} className="hover:bg-gray-50">
+                  <ExpandableRow key={o.id} colSpan={6}
+                    expanded={expandedSolicitada === o.id}
+                    onToggle={() => setExpandedSolicitada(p => p === o.id ? null : o.id)}
+                    rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
+                    detail={<TrazabilidadPanel
+                      titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}`}
+                      cadena={[{ label: "No. Compromiso", value: o.no_compromiso }]}
+                      traz={o.traz}
+                    />}>
                     <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
                       OC-{String(o.numero).padStart(3, "0")}
                     </td>
@@ -121,7 +141,7 @@ export default function CompromisoClient({ ordenes: init, solicitadas: initSolic
                     <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
                       {o.total != null ? Q(o.total) : "—"}
                     </td>
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => ejecutarAccion(o.id, aprobarCompromiso)}
@@ -142,7 +162,7 @@ export default function CompromisoClient({ ordenes: init, solicitadas: initSolic
                       </div>
                       {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[260px] whitespace-normal break-words text-left ml-auto">{a.error}</p>}
                     </td>
-                  </tr>
+                  </ExpandableRow>
                 );
               })}
             </tbody>

@@ -5,6 +5,7 @@ import { eq, sql, and } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { requireModuloAccessAction } from "@/lib/modulo-access";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
+import { trazabilidadPorConsolidaciones } from "./trazabilidad-utils";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -15,16 +16,20 @@ async function requireEdit(): Promise<{ error: string } | { uid: number }> {
 
 export async function getOrdenesEnDevengado() {
   const ordenes = await db.select().from(ordenesCompra).where(eq(ordenesCompra.estado, "En Devengado")).orderBy(sql`created_at ASC`);
+  const trazMap = await trazabilidadPorConsolidaciones(ordenes.map(o => o.consolidacion_id));
   return Promise.all(ordenes.map(async o => ({
     ...o, renglones: await gruposRenglonDeConsolidacion(o.consolidacion_id),
+    traz: trazMap.get(o.consolidacion_id) ?? null,
   })));
 }
 
 /** Órdenes con No. de Devengado ya registrado, esperando que Presupuesto lo apruebe. */
 export async function getOrdenesDevengadoSolicitado() {
   const ordenes = await db.select().from(ordenesCompra).where(eq(ordenesCompra.estado, "Devengado Solicitado")).orderBy(sql`created_at ASC`);
+  const trazMap = await trazabilidadPorConsolidaciones(ordenes.map(o => o.consolidacion_id));
   return Promise.all(ordenes.map(async o => ({
     ...o, renglones: await gruposRenglonDeConsolidacion(o.consolidacion_id),
+    traz: trazMap.get(o.consolidacion_id) ?? null,
   })));
 }
 
@@ -35,8 +40,10 @@ export async function getOrdenesEnviadasADaf() {
   const ordenes = await db.select().from(ordenesCompra)
     .where(sql`${ordenesCompra.estado_devengado} IS NOT NULL`)
     .orderBy(sql`fecha_envio_daf DESC`);
+  const trazMap = await trazabilidadPorConsolidaciones(ordenes.map(o => o.consolidacion_id));
   return Promise.all(ordenes.map(async o => ({
     ...o, renglones: await gruposRenglonDeConsolidacion(o.consolidacion_id),
+    traz: trazMap.get(o.consolidacion_id) ?? null,
   })));
 }
 

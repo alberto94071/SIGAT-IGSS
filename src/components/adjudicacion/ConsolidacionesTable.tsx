@@ -180,6 +180,7 @@ export default function ConsolidacionesTable({ consolidaciones, acciones, onVerM
                                   <table className="w-full text-xs">
                                     <thead><tr className="bg-gray-100">
                                       <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">Código IGSS</th>
+                                      <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">PPR</th>
                                       <th className="px-3 py-1.5 text-left font-semibold text-gray-600">Insumo</th>
                                       <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">Subproducto</th>
                                       <th className="px-3 py-1.5 text-left font-semibold text-gray-600">Renglón</th>
@@ -190,6 +191,7 @@ export default function ConsolidacionesTable({ consolidaciones, acciones, onVerM
                                       {c.precios.map((p, i) => (
                                         <tr key={i}>
                                           <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{p.codigo_igss ?? "—"}</td>
+                                          <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{p.codigo_ppr ?? "—"}</td>
                                           <td className="px-3 py-2 text-gray-900 font-medium">{p.nombre}</td>
                                           <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{p.subproducto}</td>
                                           <td className="px-3 py-2 tabular-nums text-gray-600">{p.renglon ?? "—"}</td>
