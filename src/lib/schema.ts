@@ -46,6 +46,12 @@ export const configuracion = pgTable("configuracion", {
   nit_encargado_unidad:      text("nit_encargado_unidad").notNull().default("52392678"),
   // NIT del solicitante (Caja Chica) — el nombre y número de empleado ya existían.
   nit_solicitante: text("nit_solicitante").notNull().default(""),
+  // Cuenta bancaria del Fondo Rotativo — datos fijos que van siempre en el
+  // Voucher/Baucher impreso (ver ImprimirVoucherBancosClient.tsx), sin
+  // importar qué cheque se esté imprimiendo.
+  banco_nombre:  text("banco_nombre").notNull().default(""),
+  cuenta_numero: text("cuenta_numero").notNull().default(""),
+  cuenta_nombre: text("cuenta_nombre").notNull().default(""),
   // Marca el último cuatrimestre ya cerrado (formato "2026-1") para la
   // caducidad de saldo programado — ver cierre-cuatrimestre.ts.
   ultimo_cuatrimestre_cerrado: text("ultimo_cuatrimestre_cerrado"),
@@ -237,6 +243,12 @@ export const fondoRotativoPagos = pgTable("fondo_rotativo_pagos", {
   fri_id:                integer("fri_id").references(() => friFondoRotativo.id),
   creado_por:            integer("creado_por").references(() => usuarios.id),
   created_at:            text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+  // Libro Conciliación (Fondo Rotativo) — marca si este cheque ya se cotejó
+  // contra el estado de cuenta bancario. Solo aplica a pagos con cheque ya
+  // emitido; independiente de fri_id/estado (un cheque puede conciliarse
+  // aunque su compra siga en trámite más adelante en el flujo).
+  conciliado:            boolean("conciliado").notNull().default(false),
+  fecha_conciliacion:    text("fecha_conciliacion"),
 });
 
 // ─── Movimientos bancarios (hoja Ban) ─────────────────────────────────────────

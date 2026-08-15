@@ -1,7 +1,7 @@
 "use server";
 import { db } from "@/lib/db";
-import { fondoRotativoPagos, consolidaciones, valesCajaChica, friFondoRotativo, presupuestoRenglones } from "@/lib/schema";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { fondoRotativoPagos, consolidaciones, valesCajaChica, friFondoRotativo, presupuestoRenglones, configuracion } from "@/lib/schema";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
 import { esGrupo100 } from "@/lib/programacion-constants";
@@ -68,7 +68,7 @@ export type PagoFondoRotativo = {
   monto_cheque: number | null; monto_letras: string | null; concepto_voucher: string | null;
   estado: string;
   numero_a04: number | null; anio_a04: number | null;
-  total: number | null; tipo_compra: string | null;
+  total: number | null; tipo_compra: string | null; exento_iva: boolean;
   fri_id: number | null; fri_numero: number | null; fri_anio: number | null;
   // true si TODOS los renglones de esta compra son 100-199 — ver esGrupo100 en
   // programacion-constants.ts. Determina si Fondo Rotativo/Pagos pide los
@@ -103,7 +103,7 @@ export async function conDetalle(rows: (typeof fondoRotativoPagos.$inferSelect)[
     return {
       ...r,
       numero_a04: c?.numero_a04 ?? null, anio_a04: c?.anio_a04 ?? null,
-      total: c?.total ?? null, tipo_compra: c?.tipo_compra ?? null,
+      total: c?.total ?? null, tipo_compra: c?.tipo_compra ?? null, exento_iva: c?.exento_iva ?? false,
       vale_solicitante_nombre: vale?.solicitante_nombre ?? null,
       fri_numero: fri?.numero ?? null, fri_anio: fri?.anio ?? null,
       es_grupo_100: await esPagoGrupo100(r.consolidacion_id),
@@ -120,6 +120,118 @@ export async function getPagosPendientesFormaPago(): Promise<PagoFondoRotativo[]
 export async function getLibroBancos(): Promise<PagoFondoRotativo[]> {
   const rows = await db.select().from(fondoRotativoPagos).where(eq(fondoRotativoPagos.estado, "Enviado a Bancos"));
   return conDetalle(rows);
+}
+
+// ─── Libro Bancos (registro permanente) ────────────────────────────────────
+// A diferencia de getLibroBancos (que es la bandeja de trabajo de "Enviado a
+// Bancos" pendientes de completar voucher), este es el libro real: TODO
+// cheque ya emitido, sin importar en qué estado siga después, con saldo
+// corriente estilo chequera (saldo anterior ± monto = saldo nuevo).
+//
+// El saldo arranca en configuracion.monto_fondo_rotativo (el monto asignado
+// al fondo) y de ahí se resta cada cheque emitido (fecha_emision_cheque) y se
+// suma cada Reintegro FRI ya recibido (fecha_reintegro) — ambos intercalados
+// en orden cronológico. Ojo: no todo cheque se reintegra — los de renglón
+// 200-300 quedan en "Enviado a Bancos" sin pasar por FRI (ver el estado en
+// schema.ts), así que el saldo de este libro asume que esos gastos salen del
+// mismo fondo sin reposición. Si el cliente confirma un criterio distinto
+// para el saldo bancario real, este cálculo hay que ajustarlo.
+export type MovimientoBanco = {
+  id: string; fecha: string; tipo: "Cheque" | "Reintegro FRI";
+  descripcion: string; beneficiario: string | null; numero_cheque: string | null;
+  debe: number; haber: number; saldo: number;
+  numero_a04: number | null; anio_a04: number | null; pagoId: number | null;
+};
+
+// ─── Libro Conciliación ─────────────────────────────────────────────────────
+// "Similar al de Bancos" (pedido del cliente): mismo registro de cheques
+// emitidos, pero acá cada uno se marca si ya se cotejó contra el estado de
+// cuenta del banco — independiente de en qué parte del flujo de la compra
+// vaya después. No incluye los Reintegro FRI del Libro Bancos: la
+// conciliación bancaria es sobre los cheques que salieron de la cuenta, no
+// sobre los depósitos de reintegro (esos se concilian por separado, contra
+// el estado de cuenta, el día que el cliente lo pida).
+export type MovimientoConciliacion = MovimientoBanco & { conciliado: boolean; fecha_conciliacion: string | null };
+
+export async function getLibroConciliacion(): Promise<MovimientoConciliacion[]> {
+  const movimientos = (await getLibroBancosCompleto()).filter(m => m.tipo === "Cheque" && m.pagoId != null);
+  if (movimientos.length === 0) return [];
+  const chequeIds = movimientos.map(m => m.pagoId as number);
+  const rows = await db.select({
+    id: fondoRotativoPagos.id, conciliado: fondoRotativoPagos.conciliado, fecha_conciliacion: fondoRotativoPagos.fecha_conciliacion,
+  }).from(fondoRotativoPagos).where(inArray(fondoRotativoPagos.id, chequeIds));
+  const map = new Map(rows.map(r => [r.id, r]));
+  return movimientos.map(m => ({
+    ...m,
+    conciliado: map.get(m.pagoId as number)?.conciliado ?? false,
+    fecha_conciliacion: map.get(m.pagoId as number)?.fecha_conciliacion ?? null,
+  }));
+}
+
+export async function marcarConciliado(pagoId: number, fecha: string): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireCompras();
+    if ("error" in check) return check;
+    if (!fecha.trim()) return { error: "La fecha de conciliación es obligatoria" };
+    await db.update(fondoRotativoPagos).set({ conciliado: true, fecha_conciliacion: fecha.trim() })
+      .where(eq(fondoRotativoPagos.id, pagoId));
+    return { ok: true };
+  } catch {
+    return { error: "Error al marcar como conciliado" };
+  }
+}
+
+export async function desmarcarConciliado(pagoId: number): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireCompras();
+    if ("error" in check) return check;
+    await db.update(fondoRotativoPagos).set({ conciliado: false, fecha_conciliacion: null })
+      .where(eq(fondoRotativoPagos.id, pagoId));
+    return { ok: true };
+  } catch {
+    return { error: "Error al desmarcar" };
+  }
+}
+
+export async function getLibroBancosCompleto(): Promise<MovimientoBanco[]> {
+  const [config, chequesRows, reintegros] = await Promise.all([
+    db.select({ monto_fondo_rotativo: configuracion.monto_fondo_rotativo }).from(configuracion).limit(1),
+    db.select().from(fondoRotativoPagos).where(isNotNull(fondoRotativoPagos.numero_cheque)),
+    db.select().from(friFondoRotativo).where(isNotNull(friFondoRotativo.fecha_reintegro)),
+  ]);
+  const cheques = await conDetalle(chequesRows);
+
+  type Evento = {
+    fecha: string; orden: number; tipo: "Cheque" | "Reintegro FRI";
+    descripcion: string; beneficiario: string | null; numero_cheque: string | null; monto: number;
+    numero_a04: number | null; anio_a04: number | null; pagoId: number | null;
+  };
+  const eventos: Evento[] = [
+    ...cheques.map((p): Evento => ({
+      fecha: p.fecha_emision_cheque ?? "", orden: p.id, tipo: "Cheque",
+      descripcion: p.concepto_voucher ?? `A-04 ${p.numero_a04 ?? "—"}/${p.anio_a04 ?? "—"}`,
+      beneficiario: p.destinatario_nombre, numero_cheque: p.numero_cheque,
+      monto: p.monto_cheque ?? p.total ?? 0,
+      numero_a04: p.numero_a04, anio_a04: p.anio_a04, pagoId: p.id,
+    })),
+    ...reintegros.map((f): Evento => ({
+      fecha: f.fecha_reintegro ?? "", orden: -f.id, tipo: "Reintegro FRI",
+      descripcion: `Reintegro FRI ${f.numero}/${f.anio}`, beneficiario: null, numero_cheque: null,
+      monto: f.total, numero_a04: null, anio_a04: null, pagoId: null,
+    })),
+  ];
+  eventos.sort((a, b) => a.fecha === b.fecha ? a.orden - b.orden : a.fecha.localeCompare(b.fecha));
+
+  let saldo = config[0]?.monto_fondo_rotativo ?? 0;
+  return eventos.map((e, i) => {
+    saldo += e.tipo === "Cheque" ? -e.monto : e.monto;
+    return {
+      id: `${e.tipo}-${i}`, fecha: e.fecha, tipo: e.tipo, descripcion: e.descripcion,
+      beneficiario: e.beneficiario, numero_cheque: e.numero_cheque,
+      debe: e.tipo === "Cheque" ? e.monto : 0, haber: e.tipo === "Reintegro FRI" ? e.monto : 0,
+      saldo, numero_a04: e.numero_a04, anio_a04: e.anio_a04, pagoId: e.pagoId,
+    };
+  });
 }
 
 // Historial completo de Fondo Rotativo — toda consolidación que ya generó su

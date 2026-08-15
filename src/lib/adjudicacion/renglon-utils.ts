@@ -97,9 +97,12 @@ export async function getPprsPorItems(items: ItemParaPpr[]): Promise<Record<stri
 
 // Persiste la presentación/PPR elegida por el usuario para cada renglón de una
 // consolidación — se guarda en siaf_compras_items.codigo_ppr (todos los ítems
-// que comparten codigo_igss::subproducto dentro de esa consolidación), para
-// que quede disponible en la Orden de Compra, el SIAF-04 y su impresión.
-export async function guardarPprSeleccion(consolidacionId: number, seleccion: { codigo_igss: string; subproducto: string; codigo_ppr: string }[]): Promise<void> {
+// que comparten codigo_igss::subproducto::nombre dentro de esa consolidación),
+// para que quede disponible en la Orden de Compra, el SIAF-04 y su impresión.
+// El nombre entra al WHERE por la misma razón que en el resto del código: un
+// codigo_igss "S/C" se reutiliza entre insumos distintos que comparten
+// subproducto — sin el nombre, guardar el PPR de uno pisaba el de otro.
+export async function guardarPprSeleccion(consolidacionId: number, seleccion: { codigo_igss: string; subproducto: string; nombre: string; codigo_ppr: string }[]): Promise<void> {
   if (seleccion.length === 0) return;
   const siafIds = (await db.select({ id: siafCompras.id }).from(siafCompras)
     .where(eq(siafCompras.consolidacion_id, consolidacionId))).map(s => s.id);
@@ -111,6 +114,7 @@ export async function guardarPprSeleccion(consolidacionId: number, seleccion: { 
         inArray(siafComprasItems.solicitud_id, siafIds),
         eq(siafComprasItems.codigo_igss, s.codigo_igss),
         eq(siafComprasItems.subproducto, s.subproducto),
+        eq(siafComprasItems.nombre, s.nombre),
       ));
   }
 }
@@ -193,6 +197,7 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
     codigo_ppr:          siafComprasItems.codigo_ppr,
     subproducto:         siafComprasItems.subproducto,
     nombre:              siafComprasItems.nombre,
+    unidad_medida:       siafComprasItems.unidad_medida,
     cantidad_solicitada: siafComprasItems.cantidad_solicitada,
     precio_unitario:     siafComprasItems.precio_unitario,
   }).from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds));
@@ -221,7 +226,12 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
         renglon, codigo_igss: item.codigo_igss, codigo_ppr: item.codigo_ppr,
         subproducto: item.subproducto, nombre: item.nombre, cantidad: item.cantidad_solicitada,
         total: itemTotal,
-        unidad_medida: unidades.get(fichaKey) ?? null,
+        // El snapshot guardado al crear el SIAF (item.unidad_medida) tiene
+        // prioridad — Base de Datos Central solo se usa de respaldo cuando
+        // ese snapshot vino vacío (ver mismo patrón en a01-siaf/actions.ts),
+        // y su búsqueda además exige codigo_igss real, así que nunca cubre
+        // insumos "S/C".
+        unidad_medida: item.unidad_medida?.trim() || unidades.get(fichaKey) || null,
         codigo: codigos.get(fichaKey) ?? null,
       });
     }

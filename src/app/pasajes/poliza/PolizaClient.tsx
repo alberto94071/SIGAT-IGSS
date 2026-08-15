@@ -1,9 +1,9 @@
 "use client";
 import { fechaGuatemala } from "@/lib/date-utils";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
-import { FileCheck, Printer, ChevronDown, ChevronRight, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { FileCheck, Printer, ChevronDown, ChevronRight, Loader2, AlertTriangle, CheckCircle2, Search } from "lucide-react";
 import { generarPoliza, asignarValeYEnviarALiquidar, getPolizaConDetalle } from "@/lib/poliza-actions";
 
 type Dpd23 = {
@@ -32,6 +32,15 @@ export default function PolizaClient({
   const [errorAsignar, setErrorAsignar] = useState("");
   const [expandido, setExpandido] = useState<number | null>(null);
   const [detalle, setDetalle] = useState<Record<number, Item[]>>({});
+  const [query, setQuery] = useState("");
+
+  const q = query.toLowerCase().trim();
+  const polizasFiltradas = useMemo(() => !q ? polizas : polizas.filter(p =>
+    String(p.numero).includes(q) ||
+    p.fecha.includes(q) ||
+    p.estado.toLowerCase().includes(q) ||
+    (p.fri_numero != null && String(p.fri_numero).includes(q))
+  ), [polizas, q]);
 
   function toggleDpd23(id: number) {
     setSeleccionDpd23(prev => {
@@ -176,6 +185,13 @@ export default function PolizaClient({
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />{errorAsignar}
           </div>
         )}
+        <div className="mb-2">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input className="input pl-9" placeholder="Buscar por No. de póliza, fecha, estado, FRI…"
+              value={query} onChange={e => setQuery(e.target.value)} />
+          </div>
+        </div>
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -191,7 +207,7 @@ export default function PolizaClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {polizas.map(p => (
+                {polizasFiltradas.map(p => (
                   <>
                     <tr key={p.id} className={`hover:bg-gray-50 ${seleccionPolizas.has(p.id) ? "bg-brand-50" : ""}`}>
                       {canEdit && (
@@ -266,8 +282,10 @@ export default function PolizaClient({
                 ))}
               </tbody>
             </table>
-            {polizas.length === 0 && (
-              <div className="text-center py-10 text-gray-400 text-sm">Aún no se ha generado ninguna póliza.</div>
+            {polizasFiltradas.length === 0 && (
+              <div className="text-center py-10 text-gray-400 text-sm">
+                {q ? "Sin resultados para esa búsqueda." : "Aún no se ha generado ninguna póliza."}
+              </div>
             )}
           </div>
         </div>

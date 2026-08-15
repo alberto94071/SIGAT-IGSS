@@ -12,6 +12,7 @@ type Config = {
   nombre_solicitante: string; numero_empleado_sol: string; resolucion_fondo: string;
   nombre_unidad_ejecutora?: string; centro_costo_nombre?: string;
   direccion_unidad?: string; justificacion_siaf?: string;
+  banco_nombre?: string; cuenta_numero?: string; cuenta_nombre?: string;
 };
 type Firmante = { id: number; nombre: string; cargo: string; unidad: string | null; activo: boolean };
 
@@ -134,6 +135,16 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
             helper="Saldo líquido disponible ahora mismo para autorizar vales. Baja con cada cheque y sube con las boletas de depósito de liquidaciones." />
         </div>
         <Field label="Resolución del fondo" k="resolucion_fondo" />
+      </section>
+
+      {/* Cuenta bancaria — datos fijos que van siempre en el Voucher/Baucher impreso */}
+      <section className="card p-5 space-y-4">
+        <h2 className="font-semibold text-gray-700 text-sm uppercase tracking-wide">Cuenta bancaria (Voucher/Baucher)</h2>
+        <Field label="Nombre del banco" k="banco_nombre" />
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Número de cuenta" k="cuenta_numero" />
+          <Field label="Nombre de la cuenta" k="cuenta_nombre" />
+        </div>
       </section>
 
       {/* Responsables */}

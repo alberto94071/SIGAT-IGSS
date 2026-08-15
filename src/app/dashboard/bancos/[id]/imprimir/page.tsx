@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { fondoRotativoPagos, configuracion } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getPosicionesImpresion } from "@/lib/impresion-posiciones-actions";
+import { getLibroBancosCompleto } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 import ImprimirVoucherBancosClient from "./ImprimirVoucherBancosClient";
 
 export default async function ImprimirVoucherBancosPage({ params }: { params: Promise<{ id: string }> }) {
@@ -11,12 +12,20 @@ export default async function ImprimirVoucherBancosPage({ params }: { params: Pr
   if (!session) redirect("/login");
 
   const { id } = await params;
-  const [pago, config, posicionesGuardadas] = await Promise.all([
+  const [pago, config, posicionesGuardadas, libroBancos] = await Promise.all([
     db.select().from(fondoRotativoPagos).where(eq(fondoRotativoPagos.id, Number(id))).limit(1).then(r => r[0]),
     db.select().from(configuracion).limit(1).then(r => r[0]),
     getPosicionesImpresion("cheque"),
+    getLibroBancosCompleto(),
   ]);
   if (!pago || !pago.numero_cheque || pago.estado !== "Enviado a Bancos") notFound();
+
+  // El saldo corriente de este cheque específico ya lo calculó Libro Bancos
+  // (mismo orden cronológico, ver getLibroBancosCompleto) — se busca por
+  // pagoId en vez de recalcularlo aquí para no desincronizarse de esa fuente.
+  const movimiento = libroBancos.find(m => m.pagoId === pago.id);
+  const saldoNuevo = movimiento?.saldo ?? null;
+  const saldoAnterior = movimiento ? movimiento.saldo + movimiento.debe - movimiento.haber : null;
 
   return (
     <ImprimirVoucherBancosClient
@@ -31,8 +40,11 @@ export default async function ImprimirVoucherBancosPage({ params }: { params: Pr
       }}
       municipio={config?.municipio ?? "Tacaná, San Marcos"}
       codigoContable={config?.codigo_contable ?? "12.07.04"}
-      solicitante={config?.nombre_solicitante ?? ""}
-      jefe={config?.nombre_encargado_unidad ?? ""}
+      bancoNombre={config?.banco_nombre ?? ""}
+      cuentaNumero={config?.cuenta_numero ?? ""}
+      cuentaNombre={config?.cuenta_nombre ?? ""}
+      saldoAnterior={saldoAnterior}
+      saldoNuevo={saldoNuevo}
       posicionesGuardadas={posicionesGuardadas}
     />
   );

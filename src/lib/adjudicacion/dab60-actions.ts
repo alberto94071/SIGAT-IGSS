@@ -2,7 +2,7 @@
 import { fechaHoraGuatemala } from "@/lib/date-utils";
 
 import { db } from "@/lib/db";
-import { ordenesCompra, dab60Posiciones, fondoRotativoPagos } from "@/lib/schema";
+import { ordenesCompra, dab60Posiciones, fondoRotativoPagos, consolidaciones } from "@/lib/schema";
 import { eq, sql, isNotNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
@@ -103,6 +103,45 @@ export async function getOrdenesArchivadasAlmacen(offset: number = 0) {
     ...o, renglones: await gruposRenglonDeConsolidacion(o.consolidacion_id),
   })));
   return { ordenes, hasMore };
+}
+
+// Igual que getOrdenesArchivadasAlmacen, pero para los DAB-60 de la vía
+// Fondo Rotativo — antes no aparecían en ningún archivo (el DAB-60 de un
+// pago Regularizado solo se podía imprimir desde su bandeja activa, y
+// dejaba de ser accesible en cuanto el pago avanzaba de etapa).
+export async function getPagosFondoRotativoArchivados(offset: number = 0) {
+  const limit = ARCHIVO_ALMACEN_PAGE_SIZE;
+  const pagina = await db.select({
+    id: fondoRotativoPagos.id,
+    consolidacion_id: fondoRotativoPagos.consolidacion_id,
+    estado: fondoRotativoPagos.estado,
+    dab60_generado_en: fondoRotativoPagos.dab60_generado_en,
+    dab60_no_recibo_almacen: fondoRotativoPagos.dab60_no_recibo_almacen,
+    dab60_serie_recibo_almacen: fondoRotativoPagos.dab60_serie_recibo_almacen,
+    dab60_encargado_almacen: fondoRotativoPagos.dab60_encargado_almacen,
+    dab60_lote: fondoRotativoPagos.dab60_lote,
+    dab60_fecha_vencimiento: fondoRotativoPagos.dab60_fecha_vencimiento,
+    dab60_marca: fondoRotativoPagos.dab60_marca,
+    dab60_modelo: fondoRotativoPagos.dab60_modelo,
+    dab60_serie: fondoRotativoPagos.dab60_serie,
+    no_factura: fondoRotativoPagos.no_factura,
+    serie_factura: fondoRotativoPagos.serie_factura,
+    numero_a04: consolidaciones.numero_a04,
+    anio_a04: consolidaciones.anio_a04,
+    proveedor_nit: consolidaciones.proveedor_nit,
+    proveedor_nombre: consolidaciones.proveedor_nombre,
+    total: consolidaciones.total,
+  }).from(fondoRotativoPagos)
+    .innerJoin(consolidaciones, eq(consolidaciones.id, fondoRotativoPagos.consolidacion_id))
+    .where(isNotNull(fondoRotativoPagos.dab60_generado_en))
+    .orderBy(sql`dab60_generado_en DESC`)
+    .limit(limit + 1).offset(offset);
+  const hasMore = pagina.length > limit;
+  const pagosPagina = pagina.slice(0, limit);
+  const pagos = await Promise.all(pagosPagina.map(async p => ({
+    ...p, renglones: await gruposRenglonDeConsolidacion(p.consolidacion_id),
+  })));
+  return { pagos, hasMore };
 }
 
 export type Dab60Data = {

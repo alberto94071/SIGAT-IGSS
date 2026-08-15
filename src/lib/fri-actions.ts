@@ -4,6 +4,8 @@ import { fondoRotativoPagos, friFondoRotativo, consolidaciones, configuracion, p
 import { eq, inArray, sql, desc, and, isNull, isNotNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { conDetalle, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import { gruposRenglonDeConsolidacion } from "@/lib/adjudicacion/renglon-utils";
+import { netoDeIva } from "@/lib/iva-utils";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -47,6 +49,44 @@ export async function getFriConDetalle(friId: number): Promise<{ fri: Fri; pagos
       .from(polizas).where(eq(polizas.fri_id, friId)),
   ]);
   return { fri, pagos: await conDetalle(pagoRows), polizas: polizaRows };
+}
+
+export type FriDocumento = { referencia: string; detalle: string; monto: number };
+export type FriGrupoRenglon = { renglon: string; documentos: FriDocumento[]; subtotal: number };
+
+// Agrupa el contenido de un FRI por renglón presupuestario para el reporte
+// impreso — cada pago resuelve su(s) renglón(es) reales vía
+// gruposRenglonDeConsolidacion (mismo helper que usan Órdenes/DAB-60/A-04) y
+// aporta su monto SIN IVA (igual que se reserva en presupuesto_renglones).
+// Las pólizas de pasajes no tienen un renglón individual en el sistema —
+// bajo el mismo criterio con que se comprometen (no se les descuenta IVA
+// aparte), se agrupan bajo el rótulo fijo "Pasajes".
+export async function agruparFriPorRenglon(pagos: PagoFondoRotativo[], polizasFri: PolizaFri[]): Promise<FriGrupoRenglon[]> {
+  const grupos = new Map<string, FriGrupoRenglon>();
+  const agregar = (renglon: string, doc: FriDocumento) => {
+    if (!grupos.has(renglon)) grupos.set(renglon, { renglon, documentos: [], subtotal: 0 });
+    const g = grupos.get(renglon)!;
+    g.documentos.push(doc);
+    g.subtotal += doc.monto;
+  };
+
+  for (const p of pagos) {
+    const renglones = await gruposRenglonDeConsolidacion(p.consolidacion_id);
+    const referencia = p.numero_a04 != null ? `A-04 ${p.numero_a04}/${p.anio_a04}` : "—";
+    for (const r of renglones) {
+      const monto = p.exento_iva ? r.total : netoDeIva(r.total);
+      agregar(String(r.renglon ?? "—"), {
+        referencia,
+        detalle: `${p.destinatario_nombre ?? "—"} · ${r.nombre} · ${p.forma_pago === "cheque" ? `Cheque ${p.numero_cheque ?? ""}` : `Vale ${p.numero_vale ?? ""}`}`,
+        monto,
+      });
+    }
+  }
+  for (const pz of polizasFri) {
+    agregar("Pasajes", { referencia: `Póliza ${pz.numero}`, detalle: `Cuadro de Caja del ${pz.fecha}`, monto: pz.total });
+  }
+
+  return [...grupos.values()].sort((a, b) => a.renglon.localeCompare(b.renglon, "es", { numeric: true }));
 }
 
 export async function getFriPorNumero(numero: number, anio: number) {

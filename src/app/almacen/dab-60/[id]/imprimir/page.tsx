@@ -52,8 +52,13 @@ export default async function ImprimirDab60Page({ params }: Props) {
   const renglonesUnicos = [...new Set(renglones.map(r => r.renglon).filter((r): r is number => r != null))];
   const descripcion = [...new Set(renglones.map(r => r.nombre.trim()).filter(Boolean))].join("; ");
 
+  // El "LUGAR Y FECHA" del formulario debe ser la fecha de ingreso del
+  // producto a bodega (dato que se captura al generar el DAB-60), no la
+  // fecha en que se creó la Orden de Compra — si todavía no se capturó,
+  // se cae de vuelta a la fecha de la orden.
+  const fechaFormulario = orden.fecha_ingreso_producto ?? orden.fecha;
   const datos = {
-    lugarFecha: cfg ? `${cfg.municipio}, ${fechaLarga(orden.fecha)}` : fechaLarga(orden.fecha),
+    lugarFecha: cfg ? `${cfg.municipio}, ${fechaLarga(fechaFormulario)}` : fechaLarga(fechaFormulario),
     dependencia: cfg ? `${cfg.codigo_contable}-${cfg.nombre_unidad}`.toUpperCase() : "",
     claveAdministrativa: cfg?.codigo_centro_costo ?? "",
     ordenCompra: `${orden.numero}/${orden.anio}`,

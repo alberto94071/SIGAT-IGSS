@@ -4,7 +4,7 @@ import Link from "next/link";
 import {
   RotateCcw, MapPin, Bus, ArrowRight, Construction,
   ShoppingCart, Database, Calculator, Wallet,
-  Archive, Library, Gavel, FileSignature, UserCog, Route
+  Archive, Gavel, FileSignature, UserCog, Route
 } from "lucide-react";
 import { type Modulo, type Rol } from "@/lib/permisos";
 import { getPermisosFrescos } from "@/lib/modulo-access";
@@ -116,19 +116,6 @@ const MODULES = [
     bgLight: "bg-teal-50",
     available: true,
     permiso: "mod_almacen" as Modulo | null,
-  },
-  {
-    id: "libros",
-    title: "Libros",
-    description: "Libro de banco, libro de conciliación y libro de caja chica.",
-    href: "/libros",
-    icon: Library,
-    color: "bg-slate-500",
-    ring: "ring-slate-200",
-    textColor: "text-slate-600",
-    bgLight: "bg-slate-50",
-    available: false,
-    permiso: "mod_libros" as Modulo | null,
   },
   {
     id: "junta-adjudicadora",

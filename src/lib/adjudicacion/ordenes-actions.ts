@@ -74,7 +74,7 @@ export async function getOrdenesEnProceso() {
 // (cruzado con las cotizaciones) entre la cantidad total, para no pedirle al
 // usuario un dato que el sistema ya conoce.
 export async function generarOrdenDeCompra(consolidacionId: number, data: {
-  seleccionPpr: { codigo_igss: string; subproducto: string; codigo_ppr: string }[];
+  seleccionPpr: { codigo_igss: string; subproducto: string; nombre: string; codigo_ppr: string }[];
   numero_orden: string; fecha_notificacion: string;
 }): Promise<{ ok: true, ordenId: number } | { error: string }> {
   try {
@@ -101,7 +101,7 @@ export async function generarOrdenDeCompra(consolidacionId: number, data: {
     for (const r of renglones) {
       const clave = clavePprDeItem({ codigo_igss: r.codigo_igss, nombre: r.nombre, renglon: r.renglon });
       if (!pprDisponibles[clave]?.length) continue;
-      const elegido = data.seleccionPpr.find(s => s.codigo_igss === r.codigo_igss && s.subproducto === r.subproducto);
+      const elegido = data.seleccionPpr.find(s => s.codigo_igss === r.codigo_igss && s.subproducto === r.subproducto && s.nombre === r.nombre);
       if (!elegido?.codigo_ppr) return { error: `Selecciona el PPR/presentación de "${r.nombre}" antes de generar la orden` };
     }
 

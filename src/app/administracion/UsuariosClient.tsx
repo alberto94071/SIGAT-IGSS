@@ -37,7 +37,6 @@ const MODULOS_LAUNCHER: { key: keyof Permisos; label: string }[] = [
   { key: "mod_junta_adjudicadora",    label: "Junta Adjudicadora"     },
   { key: "mod_almacen",               label: "Almacén"                },
   { key: "mod_caja_chica",            label: "Caja Chica (launcher)"  },
-  { key: "mod_libros",                label: "Libros"                 },
   { key: "mod_viaticos",              label: "Pago de Viáticos"       },
   { key: "mod_pasajes",               label: "Pago de Pasajes"        },
   { key: "mod_contrato_cotizaciones", label: "Contrato y Cotizaciones"},
