@@ -10,6 +10,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { crearNotificacion } from "@/lib/notificaciones";
 import { LIMITE_POR_TIPO, type TipoCompra } from "./types";
+import { netoDeIva } from "@/lib/iva-utils";
 
 async function requireJunta(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -97,7 +98,7 @@ export async function aprobarActa(actaId: number): Promise<{ ok: true } | { erro
     const [ganador] = await db.select().from(oferentes).where(eq(oferentes.id, con.oferente_ganador_id)).limit(1);
     if (!ganador) return { error: "No se encontró el oferente ganador" };
 
-    const total = ganador.exento_iva ? ganador.costo : ganador.costo * 0.88;
+    const total = ganador.exento_iva ? ganador.costo : netoDeIva(ganador.costo);
     const limite = LIMITE_POR_TIPO[tipo];
     if (total > limite) {
       return { error: `El total Q${total.toFixed(2)} supera el límite de Q${limite.toLocaleString("es-GT")} para ${tipo}. Rechaza el acta para que Compras corrija el precio.` };
@@ -124,7 +125,7 @@ export async function aprobarActa(actaId: number): Promise<{ ok: true } | { erro
           const filas = rawItems.filter(r => r.codigo_igss === linea.codigo_igss && r.subproducto === linea.subproducto);
           for (const fila of filas) {
             const bruto = fila.cantidad_solicitada * linea.precio_unitario;
-            const montoNeto = ganador.exento_iva ? bruto : bruto * 0.88;
+            const montoNeto = ganador.exento_iva ? bruto : netoDeIva(bruto);
             await tx.update(siafComprasItems).set({
               precio_unitario: linea.precio_unitario, item_exento_iva: ganador.exento_iva, monto_neto: montoNeto,
             }).where(eq(siafComprasItems.id, fila.id));
@@ -145,7 +146,7 @@ export async function aprobarActa(actaId: number): Promise<{ ok: true } | { erro
             if (filas.length === 0) continue;
             const cantidadTotal = filas.reduce((sum, f) => sum + f.cantidad_solicitada, 0);
             const bruto = cantidadTotal * linea.precio_unitario;
-            const totalNeto = ganador.exento_iva ? bruto : bruto * 0.88;
+            const totalNeto = ganador.exento_iva ? bruto : netoDeIva(bruto);
             await tx.insert(nogRegistros).values({
               nog: nogTrim,
               proveedor_id: ganador.proveedor_id, proveedor_nit: ganador.nit, proveedor_nombre: ganador.nombre,

@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
 import { esGrupo100 } from "@/lib/programacion-constants";
 import { trazabilidadPorConsolidaciones, type TrazabilidadConsolidacion } from "./trazabilidad-utils";
+import { netoDeIva } from "@/lib/iva-utils";
 
 // true si TODOS los renglones de la consolidación de este pago son 100-199 —
 // esos van a Pago/FRI en vez de Bancos/Caja Chica-Vale.
@@ -38,7 +39,7 @@ async function reflejarEnEjecucion(tx: Tx, consolidacionId: number): Promise<voi
     // y devengado_regularizado tienen que moverse en la misma unidad que el
     // resto de presupuesto_renglones, o "Regularizado" queda inflado por el
     // 12% del IVA frente a "Normal" en el reporte de Ejecución.
-    const montoNeto = exentoIva ? r.total : r.total * 0.88;
+    const montoNeto = exentoIva ? r.total : netoDeIva(r.total);
     await tx.update(presupuestoRenglones).set({
       devengado_regularizado: sql`COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) + ${montoNeto}`,
       pre_compromiso: sql`GREATEST(COALESCE(${presupuestoRenglones.pre_compromiso}, 0) - ${montoNeto}, 0)`,

@@ -4,6 +4,7 @@ import { Hash, Plus, X, Loader2, Trash2, Building2, DollarSign } from "lucide-re
 import { crearNog, eliminarNog } from "@/lib/nog-actions";
 import NitAutocomplete from "@/components/adjudicacion/NitAutocomplete";
 import InsumoAutocomplete from "@/components/InsumoAutocomplete";
+import { netoDeIva } from "@/lib/iva-utils";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -140,7 +141,7 @@ function AgregarNogModal({ onClose, onCreado }: { onClose: () => void; onCreado:
   const cantidadNum = parseFloat(cantidad);
   const precioNum = parseFloat(precio);
   const totalPreview = cantidadNum > 0 && precioNum > 0
-    ? (exentoIva ? cantidadNum * precioNum : cantidadNum * precioNum * 0.88)
+    ? (exentoIva ? cantidadNum * precioNum : netoDeIva(cantidadNum * precioNum))
     : null;
 
   async function handleGuardar() {

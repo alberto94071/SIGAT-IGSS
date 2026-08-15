@@ -7,6 +7,7 @@ import { eq, and, sql, inArray, desc } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { crearNotificacion } from "@/lib/notificaciones";
 import { verificarPresupuestoDisponible, mensajePresupuestoExcedido, getDisponibleTx, PresupuestoExcedidoEnTransaccion } from "@/lib/presupuesto-disponible";
+import { netoDeIva } from "@/lib/iva-utils";
 
 // Todo ítem de un SIAF debe existir en el PAC (Catálogo de Compras) — si el
 // catalogo_id que mandó el cliente ya no existe o fue desactivado, no se
@@ -249,7 +250,7 @@ async function calcularMontosPorRenglonSiaf(items: ItemSiaf[]): Promise<
         .orderBy(desc(cotizacionesAnualesItems.id))
         .limit(1);
       if (cotiz) {
-        precioUnitario = cotiz.exento_iva ? cotiz.precio_unitario : cotiz.precio_unitario * 0.88;
+        precioUnitario = cotiz.exento_iva ? cotiz.precio_unitario : netoDeIva(cotiz.precio_unitario);
       }
     }
     // Sin precio no se puede calcular el monto a reservar contra

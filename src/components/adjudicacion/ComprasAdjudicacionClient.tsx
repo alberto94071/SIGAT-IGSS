@@ -1,5 +1,6 @@
 "use client";
 import { fechaGuatemala } from "@/lib/date-utils";
+import { netoDeIva } from "@/lib/iva-utils";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -310,7 +311,7 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
       bruto += p.cantidad * linea.precio;
       if (!linea.exento_iva) todosExentos = false;
     }
-    return todosExentos ? bruto : bruto * 0.88;
+    return todosExentos ? bruto : netoDeIva(bruto);
   })();
 
   async function handleConfirmarNog() {
@@ -453,7 +454,7 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
       if (!(precio > 0)) return null;
       bruto += p.cantidad * precio;
     }
-    return duExento ? bruto : bruto * 0.88;
+    return duExento ? bruto : netoDeIva(bruto);
   }
 
   async function handleAdjudicarDirecto() {
@@ -492,7 +493,7 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
       if (!(precio > 0)) return null;
       bruto += p.cantidad * precio;
     }
-    return rgExento ? bruto : bruto * 0.88;
+    return rgExento ? bruto : netoDeIva(bruto);
   }
 
   async function enviarRegularizado() {
@@ -842,7 +843,7 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                   <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 mt-2">
                     {rgExento
                       ? <>Exento de IVA — Total: <strong className="text-gray-900">{Q(rgTotalPreview()!)}</strong></>
-                      : <>Con IVA (se descuenta 12%) — Total: <strong className="text-gray-900">{Q(rgTotalPreview()!)}</strong></>}
+                      : <>Con IVA (neto de IVA) — Total: <strong className="text-gray-900">{Q(rgTotalPreview()!)}</strong></>}
                   </p>
                 )}
               </div>
@@ -925,7 +926,7 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                   <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 mt-2">
                     {duExento
                       ? <>Exento de IVA — Total: <strong className="text-gray-900">{Q(duTotalPreview()!)}</strong></>
-                      : <>Con IVA (se descuenta 12%) — Total: <strong className="text-gray-900">{Q(duTotalPreview()!)}</strong></>}
+                      : <>Con IVA (neto de IVA) — Total: <strong className="text-gray-900">{Q(duTotalPreview()!)}</strong></>}
                   </p>
                 )}
               </div>

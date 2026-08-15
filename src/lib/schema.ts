@@ -609,6 +609,10 @@ export const catalogoFirmantes = pgTable("catalogo_firmantes", {
   id:         serial("id").primaryKey(),
   nombre:     text("nombre").notNull(),
   cargo:      text("cargo").notNull(),
+  // Unidad/oficina del firmante — tercera línea opcional bajo nombre+cargo
+  // en la Forma A-04 SIAF (ej. "U.I.A.A.D.D.M. en el Municipio de Tejutla"),
+  // solo cuando aplica; no todos los firmantes la llevan en el formato real.
+  unidad:     text("unidad"),
   activo:     boolean("activo").notNull().default(true),
   created_at: text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });

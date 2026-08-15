@@ -4,6 +4,7 @@ import { Loader2, Plus, Trash2 } from "lucide-react";
 import { Q } from "./ConsolidacionesTable";
 import NitAutocomplete from "./NitAutocomplete";
 import type { Oferente } from "@/lib/adjudicacion/types";
+import { netoDeIva } from "@/lib/iva-utils";
 
 type Renglon = { codigo_igss: string | null; subproducto: string; nombre: string; cantidad: number; unidad_medida?: string | null };
 
@@ -60,7 +61,7 @@ export default function OferentesEditor({
       if (!(precio > 0)) return null;
       bruto += r.cantidad * precio;
     }
-    return exentoIva ? bruto : bruto * 0.88;
+    return exentoIva ? bruto : netoDeIva(bruto);
   }
 
   async function handleAgregar() {
