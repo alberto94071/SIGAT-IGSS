@@ -22,7 +22,7 @@ type Consolidacion = {
   a04_unidad_medida: string | null; a04_cantidad: number | null;
 };
 type Renglon = {
-  renglon: number | null; codigo_ppr: string | null; nombre: string;
+  renglon: number | null; codigo_igss: string | null; codigo_ppr: string | null; nombre: string;
   cantidad: number; total: number; unidad_medida: string | null;
 };
 type Firmante = { id: number; nombre: string; cargo: string; unidad: string | null };
@@ -38,17 +38,21 @@ interface Props {
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const FONT = "Arial, Helvetica, sans-serif";
 const B = "2px solid #1a1a1a";
-const TB = "1.5px solid #333";
-const R = "8px";
+const TB = "2px solid #000";
+const R = "16px";
 const C = "#000";
 
 // Defensa contra código PPR guardado con un "-null" colgado (dato viejo de
 // antes de que la selección de PPR sin código real usara el id de Base de
 // Datos Central en vez del código_ppr crudo) — mejor mostrar "—" que
-// imprimir literalmente la palabra "null" en un documento oficial.
-function codigoPprMostrar(v: string | null | undefined): string {
-  const s = v?.trim();
-  return !s || /-?null$/i.test(s) ? "—" : s;
+// imprimir literalmente la palabra "null" en un documento oficial. Cuando
+// el insumo no tiene código real (codigo_igss = "S/C") y tampoco se le
+// asignó PPR, la Forma A-04 SIAF real imprime "S-C" en esa columna en vez
+// de dejarla en blanco.
+function codigoPprMostrar(codigoPpr: string | null | undefined, codigoIgss: string | null | undefined): string {
+  const s = codigoPpr?.trim();
+  if (s && !/-?null$/i.test(s)) return s;
+  return codigoIgss?.trim() === "S/C" ? "S-C" : "—";
 }
 
 const METODOS = ["Baja Cuantía", "Compra Directa", "Contrato Abierto", "Casos de Excepción"] as const;
@@ -111,7 +115,7 @@ export default function ImprimirA04Client({
         const total = r.total;
         const ivaFila = c.exento_iva ? 0 : montoIva(total);
         return {
-          codigoPpr: codigoPprMostrar(r.codigo_ppr),
+          codigoPpr: codigoPprMostrar(r.codigo_ppr, r.codigo_igss),
           renglonNum: r.renglon != null ? String(r.renglon) : "—",
           categoria: (r.renglon != null ? NOMBRE_RENGLON.get(r.renglon) : null) ?? null,
           descripcion: r.nombre.toUpperCase(),
@@ -122,7 +126,7 @@ export default function ImprimirA04Client({
         };
       })
     : [{
-        codigoPpr: codigoPprMostrar(renglon?.codigo_ppr),
+        codigoPpr: codigoPprMostrar(renglon?.codigo_ppr, renglon?.codigo_igss),
         renglonNum: renglon?.renglon != null ? String(renglon.renglon) : "—",
         categoria: (renglon?.renglon != null ? NOMBRE_RENGLON.get(renglon.renglon) : null) ?? null,
         descripcion: (c.a04_descripcion || renglon?.nombre || "—").toUpperCase(),
@@ -254,70 +258,75 @@ export default function ImprimirA04Client({
             </div>
           </div>
 
-          {/* Recuadro: Detalle de bienes y/o servicios */}
-          <div style={{ border: B, borderRadius: R, padding: "10px 12px", marginBottom: "10px", fontSize: "9pt" }}>
-            <p style={{ margin: "0 0 4px 0", fontWeight: "bold", textAlign: "center", fontSize: "8.5pt" }}>
-              DETALLE DE BIENES Y/O SERVICIOS
-            </p>
-            <p style={{ margin: "0 0 8px 0", textAlign: "center", fontSize: "8pt" }}>
-              ADQUIRIDOS SEGÚN DOCUMENTO TRIBUTARIO ELECTRÓNICO -DTE- No. <V minWidth="70px">{c.a04_dte_numero ?? null}</V>
-              &nbsp;&nbsp;Serie: <V minWidth="50px">{c.a04_dte_serie ?? null}</V>
-              &nbsp;&nbsp;de fecha: <V minWidth="80px">{c.a04_dte_fecha ?? null}</V>
-            </p>
-            <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", fontSize: "8pt" }}>
-              <colgroup>
-                <col style={{ width: "7%" }} />
-                <col style={{ width: "7%" }} />
-                <col style={{ width: "6%" }} />
-                <col style={{ width: "27%" }} />
-                <col style={{ width: "8%" }} />
-                <col style={{ width: "7%" }} />
-                <col style={{ width: "10%" }} />
-                <col style={{ width: "10%" }} />
-                <col style={{ width: "8%" }} />
-                <col style={{ width: "10%" }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th style={{ border: TB, padding: "4px" }}>No. Pedido</th>
-                  <th style={{ border: TB, padding: "4px" }}>Código PpR</th>
-                  <th style={{ border: TB, padding: "4px" }}>Renglón</th>
-                  <th style={{ border: TB, padding: "4px" }}>Descripción</th>
-                  <th style={{ border: TB, padding: "4px" }}>Unidad de Medida</th>
-                  <th style={{ border: TB, padding: "4px" }}>Cantidad</th>
-                  <th style={{ border: TB, padding: "4px" }}>Precio Unitario</th>
-                  <th style={{ border: TB, padding: "4px" }}>Total</th>
-                  <th style={{ border: TB, padding: "4px" }}>(-) IVA</th>
-                  <th style={{ border: TB, padding: "4px" }}>Liquido</th>
+          {/* Detalle de bienes y/o servicios — acá la tabla ES el recuadro
+              (título y línea de DTE van como filas de la misma tabla), sin
+              caja redondeada aparte, tal como la Forma A-04 SIAF real. */}
+          <table style={{
+            width: "100%", tableLayout: "fixed", borderCollapse: "collapse",
+            fontSize: "8pt", marginBottom: "10px", border: TB,
+          }}>
+            <colgroup>
+              <col style={{ width: "7%" }} />
+              <col style={{ width: "7%" }} />
+              <col style={{ width: "6%" }} />
+              <col style={{ width: "27%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "7%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "10%" }} />
+            </colgroup>
+            <tbody>
+              <tr>
+                <td colSpan={10} style={{ border: TB, padding: "6px 4px 2px 4px", fontWeight: "bold", textAlign: "center", fontSize: "8.5pt" }}>
+                  DETALLE DE BIENES Y/O SERVICIOS
+                </td>
+              </tr>
+              <tr>
+                <td colSpan={10} style={{ border: TB, padding: "2px 4px 6px 4px", textAlign: "center", fontSize: "8pt" }}>
+                  ADQUIRIDOS SEGÚN DOCUMENTO TRIBUTARIO ELECTRÓNICO -DTE- No. <V minWidth="70px">{c.a04_dte_numero ?? null}</V>
+                  &nbsp;&nbsp;Serie: <V minWidth="50px">{c.a04_dte_serie ?? null}</V>
+                  &nbsp;&nbsp;de fecha: <V minWidth="80px">{c.a04_dte_fecha ?? null}</V>
+                </td>
+              </tr>
+              <tr>
+                <th style={{ border: TB, padding: "4px", textAlign: "center" }}>No. Pedido</th>
+                <th style={{ border: TB, padding: "4px", textAlign: "center" }}>Código PpR</th>
+                <th style={{ border: TB, padding: "4px", textAlign: "center" }}>Renglón</th>
+                <th style={{ border: TB, padding: "4px", textAlign: "center" }}>Descripción</th>
+                <th style={{ border: TB, padding: "4px", textAlign: "center" }}>Unidad de Medida</th>
+                <th style={{ border: TB, padding: "4px", textAlign: "center" }}>Cantidad</th>
+                <th style={{ border: TB, padding: "4px", textAlign: "center" }}>Precio Unitario</th>
+                <th style={{ border: TB, padding: "4px", textAlign: "center" }}>Total</th>
+                <th style={{ border: TB, padding: "4px", textAlign: "center" }}>(-) IVA</th>
+                <th style={{ border: TB, padding: "4px", textAlign: "center" }}>Liquido</th>
+              </tr>
+              {filas.map((f, i) => (
+                <tr key={i}>
+                  <td style={{ border: TB, padding: "14px 4px", textAlign: "center", fontWeight: "bold" }}>{c.a04_no_pedido ?? "—"}</td>
+                  <td style={{ border: TB, padding: "14px 4px", textAlign: "center", fontWeight: "bold" }}>{f.codigoPpr}</td>
+                  <td style={{ border: TB, padding: "14px 4px", textAlign: "center", fontWeight: "bold" }}>{f.renglonNum}</td>
+                  <td style={{ border: TB, padding: "14px 6px", wordBreak: "break-word", textAlign: "center" }}>
+                    {f.categoria && <p style={{ margin: 0, fontWeight: "bold" }}>{f.categoria}</p>}
+                    <p style={{ margin: 0 }}>{f.descripcion}</p>
+                  </td>
+                  <td style={{ border: TB, padding: "14px 4px", textAlign: "center", fontWeight: "bold" }}>{f.unidad}</td>
+                  <td style={{ border: TB, padding: "14px 4px", textAlign: "center", fontWeight: "bold" }}>{f.cantidad}</td>
+                  <td style={{ border: TB, padding: "14px 4px", textAlign: "center", fontWeight: "bold" }}>{Q(f.precioUnitario)}</td>
+                  <td style={{ border: TB, padding: "14px 4px", textAlign: "center", fontWeight: "bold" }}>{Q(f.total)}</td>
+                  <td style={{ border: TB, padding: "14px 4px", textAlign: "center", fontWeight: "bold" }}>{Q(f.iva)}</td>
+                  <td style={{ border: TB, padding: "14px 4px", textAlign: "center", fontWeight: "bold" }}>{Q(f.liquido)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {filas.map((f, i) => (
-                  <tr key={i}>
-                    <td style={{ border: TB, padding: "4px", textAlign: "center" }}>{c.a04_no_pedido ?? "—"}</td>
-                    <td style={{ border: TB, padding: "4px", textAlign: "center" }}>{f.codigoPpr}</td>
-                    <td style={{ border: TB, padding: "4px", textAlign: "center" }}>{f.renglonNum}</td>
-                    <td style={{ border: TB, padding: "6px", wordBreak: "break-word" }}>
-                      {f.categoria && <p style={{ margin: 0, fontWeight: "bold" }}>{f.categoria}</p>}
-                      <p style={{ margin: 0 }}>{f.descripcion}</p>
-                    </td>
-                    <td style={{ border: TB, padding: "4px", textAlign: "center" }}>{f.unidad}</td>
-                    <td style={{ border: TB, padding: "4px", textAlign: "center" }}>{f.cantidad}</td>
-                    <td style={{ border: TB, padding: "4px", textAlign: "right" }}>{Q(f.precioUnitario)}</td>
-                    <td style={{ border: TB, padding: "4px", textAlign: "right" }}>{Q(f.total)}</td>
-                    <td style={{ border: TB, padding: "4px", textAlign: "right" }}>{Q(f.iva)}</td>
-                    <td style={{ border: TB, padding: "4px", textAlign: "right" }}>{Q(f.liquido)}</td>
-                  </tr>
-                ))}
-                <tr>
-                  <td colSpan={7} style={{ border: TB, padding: "4px", textAlign: "right", fontWeight: "bold" }}>Totales</td>
-                  <td style={{ border: TB, padding: "4px", textAlign: "right", fontWeight: "bold" }}>{Q(montoBruto)}</td>
-                  <td style={{ border: TB, padding: "4px", textAlign: "right", fontWeight: "bold" }}>{Q(iva)}</td>
-                  <td style={{ border: TB, padding: "4px", textAlign: "right", fontWeight: "bold" }}>{Q(liquido)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+              ))}
+              <tr>
+                <td colSpan={7} style={{ border: TB, padding: "4px", textAlign: "right", fontWeight: "bold" }}>Totales</td>
+                <td style={{ border: TB, padding: "4px", textAlign: "center", fontWeight: "bold" }}>{Q(montoBruto)}</td>
+                <td style={{ border: TB, padding: "4px", textAlign: "center", fontWeight: "bold" }}>{Q(iva)}</td>
+                <td style={{ border: TB, padding: "4px", textAlign: "center", fontWeight: "bold" }}>{Q(liquido)}</td>
+              </tr>
+            </tbody>
+          </table>
 
           {/* Firmas */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginTop: "20px" }}>
