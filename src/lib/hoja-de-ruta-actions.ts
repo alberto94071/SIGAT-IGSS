@@ -2,7 +2,7 @@
 import { db } from "@/lib/db";
 import {
   siafCompras, siafComprasItems, consolidaciones, actasAdjudicacion,
-  ordenesCompra, fondoRotativoPagos, usuarios,
+  ordenesCompra, fondoRotativoPagos, usuarios, friFondoRotativo,
 } from "@/lib/schema";
 import { inArray, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
@@ -14,7 +14,7 @@ export type HojaDeRuta = {
     observaciones: string | null;
     creado_por_nombre: string | null; created_at: string | null;
     motivo_rechazo: string | null; rechazado_por_nombre: string | null; rechazado_en: string | null;
-    items: { id: number; codigo_igss: string | null; nombre: string; subproducto: string; cantidad_solicitada: number; renglon: number | null }[];
+    items: { id: number; codigo_igss: string | null; codigo_ppr: string | null; nombre: string; subproducto: string; cantidad_solicitada: number; renglon: number | null; precio_unitario: number | null }[];
   };
   consolidacion: {
     id: number; numero: number; anio: number; fecha: string; pre_orden: string | null;
@@ -39,9 +39,16 @@ export type HojaDeRuta = {
     historial_devoluciones: string | null;
   } | null;
   pago: {
+    id: number;
     forma_pago: string | null; estado: string;
     numero_cheque: string | null; fecha_emision_cheque: string | null;
     numero_vale: string | null; fecha_pago: string | null; vale_id: number | null;
+    fri_id: number | null; fri_numero: number | null; fri_anio: number | null;
+    dab60_no_recibo_almacen: string | null; dab60_serie_recibo_almacen: string | null;
+    dab60_encargado_almacen: string | null; dab60_fecha_ingreso_producto: string | null;
+    dab60_lote: string | null; dab60_fecha_vencimiento: string | null;
+    dab60_marca: string | null; dab60_modelo: string | null; dab60_serie: string | null;
+    dab60_generado_en: string | null;
   } | null;
 };
 
@@ -51,14 +58,15 @@ export async function construirHojaDeRuta(ids: number[]): Promise<HojaDeRuta[]> 
   const siafs = await db.select().from(siafCompras).where(inArray(siafCompras.id, ids));
   const itemsRaw = await db.select({
     id: siafComprasItems.id, solicitud_id: siafComprasItems.solicitud_id,
-    codigo_igss: siafComprasItems.codigo_igss,
+    codigo_igss: siafComprasItems.codigo_igss, codigo_ppr: siafComprasItems.codigo_ppr,
     nombre: siafComprasItems.nombre, subproducto: siafComprasItems.subproducto,
     cantidad_solicitada: siafComprasItems.cantidad_solicitada,
+    precio_unitario: siafComprasItems.precio_unitario,
   }).from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, ids));
 
   const renglonMap = await renglonLookupMap();
   const items = itemsRaw.map(i => ({
-    ...i, renglon: renglonMap.get(`${i.codigo_igss}::${i.subproducto}`) ?? null,
+    ...i, renglon: renglonMap.get(`${i.codigo_igss}::${i.subproducto}::${i.nombre}`) ?? null,
   }));
 
   const consolIds = [...new Set(siafs.map(s => s.consolidacion_id).filter((v): v is number => v != null))];
@@ -74,6 +82,11 @@ export async function construirHojaDeRuta(ids: number[]): Promise<HojaDeRuta[]> 
   const pagos = consolIds.length > 0
     ? await db.select().from(fondoRotativoPagos).where(inArray(fondoRotativoPagos.consolidacion_id, consolIds))
     : [];
+  const friIds = [...new Set(pagos.map(p => p.fri_id).filter((v): v is number => v != null))];
+  const fris = friIds.length > 0
+    ? await db.select().from(friFondoRotativo).where(inArray(friFondoRotativo.id, friIds))
+    : [];
+  const frisMap = new Map(fris.map(f => [f.id, f]));
 
   const usuarioIds = [...new Set([
     ...siafs.map(s => s.creado_por), ...siafs.map(s => s.rechazado_por),
@@ -134,9 +147,18 @@ export async function construirHojaDeRuta(ids: number[]): Promise<HojaDeRuta[]> 
         historial_devoluciones: orden.historial_devoluciones,
       } : null,
       pago: pago ? {
+        id: pago.id,
         forma_pago: pago.forma_pago, estado: pago.estado,
         numero_cheque: pago.numero_cheque, fecha_emision_cheque: pago.fecha_emision_cheque,
         numero_vale: pago.numero_vale, fecha_pago: pago.fecha_pago, vale_id: pago.vale_id,
+        fri_id: pago.fri_id,
+        fri_numero: pago.fri_id != null ? frisMap.get(pago.fri_id)?.numero ?? null : null,
+        fri_anio: pago.fri_id != null ? frisMap.get(pago.fri_id)?.anio ?? null : null,
+        dab60_no_recibo_almacen: pago.dab60_no_recibo_almacen, dab60_serie_recibo_almacen: pago.dab60_serie_recibo_almacen,
+        dab60_encargado_almacen: pago.dab60_encargado_almacen, dab60_fecha_ingreso_producto: pago.dab60_fecha_ingreso_producto,
+        dab60_lote: pago.dab60_lote, dab60_fecha_vencimiento: pago.dab60_fecha_vencimiento,
+        dab60_marca: pago.dab60_marca, dab60_modelo: pago.dab60_modelo, dab60_serie: pago.dab60_serie,
+        dab60_generado_en: pago.dab60_generado_en,
       } : null,
     };
   }).sort((a, b) => b.siaf.id - a.siaf.id);

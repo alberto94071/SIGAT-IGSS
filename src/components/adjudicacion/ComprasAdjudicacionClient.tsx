@@ -29,6 +29,13 @@ interface Props { consolidaciones: Consolidacion[]; canEdit: boolean; }
 
 type SubTipoBaja = "con_insumos" | "por_servicios" | null;
 
+// codigo_igss+subproducto solos no identifican un insumo cuando el código es
+// "S/C" — varios insumos distintos (Agua, Energía, cada mes...) lo comparten
+// — se agrega el nombre para que cada fila de precio tenga su propia llave.
+function claveInsumo(p: { codigo_igss: string | null; subproducto: string; nombre: string }): string {
+  return `${p.codigo_igss}::${p.subproducto}::${p.nombre}`;
+}
+
 export default function ComprasAdjudicacionClient({ consolidaciones: init, canEdit }: Props) {
   const [consolidaciones, setConsolidaciones] = useState(init);
   const [wizardFor,   setWizardFor]   = useState<Consolidacion | null>(null);
@@ -372,8 +379,13 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     setRgPrecios(prev => {
       const next = { ...prev };
       for (const p of c.precios) {
-        const linea = p.codigo_igss ? cot.items.find(i => i.codigo_igss === p.codigo_igss) : undefined;
-        if (linea) next[`${p.codigo_igss}::${p.subproducto}`] = String(linea.precio_unitario);
+        // codigo_igss solo no basta cuando es "S/C" — varios insumos
+        // distintos (Agua, Energía, cada mes...) lo comparten, así que
+        // también se cruza por nombre para no tomar el precio de otro.
+        const linea = p.codigo_igss
+          ? cot.items.find(i => i.codigo_igss === p.codigo_igss && (i.nombre == null || i.nombre === p.nombre))
+          : undefined;
+        if (linea) next[`${p.codigo_igss}::${p.subproducto}::${p.nombre}`] = String(linea.precio_unitario);
       }
       return next;
     });
@@ -387,7 +399,7 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     if (c.precios.length !== 1) return;
     const p = c.precios[0];
     const precio = cot.costo / (p.cantidad || 1);
-    setRgPrecios(prev => ({ ...prev, [`${p.codigo_igss}::${p.subproducto}`]: String(precio) }));
+    setRgPrecios(prev => ({ ...prev, [`${p.codigo_igss}::${p.subproducto}::${p.nombre}`]: String(precio) }));
   }
 
   async function finalizarEnviar() {
@@ -437,7 +449,7 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     if (c.precios.length === 0) return null;
     let bruto = 0;
     for (const p of c.precios) {
-      const precio = parseFloat(duPrecios[`${p.codigo_igss}::${p.subproducto}`] ?? "");
+      const precio = parseFloat(duPrecios[claveInsumo(p)] ?? "");
       if (!(precio > 0)) return null;
       bruto += p.cantidad * precio;
     }
@@ -449,8 +461,8 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     if (!duNumeroAdjudicacion.trim()) return setError("El número de adjudicación es obligatorio");
     if (!duRazon.trim()) return setError("La razón de adjudicación es obligatoria");
     const items = c.precios.map(p => ({
-      codigo_igss: p.codigo_igss, subproducto: p.subproducto,
-      precio_unitario: parseFloat(duPrecios[`${p.codigo_igss}::${p.subproducto}`] ?? ""),
+      codigo_igss: p.codigo_igss, nombre: p.nombre, subproducto: p.subproducto,
+      precio_unitario: parseFloat(duPrecios[claveInsumo(p)] ?? ""),
     }));
     if (items.some(i => !(i.precio_unitario > 0))) return setError("Ingresa un precio unitario válido para cada insumo");
     setLoading(true); setError(""); setLimitExceeded(false);
@@ -476,7 +488,7 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     if (c.precios.length === 0) return null;
     let bruto = 0;
     for (const p of c.precios) {
-      const precio = parseFloat(rgPrecios[`${p.codigo_igss}::${p.subproducto}`] ?? "");
+      const precio = parseFloat(rgPrecios[claveInsumo(p)] ?? "");
       if (!(precio > 0)) return null;
       bruto += p.cantidad * precio;
     }
@@ -492,8 +504,8 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
       if (subTipo === "por_servicios" && !cotizId) return setError("Selecciona una cotización de servicio");
     }
     const items = c.precios.map(p => ({
-      codigo_igss: p.codigo_igss, subproducto: p.subproducto,
-      precio_unitario: parseFloat(rgPrecios[`${p.codigo_igss}::${p.subproducto}`] ?? ""),
+      codigo_igss: p.codigo_igss, nombre: p.nombre, subproducto: p.subproducto,
+      precio_unitario: parseFloat(rgPrecios[claveInsumo(p)] ?? ""),
     }));
     if (items.some(i => !(i.precio_unitario > 0))) return setError("Ingresa un precio unitario válido para cada insumo");
     // No. de Pedido, Unidad de Medida, Descripción y Cantidad ya no se piden —
@@ -800,9 +812,9 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                 <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Precio unitario por insumo</p>
                 <div className="space-y-2">
                   {c.precios.map(p => {
-                    const key = `${p.codigo_igss}::${p.subproducto}`;
+                    const key = claveInsumo(p);
                     const precioCotizado = subTipo === "con_insumos" && p.codigo_igss
-                      ? cotizAnualFound?.items.find(i => i.codigo_igss === p.codigo_igss)?.precio_unitario
+                      ? cotizAnualFound?.items.find(i => i.codigo_igss === p.codigo_igss && (i.nombre == null || i.nombre === p.nombre))?.precio_unitario
                       : undefined;
                     const difiere = precioCotizado != null && parseFloat(rgPrecios[key] ?? "") !== precioCotizado;
                     return (
@@ -892,7 +904,7 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                 </p>
                 <div className="space-y-2">
                   {c.precios.map(p => {
-                    const key = `${p.codigo_igss}::${p.subproducto}`;
+                    const key = claveInsumo(p);
                     return (
                       <div key={key} className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2">
                         <div className="flex-1 min-w-0">

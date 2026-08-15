@@ -6,6 +6,7 @@ import { consolidaciones, ordenesCompra, siafCompras } from "@/lib/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { gruposRenglonDeConsolidacion, getPprsPorItems, clavePprDeItem, guardarPprSeleccion, type PprOpcion, type ItemParaPpr } from "./renglon-utils";
+import { trazabilidadPorConsolidaciones, type TrazabilidadConsolidacion } from "./trazabilidad-utils";
 
 async function requireCompras(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -20,12 +21,15 @@ export type ConsolidacionPendienteOrden = {
   proveedor_nit: string | null; proveedor_nombre: string | null; total: number | null;
   pre_orden: string | null; numero_adjudicacion: string | null; cotizacion_anual_id: number | null;
   renglones: { renglon: number | null; codigo_igss: string | null; codigo_ppr: string | null; subproducto: string; nombre: string; cantidad: number; precio_cotizacion?: number }[];
+  traz: TrazabilidadConsolidacion | null;
 };
 
 export async function getConsolidacionesPendientesOrden(): Promise<ConsolidacionPendienteOrden[]> {
   const cons = await db.select().from(consolidaciones)
     .where(and(eq(consolidaciones.estado, "Enviado a Presupuesto"), eq(consolidaciones.destino, "presupuesto")))
     .orderBy(sql`created_at ASC`);
+
+  const trazMap = await trazabilidadPorConsolidaciones(cons.map(c => c.id));
 
   return Promise.all(cons.map(async c => {
     const renglones = await gruposRenglonDeConsolidacion(c.id);
@@ -44,6 +48,7 @@ export async function getConsolidacionesPendientesOrden(): Promise<Consolidacion
       pre_orden: c.pre_orden, numero_adjudicacion: c.numero_adjudicacion,
       cotizacion_anual_id: c.cotizacion_anual_id,
       renglones: renglonesConPrecio,
+      traz: trazMap.get(c.id) ?? null,
     };
   }));
 }
@@ -58,8 +63,10 @@ export async function getPprsParaRenglones(items: ItemParaPpr[]): Promise<Record
 
 export async function getOrdenesEnProceso() {
   const ordenes = await db.select().from(ordenesCompra).where(eq(ordenesCompra.estado, "Generada")).orderBy(sql`created_at ASC`);
+  const trazMap = await trazabilidadPorConsolidaciones(ordenes.map(o => o.consolidacion_id));
   return Promise.all(ordenes.map(async o => ({
     ...o, renglones: await gruposRenglonDeConsolidacion(o.consolidacion_id),
+    traz: trazMap.get(o.consolidacion_id) ?? null,
   })));
 }
 

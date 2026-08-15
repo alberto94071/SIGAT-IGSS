@@ -87,7 +87,7 @@ export async function getConsolidacionesConDetalles(): Promise<Consolidacion[]> 
           codigo_igss: item.codigo_igss, codigo_ppr: item.codigo_ppr, subproducto: item.subproducto,
           nombre: item.nombre, unidad_medida,
           cantidad: item.cantidad_solicitada, precio_unitario: null,
-          renglon: renglonMap.get(key) ?? null,
+          renglon: renglonMap.get(`${item.codigo_igss}::${item.subproducto}::${item.nombre}`) ?? null,
         });
       }
     }
@@ -210,7 +210,7 @@ export async function getPendientesPorDestino(destino: "fondo_rotativo" | "presu
           codigo_igss: item.codigo_igss, codigo_ppr: item.codigo_ppr, subproducto: item.subproducto,
           nombre: item.nombre, unidad_medida: item.unidad_medida,
           cantidad: item.cantidad_solicitada, precio_unitario: null,
-          renglon: renglonMap.get(key) ?? null,
+          renglon: renglonMap.get(`${item.codigo_igss}::${item.subproducto}::${item.nombre}`) ?? null,
         });
       }
     }

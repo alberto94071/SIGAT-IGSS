@@ -98,7 +98,7 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
                         {h.siaf.items.map(i => (
                           <span key={i.id} className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-mono">
-                            {i.codigo_igss ?? "—"} · {i.nombre} · {i.subproducto} · Renglón {i.renglon ?? "—"} ({i.cantidad_solicitada.toLocaleString("es-GT")})
+                            {i.codigo_igss ?? "—"}{i.codigo_ppr ? ` / PPR ${i.codigo_ppr}` : ""} · {i.nombre} · {i.subproducto} · Renglón {i.renglon ?? "—"} ({i.cantidad_solicitada.toLocaleString("es-GT")}){i.precio_unitario != null ? ` · ${Q(i.precio_unitario)}/u` : ""}
                           </span>
                         ))}
                       </div>
@@ -215,6 +215,23 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
 
                     {/* Cada cambio de ruta del lado de Fondo Rotativo es su propio paso. */}
 
+                    {/* Paso: Almacén/DAB-60 (Fondo Rotativo) — solo si esta compra
+                        realmente pasó por Almacén antes de elegir forma de pago. */}
+                    {h.pago?.dab60_generado_en && (
+                      <Paso icon={Archive} titulo={`Almacén/DAB-60 — ${h.pago.dab60_generado_en}`}
+                        accion={<PrintLink href={`/almacen/dab-60/fondo-rotativo/${h.pago.id}/imprimir`} label="Ver / Imprimir DAB-60" />}>
+                        <p className="text-xs text-gray-500">
+                          Recibo {h.pago.dab60_no_recibo_almacen ?? "—"} / {h.pago.dab60_serie_recibo_almacen ?? "—"}
+                          {h.pago.dab60_encargado_almacen && <> · Encargado: {h.pago.dab60_encargado_almacen}</>}
+                        </p>
+                        {(h.pago.dab60_lote || h.pago.dab60_fecha_vencimiento || h.pago.dab60_marca || h.pago.dab60_modelo || h.pago.dab60_serie) && (
+                          <p className="text-xs text-gray-500">
+                            Lote {h.pago.dab60_lote ?? "—"} · Vence {h.pago.dab60_fecha_vencimiento ?? "—"} · {h.pago.dab60_marca ?? "—"} {h.pago.dab60_modelo ?? ""} · Serie {h.pago.dab60_serie ?? "—"}
+                          </p>
+                        )}
+                      </Paso>
+                    )}
+
                     {/* Paso: Fondo Rotativo/Pagos */}
                     {h.pago && (
                       <Paso icon={Wallet} titulo="Fondo Rotativo/Pagos"
@@ -250,6 +267,14 @@ export default function HojaDeRutaClient({ registros }: { registros: HojaDeRuta[
                     {h.pago?.estado === "Liquidado" && (
                       <Paso icon={Coins} titulo="Caja Chica/Libro Caja Chica">
                         <p className="text-xs text-gray-500">Vale No. {h.pago.numero_vale ?? "—"} liquidado</p>
+                      </Paso>
+                    )}
+
+                    {/* Paso: Pago/FRI — solo si este pago ya se conformó en un FRI */}
+                    {h.pago?.fri_id != null && (
+                      <Paso icon={Wallet} titulo={`Pago/FRI ${h.pago.fri_numero ?? "—"}/${h.pago.fri_anio ?? "—"}`}
+                        accion={<PrintLink href={`/dashboard/fri/${h.pago.fri_numero ?? ""}?anio=${h.pago.fri_anio ?? ""}`} label="Ver / Imprimir FRI" />}>
+                        <p className="text-xs text-gray-500">Este gasto quedó incluido en el reporte de FRI para pedir el reintegro.</p>
                       </Paso>
                     )}
                   </div>

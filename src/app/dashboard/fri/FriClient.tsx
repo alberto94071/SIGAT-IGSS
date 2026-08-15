@@ -6,17 +6,20 @@ import Link from "next/link";
 import { Wallet, Printer, ChevronDown, ChevronRight, Loader2, AlertTriangle, CheckCircle2, X } from "lucide-react";
 import { conformarFri, marcarFriReintegrado, enviarFriADaf, marcarFriRechazado, getFriConDetalle, type Fri, type PolizaFri, type FriItemInput } from "@/lib/fri-actions";
 import type { PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import type { TrazabilidadConsolidacion } from "@/lib/adjudicacion/trazabilidad-utils";
+import ExpandableRow from "@/components/ExpandableRow";
+import TrazabilidadPanel from "@/components/TrazabilidadPanel";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-type Row = { key: string; item: FriItemInput; origen: string; referencia: string; detalle: string; total: number };
+type Row = { key: string; item: FriItemInput; origen: string; referencia: string; detalle: string; total: number; traz: TrazabilidadConsolidacion | null };
 
 function pagoARow(p: PagoFondoRotativo): Row {
   return {
     key: `pago:${p.id}`, item: { tipo: "pago", id: p.id }, origen: "Gastos Varios",
     referencia: p.numero_a04 != null ? `A-04 ${p.numero_a04}/${p.anio_a04}` : "—",
     detalle: `${p.destinatario_nombre ?? "—"} · ${p.forma_pago === "cheque" ? `Cheque ${p.numero_cheque ?? ""}` : `Vale ${p.numero_vale ?? ""}`}`,
-    total: p.total ?? 0,
+    total: p.total ?? 0, traz: p.traz,
   };
 }
 function polizaARow(p: PolizaFri): Row {
@@ -24,7 +27,7 @@ function polizaARow(p: PolizaFri): Row {
     key: `poliza:${p.id}`, item: { tipo: "poliza", id: p.id }, origen: "Pasajes",
     referencia: `Póliza ${p.numero}`,
     detalle: `Cuadro de Caja del ${p.fecha} · ${p.estado}`,
-    total: p.total,
+    total: p.total, traz: null,
   };
 }
 
@@ -38,6 +41,7 @@ export default function FriClient({
   const [conformando, setConformando] = useState(false);
   const [errorConformar, setErrorConformar] = useState("");
   const [expandido, setExpandido] = useState<number | null>(null);
+  const [expandidoPendiente, setExpandidoPendiente] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<Record<number, { pagos: PagoFondoRotativo[]; polizas: PolizaFri[] }>>({});
   const [reintegrarFor, setReintegrarFor] = useState<Fri | null>(null);
   const [enviarFor, setEnviarFor] = useState<Fri | null>(null);
@@ -123,6 +127,7 @@ export default function FriClient({
               <thead>
                 <tr className="table-header">
                   <th className="px-4 py-3 w-8"></th>
+                  <th className="px-4 py-3 w-8"></th>
                   <th className="px-4 py-3 text-left whitespace-nowrap">Origen</th>
                   <th className="px-4 py-3 text-left whitespace-nowrap">Referencia</th>
                   <th className="px-4 py-3 text-left">Detalle</th>
@@ -131,15 +136,19 @@ export default function FriClient({
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filas.map(f => (
-                  <tr key={f.key} className={`hover:bg-gray-50 ${seleccion.has(f.key) ? "bg-brand-50" : ""}`}>
-                    <td className="px-4 py-3">
+                  <ExpandableRow key={f.key} colSpan={6}
+                    expanded={expandidoPendiente === f.key}
+                    onToggle={() => setExpandidoPendiente(p => p === f.key ? null : f.key)}
+                    rowClassName={`hover:bg-gray-50 cursor-pointer transition-colors ${seleccion.has(f.key) ? "bg-brand-50" : ""}`}
+                    detail={<TrazabilidadPanel titulo={`Detalle de ${f.referencia}`} traz={f.traz} />}>
+                    <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                       <input type="checkbox" checked={seleccion.has(f.key)} onChange={() => toggle(f.key)} className="w-4 h-4 accent-brand-600" />
                     </td>
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{f.origen}</td>
                     <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">{f.referencia}</td>
                     <td className="px-4 py-3 text-xs text-gray-600">{f.detalle}</td>
                     <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">{Q(f.total)}</td>
-                  </tr>
+                  </ExpandableRow>
                 ))}
               </tbody>
             </table>
@@ -229,6 +238,7 @@ export default function FriClient({
                                   <th className="text-left py-1">Origen</th>
                                   <th className="text-left py-1">Referencia</th>
                                   <th className="text-left py-1">Detalle</th>
+                                  <th className="text-left py-1">SIAF / Consolidación</th>
                                   <th className="text-right py-1">Total</th>
                                 </tr>
                               </thead>
@@ -238,6 +248,11 @@ export default function FriClient({
                                     <td className="py-1.5">{r.origen}</td>
                                     <td className="py-1.5 font-mono">{r.referencia}</td>
                                     <td className="py-1.5">{r.detalle}</td>
+                                    <td className="py-1.5 font-mono text-gray-500">
+                                      {r.traz
+                                        ? `${r.traz.siaf_correlativos.join(", ") || "—"} · Cons. ${r.traz.consolidacion_numero}/${r.traz.consolidacion_anio}`
+                                        : "—"}
+                                    </td>
                                     <td className="py-1.5 text-right font-mono">{Q(r.total)}</td>
                                   </tr>
                                 ))}

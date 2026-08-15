@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Menu, XCircle, CheckCheck, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { getMisNotificaciones, marcarNotificacionLeida, marcarTodasLeidas } from "@/app/notificaciones/actions";
+import { fechaGuatemala } from "@/lib/date-utils";
 import PersonalizacionButton from "./PersonalizacionButton";
 
 interface Props {
@@ -23,9 +24,14 @@ const POLL_MS = 30000;
 
 export default function TopBar({ userName, rolLabel, rolColor, onMenuOpen, sidebarCollapsed, onToggleSidebar }: Props) {
   const router = useRouter();
-  const now = new Date();
-  const fecha = now.toLocaleDateString("es-GT", {
-    weekday: "long", year: "numeric", month: "long", day: "numeric"
+  // Misma fecha que usan las reglas de negocio con ventana (ej. Modificaciones
+  // solo se aprueban del 15 al 20, ver ventanaAprobacionModificacionAbierta) —
+  // fechaGuatemala() calcula el día calendario en Guatemala (UTC-6)
+  // independiente de en qué huso horario esté el navegador. Se parsea y
+  // formatea en UTC para no dejar que el navegador la reinterprete en su
+  // propio huso al mostrarla.
+  const fecha = new Date(`${fechaGuatemala()}T00:00:00Z`).toLocaleDateString("es-GT", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC",
   });
 
   const [open,          setOpen]          = useState(false);

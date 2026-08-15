@@ -500,6 +500,7 @@ export default function SiafClient({
                                   <thead>
                                     <tr className="bg-gray-100">
                                       <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Código IGSS</th>
+                                      <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">PPR</th>
                                       <th className="px-3 py-2 text-left font-semibold text-gray-600">Insumo</th>
                                       <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Subproducto</th>
                                       <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Renglón</th>
@@ -512,12 +513,13 @@ export default function SiafClient({
                                     {s.items.map(item => {
                                       const despues = item.cantidad_antes != null
                                         ? item.cantidad_antes - item.cantidad_solicitada : null;
-                                      const renglon = item.catalogo_id 
-                                        ? renglonPorItem.get(String(item.catalogo_id)) 
+                                      const renglon = item.catalogo_id
+                                        ? renglonPorItem.get(String(item.catalogo_id))
                                         : (renglonPorItem.get(`${item.codigo_igss}::${item.subproducto}::${item.nombre}`) ?? renglonPorItem.get(`${item.codigo_igss}::${item.subproducto}`));
                                       return (
                                         <tr key={item.id}>
                                           <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{item.codigo_igss ?? "—"}</td>
+                                          <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{item.codigo_ppr ?? "—"}</td>
                                           <td className="px-3 py-2 font-medium text-gray-900">{item.nombre}</td>
                                           <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{item.subproducto}</td>
                                           <td className="px-3 py-2 tabular-nums text-gray-600 whitespace-nowrap">{renglon ?? "—"}</td>

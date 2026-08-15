@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Landmark, X, Loader2, Send, CheckCircle2, Printer, FileEdit } from "lucide-react";
 import { completarVoucherBancos, type PagoFondoRotativo, type TipoDocumentoPago } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 import { montoEnLetras } from "@/lib/adjudicacion/deletreo";
+import ExpandableRow from "@/components/ExpandableRow";
+import TrazabilidadPanel from "@/components/TrazabilidadPanel";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -13,6 +15,7 @@ interface Props { pagos: PagoFondoRotativo[]; }
 export default function BancosClient({ pagos: init }: Props) {
   const [pagos, setPagos] = useState(init);
   const [modalFor, setModalFor] = useState<PagoFondoRotativo | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   return (
     <div className="space-y-5">
@@ -30,6 +33,7 @@ export default function BancosClient({ pagos: init }: Props) {
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
+                <th className="px-4 py-3 w-8"></th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">No. A-04 SIAF</th>
                 <th className="px-4 py-3 text-left">Destinatario</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Factura</th>
@@ -40,7 +44,18 @@ export default function BancosClient({ pagos: init }: Props) {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {pagos.map(p => (
-                <tr key={p.id} className="hover:bg-gray-50">
+                <ExpandableRow key={p.id} colSpan={7}
+                  expanded={expandedId === p.id}
+                  onToggle={() => setExpandedId(prev => prev === p.id ? null : p.id)}
+                  rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
+                  detail={<TrazabilidadPanel
+                    titulo={`Detalle de A-04 SIAF ${p.numero_a04 != null ? `${p.numero_a04}/${p.anio_a04}` : ""}`}
+                    cadena={[
+                      { label: "No. Cheque", value: p.numero_cheque },
+                      { label: "FRI", value: p.fri_numero != null ? `${p.fri_numero}/${p.fri_anio}` : null },
+                    ]}
+                    traz={p.traz}
+                  />}>
                   <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
                     {p.numero_a04 != null ? `${p.numero_a04}/${p.anio_a04}` : "—"}
                   </td>
@@ -52,7 +67,7 @@ export default function BancosClient({ pagos: init }: Props) {
                   <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
                     {p.total != null ? Q(p.total) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                     {p.numero_cheque == null ? (
                       <button onClick={() => setModalFor(p)}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors ml-auto">
@@ -72,7 +87,7 @@ export default function BancosClient({ pagos: init }: Props) {
                       </div>
                     )}
                   </td>
-                </tr>
+                </ExpandableRow>
               ))}
             </tbody>
           </table>

@@ -63,7 +63,7 @@ export async function cargarArchivoCompras(offset: number): Promise<{ solicitude
     rechazado_por_nombre: s.rechazado_por != null ? usuariosMap.get(s.rechazado_por) ?? null : null,
     destino: destinoMap.get(s.id) ?? null,
     items: itemsList.filter(i => i.solicitud_id === s.id).map(i => ({
-      ...i, renglon: renglonMap.get(`${i.codigo_igss}::${i.subproducto}`) ?? null,
+      ...i, renglon: renglonMap.get(`${i.codigo_igss}::${i.subproducto}::${i.nombre}`) ?? null,
     })),
   }));
 

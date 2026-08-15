@@ -6,6 +6,9 @@ import { registrarDevengado, aprobarDevengado, rechazarDevengado, actualizarEsta
 import { regresarACompromiso, regresarADab60, regresarOrdenAAdjudicacion } from "@/lib/adjudicacion/compromiso-actions";
 import { fechaGuatemala } from "@/lib/date-utils";
 import RenglonBadges from "@/components/RenglonBadges";
+import ExpandableRow from "@/components/ExpandableRow";
+import TrazabilidadPanel from "@/components/TrazabilidadPanel";
+import type { TrazabilidadConsolidacion } from "@/lib/adjudicacion/trazabilidad-utils";
 
 type Orden = {
   id: number; numero: number; anio: number; tipo_compra: string;
@@ -15,6 +18,7 @@ type Orden = {
   estado_devengado?: string | null; fecha_pago?: string | null;
   dab60_generado_en?: string | null;
   renglones: { renglon: number | null; subproducto: string; nombre: string; cantidad: number }[];
+  traz: TrazabilidadConsolidacion | null;
 };
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -26,6 +30,9 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
   const [devengarFor, setDevengarFor] = useState<Orden | null>(null);
   const [acciones, setAcciones] = useState<Record<number, { cargando: boolean; error: string | null }>>({});
   const [accionesRegresar, setAccionesRegresar] = useState<Record<number, { cargando: boolean; error: string | null }>>({});
+  const [expandedOrden, setExpandedOrden] = useState<number | null>(null);
+  const [expandedSolicitada, setExpandedSolicitada] = useState<number | null>(null);
+  const [expandedEnviada, setExpandedEnviada] = useState<number | null>(null);
 
   function onRegistrado(orden: Orden) {
     setOrdenes(p => p.filter(x => x.id !== orden.id));
@@ -101,6 +108,7 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
+                <th className="px-4 py-3 w-8"></th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Orden</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">No. Compromiso</th>
                 <th className="px-4 py-3 text-left">Proveedor</th>
@@ -110,7 +118,15 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
             </thead>
             <tbody className="divide-y divide-gray-100">
               {ordenes.map(o => (
-                <tr key={o.id} className="hover:bg-gray-50">
+                <ExpandableRow key={o.id} colSpan={6}
+                  expanded={expandedOrden === o.id}
+                  onToggle={() => setExpandedOrden(p => p === o.id ? null : o.id)}
+                  rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
+                  detail={<TrazabilidadPanel
+                    titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}/${o.anio}`}
+                    cadena={[{ label: "No. Compromiso", value: o.no_compromiso }]}
+                    traz={o.traz}
+                  />}>
                   <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
                     OC-{String(o.numero).padStart(3, "0")}/{o.anio}
                   </td>
@@ -123,7 +139,7 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
                   <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
                     {o.total != null ? Q(o.total) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1.5">
                       <button onClick={() => handleRegresar(o.id, "ordenes")}
                         disabled={accionesRegresar[o.id]?.cargando}
@@ -138,7 +154,7 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
                     </div>
                     {accionesRegresar[o.id]?.error && <p className="text-red-600 text-xs mt-1 max-w-[180px]">{accionesRegresar[o.id]!.error}</p>}
                   </td>
-                </tr>
+                </ExpandableRow>
               ))}
             </tbody>
           </table>
@@ -163,6 +179,7 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
+                <th className="px-4 py-3 w-8"></th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Orden</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">No. Devengado</th>
                 <th className="px-4 py-3 text-left">Proveedor</th>
@@ -174,7 +191,15 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
               {solicitadas.map(o => {
                 const a = acciones[o.id];
                 return (
-                  <tr key={o.id} className="hover:bg-gray-50">
+                  <ExpandableRow key={o.id} colSpan={6}
+                    expanded={expandedSolicitada === o.id}
+                    onToggle={() => setExpandedSolicitada(p => p === o.id ? null : o.id)}
+                    rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
+                    detail={<TrazabilidadPanel
+                      titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}/${o.anio}`}
+                      cadena={[{ label: "No. Compromiso", value: o.no_compromiso }, { label: "No. Devengado", value: o.no_devengado }]}
+                      traz={o.traz}
+                    />}>
                     <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
                       OC-{String(o.numero).padStart(3, "0")}/{o.anio}
                     </td>
@@ -187,7 +212,7 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
                     <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
                       {o.total != null ? Q(o.total) : "—"}
                     </td>
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => ejecutarAccion(o.id, aprobarDevengado, (ord) => setEnviadas(p => [{ ...ord, estado_devengado: "Enviado" }, ...p]))}
@@ -208,7 +233,7 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
                       </div>
                       {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[180px]">{a.error}</p>}
                     </td>
-                  </tr>
+                  </ExpandableRow>
                 );
               })}
             </tbody>
@@ -232,6 +257,7 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
+                <th className="px-4 py-3 w-8"></th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Orden</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">No. Devengado</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Envío a DAF</th>
@@ -246,6 +272,8 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
                   onRegresar={destino => handleRegresarA(o, destino)}
                   regresando={accionesRegresar[o.id]?.cargando ?? false}
                   errorRegresar={accionesRegresar[o.id]?.error ?? null}
+                  expanded={expandedEnviada === o.id}
+                  onToggleExpand={() => setExpandedEnviada(p => p === o.id ? null : o.id)}
                 />
               ))}
             </tbody>
@@ -328,12 +356,14 @@ const ETIQUETA_DESTINO: Record<"compromiso" | "dab60" | "adjudicacion", string> 
   adjudicacion: "Devolver a Compras/Adjudicación",
 };
 
-function FilaSeguimiento({ orden: o, onActualizado, onRegresar, regresando, errorRegresar }: {
+function FilaSeguimiento({ orden: o, onActualizado, onRegresar, regresando, errorRegresar, expanded, onToggleExpand }: {
   orden: Orden;
   onActualizado: (id: number, estado: EstadoDevengado, fechaPago: string | null) => void;
   onRegresar: (destino: "compromiso" | "dab60" | "adjudicacion") => void;
   regresando: boolean;
   errorRegresar: string | null;
+  expanded: boolean;
+  onToggleExpand: () => void;
 }) {
   const [fechaPago, setFechaPago] = useState(fechaGuatemala());
   const [pidiendoFechaPago, setPidiendoFechaPago] = useState(false);
@@ -377,7 +407,13 @@ function FilaSeguimiento({ orden: o, onActualizado, onRegresar, regresando, erro
   }
 
   return (
-    <tr className="hover:bg-gray-50 align-top">
+    <ExpandableRow colSpan={6} expanded={expanded} onToggle={onToggleExpand}
+      rowClassName="hover:bg-gray-50 align-top cursor-pointer transition-colors"
+      detail={<TrazabilidadPanel
+        titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}/${o.anio}`}
+        cadena={[{ label: "No. Compromiso", value: o.no_compromiso }, { label: "No. Devengado", value: o.no_devengado }, { label: "Envío a DAF", value: o.fecha_envio_daf }]}
+        traz={o.traz}
+      />}>
       <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
         OC-{String(o.numero).padStart(3, "0")}/{o.anio}
       </td>
@@ -392,7 +428,7 @@ function FilaSeguimiento({ orden: o, onActualizado, onRegresar, regresando, erro
         )}
         {error && <p className="text-xs text-red-600 mt-1 max-w-[180px]">{error}</p>}
       </td>
-      <td className="px-4 py-3 text-right whitespace-nowrap">
+      <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
         {o.estado_devengado === "Enviado" && !pidiendoFechaPago && (
           <div className="flex items-center gap-1.5 justify-end">
             <button onClick={() => marcar("Rechazado")} disabled={guardando}
@@ -445,6 +481,6 @@ function FilaSeguimiento({ orden: o, onActualizado, onRegresar, regresando, erro
         )}
         {errorRegresar && <p className="text-xs text-red-600 mt-1 max-w-[180px] text-right">{errorRegresar}</p>}
       </td>
-    </tr>
+    </ExpandableRow>
   );
 }

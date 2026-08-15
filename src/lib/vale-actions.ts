@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { valesCajaChica, configuracion, polizas, fondoRotativoPagos, consolidaciones } from "@/lib/schema";
 import { eq, desc, sql, and, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
+import { trazabilidadPorConsolidaciones } from "@/lib/adjudicacion/trazabilidad-utils";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -263,11 +264,19 @@ export async function liquidarValePasajes(valeId: number, data: { numero_boleta_
 // efectivo ya ligados a este vale desde Fondo Rotativo/Pagos (igual que en
 // pasajes) — no se vuelve a teclear a mano.
 export async function getUsoValeGastosVarios(valeId: number) {
-  const rows = await db.select({ total: consolidaciones.total })
+  const rows = await db.select({
+    id: fondoRotativoPagos.id, consolidacion_id: fondoRotativoPagos.consolidacion_id,
+    destinatario_nombre: fondoRotativoPagos.destinatario_nombre,
+    total: consolidaciones.total, numero_a04: consolidaciones.numero_a04, anio_a04: consolidaciones.anio_a04,
+  })
     .from(fondoRotativoPagos)
     .innerJoin(consolidaciones, eq(fondoRotativoPagos.consolidacion_id, consolidaciones.id))
     .where(eq(fondoRotativoPagos.vale_id, valeId));
-  return rows.reduce((s, r) => s + (r.total ?? 0), 0);
+  const trazMap = await trazabilidadPorConsolidaciones(rows.map(r => r.consolidacion_id));
+  return {
+    total: rows.reduce((s, r) => s + (r.total ?? 0), 0),
+    pagos: rows.map(r => ({ ...r, traz: trazMap.get(r.consolidacion_id) ?? null })),
+  };
 }
 
 export async function liquidarValeGastosVarios(valeId: number, data: { numero_boleta_deposito?: string; monto_boleta_deposito?: number }): Promise<{ ok: true } | { error: string }> {
@@ -280,7 +289,7 @@ export async function liquidarValeGastosVarios(valeId: number, data: { numero_bo
     if (vale.tipo !== "gastos_varios") return { error: "Este vale no es de gastos varios" };
     if (vale.estado !== "Activo") return { error: "Este vale no está activo" };
 
-    const totalUsado = await getUsoValeGastosVarios(valeId);
+    const { total: totalUsado } = await getUsoValeGastosVarios(valeId);
     const monto = vale.monto_autorizado ?? vale.monto;
     const remanente = monto - totalUsado;
 

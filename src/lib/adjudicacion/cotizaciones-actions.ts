@@ -1,7 +1,7 @@
 "use server";
 import { db } from "@/lib/db";
 import { cotizacionesServicio, cotizacionesAnuales, cotizacionesAnualesItems, catalogoCompras } from "@/lib/schema";
-import { eq, sql, ilike, or, inArray } from "drizzle-orm";
+import { and, eq, sql, ilike, or, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import type { CotizacionAnual, TipoCotizacionAnual } from "./types";
 import { RENGLONES_EXCEPCION } from "./types";
@@ -131,7 +131,7 @@ export async function eliminarCotizacionAnual(id: number): Promise<{ ok: true } 
 }
 
 export async function agregarLineaCotizacionAnual(cotizacionAnualId: number, data: {
-  codigo_igss: string; precio_unitario: number; exento_iva: boolean;
+  codigo_igss: string; nombre?: string; precio_unitario: number; exento_iva: boolean;
 }): Promise<{ ok: true } | { error: string }> {
   try {
     const session = await auth();
@@ -139,6 +139,7 @@ export async function agregarLineaCotizacionAnual(cotizacionAnualId: number, dat
     if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
 
     const codigo = data.codigo_igss.trim();
+    const nombre = data.nombre?.trim() || null;
     if (!codigo) return { error: "El código de insumo es obligatorio" };
     if (!(data.precio_unitario > 0)) return { error: "Ingresa un precio unitario válido" };
 
@@ -146,22 +147,44 @@ export async function agregarLineaCotizacionAnual(cotizacionAnualId: number, dat
       .from(cotizacionesAnuales).where(eq(cotizacionesAnuales.id, cotizacionAnualId)).limit(1);
     if (!cot) return { error: "No se encontró la cotización anual" };
 
-    const [catalogo] = await db.select({ nombre: catalogoCompras.nombre, renglon: catalogoCompras.renglon })
-      .from(catalogoCompras).where(eq(catalogoCompras.codigo_igss, codigo)).limit(1);
+    // codigo_igss por sí solo no identifica el insumo cuando es "S/C" (sin
+    // código real) — varios insumos distintos (Agua, Energía, cada mes...)
+    // comparten ese mismo código (ver catalogo_compras_codigo_subproducto_idx
+    // en schema.ts). Si hay más de una fila con ese código, se exige el
+    // nombre exacto elegido en el buscador para saber a cuál se refiere; si
+    // el código es único no hace falta.
+    const candidatos = await db.select({ nombre: catalogoCompras.nombre, renglon: catalogoCompras.renglon })
+      .from(catalogoCompras).where(eq(catalogoCompras.codigo_igss, codigo));
+    let catalogo: { nombre: string; renglon: number | null } | undefined;
+    if (candidatos.length > 1) {
+      if (!nombre) return { error: `El código ${codigo} corresponde a varios insumos distintos — vuelve a elegirlo desde el buscador.` };
+      catalogo = candidatos.find(c => c.nombre === nombre);
+      if (!catalogo) return { error: `No se encontró el insumo "${nombre}" con código ${codigo} en el catálogo.` };
+    } else {
+      catalogo = candidatos[0];
+    }
 
     if (cot.tipo === "excepcion" && !(catalogo?.renglon != null && RENGLONES_EXCEPCION.includes(catalogo.renglon))) {
       return { error: `Una cotización de Excepción solo puede incluir insumos de los renglones ${RENGLONES_EXCEPCION.join(", ")} (energía eléctrica, agua, telefonía fija). El insumo ${codigo} es del renglón ${catalogo?.renglon ?? "desconocido"}.` };
     }
 
+    const nombreFinal = catalogo?.nombre ?? nombre;
+    // Mismo criterio que la desambiguación de arriba: dos insumos "S/C"
+    // distintos (Agua y Energía, por ejemplo) pueden convivir en la misma
+    // cotización — el duplicado real es mismo código Y mismo nombre.
     const [dup] = await db.select({ id: cotizacionesAnualesItems.id }).from(cotizacionesAnualesItems)
-      .where(sql`${cotizacionesAnualesItems.cotizacion_anual_id} = ${cotizacionAnualId} AND ${cotizacionesAnualesItems.codigo_igss} = ${codigo}`)
+      .where(and(
+        eq(cotizacionesAnualesItems.cotizacion_anual_id, cotizacionAnualId),
+        eq(cotizacionesAnualesItems.codigo_igss, codigo),
+        nombreFinal != null ? eq(cotizacionesAnualesItems.nombre, nombreFinal) : sql`${cotizacionesAnualesItems.nombre} IS NULL`,
+      ))
       .limit(1);
-    if (dup) return { error: `El insumo ${codigo} ya tiene un precio en esta cotización` };
+    if (dup) return { error: `El insumo ${nombreFinal ?? codigo} ya tiene un precio en esta cotización` };
 
     await db.insert(cotizacionesAnualesItems).values({
       cotizacion_anual_id: cotizacionAnualId,
       codigo_igss: codigo,
-      nombre: catalogo?.nombre ?? null,
+      nombre: nombreFinal,
       precio_unitario: data.precio_unitario,
       exento_iva: data.exento_iva,
     });
@@ -197,7 +220,7 @@ export async function editarLineaCotizacionAnual(id: number, data: {
 // agregarLineaCotizacionAnual fila por fila (misma validación de renglón,
 // duplicados, etc.), sin frenar el lote completo por un error puntual.
 export async function agregarLineasCotizacionAnualBulk(cotizacionAnualId: number, lineas: {
-  codigo_igss: string; precio_unitario: number; exento_iva: boolean;
+  codigo_igss: string; nombre?: string; precio_unitario: number; exento_iva: boolean;
 }[]): Promise<{ ok: true; agregadas: number; errores: string[] }> {
   let agregadas = 0;
   const errores: string[] = [];

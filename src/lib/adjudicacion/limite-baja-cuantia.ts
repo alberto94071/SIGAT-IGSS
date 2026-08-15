@@ -17,11 +17,15 @@ export function bordesCuatrimestre(fechaISO: string): { inicio: string; fin: str
   return { inicio: `${anio}-09-01`, fin: `${anio}-12-31` };
 }
 
-// Suma lo ya adjudicado por Baja Cuantía de un código de insumo dentro del
-// cuatrimestre de `fecha` (excluyendo, si se indica, la propia consolidación
-// que se está evaluando — para permitir corregir/reenviar sin duplicar).
+// Suma lo ya adjudicado por Baja Cuantía de un insumo dentro del cuatrimestre
+// de `fecha` (excluyendo, si se indica, la propia consolidación que se está
+// evaluando — para permitir corregir/reenviar sin duplicar). codigoIgss solo
+// no identifica el insumo cuando es "S/C" — varios insumos distintos (Agua,
+// Energía, cada mes...) lo comparten, así que también se filtra por nombre
+// cuando se conoce; si no, cada uno tendría que compartir un mismo límite de
+// Q25,000 con insumos que no tienen nada que ver entre sí.
 export async function totalInsumoEnCuatrimestre(
-  codigoIgss: string, fecha: string, excluirConsolidacionId?: number,
+  codigoIgss: string, nombre: string | undefined, fecha: string, excluirConsolidacionId?: number,
 ): Promise<number> {
   const { inicio, fin } = bordesCuatrimestre(fecha);
   const condiciones = [
@@ -29,6 +33,7 @@ export async function totalInsumoEnCuatrimestre(
     eq(consolidaciones.tipo_compra, "Baja Cuantía"),
     sql`${consolidaciones.fecha} >= ${inicio} AND ${consolidaciones.fecha} <= ${fin}`,
   ];
+  if (nombre != null) condiciones.push(eq(siafComprasItems.nombre, nombre));
   if (excluirConsolidacionId != null) condiciones.push(sql`${consolidaciones.id} != ${excluirConsolidacionId}`);
 
   const rows = await db.select({ monto_neto: siafComprasItems.monto_neto })
@@ -40,35 +45,39 @@ export async function totalInsumoEnCuatrimestre(
   return rows.reduce((s, r) => s + (r.monto_neto ?? 0), 0);
 }
 
-// Verifica un lote de ítems {codigo_igss, monto_neto} contra el límite de
-// Q25,000/cuatrimestre, agrupando por código (varias líneas del mismo insumo
-// en un mismo SIAF también se suman entre sí antes de comparar). Devuelve la
-// lista de insumos que excederían el límite, ya con el detalle para el
-// mensaje de error.
+// Verifica un lote de ítems {codigo_igss, nombre, monto_neto} contra el
+// límite de Q25,000/cuatrimestre, agrupando por insumo (código+nombre —
+// varias líneas del mismo insumo en un mismo SIAF también se suman entre sí
+// antes de comparar; ver nota de "S/C" arriba). Devuelve la lista de
+// insumos que excederían el límite, ya con el detalle para el mensaje de
+// error.
 export async function verificarLimiteInsumos(
-  items: { codigo_igss: string; monto_neto: number }[],
+  items: { codigo_igss: string; nombre?: string; monto_neto: number }[],
   fecha: string,
   excluirConsolidacionId?: number,
-): Promise<{ codigo_igss: string; yaAcumulado: number; nuevoTotal: number }[]> {
-  const porCodigo = new Map<string, number>();
+): Promise<{ codigo_igss: string; nombre?: string; yaAcumulado: number; nuevoTotal: number }[]> {
+  const porInsumo = new Map<string, { codigo_igss: string; nombre?: string; monto: number }>();
   for (const item of items) {
-    porCodigo.set(item.codigo_igss, (porCodigo.get(item.codigo_igss) ?? 0) + item.monto_neto);
+    const key = `${item.codigo_igss}::${item.nombre ?? ""}`;
+    const existente = porInsumo.get(key);
+    if (existente) existente.monto += item.monto_neto;
+    else porInsumo.set(key, { codigo_igss: item.codigo_igss, nombre: item.nombre, monto: item.monto_neto });
   }
 
-  const excedidos: { codigo_igss: string; yaAcumulado: number; nuevoTotal: number }[] = [];
-  for (const [codigo, montoNuevo] of porCodigo) {
-    const yaAcumulado = await totalInsumoEnCuatrimestre(codigo, fecha, excluirConsolidacionId);
+  const excedidos: { codigo_igss: string; nombre?: string; yaAcumulado: number; nuevoTotal: number }[] = [];
+  for (const { codigo_igss, nombre, monto: montoNuevo } of porInsumo.values()) {
+    const yaAcumulado = await totalInsumoEnCuatrimestre(codigo_igss, nombre, fecha, excluirConsolidacionId);
     const nuevoTotal = yaAcumulado + montoNuevo;
     if (nuevoTotal > LIMITE_INSUMO_CUATRIMESTRE) {
-      excedidos.push({ codigo_igss: codigo, yaAcumulado, nuevoTotal });
+      excedidos.push({ codigo_igss, nombre, yaAcumulado, nuevoTotal });
     }
   }
   return excedidos;
 }
 
-export function mensajeLimiteExcedido(excedidos: { codigo_igss: string; yaAcumulado: number; nuevoTotal: number }[]): string {
+export function mensajeLimiteExcedido(excedidos: { codigo_igss: string; nombre?: string; yaAcumulado: number; nuevoTotal: number }[]): string {
   const detalle = excedidos.map(e =>
-    `${e.codigo_igss} (ya acumulado Q${e.yaAcumulado.toFixed(2)} este cuatrimestre, con este SIAF llegaría a Q${e.nuevoTotal.toFixed(2)})`
+    `${e.nombre ?? e.codigo_igss} (ya acumulado Q${e.yaAcumulado.toFixed(2)} este cuatrimestre, con este SIAF llegaría a Q${e.nuevoTotal.toFixed(2)})`
   ).join("; ");
   return `Estos insumos superarían el límite de Q${LIMITE_INSUMO_CUATRIMESTRE.toLocaleString("es-GT")} por cuatrimestre: ${detalle}`;
 }
