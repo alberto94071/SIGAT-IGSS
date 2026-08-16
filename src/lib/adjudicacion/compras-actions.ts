@@ -652,8 +652,6 @@ export async function registrarRegularizado(consolidacionId: number, data: {
     }
     if (actualizaciones.length === 0) return { error: "No se encontraron los insumos consolidados" };
 
-    const total = data.exento_iva ? monto_bruto : netoDeIva(monto_bruto);
-
     if (con.tipo_compra === "Baja Cuantía") {
       const excedidos = await verificarLimiteInsumos(
         actualizaciones.filter((a): a is typeof a & { codigo_igss: string } => a.codigo_igss != null)
@@ -722,30 +720,45 @@ export async function registrarRegularizado(consolidacionId: number, data: {
       }).where(eq(siafComprasItems.id, act.id));
     }
 
-    await db.update(consolidaciones).set({
-      proveedor_nit: data.nit.trim(), proveedor_nombre: data.nombre.trim(),
-      exento_iva: data.exento_iva, total, monto_bruto,
-      destino: "fondo_rotativo", estado: "Enviado a Fondo Rotativo",
-      proveedor_direccion: data.proveedor_direccion.trim(), proveedor_telefono: data.proveedor_telefono.trim(),
-      a04_no_pedido: data.no_pedido.trim(), a04_descripcion: data.descripcion.trim(),
-      a04_unidad_medida: data.unidad_medida.trim(), a04_cantidad: data.cantidad,
-      cotizacion_anual_id: cotAnual?.id ?? null,
-    }).where(eq(consolidaciones.id, consolidacionId));
+    // Regularizado ahora también pasa por Junta Adjudicadora antes de llegar
+    // a Fondo Rotativo (confirmado por el cliente 2026-08-16, revierte la
+    // regla anterior) — igual que Baja Cuantía Normal con cotización anual
+    // (ver confirmarBajaCuantiaConCotizacionAnual): se salta solo la
+    // pantalla de comparación de oferentes, porque el precio ya viene
+    // resuelto insumo por insumo, pero pasa a "Adjudicado" — el estado que
+    // getActasPendientes() usa para poblar Junta Adjudicadora/Acta. Recién
+    // al aprobarse el Acta (aprobarActa) se decide el destino final —
+    // Fondo Rotativo en vez de Compras/Órdenes, porque con.regularizado
+    // sigue en true. costo=monto_bruto (no total, que ya está neto) porque
+    // aprobarActa recalcula el total él mismo a partir de costo+exento_iva,
+    // exactamente con la misma fórmula que se usó arriba.
+    await db.delete(oferentes).where(eq(oferentes.consolidacion_id, consolidacionId));
+    const [ofrt] = await db.insert(oferentes).values({
+      consolidacion_id: consolidacionId,
+      proveedor_id: cotServicio?.proveedor_id ?? null,
+      cotizacion_servicio_id: cotServicio?.id ?? null,
+      nit: data.nit.trim(), nombre: data.nombre.trim(),
+      costo: monto_bruto, exento_iva: data.exento_iva,
+      orden: 0, creado_por: check.uid,
+    }).returning();
 
     if (cotServicio) {
-      await db.delete(oferentes).where(eq(oferentes.consolidacion_id, consolidacionId));
-      await db.insert(oferentes).values({
-        consolidacion_id: consolidacionId,
-        proveedor_id: cotServicio.proveedor_id,
-        cotizacion_servicio_id: cotServicio.id,
-        nit: data.nit.trim(), nombre: data.nombre.trim(),
-        costo: monto_bruto, exento_iva: data.exento_iva,
-        orden: 0, creado_por: check.uid,
-      });
       await db.update(cotizacionesServicio)
         .set({ usado: true, usado_en_consolidacion_id: consolidacionId })
         .where(eq(cotizacionesServicio.id, cotServicio.id));
     }
+
+    await db.update(consolidaciones).set({
+      proveedor_nit: data.nit.trim(), proveedor_nombre: data.nombre.trim(),
+      oferente_ganador_id: ofrt.id, estado: "Adjudicado",
+      proveedor_direccion: data.proveedor_direccion.trim(), proveedor_telefono: data.proveedor_telefono.trim(),
+      a04_no_pedido: data.no_pedido.trim(), a04_descripcion: data.descripcion.trim(),
+      a04_unidad_medida: data.unidad_medida.trim(), a04_cantidad: data.cantidad,
+      cotizacion_anual_id: cotAnual?.id ?? null,
+      motivo_rechazo: null, rechazado_por: null, rechazado_en: null,
+    }).where(eq(consolidaciones.id, consolidacionId));
+
+    await db.update(siafCompras).set({ estado: "Adjudicado" }).where(eq(siafCompras.consolidacion_id, consolidacionId));
 
     return { ok: true as const };
   } catch {

@@ -529,7 +529,7 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     setLoading(false);
     if ("limitExceeded" in res) { setLimitExceeded(true); setError(res.error); return; }
     if ("error" in res) return setError(res.error);
-    onDone({ estado: "Enviado a Fondo Rotativo", destino: "fondo_rotativo", tipo_compra: tipoCompra, regularizado: true });
+    onDone({ estado: "Adjudicado", tipo_compra: tipoCompra, regularizado: true });
   }
 
   async function handleAnular() {
@@ -861,9 +861,10 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
               )}
 
               <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
-                Este caso no pasa por la Junta Adjudicadora — va directo a Fondo Rotativo. El No. de Pedido y la
-                Unidad de Medida se toman del SIAF consolidado. La factura y el correlativo A-04 SIAF se capturan
-                más adelante, al recibirla, desde Fondo Rotativo/SIAF-04.
+                Este caso pasa por Junta Adjudicadora/Acta antes de llegar a Fondo Rotativo — al aprobarse el acta se
+                envía para allá en vez de a Compras/Órdenes. El No. de Pedido y la Unidad de Medida se toman del SIAF
+                consolidado. La factura y el correlativo A-04 SIAF se capturan más adelante, al recibirla, desde
+                Fondo Rotativo/SIAF-04.
                 {tipoCompra === "Baja Cuantía" && " Cada insumo se suma contra el límite de Q25,000 por cuatrimestre."}
               </p>
             </div>
@@ -999,7 +1000,7 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
               <button onClick={enviarRegularizado}
                 disabled={loading || (tipoCompra === "Baja Cuantía" && ((subTipo === "con_insumos" && !cotizAnualFound) || (subTipo === "por_servicios" && !cotizId) || !subTipo))}
                 className="btn-primary disabled:opacity-50">
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />} Enviar a Fondo Rotativo
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />} Enviar a Junta Adjudicadora
               </button>
             )}
             {tipoCompra === "Contrato Abierto" && (
