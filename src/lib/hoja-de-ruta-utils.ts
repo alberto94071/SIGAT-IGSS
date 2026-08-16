@@ -8,12 +8,20 @@ export type Tono = "gray" | "green" | "red" | "amber" | "blue";
 // porque ese archivo es "use server" y solo puede exportar funciones async.
 export function resumenEstado(h: HojaDeRuta): { texto: string; tono: Tono } {
   if (h.pago) {
+    if (h.pago.estado === "Pendiente DAB-60")
+      return { texto: "SIAF-04 generado — esperando ingresar en Almacén/DAB-60", tono: "amber" };
     if (h.pago.estado === "Enviado a Bancos")
       return { texto: `Pago con cheque ${h.pago.numero_cheque ?? ""} enviado a Fondo Rotativo/Bancos`, tono: "green" };
     if (h.pago.estado === "Enviado a Liquidación")
       return { texto: `Pago en efectivo (vale ${h.pago.numero_vale ?? "—"}) esperando liquidarse en Caja Chica/Liquidación`, tono: "amber" };
     if (h.pago.estado === "Liquidado")
       return { texto: `Vale ${h.pago.numero_vale ?? "—"} liquidado — en Caja Chica/Libro Caja Chica`, tono: "green" };
+    if (h.pago.estado === "Pendiente FRI")
+      return { texto: "Pagado — esperando agruparse en un FRI en Fondo Rotativo/Pago-FRI", tono: "amber" };
+    if (h.pago.estado === "En FRI")
+      return { texto: `En FRI ${h.pago.fri_numero ?? "—"}/${h.pago.fri_anio ?? "—"} — esperando reintegro de la DAF`, tono: "amber" };
+    if (h.pago.estado === "Reintegrado")
+      return { texto: `Reintegrado (FRI ${h.pago.fri_numero ?? "—"}/${h.pago.fri_anio ?? "—"}) — proceso completado`, tono: "green" };
     return { texto: "SIAF-04 generado — esperando forma de pago en Fondo Rotativo/Pagos", tono: "blue" };
   }
 
