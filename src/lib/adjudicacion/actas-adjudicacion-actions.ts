@@ -100,7 +100,12 @@ export async function aprobarActa(actaId: number): Promise<{ ok: true } | { erro
 
     const total = ganador.exento_iva ? ganador.costo : netoDeIva(ganador.costo);
     const limite = LIMITE_POR_TIPO[tipo];
-    if (total > limite) {
+    // Casos de Excepción Regularizado no tiene límite — así era antes de que
+    // este flujo empezara a pasar por Junta (ver registrarRegularizado en
+    // compras-actions.ts), y ese criterio no cambió con el nuevo requisito
+    // de pasar por Junta, solo se le sumó el paso de aprobación.
+    const sinLimite = con.regularizado === true && tipo === "Casos de Excepción";
+    if (!sinLimite && total > limite) {
       return { error: `El total Q${total.toFixed(2)} supera el límite de Q${limite.toLocaleString("es-GT")} para ${tipo}. Rechaza el acta para que Compras corrija el precio.` };
     }
 
@@ -162,12 +167,19 @@ export async function aprobarActa(actaId: number): Promise<{ ok: true } | { erro
         estado: "Aprobada", aprobado_por: check.uid, aprobado_en: ahora,
       }).where(eq(actasAdjudicacion.id, actaId));
 
+      // Regularizado (Baja Cuantía o Casos de Excepción con cotización, ver
+      // registrarRegularizado) llega hasta acá con con.regularizado en true
+      // — recién aquí se decide que su destino final es Fondo Rotativo en
+      // vez de Compras/Órdenes. monto_bruto solo se guarda para
+      // Regularizado (lo usa el A-04 impreso, ver ImprimirA04Client.tsx);
+      // Normal nunca lo tuvo y no hace falta empezar a escribirlo ahora.
       await tx.update(consolidaciones).set({
         acta_aprobada: true,
         exento_iva: ganador.exento_iva,
         total,
-        destino: "presupuesto",
-        estado: "Enviado a Presupuesto",
+        ...(con.regularizado
+          ? { destino: "fondo_rotativo", estado: "Enviado a Fondo Rotativo", monto_bruto: ganador.costo }
+          : { destino: "presupuesto", estado: "Enviado a Presupuesto" }),
       }).where(eq(consolidaciones.id, acta.consolidacion_id));
     });
 
