@@ -24,7 +24,6 @@ export interface Permisos {
   mod_junta_adjudicadora:    boolean;
   mod_almacen:               boolean;
   mod_caja_chica:            boolean;
-  mod_libros:                boolean;
   mod_viaticos:              boolean;
   mod_pasajes:               boolean;
   mod_contrato_cotizaciones: boolean;
@@ -39,13 +38,13 @@ export interface Permisos {
 
 export type Modulo =
   | "mod_compras" | "mod_presupuesto" | "mod_junta_adjudicadora" | "mod_almacen"
-  | "mod_caja_chica" | "mod_libros" | "mod_viaticos" | "mod_pasajes"
+  | "mod_caja_chica" | "mod_viaticos" | "mod_pasajes"
   | "mod_contrato_cotizaciones" | "mod_base_datos" | "mod_fondo_rotativo"
   | "mod_administracion" | "mod_hoja_de_ruta";
 
 const MODULOS_DEFAULT = {
   mod_compras: true, mod_presupuesto: true, mod_junta_adjudicadora: true,
-  mod_almacen: true, mod_caja_chica: true, mod_libros: true,
+  mod_almacen: true, mod_caja_chica: true,
   mod_viaticos: true, mod_pasajes: true, mod_contrato_cotizaciones: true,
   mod_base_datos: true, mod_fondo_rotativo: true,
 };
@@ -112,6 +111,7 @@ export const NAV_ITEMS = [
   { href: "/dashboard/pagos",              label: "Pagos",               icon: "Wallet",    permiso: null },
   { href: "/dashboard/fri",                label: "Pago/FRI",            icon: "Receipt",   permiso: null },
   { href: "/dashboard/bancos",             label: "Bancos",              icon: "Landmark",  permiso: null },
+  { href: "/dashboard/libro-bancos",       label: "Libro Bancos",        icon: "BookOpen",  permiso: null },
   { href: "/dashboard/libro-conciliacion", label: "Libro Conciliación",  icon: "Scale",     permiso: null },
   { href: "/dashboard/archivo",            label: "Archivo",             icon: "Archive",   permiso: null },
 ] as const;

@@ -50,6 +50,24 @@ export async function getOrdenesCompromisoSolicitado() {
 }
 
 /**
+ * Registro histórico permanente de Compromiso: toda orden que ya tenga
+ * No. de Compromiso asignado, sin importar a dónde haya avanzado después
+ * (Almacén/DAB-60, Devengado, Completada...) ni si luego fue devuelta y
+ * re-comprometida — para consulta/reimpresión, igual que
+ * getOrdenesEnviadasADaf en devengado-actions.ts (sin filtro de estado).
+ */
+export async function getComprometidosHistorico() {
+  const ordenes = await db.select().from(ordenesCompra)
+    .where(sql`${ordenesCompra.no_compromiso} IS NOT NULL`)
+    .orderBy(sql`created_at DESC`);
+  const trazMap = await trazabilidadPorConsolidaciones(ordenes.map(o => o.consolidacion_id));
+  return Promise.all(ordenes.map(async o => ({
+    ...o, renglones: await gruposRenglonDeConsolidacion(o.consolidacion_id),
+    traz: trazMap.get(o.consolidacion_id) ?? null,
+  })));
+}
+
+/**
  * Registra el No. de Compromiso de una orden y la deja "Compromiso
  * Solicitado" — todavía NO mueve presupuesto ni la deja pasar a Almacén/
  * DAB-60/Devengado. Eso solo pasa al aprobar (ver aprobarCompromiso), que

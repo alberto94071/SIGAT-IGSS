@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { configuracion } from "@/lib/schema";
-import { getFriPorNumero } from "@/lib/fri-actions";
+import { getFriPorNumero, agruparFriPorRenglon } from "@/lib/fri-actions";
 import { getSaldoFondoRotativo } from "@/lib/vale-actions";
 import ImprimirFriClient from "./ImprimirFriClient";
 
@@ -23,13 +23,15 @@ export default async function FriImprimirPage({ params, searchParams }: Props) {
   ]);
   if (!res) notFound();
 
-  const [config] = await db.select().from(configuracion).limit(1);
+  const [config, grupos] = await Promise.all([
+    db.select().from(configuracion).limit(1).then(r => r[0]),
+    agruparFriPorRenglon(res.pagos, res.polizas),
+  ]);
 
   return (
     <ImprimirFriClient
       fri={res.fri}
-      pagos={res.pagos}
-      polizas={res.polizas}
+      grupos={grupos}
       saldo={saldo}
       nombreUnidad={config?.nombre_unidad ?? "Consultorio de Tacaná, Departamento de San Marcos"}
       nombreEncargado={config?.nombre_encargado_unidad ?? "Lilia Zucely Pérez Fuentes"}

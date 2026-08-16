@@ -33,7 +33,7 @@ export async function getPendientesSiaf04(): Promise<Consolidacion[]> {
 
 export async function generarSiaf04(consolidacionId: number, data: {
   no_factura: string; serie_factura: string; fecha_emision: string;
-  seleccionPpr: { codigo_igss: string; subproducto: string; codigo_ppr: string }[];
+  seleccionPpr: { codigo_igss: string; subproducto: string; nombre: string; codigo_ppr: string }[];
 }): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireCompras();
@@ -55,7 +55,7 @@ export async function generarSiaf04(consolidacionId: number, data: {
     for (const r of renglones) {
       const clave = clavePprDeItem({ codigo_igss: r.codigo_igss, nombre: r.nombre, renglon: r.renglon });
       if (!pprDisponibles[clave]?.length) continue;
-      const elegido = data.seleccionPpr.find(s => s.codigo_igss === r.codigo_igss && s.subproducto === r.subproducto);
+      const elegido = data.seleccionPpr.find(s => s.codigo_igss === r.codigo_igss && s.subproducto === r.subproducto && s.nombre === r.nombre);
       if (!elegido?.codigo_ppr) return { error: `Selecciona el PPR/presentación de "${r.nombre}" antes de generar el SIAF-04` };
     }
     await guardarPprSeleccion(consolidacionId, data.seleccionPpr);

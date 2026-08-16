@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
-import { Receipt, Plus, X, Loader2, AlertTriangle } from "lucide-react";
+import { Receipt, Plus, X, Loader2, AlertTriangle, Search } from "lucide-react";
 import { crearVale, type NuevoValeData, type TipoVale } from "@/lib/vale-actions";
 
 type Vale = {
@@ -22,6 +22,16 @@ const ESTADO_COLOR: Record<string, string> = {
 export default function ValeClient({ vales: init, efectivoEnCaja, canEdit }: { vales: Vale[]; efectivoEnCaja: number; canEdit: boolean }) {
   const [vales, setVales] = useState(init);
   const [modal, setModal] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const q = query.toLowerCase().trim();
+  const filtrados = useMemo(() => !q ? vales : vales.filter(v =>
+    String(v.numero).padStart(7, "0").includes(q) ||
+    v.fecha.includes(q) ||
+    v.motivo.toLowerCase().includes(q) ||
+    v.estado.toLowerCase().includes(q) ||
+    (TIPO_LABEL[v.tipo] ?? v.tipo).toLowerCase().includes(q)
+  ), [vales, q]);
 
   return (
     <div className="space-y-5">
@@ -45,6 +55,14 @@ export default function ValeClient({ vales: init, efectivoEnCaja, canEdit }: { v
         <span className="block text-xs text-brand-700/80 mt-0.5">Lo ya cobrado de vales activos, menos lo ya entregado. No es el techo de Fondo Rotativo.</span>
       </div>
 
+      <div>
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input className="input pl-9" placeholder="Buscar por No. de vale, fecha, motivo, estado…"
+            value={query} onChange={e => setQuery(e.target.value)} />
+        </div>
+      </div>
+
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -60,7 +78,7 @@ export default function ValeClient({ vales: init, efectivoEnCaja, canEdit }: { v
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {vales.map(v => (
+              {filtrados.map(v => (
                 <tr key={v.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
                     {String(v.numero).padStart(7, "0")}
@@ -91,10 +109,10 @@ export default function ValeClient({ vales: init, efectivoEnCaja, canEdit }: { v
               ))}
             </tbody>
           </table>
-          {vales.length === 0 && (
+          {filtrados.length === 0 && (
             <div className="text-center py-16 text-gray-400">
               <Receipt className="w-8 h-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">Aún no se ha registrado ningún vale.</p>
+              <p className="text-sm">{q ? "Sin resultados para esa búsqueda." : "Aún no se ha registrado ningún vale."}</p>
             </div>
           )}
         </div>

@@ -3,6 +3,7 @@ import { useState, useRef, useLayoutEffect, useCallback, type RefObject } from "
 import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft, Eye, EyeOff, Save, RotateCcw } from "lucide-react";
 import { guardarPosicionesDab60, getFondoDab60 } from "@/lib/adjudicacion/dab60-actions";
+import { netoDeIva } from "@/lib/iva-utils";
 
 type Orden = {
   id: number; numero: number; anio: number; fecha: string; tipo_compra: string;
@@ -410,10 +411,16 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
   const unidades         = renglones.map(r => r.unidad_medida ?? "");
   const codigos          = renglones.map(r => r.codigo ?? "");
   const codigosPpr       = renglones.map(r => r.codigo_igss && r.codigo_ppr ? `${r.codigo_igss}-${r.codigo_ppr}` : "");
-  const vUnitarios       = renglones.map(r => r.cantidad > 0
-    ? (r.total / r.cantidad).toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 8 })
+  // El formulario DAB-60 lleva costo unitario y valor total SIN IVA (el
+  // bruto con IVA incluido es el que se maneja en A-04/consolidación). El
+  // total se recalcula como cantidad × costo unitario neto (no se usa
+  // r.total bruto directo) para que ambas columnas queden matemáticamente
+  // consistentes entre sí en el papel.
+  const costosUnitariosNetos = renglones.map(r => r.cantidad > 0 ? netoDeIva(r.total / r.cantidad) : 0);
+  const vUnitarios       = renglones.map((r, i) => r.cantidad > 0
+    ? costosUnitariosNetos[i].toLocaleString("es-GT", { minimumFractionDigits: 8, maximumFractionDigits: 8 })
     : "");
-  const valoresTotales   = renglones.map(r => Q(r.total));
+  const valoresTotales   = renglones.map((r, i) => r.cantidad > 0 ? Q(costosUnitariosNetos[i] * r.cantidad) : Q(0));
 
   const campo = (id: string, textoDefault: string, opts?: { style?: React.CSSProperties; multiline?: boolean }) => {
     const texto = overrides[id] ?? textoDefault;

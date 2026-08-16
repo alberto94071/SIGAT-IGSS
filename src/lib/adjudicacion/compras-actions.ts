@@ -230,6 +230,14 @@ export async function agregarOferente(consolidacionId: number, data: {
       .where(eq(oferentes.consolidacion_id, consolidacionId));
     if (count >= MAX_OFERENTES) return { error: `Ya hay ${MAX_OFERENTES} oferentes registrados (máximo permitido)` };
 
+    // Evita duplicar por accidente al mismo oferente (ej. reabrir el
+    // asistente y volver a agregarlo sin darse cuenta de que ya quedó
+    // guardado de un intento anterior) — dejaría dos filas idénticas en la
+    // comparación de la Junta Adjudicadora.
+    const [yaExiste] = await db.select({ id: oferentes.id }).from(oferentes)
+      .where(and(eq(oferentes.consolidacion_id, consolidacionId), eq(oferentes.nit, data.nit.trim()))).limit(1);
+    if (yaExiste) return { error: "Ya agregaste un oferente con ese NIT en esta consolidación" };
+
     // El costo total se calcula (cantidad × precio de cada insumo) en vez de
     // pedirlo directo — así se guarda el mismo total de siempre en
     // oferentes.costo para las pantallas de comparación/Acta, pero ahora con

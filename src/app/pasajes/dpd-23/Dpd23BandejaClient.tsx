@@ -1,9 +1,9 @@
 "use client";
 import { fechaGuatemala } from "@/lib/date-utils";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
-import { FileText, Printer, X, Loader2, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { FileText, Printer, X, Loader2, AlertTriangle, CheckCircle2, XCircle, Search } from "lucide-react";
 import { aceptarSolicitudPasaje, rechazarSolicitudPasaje } from "@/lib/pasajes-actions";
 
 type Solicitud = {
@@ -21,6 +21,15 @@ export default function Dpd23BandejaClient({
   const [generados, setGenerados] = useState(pagos);
   const [aceptando, setAceptando] = useState<Solicitud | null>(null);
   const [rechazando, setRechazando] = useState<Solicitud | null>(null);
+  const [query, setQuery] = useState("");
+
+  const q = query.toLowerCase().trim();
+  const generadosFiltrados = useMemo(() => !q ? generados : generados.filter(p =>
+    String(p.formulario_no).padStart(4, "0").includes(q) ||
+    p.fecha_pago.includes(q) ||
+    p.afiliacion.toLowerCase().includes(q) ||
+    p.nombre_afiliado.toLowerCase().includes(q)
+  ), [generados, q]);
 
   return (
     <div className="space-y-6">
@@ -83,6 +92,13 @@ export default function Dpd23BandejaClient({
 
       <div>
         <h2 className="text-sm font-semibold text-gray-700 mb-2">DPD-23 generados</h2>
+        <div className="mb-2">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input className="input pl-9" placeholder="Buscar por formulario, fecha, afiliación, nombre…"
+              value={query} onChange={e => setQuery(e.target.value)} />
+          </div>
+        </div>
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -96,7 +112,7 @@ export default function Dpd23BandejaClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {generados.map(p => (
+                {generadosFiltrados.map(p => (
                   <tr key={p.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">{String(p.formulario_no).padStart(4, "0")}</td>
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{p.fecha_pago}</td>
@@ -112,8 +128,10 @@ export default function Dpd23BandejaClient({
                 ))}
               </tbody>
             </table>
-            {generados.length === 0 && (
-              <div className="text-center py-10 text-gray-400 text-sm">Aún no se ha generado ningún DPD-23.</div>
+            {generadosFiltrados.length === 0 && (
+              <div className="text-center py-10 text-gray-400 text-sm">
+                {q ? "Sin resultados para esa búsqueda." : "Aún no se ha generado ningún DPD-23."}
+              </div>
             )}
           </div>
         </div>

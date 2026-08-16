@@ -210,8 +210,8 @@ function GenerarSiafModal({ consolidacion: c, onClose, onDone }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [c.id]);
 
-  function keyDe(r: { codigo_igss: string | null; subproducto: string }) {
-    return `${r.codigo_igss}::${r.subproducto}`;
+  function keyDe(r: { codigo_igss: string | null; subproducto: string; nombre: string }) {
+    return `${r.codigo_igss}::${r.subproducto}::${r.nombre}`;
   }
 
   async function handleGenerar() {
@@ -219,13 +219,13 @@ function GenerarSiafModal({ consolidacion: c, onClose, onDone }: {
       setError("No. de Factura, Serie y Fecha de Emisión son obligatorios");
       return;
     }
-    const seleccionPpr: { codigo_igss: string; subproducto: string; codigo_ppr: string }[] = [];
+    const seleccionPpr: { codigo_igss: string; subproducto: string; nombre: string; codigo_ppr: string }[] = [];
     for (const r of c.precios) {
       const opciones = pprsPorCodigo[clavePprDeItem(r)];
       if (!opciones?.length) continue;
       const elegido = seleccion[keyDe(r)];
       if (!elegido) { setError(`Selecciona el PPR/presentación de "${r.nombre}"`); return; }
-      seleccionPpr.push({ codigo_igss: r.codigo_igss!, subproducto: r.subproducto, codigo_ppr: elegido });
+      seleccionPpr.push({ codigo_igss: r.codigo_igss!, subproducto: r.subproducto, nombre: r.nombre, codigo_ppr: elegido });
     }
 
     setLoading(true); setError("");

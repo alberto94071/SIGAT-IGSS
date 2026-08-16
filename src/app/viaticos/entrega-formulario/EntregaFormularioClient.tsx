@@ -1,10 +1,10 @@
 "use client";
 import { fechaGuatemala } from "@/lib/date-utils";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MapPin, Plus, X, Loader2, AlertTriangle, Printer, Trash2 } from "lucide-react";
+import { MapPin, Plus, X, Loader2, AlertTriangle, Printer, Trash2, Search } from "lucide-react";
 import { crearLiquidacion, type Comision } from "./actions";
 
 type Liquidacion = {
@@ -23,6 +23,14 @@ export default function EntregaFormularioClient({ liquidaciones: init, canEdit }
   const router = useRouter();
   const [liquidaciones, setLiquidaciones] = useState(init);
   const [modal, setModal] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const q = query.toLowerCase().trim();
+  const filtradas = useMemo(() => !q ? liquidaciones : liquidaciones.filter(l =>
+    (l.fecha_pago ?? "").includes(q) ||
+    l.persona_nombre.toLowerCase().includes(q) ||
+    l.comisiones.some(c => c.tipo.toLowerCase().includes(q) || c.lugar.toLowerCase().includes(q))
+  ), [liquidaciones, q]);
 
   return (
     <div className="space-y-5">
@@ -41,6 +49,14 @@ export default function EntregaFormularioClient({ liquidaciones: init, canEdit }
         )}
       </div>
 
+      <div>
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input className="input pl-9" placeholder="Buscar por fecha de pago, persona nombrada, comisión…"
+            value={query} onChange={e => setQuery(e.target.value)} />
+        </div>
+      </div>
+
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -54,7 +70,7 @@ export default function EntregaFormularioClient({ liquidaciones: init, canEdit }
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {liquidaciones.map(l => (
+              {filtradas.map(l => (
                 <tr key={l.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{l.fecha_pago}</td>
                   <td className="px-4 py-3 text-gray-700">{l.persona_nombre}</td>
@@ -70,10 +86,10 @@ export default function EntregaFormularioClient({ liquidaciones: init, canEdit }
               ))}
             </tbody>
           </table>
-          {liquidaciones.length === 0 && (
+          {filtradas.length === 0 && (
             <div className="text-center py-16 text-gray-400">
               <MapPin className="w-8 h-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">Aún no se ha registrado ninguna liquidación de viático.</p>
+              <p className="text-sm">{q ? "Sin resultados para esa búsqueda." : "Aún no se ha registrado ninguna liquidación de viático."}</p>
             </div>
           )}
         </div>

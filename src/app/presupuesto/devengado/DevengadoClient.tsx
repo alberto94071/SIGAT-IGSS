@@ -1,7 +1,7 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { FileCheck, Loader2, X, Send, CheckCircle, XCircle, Undo2 } from "lucide-react";
+import { FileCheck, Loader2, X, Send, CheckCircle, XCircle, Undo2, Search } from "lucide-react";
 import { registrarDevengado, aprobarDevengado, rechazarDevengado, actualizarEstadoDevengado, type EstadoDevengado } from "@/lib/adjudicacion/devengado-actions";
 import { regresarACompromiso, regresarADab60, regresarOrdenAAdjudicacion } from "@/lib/adjudicacion/compromiso-actions";
 import { fechaGuatemala } from "@/lib/date-utils";
@@ -33,6 +33,18 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
   const [expandedOrden, setExpandedOrden] = useState<number | null>(null);
   const [expandedSolicitada, setExpandedSolicitada] = useState<number | null>(null);
   const [expandedEnviada, setExpandedEnviada] = useState<number | null>(null);
+  const [query, setQuery] = useState("");
+
+  const q = query.toLowerCase().trim();
+  const enviadasFiltradas = useMemo(() => !q ? enviadas : enviadas.filter(o =>
+    `OC-${String(o.numero).padStart(3, "0")}/${o.anio}`.toLowerCase().includes(q) ||
+    (o.no_devengado ?? "").toLowerCase().includes(q) ||
+    (o.no_compromiso ?? "").toLowerCase().includes(q) ||
+    (o.proveedor_nombre ?? "").toLowerCase().includes(q) ||
+    (o.proveedor_nit ?? "").toLowerCase().includes(q) ||
+    (o.estado_devengado ?? "").toLowerCase().includes(q) ||
+    (o.fecha_envio_daf ?? "").includes(q)
+  ), [enviadas, q]);
 
   function onRegistrado(orden: Orden) {
     setOrdenes(p => p.filter(x => x.id !== orden.id));
@@ -252,6 +264,14 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
         <p className="text-sm text-gray-500 mt-0.5">Expedientes ya devengados y remitidos a la División de Administración Financiera</p>
       </div>
 
+      <div>
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input className="input pl-9" placeholder="Buscar por orden, No. Devengado, proveedor, estado…"
+            value={query} onChange={e => setQuery(e.target.value)} />
+        </div>
+      </div>
+
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -266,7 +286,7 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {enviadas.map(o => (
+              {enviadasFiltradas.map(o => (
                 <FilaSeguimiento
                   key={o.id} orden={o} onActualizado={onEstadoActualizado}
                   onRegresar={destino => handleRegresarA(o, destino)}
@@ -278,10 +298,10 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
               ))}
             </tbody>
           </table>
-          {enviadas.length === 0 && (
+          {enviadasFiltradas.length === 0 && (
             <div className="text-center py-16 text-gray-400">
               <Send className="w-8 h-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">Todavía no hay expedientes enviados a la DAF.</p>
+              <p className="text-sm">{q ? "Sin resultados para esa búsqueda." : "Todavía no hay expedientes enviados a la DAF."}</p>
             </div>
           )}
         </div>

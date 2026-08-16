@@ -1,10 +1,10 @@
 "use client";
 import { fechaGuatemala } from "@/lib/date-utils";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Archive, Plus, X, Loader2, AlertTriangle, Printer, Trash2 } from "lucide-react";
+import { Archive, Plus, X, Loader2, AlertTriangle, Printer, Trash2, Search } from "lucide-react";
 import { crearRequisicion, type ItemRequisicion } from "./actions";
 
 type Requisicion = {
@@ -16,6 +16,16 @@ export default function Dab75Client({ requisiciones: init, canEdit }: { requisic
   const router = useRouter();
   const [requisiciones, setRequisiciones] = useState(init);
   const [modal, setModal] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const q = query.toLowerCase().trim();
+  const filtradas = useMemo(() => !q ? requisiciones : requisiciones.filter(r =>
+    r.no_pedido.toLowerCase().includes(q) ||
+    r.fecha_emision.includes(q) ||
+    r.sala_servicio.toLowerCase().includes(q) ||
+    r.bodega.toLowerCase().includes(q) ||
+    r.items.some(i => i.nombre.toLowerCase().includes(q) || i.codigo.toLowerCase().includes(q))
+  ), [requisiciones, q]);
 
   return (
     <div className="space-y-5">
@@ -34,6 +44,14 @@ export default function Dab75Client({ requisiciones: init, canEdit }: { requisic
         )}
       </div>
 
+      <div>
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input className="input pl-9" placeholder="Buscar por No. de pedido, fecha, sala, bodega, insumo…"
+            value={query} onChange={e => setQuery(e.target.value)} />
+        </div>
+      </div>
+
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -48,7 +66,7 @@ export default function Dab75Client({ requisiciones: init, canEdit }: { requisic
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {requisiciones.map(r => (
+              {filtradas.map(r => (
                 <tr key={r.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">{r.no_pedido}</td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{r.fecha_emision}</td>
@@ -65,10 +83,10 @@ export default function Dab75Client({ requisiciones: init, canEdit }: { requisic
               ))}
             </tbody>
           </table>
-          {requisiciones.length === 0 && (
+          {filtradas.length === 0 && (
             <div className="text-center py-16 text-gray-400">
               <Archive className="w-8 h-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">Aún no se ha registrado ninguna requisición.</p>
+              <p className="text-sm">{q ? "Sin resultados para esa búsqueda." : "Aún no se ha registrado ninguna requisición."}</p>
             </div>
           )}
         </div>

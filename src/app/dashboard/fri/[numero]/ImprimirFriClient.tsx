@@ -3,15 +3,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
 import PrintPages from "@/components/print-pages/PrintPages";
-import type { Fri, PolizaFri } from "@/lib/fri-actions";
-import type { PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import type { Fri, FriGrupoRenglon } from "@/lib/fri-actions";
 
 type SaldoFondoRotativo = { monto_fondo_rotativo: number; saldo_disponible: number; efectivo_en_caja: number };
 
 interface Props {
   fri: Fri;
-  pagos: PagoFondoRotativo[];
-  polizas: PolizaFri[];
+  grupos: FriGrupoRenglon[];
   saldo: SaldoFondoRotativo;
   nombreUnidad: string;
   nombreEncargado: string; cargoEncargado: string;
@@ -19,36 +17,18 @@ interface Props {
 
 const Q = (n: number) => n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-type Fila = { key: string; origen: string; referencia: string; detalle: string; total: number };
-function filasDe(pagos: PagoFondoRotativo[], polizas: PolizaFri[]): Fila[] {
-  return [
-    ...pagos.map(p => ({
-      key: `pago:${p.id}`, origen: "Gastos Varios",
-      referencia: p.numero_a04 != null ? `A-04 ${p.numero_a04}/${p.anio_a04}` : "—",
-      detalle: `${p.destinatario_nombre ?? "—"} · ${p.forma_pago === "cheque" ? `Cheque ${p.numero_cheque ?? ""}` : `Vale ${p.numero_vale ?? ""}`} · Factura ${p.serie_factura}-${p.no_factura}`,
-      total: p.total ?? 0,
-    })),
-    ...polizas.map(p => ({
-      key: `poliza:${p.id}`, origen: "Pasajes",
-      referencia: `Póliza ${p.numero}`,
-      detalle: `Cuadro de Caja del ${p.fecha}`,
-      total: p.total,
-    })),
-  ];
-}
-
 const FONT = "Arial, Helvetica, sans-serif";
 const C = "#000";
-const COLS = ["14%", "18%", "50%", "18%"];
+const COLS = ["16%", "48%", "18%", "18%"];
 
 function ColGroup() {
   return <colgroup>{COLS.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>;
 }
 
-export default function ImprimirFriClient({ fri, pagos, polizas, saldo, nombreUnidad, nombreEncargado, cargoEncargado }: Props) {
+export default function ImprimirFriClient({ fri, grupos, saldo, nombreUnidad, nombreEncargado, cargoEncargado }: Props) {
   const router = useRouter();
   const [paginas, setPaginas] = useState(1);
-  const filas = filasDe(pagos, polizas);
+  const totalSinIva = grupos.reduce((s, g) => s + g.subtotal, 0);
 
   const encabezado = (
     <div style={{ fontFamily: FONT, color: C }}>
@@ -61,31 +41,69 @@ export default function ImprimirFriClient({ fri, pagos, polizas, saldo, nombreUn
         <span>Estado: <strong>{fri.estado}</strong></span>
         {fri.fecha_reintegro && <span>Fecha de reintegro: <strong>{fri.fecha_reintegro}</strong></span>}
       </div>
+      <p style={{ fontSize: "9.5pt", fontWeight: "bold", margin: "0 0 4px 0" }}>Resumen por renglón presupuestario (montos sin IVA)</p>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "8.5pt", tableLayout: "fixed" }}>
         <ColGroup />
         <thead>
           <tr>
-            <th style={{ border: "1px solid #999", padding: "4px 6px", background: "#f1f5f9" }}>Origen</th>
             <th style={{ border: "1px solid #999", padding: "4px 6px", background: "#f1f5f9" }}>Referencia</th>
             <th style={{ border: "1px solid #999", padding: "4px 6px", background: "#f1f5f9" }}>Detalle</th>
-            <th style={{ border: "1px solid #999", padding: "4px 6px", background: "#f1f5f9" }}>Valor Q.</th>
+            <th style={{ border: "1px solid #999", padding: "4px 6px", background: "#f1f5f9" }}>Renglón</th>
+            <th style={{ border: "1px solid #999", padding: "4px 6px", background: "#f1f5f9" }}>Valor Q. (sin IVA)</th>
           </tr>
         </thead>
       </table>
     </div>
   );
 
-  const filaRow = (f: Fila) => (
+  const tituloRenglon = (g: FriGrupoRenglon) => (
+    <p style={{ fontFamily: FONT, color: C, fontSize: "8.5pt", fontWeight: "bold", margin: "8px 0 2px 0" }}>
+      RENGLÓN {g.renglon}
+    </p>
+  );
+
+  const filaDoc = (g: FriGrupoRenglon, docIdx: number) => {
+    const d = g.documentos[docIdx];
+    return (
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "8.5pt", tableLayout: "fixed", fontFamily: FONT, color: C }}>
+        <ColGroup />
+        <tbody>
+          <tr>
+            <td style={{ border: "1px solid #999", padding: "4px 6px", textAlign: "center" }}>{d.referencia}</td>
+            <td style={{ border: "1px solid #999", padding: "4px 6px" }}>{d.detalle}</td>
+            <td style={{ border: "1px solid #999", padding: "4px 6px", textAlign: "center" }}>{g.renglon}</td>
+            <td style={{ border: "1px solid #999", padding: "4px 6px", textAlign: "right", fontFamily: "monospace" }}>Q {Q(d.monto)}</td>
+          </tr>
+        </tbody>
+      </table>
+    );
+  };
+
+  const subtotalRenglon = (g: FriGrupoRenglon) => (
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "8.5pt", tableLayout: "fixed", fontFamily: FONT, color: C }}>
       <ColGroup />
       <tbody>
         <tr>
-          <td style={{ border: "1px solid #999", padding: "4px 6px" }}>{f.origen}</td>
-          <td style={{ border: "1px solid #999", padding: "4px 6px", textAlign: "center" }}>{f.referencia}</td>
-          <td style={{ border: "1px solid #999", padding: "4px 6px" }}>{f.detalle}</td>
-          <td style={{ border: "1px solid #999", padding: "4px 6px", textAlign: "right", fontFamily: "monospace" }}>Q {Q(f.total)}</td>
+          <td colSpan={3} style={{ border: "1px solid #999", padding: "3px 6px", textAlign: "right", fontStyle: "italic", background: "#f8fafc" }}>
+            Subtotal renglón {g.renglon}
+          </td>
+          <td style={{ border: "1px solid #999", padding: "3px 6px", textAlign: "right", fontFamily: "monospace", fontWeight: "bold", background: "#f8fafc" }}>
+            Q {Q(g.subtotal)}
+          </td>
         </tr>
       </tbody>
+    </table>
+  );
+
+  const totalDelFondo = (
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "8.5pt", tableLayout: "fixed", fontFamily: FONT, color: C }}>
+      <ColGroup />
+      <tfoot>
+        <tr>
+          <td colSpan={3} style={{ border: "1px solid #999", padding: "5px 6px", textAlign: "right", fontWeight: "bold" }}>TOTAL DEL FONDO (sin IVA)</td>
+          <td style={{ border: "1px solid #999", padding: "5px 6px", textAlign: "right", fontWeight: "bold", fontFamily: "monospace" }}>Q {Q(totalSinIva)}</td>
+        </tr>
+      </tfoot>
     </table>
   );
 
@@ -128,7 +146,15 @@ export default function ImprimirFriClient({ fri, pagos, polizas, saldo, nombreUn
     </div>
   );
 
-  const sections: React.ReactNode[] = [...filas.map(f => filaRow(f)), cierre];
+  const sections: React.ReactNode[] = [
+    ...grupos.flatMap((g, gi) => [
+      <div key={`renglon-${gi}`}>{tituloRenglon(g)}</div>,
+      ...g.documentos.map((_, di) => <div key={`renglon-${gi}-doc-${di}`}>{filaDoc(g, di)}</div>),
+      <div key={`renglon-${gi}-subtotal`}>{subtotalRenglon(g)}</div>,
+    ]),
+    <div key="total-fondo">{totalDelFondo}</div>,
+    cierre,
+  ];
 
   return (
     <>

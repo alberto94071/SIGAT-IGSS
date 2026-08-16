@@ -28,6 +28,9 @@ export async function guardarConfiguracion(data: any) {
           nombre_solicitante:   data.nombre_solicitante,
           numero_empleado_sol:  data.numero_empleado_sol,
           resolucion_fondo:     data.resolucion_fondo,
+          banco_nombre:         data.banco_nombre,
+          cuenta_numero:        data.cuenta_numero,
+          cuenta_nombre:        data.cuenta_nombre,
           updated_at:           fechaHoraGuatemala(),
         })
         .where(eq(configuracion.id, existing.id));

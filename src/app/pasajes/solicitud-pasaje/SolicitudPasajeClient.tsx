@@ -22,6 +22,18 @@ export default function SolicitudPasajeClient({
   const [solicitudes, setSolicitudes] = useState(init);
   const [modal, setModal] = useState(false);
   const [editando, setEditando] = useState<Solicitud | null>(null);
+  const [query, setQuery] = useState("");
+
+  const q = query.toLowerCase().trim();
+  const filtradas = useMemo(() => !q ? solicitudes : solicitudes.filter(s =>
+    String(s.numero).padStart(4, "0").includes(q) ||
+    s.fecha.includes(q) ||
+    s.afiliacion.toLowerCase().includes(q) ||
+    s.nombre_afiliado.toLowerCase().includes(q) ||
+    s.punto_partida.toLowerCase().includes(q) ||
+    s.destino.toLowerCase().includes(q) ||
+    s.estado.toLowerCase().includes(q)
+  ), [solicitudes, q]);
 
   return (
     <div className="space-y-5">
@@ -40,6 +52,14 @@ export default function SolicitudPasajeClient({
         )}
       </div>
 
+      <div>
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input className="input pl-9" placeholder="Buscar por SPS-75, fecha, afiliación, nombre, ruta, estado…"
+            value={query} onChange={e => setQuery(e.target.value)} />
+        </div>
+      </div>
+
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -56,7 +76,7 @@ export default function SolicitudPasajeClient({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {solicitudes.map(s => (
+              {filtradas.map(s => (
                 <tr key={s.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">{String(s.numero).padStart(4, "0")}</td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{s.fecha}</td>
@@ -93,10 +113,10 @@ export default function SolicitudPasajeClient({
               ))}
             </tbody>
           </table>
-          {solicitudes.length === 0 && (
+          {filtradas.length === 0 && (
             <div className="text-center py-16 text-gray-400">
               <Bus className="w-8 h-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">Aún no se ha registrado ninguna solicitud de pasaje.</p>
+              <p className="text-sm">{q ? "Sin resultados para esa búsqueda." : "Aún no se ha registrado ninguna solicitud de pasaje."}</p>
             </div>
           )}
         </div>

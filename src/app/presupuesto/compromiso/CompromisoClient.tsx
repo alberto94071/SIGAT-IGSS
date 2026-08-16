@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { FileCheck, X, Loader2, AlertTriangle, Hash, CheckCircle, XCircle } from "lucide-react";
+import { useState, useMemo } from "react";
+import { FileCheck, X, Loader2, AlertTriangle, Hash, CheckCircle, XCircle, Search, History } from "lucide-react";
 import { registrarCompromiso, aprobarCompromiso, rechazarCompromiso } from "@/lib/adjudicacion/compromiso-actions";
 import RenglonBadges from "@/components/RenglonBadges";
 import ExpandableRow from "@/components/ExpandableRow";
@@ -15,15 +15,43 @@ type Orden = {
   traz: TrazabilidadConsolidacion | null;
 };
 
+type OrdenHistorico = Orden & {
+  estado: string; no_devengado: string | null; estado_devengado: string | null; fecha: string;
+};
+
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export default function CompromisoClient({ ordenes: init, solicitadas: initSolicitadas }: { ordenes: Orden[]; solicitadas: Orden[] }) {
+const ESTADO_STYLE: Record<string, string> = {
+  "Compromiso Solicitado": "bg-amber-100 text-amber-700",
+  "Pendiente DAB-60": "bg-blue-100 text-blue-700",
+  "DAB-60 Pendiente Aprobación": "bg-blue-100 text-blue-700",
+  "En Devengado": "bg-indigo-100 text-indigo-700",
+  "Devengado Solicitado": "bg-indigo-100 text-indigo-700",
+  "Completada": "bg-green-100 text-green-700",
+  "Anulada": "bg-red-100 text-red-700",
+};
+
+export default function CompromisoClient({ ordenes: init, solicitadas: initSolicitadas, historico: initHistorico }: { ordenes: Orden[]; solicitadas: Orden[]; historico: OrdenHistorico[] }) {
   const [ordenes, setOrdenes] = useState(init);
   const [solicitadas, setSolicitadas] = useState(initSolicitadas);
+  const [historico] = useState(initHistorico);
   const [comprometerFor, setComprometerFor] = useState<Orden | null>(null);
   const [acciones, setAcciones] = useState<Record<number, { cargando: boolean; error: string | null }>>({});
   const [expandedOrden, setExpandedOrden] = useState<number | null>(null);
   const [expandedSolicitada, setExpandedSolicitada] = useState<number | null>(null);
+  const [expandedHistorico, setExpandedHistorico] = useState<number | null>(null);
+  const [query, setQuery] = useState("");
+
+  const q = query.toLowerCase().trim();
+  const historicoFiltrado = useMemo(() => !q ? historico : historico.filter(o =>
+    `OC-${String(o.numero).padStart(3, "0")}`.toLowerCase().includes(q) ||
+    (o.no_compromiso ?? "").toLowerCase().includes(q) ||
+    (o.no_devengado ?? "").toLowerCase().includes(q) ||
+    (o.proveedor_nombre ?? "").toLowerCase().includes(q) ||
+    (o.proveedor_nit ?? "").toLowerCase().includes(q) ||
+    o.estado.toLowerCase().includes(q) ||
+    o.fecha.includes(q)
+  ), [historico, q]);
 
   const ejecutarAccion = async (id: number, accion: (id: number) => Promise<{ ok: true } | { error: string }>) => {
     setAcciones(prev => ({ ...prev, [id]: { cargando: true, error: null } }));
@@ -171,6 +199,77 @@ export default function CompromisoClient({ ordenes: init, solicitadas: initSolic
             <div className="text-center py-16 text-gray-400">
               <FileCheck className="w-8 h-8 mx-auto mb-2 opacity-30" />
               <p className="text-sm">No hay compromisos pendientes de aprobación.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+          <History className="w-4 h-4" /> Histórico de Compromiso
+        </h2>
+        <p className="text-sm text-gray-500 mt-0.5">
+          Toda orden con No. de Compromiso ya asignado, sin importar dónde vaya después — para consulta.
+        </p>
+      </div>
+
+      <div>
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input className="input pl-9" placeholder="Buscar por orden, No. Compromiso, proveedor, estado…"
+            value={query} onChange={e => setQuery(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="table-header">
+                <th className="px-4 py-3 w-8"></th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">Orden</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">No. Compromiso</th>
+                <th className="px-4 py-3 text-left max-w-xs">Proveedor</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">Estado</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {historicoFiltrado.map(o => (
+                <ExpandableRow key={o.id} colSpan={6}
+                  expanded={expandedHistorico === o.id}
+                  onToggle={() => setExpandedHistorico(p => p === o.id ? null : o.id)}
+                  rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
+                  detail={<TrazabilidadPanel
+                    titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}`}
+                    cadena={[{ label: "No. Compromiso", value: o.no_compromiso }, { label: "No. Devengado", value: o.no_devengado }]}
+                    traz={o.traz}
+                  />}>
+                  <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
+                    OC-{String(o.numero).padStart(3, "0")}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{o.no_compromiso ?? "—"}</td>
+                  <td className="px-4 py-3 max-w-xs">
+                    <p className="font-medium text-gray-900">{o.proveedor_nombre ?? "—"}</p>
+                    {o.proveedor_nit && <p className="text-xs text-gray-400">NIT: {o.proveedor_nit}</p>}
+                    <RenglonBadges renglones={o.renglones} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${ESTADO_STYLE[o.estado] ?? "bg-gray-100 text-gray-700"}`}>
+                      {o.estado}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
+                    {o.total != null ? Q(o.total) : "—"}
+                  </td>
+                </ExpandableRow>
+              ))}
+            </tbody>
+          </table>
+          {historicoFiltrado.length === 0 && (
+            <div className="text-center py-16 text-gray-400">
+              <History className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">{q ? "Sin resultados para esa búsqueda." : "Todavía no hay compromisos registrados."}</p>
             </div>
           )}
         </div>

@@ -60,8 +60,11 @@ export default async function ImprimirDab60FondoRotativoPage({ params }: Props) 
     marca: pago.dab60_marca, modelo: pago.dab60_modelo, serie: pago.dab60_serie,
   };
 
+  // Igual que en la ruta Normal: la fecha del formulario es la de ingreso
+  // del producto a bodega, no la del A-04/consolidación.
+  const fechaFormulario = pago.dab60_fecha_ingreso_producto ?? fecha;
   const datos = {
-    lugarFecha: cfg ? `${cfg.municipio}, ${fechaLarga(fecha)}` : fechaLarga(fecha),
+    lugarFecha: cfg ? `${cfg.municipio}, ${fechaLarga(fechaFormulario)}` : fechaLarga(fechaFormulario),
     dependencia: cfg ? `${cfg.codigo_contable}-${cfg.nombre_unidad}`.toUpperCase() : "",
     claveAdministrativa: cfg?.codigo_centro_costo ?? "",
     ordenCompra: `A-04 ${numeroA04}`,
