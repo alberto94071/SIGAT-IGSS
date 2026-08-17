@@ -151,11 +151,19 @@ export function normalizaNombre(s: string): string {
 // SiafClient.tsx al armar sugerencias de insumo). Se usa como respaldo
 // cuando el snapshot guardado en siaf_compras_items al crear la solicitud
 // quedó vacío y luego se completó en Base de Datos Central.
-export async function unidadMedidaLookupMap(): Promise<Map<string, string | null>> {
+// `codigos`, si se pasa, limita la consulta a esos codigo_igss — Base de
+// Datos Central tiene ~200 mil filas (catálogo nacional IGSS), así que traer
+// la tabla completa en cada impresión de DAB-60/A-04 o cada carga de listas
+// de consolidaciones ya no es viable; el llamador conoce de antemano qué
+// códigos necesita (los de los ítems que está resolviendo).
+export async function unidadMedidaLookupMap(codigos?: string[]): Promise<Map<string, string | null>> {
+  if (codigos && codigos.length === 0) return new Map();
   const rows = await db.select({
     codigo_igss: baseDatosCentral.codigo_igss, nombre: baseDatosCentral.nombre,
     unidad_medida: baseDatosCentral.unidad_medida,
-  }).from(baseDatosCentral).where(isNotNull(baseDatosCentral.codigo_igss));
+  }).from(baseDatosCentral).where(codigos
+    ? and(isNotNull(baseDatosCentral.codigo_igss), inArray(baseDatosCentral.codigo_igss, codigos))
+    : isNotNull(baseDatosCentral.codigo_igss));
   const map = new Map<string, string | null>();
   for (const r of rows) if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.unidad_medida);
   return map;
@@ -164,11 +172,14 @@ export async function unidadMedidaLookupMap(): Promise<Map<string, string | null
 // Mismo cruce que unidadMedidaLookupMap, pero para "codigo" (columna aparte de
 // Base de Datos Central, distinta de código IGSS y de código PPR) — es la que
 // se imprime en la columna "CODIGO" del DAB-60.
-export async function codigoLookupMap(): Promise<Map<string, string | null>> {
+export async function codigoLookupMap(codigos?: string[]): Promise<Map<string, string | null>> {
+  if (codigos && codigos.length === 0) return new Map();
   const rows = await db.select({
     codigo_igss: baseDatosCentral.codigo_igss, nombre: baseDatosCentral.nombre,
     codigo: baseDatosCentral.codigo,
-  }).from(baseDatosCentral).where(isNotNull(baseDatosCentral.codigo_igss));
+  }).from(baseDatosCentral).where(codigos
+    ? and(isNotNull(baseDatosCentral.codigo_igss), inArray(baseDatosCentral.codigo_igss, codigos))
+    : isNotNull(baseDatosCentral.codigo_igss));
   const map = new Map<string, string | null>();
   for (const r of rows) if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.codigo);
   return map;
@@ -205,8 +216,14 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
   // Un solo query para el catálogo completo (misma tabla que ya carga
   // renglonLookupMap) en vez de una consulta por ítem — antes esto era un
   // N+1 clásico: una solicitud consolidada con muchos insumos distintos
-  // disparaba una consulta a catalogo_compras por cada uno.
-  const [unidades, codigos, renglones] = await Promise.all([unidadMedidaLookupMap(), codigoLookupMap(), renglonLookupMap()]);
+  // disparaba una consulta a catalogo_compras por cada uno. Los lookups de
+  // Base de Datos Central se acotan a los codigo_igss de esta consolidación
+  // (esa tabla tiene ~200 mil filas — el catálogo nacional IGSS — así que
+  // traerla completa en cada impresión no escala).
+  const codigosIgss = [...new Set(items.map(i => i.codigo_igss).filter((c): c is string => c != null))];
+  const [unidades, codigos, renglones] = await Promise.all([
+    unidadMedidaLookupMap(codigosIgss), codigoLookupMap(codigosIgss), renglonLookupMap(),
+  ]);
 
   const grupos = new Map<string, GrupoRenglon>();
   for (const item of items) {
