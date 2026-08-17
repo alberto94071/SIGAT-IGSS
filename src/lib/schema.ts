@@ -819,6 +819,10 @@ export const proveedores = pgTable("proveedores", {
   telefono:    text("telefono"),
   email:       text("email"),
   direccion:   text("direccion"),
+  // Régimen tributario (ej. "Pequeño Contribuyente", "Trimestral") — viene del
+  // padrón de proveedores, útil de cara a retenciones; el sistema no calcula
+  // nada con esto todavía, solo se conserva como dato de referencia.
+  regimen:     text("regimen"),
   activo:      boolean("activo").notNull().default(true),
   created_at:  text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   updated_at:  text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
