@@ -59,7 +59,11 @@ export async function getConsolidacionesConDetalles(): Promise<Consolidacion[]> 
   }
 
   const renglonMap = await renglonLookupMap();
-  const unidadMedidaMap = await unidadMedidaLookupMap();
+  // Acotado a los codigo_igss presentes — Base de Datos Central tiene ~200 mil
+  // filas (catálogo nacional IGSS), traerla completa en cada carga de esta
+  // lista no escala (ver mismo criterio en gruposRenglonDeConsolidacion).
+  const codigosIgss = [...new Set(items.map(i => i.codigo_igss).filter((c): c is string => c != null))];
+  const unidadMedidaMap = await unidadMedidaLookupMap(codigosIgss);
 
   return cons.map(c => {
     const cSiaf = siaf.filter(s => s.consolidacion_id === c.id);
