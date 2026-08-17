@@ -108,6 +108,12 @@ export default function SiafClient({
   const [selCodigo,         setSelCodigo]         = useState<string | null>(null);
   const [selNombre,         setSelNombre]         = useState<string | null>(null);
   const [subprodSelections, setSubprodSelections] = useState<Map<number, string>>(new Map());
+  // Base de Datos Central (fuente normal de unidad_medida) está vacía en
+  // producción — sin este campo manual, todo insumo nuevo queda con
+  // unidad_medida null y sale en blanco en el DAB-60/A-04 impreso (ver
+  // gruposRenglonDeConsolidacion en renglon-utils.ts, que ya prioriza este
+  // snapshot sobre el catálogo cuando existe).
+  const [unidadManual,      setUnidadManual]      = useState("");
 
   // ─── Computed ──────────────────────────────────────────────────────────────
 
@@ -209,7 +215,7 @@ export default function SiafClient({
     setModal(true); setModalItems([]); setModalError("");
     setNewFecha(fechaGuatemala());
     setNewJustificacion("");
-    setItemSearch(""); setSelCodigo(null); setSelNombre(null); setSubprodSelections(new Map());
+    setItemSearch(""); setSelCodigo(null); setSelNombre(null); setSubprodSelections(new Map()); setUnidadManual("");
     setCorrLoading(true);
     const n = await getNextSiafNumeroCompras();
     setNextNumero(n); setCorrLoading(false);
@@ -223,7 +229,7 @@ export default function SiafClient({
     setModalError("");
     setNewFecha(sol.fecha);
     setNewJustificacion(sol.observaciones ?? "");
-    setItemSearch(""); setSelCodigo(null); setSelNombre(null); setSubprodSelections(new Map());
+    setItemSearch(""); setSelCodigo(null); setSelNombre(null); setSubprodSelections(new Map()); setUnidadManual("");
     const prefilled: ModalItem[] = sol.items
       .filter(i => i.catalogo_id != null)
       .map(i => ({
@@ -254,12 +260,12 @@ export default function SiafClient({
         key: Date.now() + catId, catalogo_id: entry.id,
         codigo_igss: entry.codigo_igss, codigo_ppr: entry.codigo_ppr,
         nombre: entry.nombre, subproducto: entry.subproducto,
-        unidad_medida: entry.unidad_medida, cantidad_solicitada: qty,
+        unidad_medida: unidadManual.trim() || entry.unidad_medida, cantidad_solicitada: qty,
       });
     });
     if (newItems.length === 0) return;
     setModalItems(p => [...p, ...newItems]);
-    setItemSearch(""); setSelCodigo(null); setSelNombre(null); setSubprodSelections(new Map());
+    setItemSearch(""); setSelCodigo(null); setSelNombre(null); setSubprodSelections(new Map()); setUnidadManual("");
   }
 
   async function handleGuardar() {
@@ -852,6 +858,7 @@ export default function SiafClient({
                         setSelCodigo(null);
                         setSelNombre(null);
                         setSubprodSelections(new Map());
+                        setUnidadManual("");
                         setShowItemDrop(true);
                       }}
                       onFocus={() => itemSearch.length >= 1 && setShowItemDrop(true)}
@@ -868,6 +875,7 @@ export default function SiafClient({
                             setSelNombre(c.nombre);
                             setItemSearch(c.nombre);
                             setSubprodSelections(new Map());
+                            setUnidadManual(c.unidad_medida ?? "");
                             setShowItemDrop(false);
                           }}
                           className="w-full text-left px-4 py-2.5 hover:bg-brand-50 border-b border-gray-50 last:border-0">
@@ -883,6 +891,15 @@ export default function SiafClient({
                     </div>
                   )}
                 </div>
+
+                {selCodigo != null && subprodEntries.length > 0 && (
+                  <div>
+                    <label className="label">Unidad de medida</label>
+                    <input className="input" value={unidadManual}
+                      onChange={e => setUnidadManual(e.target.value)}
+                      placeholder="Ej. Galón, Unidad, Caja…" />
+                  </div>
+                )}
 
                 {selCodigo != null && subprodEntries.length > 0 && (
                   <div className="space-y-2">
