@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/lib/db";
-import { baseDatosCentral, catalogoSubproductos, proveedores } from "@/lib/schema";
+import { baseDatosCentral, proveedores } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
@@ -56,46 +56,6 @@ export async function eliminarInsumo(id: number) {
   if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
   await db.delete(baseDatosCentral).where(eq(baseDatosCentral.id, id));
   revalidatePath("/base-datos/insumos");
-  return { ok: true };
-}
-
-// ── Subproductos ──────────────────────────────────────────────────────────────
-export async function getSubproductos() {
-  return db.select().from(catalogoSubproductos).orderBy(catalogoSubproductos.nombre);
-}
-
-export async function crearSubproducto(nombre: string) {
-  const session = await auth();
-  if (!session) return { error: "No autorizado" };
-  if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
-  try {
-    const [row] = await db.insert(catalogoSubproductos).values({ nombre, activo: true }).returning();
-    revalidatePath("/base-datos/subproductos");
-    return { subproducto: row };
-  } catch {
-    return { error: "Ya existe un subproducto con ese nombre" };
-  }
-}
-
-export async function editarSubproducto(id: number, nombre: string) {
-  const session = await auth();
-  if (!session) return { error: "No autorizado" };
-  if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
-  try {
-    await db.update(catalogoSubproductos).set({ nombre }).where(eq(catalogoSubproductos.id, id));
-    revalidatePath("/base-datos/subproductos");
-    return { ok: true };
-  } catch {
-    return { error: "Ya existe un subproducto con ese nombre" };
-  }
-}
-
-export async function toggleSubproducto(id: number, activo: boolean) {
-  const session = await auth();
-  if (!session) return { error: "No autorizado" };
-  if (session.user.rol === "consulta") return { error: "No tienes permiso para esta acción" };
-  await db.update(catalogoSubproductos).set({ activo }).where(eq(catalogoSubproductos.id, id));
-  revalidatePath("/base-datos/subproductos");
   return { ok: true };
 }
 

@@ -3,7 +3,7 @@ import { fechaGuatemala } from "@/lib/date-utils";
 
 import { db } from "@/lib/db";
 import { pasajesTarifario, pasajesSolicitudes, pasajesPagos, usuarios } from "@/lib/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { buscarAfiliadoPorAfiliacion } from "@/lib/afiliados-actions";
 
@@ -15,33 +15,84 @@ async function requireEdit(): Promise<{ error: string } | { uid: number }> {
 }
 
 // ─── Tarifario ────────────────────────────────────────────────────────────────
-export async function listarTarifario() {
-  return db.select().from(pasajesTarifario).orderBy(pasajesTarifario.punto_partida, pasajesTarifario.destino);
+// El tarifario oficial (resolución 1007-SPS/2025) trae ~7,700 rutas — nunca se
+// trae completo al cliente. listarTarifarioPaginado() es la fuente de la
+// pantalla de administración (búsqueda + paginación, mismo patrón que
+// Base de Datos/Insumos); listarDelegaciones/listarPuntosPartida/listarDestinos
+// alimentan los selects en cascada de Solicitud de Pasaje.
+export async function listarTarifarioPaginado(params: { q?: string; delegacion?: string; page?: number }) {
+  const q = (params.q ?? "").trim();
+  const delegacion = (params.delegacion ?? "").trim();
+  const page = params.page && params.page > 0 ? params.page : 1;
+  const limit = 50;
+  const offset = (page - 1) * limit;
+
+  const condiciones = [];
+  if (delegacion) condiciones.push(eq(pasajesTarifario.delegacion, delegacion));
+  if (q) condiciones.push(sql`(${pasajesTarifario.punto_partida} ILIKE ${"%" + q + "%"} OR ${pasajesTarifario.destino} ILIKE ${"%" + q + "%"})`);
+  const where = condiciones.length > 0 ? and(...condiciones) : undefined;
+
+  const [registros, [{ count }], delegaciones] = await Promise.all([
+    db.select().from(pasajesTarifario).where(where)
+      .orderBy(pasajesTarifario.delegacion, pasajesTarifario.punto_partida, pasajesTarifario.destino)
+      .limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)::int` }).from(pasajesTarifario).where(where),
+    listarDelegaciones(),
+  ]);
+
+  return { registros, totalCount: count, page, limit, delegaciones };
 }
 
-export async function buscarTarifa(puntoPartida: string, destino: string) {
+export async function listarDelegaciones(): Promise<string[]> {
+  const rows = await db.selectDistinct({ delegacion: pasajesTarifario.delegacion }).from(pasajesTarifario)
+    .orderBy(pasajesTarifario.delegacion);
+  return rows.map(r => r.delegacion);
+}
+
+export async function listarPuntosPartida(delegacion: string): Promise<string[]> {
+  if (!delegacion.trim()) return [];
+  const rows = await db.selectDistinct({ punto_partida: pasajesTarifario.punto_partida }).from(pasajesTarifario)
+    .where(eq(pasajesTarifario.delegacion, delegacion))
+    .orderBy(pasajesTarifario.punto_partida);
+  return rows.map(r => r.punto_partida);
+}
+
+export async function listarDestinos(delegacion: string, puntoPartida: string): Promise<string[]> {
+  if (!delegacion.trim() || !puntoPartida.trim()) return [];
+  const rows = await db.selectDistinct({ destino: pasajesTarifario.destino }).from(pasajesTarifario)
+    .where(and(eq(pasajesTarifario.delegacion, delegacion), eq(pasajesTarifario.punto_partida, puntoPartida)))
+    .orderBy(pasajesTarifario.destino);
+  return rows.map(r => r.destino);
+}
+
+export async function buscarTarifa(delegacion: string, puntoPartida: string, destino: string) {
   const [row] = await db.select().from(pasajesTarifario)
-    .where(sql`${pasajesTarifario.punto_partida} = ${puntoPartida} AND ${pasajesTarifario.destino} = ${destino}`)
+    .where(and(
+      eq(pasajesTarifario.delegacion, delegacion),
+      eq(pasajesTarifario.punto_partida, puntoPartida),
+      eq(pasajesTarifario.destino, destino),
+    ))
     .limit(1);
   return row ?? null;
 }
 
-export type NuevaTarifaData = { punto_partida: string; destino: string; valor_ida: number };
+export type NuevaTarifaData = { delegacion: string; punto_partida: string; destino: string; valor_ida: number };
 
 export async function crearTarifa(data: NuevaTarifaData): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireEdit();
     if ("error" in check) return check;
+    if (!data.delegacion.trim()) return { error: "La delegación/caja departamental es obligatoria" };
     if (!data.punto_partida.trim() || !data.destino.trim()) return { error: "Punto de partida y destino son obligatorios" };
     if (!(data.valor_ida > 0)) return { error: "Ingresa un valor de ida válido" };
 
     await db.insert(pasajesTarifario).values({
-      punto_partida: data.punto_partida.trim(), destino: data.destino.trim(),
+      delegacion: data.delegacion.trim(), punto_partida: data.punto_partida.trim(), destino: data.destino.trim(),
       valor_ida: data.valor_ida, creado_por: check.uid,
     });
     return { ok: true };
   } catch {
-    return { error: "Error al crear la tarifa" };
+    return { error: "Ya existe una tarifa para esa delegación, punto de partida y destino" };
   }
 }
 
@@ -49,15 +100,17 @@ export async function actualizarTarifa(id: number, data: NuevaTarifaData): Promi
   try {
     const check = await requireEdit();
     if ("error" in check) return check;
+    if (!data.delegacion.trim()) return { error: "La delegación/caja departamental es obligatoria" };
     if (!data.punto_partida.trim() || !data.destino.trim()) return { error: "Punto de partida y destino son obligatorios" };
     if (!(data.valor_ida > 0)) return { error: "Ingresa un valor de ida válido" };
 
     await db.update(pasajesTarifario).set({
-      punto_partida: data.punto_partida.trim(), destino: data.destino.trim(), valor_ida: data.valor_ida,
+      delegacion: data.delegacion.trim(), punto_partida: data.punto_partida.trim(), destino: data.destino.trim(),
+      valor_ida: data.valor_ida,
     }).where(eq(pasajesTarifario.id, id));
     return { ok: true };
   } catch {
-    return { error: "Error al actualizar la tarifa" };
+    return { error: "Ya existe una tarifa para esa delegación, punto de partida y destino" };
   }
 }
 
@@ -78,6 +131,7 @@ export type Tramo = "Ida" | "Vuelta" | "Ida y Vuelta";
 export type NuevaSolicitudData = {
   afiliacion: string;
   tramo: Tramo;
+  delegacion: string;
   punto_partida: string;
   destino: string;
   lugar_especifico: string;
@@ -98,13 +152,14 @@ export async function crearSolicitudPasaje(data: NuevaSolicitudData): Promise<{ 
 
     if (!data.afiliacion.trim()) return { error: "El número de afiliación es obligatorio" };
     if (!["Ida", "Vuelta", "Ida y Vuelta"].includes(data.tramo)) return { error: "Selecciona Ida, Vuelta o Ida y Vuelta" };
+    if (!data.delegacion.trim()) return { error: "Selecciona la delegación/caja departamental" };
     if (!data.punto_partida.trim() || !data.destino.trim()) return { error: "Punto de partida y destino son obligatorios" };
     if (!data.caso_concluido && !data.fecha_cita) return { error: "Indica la fecha de la cita, o marca que el caso fue concluido" };
 
     const afiliado = await buscarAfiliadoPorAfiliacion(data.afiliacion);
     if (!afiliado) return { error: "No se encontró un afiliado con ese número de afiliación" };
 
-    const tarifa = await buscarTarifa(data.punto_partida, data.destino);
+    const tarifa = await buscarTarifa(data.delegacion, data.punto_partida, data.destino);
     if (!tarifa) return { error: `No existe tarifa registrada para la ruta "${data.punto_partida}" → "${data.destino}". Regístrala primero en Pago de Pasajes/Tarifario.` };
 
     const res = await db.execute(sql`SELECT COALESCE(MAX(numero), 0) + 1 AS next FROM pasajes_solicitudes`);
@@ -117,6 +172,7 @@ export async function crearSolicitudPasaje(data: NuevaSolicitudData): Promise<{ 
       nombre_afiliado: afiliado.nombre,
       direccion: afiliado.direccion,
       tramo: data.tramo,
+      delegacion: data.delegacion.trim(),
       punto_partida: data.punto_partida.trim(),
       destino: data.destino.trim(),
       lugar_especifico: data.lugar_especifico.trim() || null,
@@ -143,14 +199,16 @@ export async function editarYReenviarSolicitud(id: number, data: NuevaSolicitudD
     if (solicitud.estado !== "Rechazada") return { error: "Solo se pueden editar solicitudes rechazadas" };
 
     if (!["Ida", "Vuelta", "Ida y Vuelta"].includes(data.tramo)) return { error: "Selecciona Ida, Vuelta o Ida y Vuelta" };
+    if (!data.delegacion.trim()) return { error: "Selecciona la delegación/caja departamental" };
     if (!data.punto_partida.trim() || !data.destino.trim()) return { error: "Punto de partida y destino son obligatorios" };
     if (!data.caso_concluido && !data.fecha_cita) return { error: "Indica la fecha de la cita, o marca que el caso fue concluido" };
 
-    const tarifa = await buscarTarifa(data.punto_partida, data.destino);
+    const tarifa = await buscarTarifa(data.delegacion, data.punto_partida, data.destino);
     if (!tarifa) return { error: `No existe tarifa registrada para la ruta "${data.punto_partida}" → "${data.destino}"` };
 
     await db.update(pasajesSolicitudes).set({
       tramo: data.tramo,
+      delegacion: data.delegacion.trim(),
       punto_partida: data.punto_partida.trim(),
       destino: data.destino.trim(),
       lugar_especifico: data.lugar_especifico.trim() || null,
@@ -216,7 +274,7 @@ export async function aceptarSolicitudPasaje(solicitudId: number): Promise<{ ok:
     const afiliado = await buscarAfiliadoPorAfiliacion(solicitud.afiliacion);
     if (!afiliado) return { error: "No se encontró el afiliado de la solicitud" };
 
-    const tarifa = await buscarTarifa(solicitud.punto_partida, solicitud.destino);
+    const tarifa = await buscarTarifa(solicitud.delegacion, solicitud.punto_partida, solicitud.destino);
     if (!tarifa) return { error: `No existe tarifa registrada para la ruta "${solicitud.punto_partida}" → "${solicitud.destino}"` };
 
     const formularioNo = await siguienteFormularioNo();

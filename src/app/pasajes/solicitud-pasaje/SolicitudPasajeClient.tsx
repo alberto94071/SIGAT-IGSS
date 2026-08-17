@@ -4,21 +4,23 @@ import { fechaGuatemala } from "@/lib/date-utils";
 import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Bus, Plus, X, Loader2, AlertTriangle, Printer, Search, Pencil } from "lucide-react";
-import { crearSolicitudPasaje, editarYReenviarSolicitud, type NuevaSolicitudData, type Tramo } from "@/lib/pasajes-actions";
+import {
+  crearSolicitudPasaje, editarYReenviarSolicitud, listarPuntosPartida, listarDestinos, buscarTarifa,
+  type NuevaSolicitudData, type Tramo,
+} from "@/lib/pasajes-actions";
 import { buscarAfiliados } from "@/lib/afiliados-actions";
 
-type Tarifa = { id: number; punto_partida: string; destino: string; valor_ida: number };
 type Afiliado = { id: number; afiliacion: string; nombre: string; calidad: string | null; direccion: string | null };
 type Solicitud = {
   id: number; numero: number; fecha: string; afiliacion: string; nombre_afiliado: string;
-  tramo: string; punto_partida: string; destino: string; estado: string; motivo_rechazo: string | null;
+  tramo: string; delegacion: string; punto_partida: string; destino: string; estado: string; motivo_rechazo: string | null;
 };
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function SolicitudPasajeClient({
-  solicitudes: init, tarifario, canEdit,
-}: { solicitudes: Solicitud[]; tarifario: Tarifa[]; canEdit: boolean }) {
+  solicitudes: init, delegaciones, canEdit,
+}: { solicitudes: Solicitud[]; delegaciones: string[]; canEdit: boolean }) {
   const [solicitudes, setSolicitudes] = useState(init);
   const [modal, setModal] = useState(false);
   const [editando, setEditando] = useState<Solicitud | null>(null);
@@ -124,14 +126,14 @@ export default function SolicitudPasajeClient({
 
       {modal && (
         <SolicitudModal
-          tarifario={tarifario}
+          delegaciones={delegaciones}
           onClose={() => setModal(false)}
           onCreado={s => { setSolicitudes(prev => [s, ...prev]); setModal(false); }}
         />
       )}
       {editando && (
         <SolicitudModal
-          tarifario={tarifario}
+          delegaciones={delegaciones}
           solicitudExistente={editando}
           onClose={() => setEditando(null)}
           onCreado={s => { setSolicitudes(prev => prev.map(x => x.id === s.id ? s : x)); setEditando(null); }}
@@ -186,20 +188,20 @@ function AfiliadoPicker({ onSeleccionar }: { onSeleccionar: (a: Afiliado) => voi
 }
 
 function SolicitudModal({
-  tarifario, solicitudExistente, onClose, onCreado,
-}: { tarifario: Tarifa[]; solicitudExistente?: Solicitud; onClose: () => void; onCreado: (s: Solicitud) => void }) {
+  delegaciones, solicitudExistente, onClose, onCreado,
+}: { delegaciones: string[]; solicitudExistente?: Solicitud; onClose: () => void; onCreado: (s: Solicitud) => void }) {
   const editando = !!solicitudExistente;
   const [afiliado, setAfiliado] = useState<Afiliado | null>(
     solicitudExistente ? { id: 0, afiliacion: solicitudExistente.afiliacion, nombre: solicitudExistente.nombre_afiliado, calidad: null, direccion: null } : null
   );
 
-  const puntos = useMemo(() => Array.from(new Set(tarifario.map(t => t.punto_partida))).sort(), [tarifario]);
+  const [delegacion, setDelegacion] = useState(solicitudExistente?.delegacion ?? "");
   const [puntoPartida, setPuntoPartida] = useState(solicitudExistente?.punto_partida ?? "");
-  const destinos = useMemo(
-    () => Array.from(new Set(tarifario.filter(t => t.punto_partida === puntoPartida).map(t => t.destino))).sort(),
-    [tarifario, puntoPartida]
-  );
   const [destino, setDestino] = useState(solicitudExistente?.destino ?? "");
+  const [puntos, setPuntos] = useState<string[]>([]);
+  const [destinos, setDestinos] = useState<string[]>([]);
+  const [cargandoPuntos, setCargandoPuntos] = useState(false);
+  const [cargandoDestinos, setCargandoDestinos] = useState(false);
   const [lugarEspecifico, setLugarEspecifico] = useState("");
   const [especialidad, setEspecialidad] = useState("");
   const [tramo, setTramo] = useState<Tramo>((solicitudExistente?.tramo as Tramo) ?? "Ida");
@@ -207,19 +209,40 @@ function SolicitudModal({
   const [fechaCita, setFechaCita] = useState("");
   const [observaciones, setObservaciones] = useState("");
 
+  const [tarifaValorIda, setTarifaValorIda] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const tarifa = tarifario.find(t => t.punto_partida === puntoPartida && t.destino === destino) ?? null;
-  const valor = tarifa ? (tramo === "Ida y Vuelta" ? tarifa.valor_ida * 2 : tarifa.valor_ida) : 0;
+  // Al abrir en modo edición, precarga las listas dependientes de la
+  // delegación/ruta ya guardadas para que los selects no aparezcan vacíos.
+  useEffect(() => {
+    if (!delegacion) { setPuntos([]); return; }
+    setCargandoPuntos(true);
+    listarPuntosPartida(delegacion).then(r => { setPuntos(r); setCargandoPuntos(false); });
+  }, [delegacion]);
+
+  useEffect(() => {
+    if (!delegacion || !puntoPartida) { setDestinos([]); return; }
+    setCargandoDestinos(true);
+    listarDestinos(delegacion, puntoPartida).then(r => { setDestinos(r); setCargandoDestinos(false); });
+  }, [delegacion, puntoPartida]);
+
+  useEffect(() => {
+    if (!delegacion || !puntoPartida || !destino) { setTarifaValorIda(null); return; }
+    buscarTarifa(delegacion, puntoPartida, destino).then(t => setTarifaValorIda(t?.valor_ida ?? null));
+  }, [delegacion, puntoPartida, destino]);
+
+  const tarifaEncontrada = tarifaValorIda != null;
+  const valor = tarifaValorIda != null ? (tramo === "Ida y Vuelta" ? tarifaValorIda * 2 : tarifaValorIda) : 0;
 
   async function handleGuardar() {
     if (!afiliado) return setError("Busca y selecciona al afiliado");
+    if (!delegacion) return setError("Selecciona la delegación/caja departamental");
     if (!puntoPartida || !destino) return setError("Selecciona el punto de partida y el destino");
     if (!casoConcluido && !fechaCita) return setError("Indica la fecha de la cita, o marca que el caso fue concluido");
 
     const data: NuevaSolicitudData = {
-      afiliacion: afiliado.afiliacion, tramo, punto_partida: puntoPartida, destino,
+      afiliacion: afiliado.afiliacion, tramo, delegacion, punto_partida: puntoPartida, destino,
       lugar_especifico: lugarEspecifico, especialidad, caso_concluido: casoConcluido, fecha_cita: fechaCita, observaciones,
     };
     setSaving(true); setError("");
@@ -228,7 +251,7 @@ function SolicitudModal({
       const res = await editarYReenviarSolicitud(solicitudExistente!.id, data);
       setSaving(false);
       if ("error" in res) return setError(res.error);
-      onCreado({ ...solicitudExistente!, tramo, punto_partida: puntoPartida, destino, estado: "Pendiente DPD-23", motivo_rechazo: null });
+      onCreado({ ...solicitudExistente!, tramo, delegacion, punto_partida: puntoPartida, destino, estado: "Pendiente DPD-23", motivo_rechazo: null });
       return;
     }
 
@@ -238,7 +261,7 @@ function SolicitudModal({
 
     onCreado({
       id: res.numero, numero: res.numero, fecha: fechaGuatemala(),
-      afiliacion: afiliado.afiliacion, nombre_afiliado: afiliado.nombre, tramo,
+      afiliacion: afiliado.afiliacion, nombre_afiliado: afiliado.nombre, tramo, delegacion,
       punto_partida: puntoPartida, destino, estado: "Pendiente DPD-23", motivo_rechazo: null,
     });
   }
@@ -266,18 +289,28 @@ function SolicitudModal({
             )}
           </div>
 
+          <div>
+            <label className="label">Delegación / Caja Departamental</label>
+            <select className="input" value={delegacion}
+              onChange={e => { setDelegacion(e.target.value); setPuntoPartida(""); setDestino(""); }}>
+              <option value="">Selecciona…</option>
+              {delegaciones.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Punto de partida</label>
-              <select className="input" value={puntoPartida} onChange={e => { setPuntoPartida(e.target.value); setDestino(""); }}>
-                <option value="">Selecciona…</option>
+              <select className="input" value={puntoPartida} disabled={!delegacion || cargandoPuntos}
+                onChange={e => { setPuntoPartida(e.target.value); setDestino(""); }}>
+                <option value="">{cargandoPuntos ? "Cargando…" : "Selecciona…"}</option>
                 {puntos.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
               <label className="label">Destino</label>
-              <select className="input" value={destino} onChange={e => setDestino(e.target.value)} disabled={!puntoPartida}>
-                <option value="">Selecciona…</option>
+              <select className="input" value={destino} onChange={e => setDestino(e.target.value)} disabled={!puntoPartida || cargandoDestinos}>
+                <option value="">{cargandoDestinos ? "Cargando…" : "Selecciona…"}</option>
                 {destinos.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </div>
@@ -301,9 +334,9 @@ function SolicitudModal({
               <label className="flex items-center gap-1.5 text-sm text-gray-700">
                 <input type="radio" name="tramo" checked={tramo === "Ida y Vuelta"} onChange={() => setTramo("Ida y Vuelta")} className="w-4 h-4 accent-brand-600" /> Ida y vuelta
               </label>
-              {tarifa && <span className="ml-auto text-sm font-mono font-bold text-green-700">{Q(valor)}</span>}
+              {tarifaEncontrada && <span className="ml-auto text-sm font-mono font-bold text-green-700">{Q(valor)}</span>}
             </div>
-            {puntoPartida && destino && !tarifa && (
+            {puntoPartida && destino && !tarifaEncontrada && (
               <p className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
                 No existe tarifa para esta ruta. Regístrala primero en Pago de Pasajes/Tarifario.
               </p>
