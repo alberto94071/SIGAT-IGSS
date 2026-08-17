@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { verificarMasterPassword } from "./master-password";
 import {
-  configuracion, usuarios, catalogoInsumos, catalogo182, catalogoCompras, catalogoSubproductos,
+  configuracion, usuarios, catalogoInsumos, catalogo182, catalogoCompras,
   catalogoFirmantes, siafSeq, baseDatosCentral, presupuestoRenglones, proveedores, pasajesAfiliados,
   servicios, friFondoRotativo, movimientosBanco, cajaChica, auditLog, pasajesTarifario,
   cotizacionesServicio, cotizacionesAnuales, actasNegociacion, notificaciones, nogRegistros,
@@ -27,7 +27,6 @@ const TABLAS = [
   { nombre: "catalogo_insumos", tabla: catalogoInsumos },
   { nombre: "catalogo_182", tabla: catalogo182 },
   { nombre: "catalogo_compras", tabla: catalogoCompras },
-  { nombre: "catalogo_subproductos", tabla: catalogoSubproductos },
   { nombre: "catalogo_firmantes", tabla: catalogoFirmantes },
   { nombre: "siaf_seq", tabla: siafSeq },
   { nombre: "base_datos_central", tabla: baseDatosCentral },

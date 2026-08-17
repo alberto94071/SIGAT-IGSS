@@ -326,13 +326,6 @@ export const catalogoCompras = pgTable("catalogo_compras", {
 }));
 
 // ─── Catálogo de subproductos (controlado por superadmin) ────────────────────
-export const catalogoSubproductos = pgTable("catalogo_subproductos", {
-  id:         serial("id").primaryKey(),
-  nombre:     text("nombre").notNull().unique(),
-  activo:     boolean("activo").notNull().default(true),
-  created_at: text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
-});
-
 // ─── Consolidaciones de solicitudes A-01 SIAF ────────────────────────────────
 export const consolidaciones = pgTable("consolidaciones", {
   id:               serial("id").primaryKey(),
@@ -1005,16 +998,25 @@ export const pasajesAfiliados = pgTable("pasajes_afiliados", {
   patrono:          text("patrono"),
 });
 
-// Tarifario por ruta — administrable desde Caja Chica/Tarifario (igual que la
-// hoja "Tarifa": precio de ida = precio de vuelta, por punto de partida/destino).
+// Tarifario por ruta — administrable desde Pago de Pasajes/Tarifario (igual
+// que la hoja "Tarifa": precio de ida = precio de vuelta, por punto de
+// partida/destino). Una misma ruta (punto_partida + destino) puede tener
+// tarifas distintas según qué delegación/caja departamental la cotizó (ver
+// resolución 1007-SPS/2025 — la carga masiva de esa tarifa oficial trajo 105
+// rutas con precio distinto según delegación), así que delegación es parte
+// de la identidad de la tarifa, no un dato decorativo.
 export const pasajesTarifario = pgTable("pasajes_tarifario", {
   id:             serial("id").primaryKey(),
+  delegacion:     text("delegacion").notNull(),
   punto_partida:  text("punto_partida").notNull(),
   destino:        text("destino").notNull(),
   valor_ida:      doublePrecision("valor_ida").notNull(),
   creado_por:     integer("creado_por").references(() => usuarios.id),
   created_at:     text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
-});
+}, table => ({
+  delegacionRutaUnica: uniqueIndex("pasajes_tarifario_delegacion_ruta_idx")
+    .on(table.delegacion, table.punto_partida, table.destino),
+}));
 
 // Solicitud de Pago de Pasaje (SPS-75) — memo de autorización dirigido al Jefe
 // de Unidad, que pide el pago de un tramo (ida o vuelta) para un afiliado.
@@ -1028,6 +1030,10 @@ export const pasajesSolicitudes = pgTable("pasajes_solicitudes", {
   nombre_afiliado:  text("nombre_afiliado").notNull(),
   direccion:        text("direccion"),
   tramo:            text("tramo").notNull(), // "Ida" | "Vuelta" | "Ida y Vuelta"
+  // Identifica junto con punto_partida+destino qué fila del tarifario se usó
+  // para esta solicitud — una misma ruta puede tener tarifas distintas según
+  // delegación (ver pasajesTarifario).
+  delegacion:       text("delegacion").notNull(),
   punto_partida:    text("punto_partida").notNull(),
   destino:          text("destino").notNull(),
   lugar_especifico: text("lugar_especifico"), // ej. "Consultorio San Marcos" — detalle impreso junto al destino

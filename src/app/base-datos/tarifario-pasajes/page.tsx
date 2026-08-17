@@ -6,7 +6,7 @@ import TarifarioClient from "@/components/TarifarioClient";
 
 interface Props { searchParams: Promise<{ q?: string; delegacion?: string; page?: string }> }
 
-export default async function TarifarioPage({ searchParams }: Props) {
+export default async function TarifarioPasajesPage({ searchParams }: Props) {
   const session = await auth();
   if (!session) redirect("/login");
   const rol = session.user.rol as Rol;
