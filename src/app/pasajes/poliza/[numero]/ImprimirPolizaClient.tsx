@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
 import PrintPages from "@/components/print-pages/PrintPages";
+import SelectorFirmante, { type Firmante } from "@/components/SelectorFirmante";
 
 type PolizaRow = { numero: number; fecha: string; total: number };
 type Item = {
@@ -15,7 +16,7 @@ interface Props {
   items: Item[];
   codigoContable: string;
   nombreUnidad: string;
-  nombreEncargado: string; cargoEncargado: string;
+  firmantes: Firmante[];
 }
 
 const Q = (n: number) => n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -35,9 +36,12 @@ function ColGroup() {
   return <colgroup>{COLS.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>;
 }
 
-export default function ImprimirPolizaClient({ poliza, items, codigoContable, nombreUnidad, nombreEncargado, cargoEncargado }: Props) {
+export default function ImprimirPolizaClient({ poliza, items, codigoContable, nombreUnidad, firmantes }: Props) {
   const router = useRouter();
   const [paginas, setPaginas] = useState(1);
+  const [firmante, setFirmante] = useState<Firmante | null>(null);
+  const nombreEncargado = firmante?.nombre ?? "___________________________";
+  const cargoEncargado = firmante?.cargo ?? "Encargado(a) de Unidad";
   const fechas = items.map(i => i.fecha_pago).sort();
   const desde = fechas[0] ?? poliza.fecha;
   const hasta = fechas[fechas.length - 1] ?? poliza.fecha;
@@ -124,6 +128,8 @@ export default function ImprimirPolizaClient({ poliza, items, codigoContable, no
         <span className="text-sm font-semibold text-gray-700">
           Cuadro de Caja No. {poliza.numero} · {paginas} {paginas === 1 ? "hoja" : "hojas"} tamaño A4
         </span>
+        <span className="text-gray-300">|</span>
+        <SelectorFirmante label="Encargado(a)" firmantes={firmantes} value={firmante} onChange={setFirmante} />
         <button onClick={() => window.print()}
           className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700">
           <Printer className="w-4 h-4" /> Imprimir

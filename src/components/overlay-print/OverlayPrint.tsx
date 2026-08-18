@@ -20,9 +20,12 @@ interface OverlayPrintProps {
   pageWidthIn?: number;
   pageHeightIn?: number;
   children: ReactNode;
+  // Controles adicionales (ej. selector de firmante) dentro de la misma barra
+  // "no-print", entre el título y el ajuste de milímetros.
+  extraToolbar?: ReactNode;
 }
 
-export function OverlayPrint({ storageKey, title, pageWidthIn = 8.5, pageHeightIn = 11, children }: OverlayPrintProps) {
+export function OverlayPrint({ storageKey, title, pageWidthIn = 8.5, pageHeightIn = 11, children, extraToolbar }: OverlayPrintProps) {
   const router = useRouter();
   const [offset, setOffset] = useState<Offset>({ x: 0, y: 0 });
   const [loaded, setLoaded] = useState(false);
@@ -51,6 +54,7 @@ export function OverlayPrint({ storageKey, title, pageWidthIn = 8.5, pageHeightI
         </button>
         <span className="text-gray-300">|</span>
         <span className="text-sm font-semibold text-gray-700">{title}</span>
+        {extraToolbar}
 
         <label className="flex items-center gap-1.5 text-xs text-gray-600 ml-4">
           Ajuste horizontal (mm)

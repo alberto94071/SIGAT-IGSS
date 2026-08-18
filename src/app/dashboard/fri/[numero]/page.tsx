@@ -1,7 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { configuracion } from "@/lib/schema";
+import { configuracion, catalogoFirmantes } from "@/lib/schema";
+import { eq, asc } from "drizzle-orm";
 import { getFriPorNumero, agruparFriPorRenglon } from "@/lib/fri-actions";
 import { getSaldoFondoRotativo } from "@/lib/vale-actions";
 import ImprimirFriClient from "./ImprimirFriClient";
@@ -23,9 +24,10 @@ export default async function FriImprimirPage({ params, searchParams }: Props) {
   ]);
   if (!res) notFound();
 
-  const [config, grupos] = await Promise.all([
+  const [config, grupos, firmantes] = await Promise.all([
     db.select().from(configuracion).limit(1).then(r => r[0]),
     agruparFriPorRenglon(res.pagos, res.polizas),
+    db.select().from(catalogoFirmantes).where(eq(catalogoFirmantes.activo, true)).orderBy(asc(catalogoFirmantes.nombre)),
   ]);
 
   return (
@@ -34,8 +36,7 @@ export default async function FriImprimirPage({ params, searchParams }: Props) {
       grupos={grupos}
       saldo={saldo}
       nombreUnidad={config?.nombre_unidad ?? "Consultorio de Tacaná, Departamento de San Marcos"}
-      nombreEncargado={config?.nombre_encargado_unidad ?? "Lilia Zucely Pérez Fuentes"}
-      cargoEncargado={config?.cargo_encargado_unidad ?? 'Analista "A"'}
+      firmantes={firmantes as any}
     />
   );
 }

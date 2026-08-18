@@ -1,7 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { configuracion } from "@/lib/schema";
+import { configuracion, catalogoFirmantes } from "@/lib/schema";
+import { eq, asc } from "drizzle-orm";
 import { getSolicitudPasaje } from "@/lib/pasajes-actions";
 import ImprimirSps75Client from "./ImprimirSps75Client";
 
@@ -13,16 +14,18 @@ export default async function Sps75ImprimirPage({ params }: { params: Promise<{ 
   const solicitud = await getSolicitudPasaje(Number(numero));
   if (!solicitud) notFound();
 
-  const [config] = await db.select().from(configuracion).limit(1);
+  const [config, firmantes] = await Promise.all([
+    db.select().from(configuracion).limit(1).then(r => r[0]),
+    db.select().from(catalogoFirmantes).where(eq(catalogoFirmantes.activo, true)).orderBy(asc(catalogoFirmantes.nombre)),
+  ]);
 
   return (
     <ImprimirSps75Client
       solicitud={solicitud}
       nombreUnidad={config?.nombre_dependencia_medica ?? "Consultorio de Tacaná, Departamento de San Marcos"}
-      nombreJefe={config?.nombre_encargado_unidad ?? "Lilia Zucely Pérez Fuentes"}
-      cargoJefe={config?.cargo_encargado_unidad ?? 'Analista "A"'}
       nombreSolicitante={config?.nombre_secretaria_unidad ?? "Elesinda Gabriela Rodriguez Orozco"}
       cargoSolicitante={config?.cargo_secretaria_unidad ?? 'Secretaria "A"'}
+      firmantes={firmantes as any}
     />
   );
 }

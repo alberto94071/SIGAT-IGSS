@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
 import PrintPages from "@/components/print-pages/PrintPages";
+import SelectorFirmante, { type Firmante } from "@/components/SelectorFirmante";
 import { fechaGuatemala } from "@/lib/date-utils";
 import type { ModificacionRow, TransferenciaRow } from "@/lib/programacion-actions";
 
@@ -10,8 +11,7 @@ interface Props {
   modificaciones: ModificacionRow[];
   transferencias: TransferenciaRow[];
   nombreUnidad: string;
-  nombreEncargado: string;
-  cargoEncargado: string;
+  firmantes: Firmante[];
 }
 
 const Q = (n: number) => n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -25,10 +25,13 @@ function ColGroup({ cols }: { cols: string[] }) {
 }
 
 export default function ImprimirModificacionesClient({
-  modificaciones, transferencias, nombreUnidad, nombreEncargado, cargoEncargado,
+  modificaciones, transferencias, nombreUnidad, firmantes,
 }: Props) {
   const router = useRouter();
   const [paginas, setPaginas] = useState(1);
+  const [firmante, setFirmante] = useState<Firmante | null>(null);
+  const nombreEncargado = firmante?.nombre ?? "___________________________";
+  const cargoEncargado = firmante?.cargo ?? "Encargado(a) de Unidad";
 
   const encabezado = (
     <div style={{ fontFamily: FONT, color: C }}>
@@ -137,6 +140,8 @@ export default function ImprimirModificacionesClient({
         <span className="text-sm font-semibold text-gray-700">
           Modificaciones · {paginas} {paginas === 1 ? "hoja" : "hojas"} tamaño Carta
         </span>
+        <span className="text-gray-300">|</span>
+        <SelectorFirmante label="Encargado(a)" firmantes={firmantes} value={firmante} onChange={setFirmante} />
         <button onClick={() => window.print()}
           className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700">
           <Printer className="w-4 h-4" /> Imprimir

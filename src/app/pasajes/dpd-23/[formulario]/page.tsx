@@ -1,7 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { configuracion } from "@/lib/schema";
+import { configuracion, catalogoFirmantes } from "@/lib/schema";
+import { eq, asc } from "drizzle-orm";
 import { getPagoPasaje } from "@/lib/pasajes-actions";
 import ImprimirDpd23Client from "./ImprimirDpd23Client";
 
@@ -14,7 +15,10 @@ export default async function Dpd23ImprimirPage({ params }: { params: Promise<{ 
   const pago = await getPagoPasaje(formularioNo);
   if (!pago) notFound();
 
-  const [config] = await db.select().from(configuracion).limit(1);
+  const [config, firmantes] = await Promise.all([
+    db.select().from(configuracion).limit(1).then(r => r[0]),
+    db.select().from(catalogoFirmantes).where(eq(catalogoFirmantes.activo, true)).orderBy(asc(catalogoFirmantes.nombre)),
+  ]);
 
   return (
     <ImprimirDpd23Client
@@ -24,8 +28,7 @@ export default async function Dpd23ImprimirPage({ params }: { params: Promise<{ 
       municipio={config?.municipio ?? "Tacaná, San Marcos"}
       nombreSecretaria={config?.nombre_secretaria_unidad ?? "Elesinda Gabriela Rodriguez Orozco"}
       cargoSecretaria={config?.cargo_secretaria_unidad ?? 'Secretaria "A"'}
-      nombreEncargado={config?.nombre_encargado_unidad ?? "Lilia Zucely Pérez Fuentes"}
-      cargoEncargado={config?.cargo_encargado_unidad ?? 'Analista "A"'}
+      firmantes={firmantes as any}
     />
   );
 }

@@ -1,7 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { configuracion } from "@/lib/schema";
+import { configuracion, catalogoFirmantes } from "@/lib/schema";
+import { eq, asc } from "drizzle-orm";
 import { getPolizaPorNumero } from "@/lib/poliza-actions";
 import ImprimirPolizaClient from "./ImprimirPolizaClient";
 
@@ -13,7 +14,10 @@ export default async function PolizaImprimirPage({ params }: { params: Promise<{
   const res = await getPolizaPorNumero(Number(numero));
   if (!res) notFound();
 
-  const [config] = await db.select().from(configuracion).limit(1);
+  const [config, firmantes] = await Promise.all([
+    db.select().from(configuracion).limit(1).then(r => r[0]),
+    db.select().from(catalogoFirmantes).where(eq(catalogoFirmantes.activo, true)).orderBy(asc(catalogoFirmantes.nombre)),
+  ]);
 
   return (
     <ImprimirPolizaClient
@@ -21,8 +25,7 @@ export default async function PolizaImprimirPage({ params }: { params: Promise<{
       items={res.items}
       codigoContable={config?.codigo_contable ?? "12.07.04"}
       nombreUnidad={config?.nombre_unidad ?? "Consultorio de Tacaná, Departamento de San Marcos"}
-      nombreEncargado={config?.nombre_encargado_unidad ?? "Lilia Zucely Pérez Fuentes"}
-      cargoEncargado={config?.cargo_encargado_unidad ?? 'Analista "A"'}
+      firmantes={firmantes as any}
     />
   );
 }

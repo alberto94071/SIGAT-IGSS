@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
 import PrintPages from "@/components/print-pages/PrintPages";
+import SelectorFirmante, { type Firmante } from "@/components/SelectorFirmante";
 import type { Fri, FriGrupoRenglon } from "@/lib/fri-actions";
 
 type SaldoFondoRotativo = { monto_fondo_rotativo: number; saldo_disponible: number; efectivo_en_caja: number };
@@ -12,7 +13,7 @@ interface Props {
   grupos: FriGrupoRenglon[];
   saldo: SaldoFondoRotativo;
   nombreUnidad: string;
-  nombreEncargado: string; cargoEncargado: string;
+  firmantes: Firmante[];
 }
 
 const Q = (n: number) => n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -25,9 +26,12 @@ function ColGroup() {
   return <colgroup>{COLS.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>;
 }
 
-export default function ImprimirFriClient({ fri, grupos, saldo, nombreUnidad, nombreEncargado, cargoEncargado }: Props) {
+export default function ImprimirFriClient({ fri, grupos, saldo, nombreUnidad, firmantes }: Props) {
   const router = useRouter();
   const [paginas, setPaginas] = useState(1);
+  const [firmante, setFirmante] = useState<Firmante | null>(null);
+  const nombreEncargado = firmante?.nombre ?? "___________________________";
+  const cargoEncargado = firmante?.cargo ?? "Encargado(a) de Unidad";
   const totalSinIva = grupos.reduce((s, g) => s + g.subtotal, 0);
 
   const encabezado = (
@@ -166,6 +170,8 @@ export default function ImprimirFriClient({ fri, grupos, saldo, nombreUnidad, no
         <span className="text-sm font-semibold text-gray-700">
           FRI {fri.numero}/{fri.anio} · {paginas} {paginas === 1 ? "hoja" : "hojas"} tamaño A4
         </span>
+        <span className="text-gray-300">|</span>
+        <SelectorFirmante label="Encargado(a)" firmantes={firmantes} value={firmante} onChange={setFirmante} />
         <button onClick={() => window.print()}
           className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700">
           <Printer className="w-4 h-4" /> Imprimir
