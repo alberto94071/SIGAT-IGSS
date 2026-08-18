@@ -1,8 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { actasAdjudicacion, consolidaciones, configuracion, oferentes } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { actasAdjudicacion, consolidaciones, configuracion, oferentes, catalogoFirmantes } from "@/lib/schema";
+import { eq, asc } from "drizzle-orm";
 import { marcarActaPrevisualizada } from "@/lib/adjudicacion/actas-adjudicacion-actions";
 import ImprimirActaClient from "./ImprimirActaClient";
 
@@ -22,7 +22,10 @@ export default async function ImprimirActaPage({ params }: Props) {
   const oferentesGanadores = await db.select().from(oferentes)
     .where(eq(oferentes.consolidacion_id, con.id)).orderBy(oferentes.orden, oferentes.id);
 
-  const [config] = await db.select().from(configuracion).limit(1);
+  const [config, firmantes] = await Promise.all([
+    db.select().from(configuracion).limit(1).then(r => r[0]),
+    db.select().from(catalogoFirmantes).where(eq(catalogoFirmantes.activo, true)).orderBy(asc(catalogoFirmantes.nombre)),
+  ]);
 
   if (!acta.previsualizada) {
     await marcarActaPrevisualizada(acta.id);
@@ -37,6 +40,7 @@ export default async function ImprimirActaPage({ params }: Props) {
       municipio={config?.municipio ?? ""}
       direccionUnidad={config?.direccion_unidad ?? ""}
       nombreResponsable={config?.nombre_responsable ?? ""}
+      firmantes={firmantes as any}
     />
   );
 }

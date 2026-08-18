@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
 import { deletrearCodigo, fechaEnLetras, horaEnLetras } from "@/lib/adjudicacion/deletreo";
 import PrintPages from "@/components/print-pages/PrintPages";
+import SelectorFirmante, { type Firmante } from "@/components/SelectorFirmante";
 
 type Acta = {
   id: number; no_formulario: string; no_acta: string; lugar: string; fecha: string; hora: string;
@@ -20,16 +21,24 @@ type Oferente = { id: number; nit: string; nombre: string; costo: number; exento
 interface Props {
   acta: Acta; consolidacion: Consolidacion; oferentes: Oferente[];
   nombreUnidad: string; municipio: string; direccionUnidad: string; nombreResponsable: string;
+  firmantes: Firmante[];
 }
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function ImprimirActaClient({
-  acta, consolidacion: c, oferentes, nombreUnidad, municipio, direccionUnidad, nombreResponsable,
+  acta, consolidacion: c, oferentes, nombreUnidad, municipio, direccionUnidad, nombreResponsable, firmantes,
 }: Props) {
   const router = useRouter();
   const [municipioNombre, departamento] = municipio.split(",").map(s => s.trim());
   const dep = departamento || "San Marcos";
+
+  // Encargado(a) de Unidad que preside la Junta — antes venía fijo ("Lilia
+  // Zucely Pérez Fuentes"); ahora se elige de Configuración → Firmantes en
+  // cada impresión, porque esa persona ya no trabaja ahí.
+  const [encargadoUnidad, setEncargadoUnidad] = useState<Firmante | null>(null);
+  const nombreEncargadoUnidad = encargadoUnidad?.nombre ?? "___________________________";
+  const cargoEncargadoUnidad = encargadoUnidad?.cargo ?? "Encargado(a) de Unidad";
 
   const fechaTexto = fechaEnLetras(acta.fecha);
   const horaTexto = horaEnLetras(acta.hora);
@@ -62,11 +71,11 @@ export default function ImprimirActaClient({
       <p style={{ fontSize: "9pt", textAlign: "justify", lineHeight: 1.4 }}>
         En el Municipio de {acta.lugar || municipioNombre}, del Departamento de {dep}, siendo las {horaTexto} del
         día {fechaTexto}, reunidos en el local que ocupa la {nombreUnidad}, del Instituto Guatemalteco de
-        Seguridad Social, las siguientes personas: Lilia Zucely Pérez Fuentes, Analista &ldquo;A&rdquo; con
-        Funciones de Encargada de Unidad, {nombreResponsable || "Bernon Raúl Miranda González"}, Analista
+        Seguridad Social, las siguientes personas: {nombreEncargadoUnidad}, {cargoEncargadoUnidad},
+        {" "}{nombreResponsable || "Bernon Raúl Miranda González"}, Analista
         &ldquo;A&rdquo; y Encargado de Presupuesto, Edwin Baudilio Fuentes Fuentes, Bodeguero &ldquo;A&rdquo;,
         Elesinda Gabriela Rodríguez Orozco, Secretaria &ldquo;A&rdquo; para dejar constancia de lo siguiente:{" "}
-        <strong>PRIMERO:</strong> La Licenciada Lilia Pérez, da la bienvenida a todos los presentes y a
+        <strong>PRIMERO:</strong> {nombreEncargadoUnidad}, da la bienvenida a todos los presentes y a
         continuación da a conocer la necesidad de adquisición de bienes y/o servicios necesarios para el
         servicio y buen funcionamiento de esta {nombreUnidad}, con el objeto de dar cumplimiento a la Ley de
         Contrataciones del Estado. <strong>SEGUNDO:</strong> Se procede a la comparación de ofertas recibidas,
@@ -122,8 +131,8 @@ export default function ImprimirActaClient({
           <p style={{ margin: 0, color: "#444" }}>Analista &ldquo;A&rdquo;/Encargado de Fondo Rotativo</p>
         </div>
         <div style={{ borderTop: "1.5px solid #222", paddingTop: "6px" }}>
-          <p style={{ margin: 0, fontWeight: "bold" }}>Vo.Bo. Licda. Lilia Zucely Pérez Fuentes</p>
-          <p style={{ margin: 0, color: "#444" }}>Analista &ldquo;A&rdquo;/Encargada de Unidad</p>
+          <p style={{ margin: 0, fontWeight: "bold" }}>Vo.Bo. {nombreEncargadoUnidad}</p>
+          <p style={{ margin: 0, color: "#444" }}>{cargoEncargadoUnidad}</p>
           <p style={{ margin: 0, color: "#444" }}>IGSS/UIAADDM en el Municipio de {municipioNombre}, {dep}</p>
         </div>
       </div>
@@ -144,6 +153,8 @@ export default function ImprimirActaClient({
         <span className="text-sm font-semibold text-gray-700">
           Acta {acta.no_acta} · {paginas} {paginas === 1 ? "hoja" : "hojas"} tamaño Carta
         </span>
+        <span className="text-gray-300">|</span>
+        <SelectorFirmante label="Encargado(a) de Unidad" firmantes={firmantes} value={encargadoUnidad} onChange={setEncargadoUnidad} />
         <button onClick={() => window.print()}
           className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700">
           <Printer className="w-4 h-4" /> Imprimir

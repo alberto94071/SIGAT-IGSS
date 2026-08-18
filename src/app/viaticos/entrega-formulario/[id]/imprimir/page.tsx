@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { configuracion } from "@/lib/schema";
+import { configuracion, catalogoFirmantes } from "@/lib/schema";
+import { eq, asc } from "drizzle-orm";
 import { getLiquidacion } from "../../actions";
 import ImprimirViaticoClient from "./ImprimirViaticoClient";
 
@@ -8,7 +9,10 @@ export default async function ImprimirViaticoPage({ params }: { params: Promise<
   const { id } = await params;
   const liquidacion = await getLiquidacion(Number(id));
   if (!liquidacion) notFound();
-  const [config] = await db.select().from(configuracion).limit(1);
+  const [[config], firmantes] = await Promise.all([
+    db.select().from(configuracion).limit(1),
+    db.select().from(catalogoFirmantes).where(eq(catalogoFirmantes.activo, true)).orderBy(asc(catalogoFirmantes.nombre)),
+  ]);
 
   return (
     <ImprimirViaticoClient
@@ -16,8 +20,7 @@ export default async function ImprimirViaticoPage({ params }: { params: Promise<
       entidadRecibio={config?.entidad_recibio_viatico ?? ""}
       municipio={config?.municipio ?? ""}
       nombreResponsable={config?.nombre_responsable ?? ""}
-      nombreEncargadoUnidad={config?.nombre_encargado_unidad ?? ""}
-      cargoEncargadoUnidad={config?.cargo_encargado_unidad ?? ""}
+      firmantes={firmantes as any}
     />
   );
 }

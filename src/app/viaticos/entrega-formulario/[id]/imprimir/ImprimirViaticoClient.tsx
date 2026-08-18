@@ -1,6 +1,8 @@
 "use client";
+import { useState } from "react";
 import { OverlayPrint } from "@/components/overlay-print/OverlayPrint";
 import OverlayField from "@/components/overlay-print/OverlayField";
+import SelectorFirmante, { type Firmante } from "@/components/SelectorFirmante";
 import { montoEnLetras } from "@/lib/adjudicacion/deletreo";
 import type { Comision } from "../../actions";
 
@@ -19,7 +21,8 @@ type Liquidacion = {
 interface Props {
   liquidacion: Liquidacion;
   entidadRecibio: string; municipio: string;
-  nombreResponsable: string; nombreEncargadoUnidad: string; cargoEncargadoUnidad: string;
+  nombreResponsable: string;
+  firmantes: Firmante[];
 }
 
 const Q = (n: number) => n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -31,15 +34,20 @@ function fechaCorta(iso: string | null): string {
 }
 
 export default function ImprimirViaticoClient({
-  liquidacion: l, entidadRecibio, municipio, nombreResponsable, nombreEncargadoUnidad, cargoEncargadoUnidad,
+  liquidacion: l, entidadRecibio, municipio, nombreResponsable, firmantes,
 }: Props) {
+  const [firmante, setFirmante] = useState<Firmante | null>(null);
+  const nombreEncargadoUnidad = firmante?.nombre ?? "___________________________";
+  const cargoEncargadoUnidad = firmante?.cargo ?? "Encargado(a) de Unidad";
   const sumaGastos = (l.gasto_desayuno ?? 0) + (l.gasto_almuerzo ?? 0) + (l.gasto_cena ?? 0) + (l.gasto_hospedaje ?? 0);
   const total11 = sumaGastos + l.otros_gastos;
   const tieneAnticipo = !!l.recibido_va_no;
   const total15 = total11 - (l.reintegro ?? 0) + (l.complemento ?? 0);
 
   return (
-    <OverlayPrint storageKey="overlay-offset-viatico" title="Planilla de Viático — Formulario V-L">
+    <OverlayPrint storageKey="overlay-offset-viatico" title="Planilla de Viático — Formulario V-L"
+      extraToolbar={<SelectorFirmante label="Encargado(a) de Unidad" firmantes={firmantes} value={firmante} onChange={setFirmante} />}
+    >
       <OverlayField top={1.08} left={5.6} width={2.2} bold size={11}>{Q(total15)}</OverlayField>
       <OverlayField top={1.52} left={1.35} width={6.4}>{entidadRecibio}</OverlayField>
       <OverlayField top={1.85} left={1.85} width={5.9}>{montoEnLetras(total15).replace(/\.$/, "")}</OverlayField>

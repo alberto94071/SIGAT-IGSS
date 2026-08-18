@@ -1,7 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { configuracion } from "@/lib/schema";
+import { configuracion, catalogoFirmantes } from "@/lib/schema";
+import { eq, asc } from "drizzle-orm";
 import { getEntradas } from "@/lib/programacion-actions";
 import { CUATRIMESTRES } from "@/lib/programacion-constants";
 import ImprimirProgramacionClient from "./ImprimirProgramacionClient";
@@ -21,8 +22,11 @@ export default async function ImprimirProgramacionPage({ params, searchParams }:
   const cuatrimestreInfo = CUATRIMESTRES.find(c => c.id === cuatrimestre);
   if (!cuatrimestreInfo) notFound();
 
-  const entradas = await getEntradas(cuatrimestre);
-  const [config] = await db.select().from(configuracion).limit(1);
+  const [entradas, [config], firmantes] = await Promise.all([
+    getEntradas(cuatrimestre),
+    db.select().from(configuracion).limit(1),
+    db.select().from(catalogoFirmantes).where(eq(catalogoFirmantes.activo, true)).orderBy(asc(catalogoFirmantes.nombre)),
+  ]);
 
   return (
     <ImprimirProgramacionClient
@@ -31,8 +35,7 @@ export default async function ImprimirProgramacionPage({ params, searchParams }:
       cuatrimestreLabel={cuatrimestreInfo.label}
       entradas={entradas}
       nombreUnidad={config?.nombre_unidad ?? ""}
-      nombreEncargado={config?.nombre_encargado_unidad ?? ""}
-      cargoEncargado={config?.cargo_encargado_unidad ?? ""}
+      firmantes={firmantes as any}
     />
   );
 }

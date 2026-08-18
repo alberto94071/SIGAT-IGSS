@@ -1,7 +1,9 @@
 "use client";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
 import { montoEnLetras } from "@/lib/adjudicacion/deletreo";
+import SelectorFirmante, { type Firmante } from "@/components/SelectorFirmante";
 
 type Pago = {
   formulario_no: number; fecha_pago: string; afiliacion: string; nombre_afiliado: string;
@@ -14,7 +16,7 @@ interface Props {
   codigoContable: string;
   nombreUnidad: string; municipio: string;
   nombreSecretaria: string; cargoSecretaria: string;
-  nombreEncargado: string; cargoEncargado: string;
+  firmantes: Firmante[];
 }
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
@@ -38,9 +40,12 @@ const B = "1.5px solid #1a1a1a";
 const C = "#000";
 
 export default function ImprimirDpd23Client({
-  pago: p, codigoContable, nombreUnidad, municipio, nombreSecretaria, cargoSecretaria, nombreEncargado, cargoEncargado,
+  pago: p, codigoContable, nombreUnidad, municipio, nombreSecretaria, cargoSecretaria, firmantes,
 }: Props) {
   const router = useRouter();
+  const [firmante, setFirmante] = useState<Firmante | null>(null);
+  const nombreEncargado = firmante?.nombre ?? "___________________________";
+  const cargoEncargado = firmante?.cargo ?? "Encargado(a) de Unidad";
   const anio = p.fecha_pago ? p.fecha_pago.slice(0, 4) : String(new Date().getFullYear());
   const direccion = p.ida && p.vuelta ? "Ida y Vuelta" : p.ida ? "Ida" : "Vuelta";
 
@@ -52,6 +57,8 @@ export default function ImprimirDpd23Client({
         </button>
         <span className="text-gray-300">|</span>
         <span className="text-sm font-semibold text-gray-700">DPD-23 — Formulario {p.formulario_no}/{anio}</span>
+        <span className="text-gray-300">|</span>
+        <SelectorFirmante label="Encargado(a)" firmantes={firmantes} value={firmante} onChange={setFirmante} />
         <button onClick={() => window.print()}
           className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700">
           <Printer className="w-4 h-4" /> Imprimir

@@ -1,7 +1,9 @@
 "use client";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
 import { nombreNatural } from "@/lib/nombre-utils";
+import SelectorFirmante, { type Firmante } from "@/components/SelectorFirmante";
 
 type Solicitud = {
   numero: number; fecha: string; afiliacion: string; nombre_afiliado: string;
@@ -13,8 +15,8 @@ type Solicitud = {
 interface Props {
   solicitud: Solicitud;
   nombreUnidad: string;
-  nombreJefe: string; cargoJefe: string;
   nombreSolicitante: string; cargoSolicitante: string;
+  firmantes: Firmante[];
 }
 
 function fechaCorta(iso: string): string {
@@ -32,9 +34,12 @@ const Casilla = ({ marcado }: { marcado: boolean }) => (
 );
 
 export default function ImprimirSps75Client({
-  solicitud: s, nombreUnidad, nombreJefe, cargoJefe, nombreSolicitante, cargoSolicitante,
+  solicitud: s, nombreUnidad, nombreSolicitante, cargoSolicitante, firmantes,
 }: Props) {
   const router = useRouter();
+  const [firmante, setFirmante] = useState<Firmante | null>(null);
+  const nombreJefe = firmante?.nombre ?? "___________________________";
+  const cargoJefe = firmante?.cargo ?? "Encargado(a) de Unidad";
   const destinoCompleto = s.lugar_especifico ? `${s.destino}: ${s.lugar_especifico}` : s.destino;
 
   return (
@@ -45,6 +50,8 @@ export default function ImprimirSps75Client({
         </button>
         <span className="text-gray-300">|</span>
         <span className="text-sm font-semibold text-gray-700">SPS-75 — Solicitud {s.numero}</span>
+        <span className="text-gray-300">|</span>
+        <SelectorFirmante label="Jefe" firmantes={firmantes} value={firmante} onChange={setFirmante} />
         <button onClick={() => window.print()}
           className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700">
           <Printer className="w-4 h-4" /> Imprimir
