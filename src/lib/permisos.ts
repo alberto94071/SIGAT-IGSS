@@ -104,6 +104,17 @@ export function canAccess(permisos: Permisos, modulo: keyof Permisos): boolean {
   return permisos[modulo] === true;
 }
 
+// Sin esta protección, el propio Administrador Máster podía editar sus
+// propios accesos por error (o por curiosidad) y quitarse mod_administracion
+// — bloqueándose a sí mismo sin ningún aviso ni forma de revertirlo desde la
+// pantalla (ya pasó una vez: registro de auditoría real, "editar_permisos"
+// contra su propio id inmediatamente después de crear otro usuario). Ver
+// UsuariosClient.tsx (botón oculto) y administracion/actions.ts
+// (guardarPermisos, rechazo en el servidor).
+export function puedeEditarPermisosDe(meId: number, objetivoId: number): boolean {
+  return meId !== objetivoId;
+}
+
 // Nav items con su permiso requerido — rutas del módulo Fondo Rotativo
 export const NAV_ITEMS = [
   { href: "/dashboard/siaf-04",            label: "SIAF-04",            icon: "FileText",  permiso: null },

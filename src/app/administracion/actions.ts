@@ -4,7 +4,7 @@ import { usuarios, auditLog } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
-import { type Rol, type Permisos, ROLES_GESTIONABLES_POR_ADMIN } from "@/lib/permisos";
+import { type Rol, type Permisos, ROLES_GESTIONABLES_POR_ADMIN, puedeEditarPermisosDe } from "@/lib/permisos";
 
 async function getMe() {
   const session = await auth();
@@ -151,6 +151,9 @@ export async function guardarPermisos(data: { id: number; permisos: Permisos }) 
   try {
     const me = await getMe();
     if (!me || me.rol !== "superadmin") return { error: "Sin permiso" };
+    if (!puedeEditarPermisosDe(me.id, data.id)) {
+      return { error: "No podés editar tus propios accesos — pedile a otro Administrador Máster que los ajuste." };
+    }
 
     await db.update(usuarios)
       .set({ permisos: JSON.stringify(data.permisos), updated_at: new Date().toISOString() })
