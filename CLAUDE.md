@@ -134,6 +134,15 @@ mergeado), actualizá este archivo antes de dar el trabajo por cerrado:
   una función nueva que lee `base_datos_central` o `pasajes_tarifario`,
   copiar ese patrón (recibir la lista de códigos/rutas necesarios como
   parámetro, no traer la tabla completa).
+- **El correlativo del A-01 SIAF (`getNextSiafNumeroCompras` en
+  `a01-siaf/actions.ts`) tiene un piso configurable** —
+  `configuracion.siaf_compras_numero_inicial` / `_anio`, editable desde
+  Administración → Configuración → Forma A-01 SIAF. Sirve para cuando la
+  unidad ya venía llevando correlativo fuera del sistema (pasó al arrancar:
+  105 SIAF ya hechos, se configuró piso 105/2026 para que el sistema
+  siguiera en 106). Solo aplica mientras el año actual coincida con el año
+  configurado — el año siguiente vuelve a arrancar en 1 solo. Sobrevive a
+  "Reiniciar Sistema" porque `configuracion` no se trunca ahí.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
