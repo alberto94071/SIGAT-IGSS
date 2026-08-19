@@ -21,22 +21,39 @@ export async function getLiquidacionesPendientes(): Promise<PagoFondoRotativo[]>
   return conDetalle(rows);
 }
 
-// Al pagar aquí, el pago no se queda "Liquidado" como punto final — sigue de
+// Aquí es donde se asigna el vale y se confirma el pago en efectivo — Fondo
+// Rotativo/Pagos solo lo marcó como "efectivo" y lo mandó para acá, sin vale
+// ni fecha (ver registrarFormaPagoEfectivo). Si todavía no hay vale de
+// "gastos varios" activo, el pago simplemente se queda esperando en esta
+// pantalla hasta que Caja Chica/Vale genere uno.
+//
+// Al confirmar, el pago no se queda "Liquidado" como punto final — sigue de
 // largo a Fondo Rotativo/Pago-FRI, a esperar que se conforme en un FRI junto
 // con el resto de pagos pendientes de reintegro (mismo destino que ya tenían
 // los pagos de grupo 100-199). fecha_liquidacion_caja_chica queda como la
 // marca de que este pago sí pasó por Caja Chica, para el Libro de Caja Chica.
-export async function liquidarPago(id: number): Promise<{ ok: true } | { error: string }> {
+export async function liquidarPago(id: number, data: {
+  fecha_pago: string; vale_id: number;
+}): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireEdit();
     if ("error" in check) return check;
+    if (!data.fecha_pago || !data.vale_id)
+      return { error: "Fecha de pago y vale son obligatorios" };
 
     const [pago] = await db.select().from(fondoRotativoPagos).where(eq(fondoRotativoPagos.id, id)).limit(1);
     if (!pago) return { error: "No se encontró el registro" };
     if (pago.estado !== "Enviado a Liquidación") return { error: "Este pago no está pendiente de liquidar" };
 
+    const [vale] = await db.select().from(valesCajaChica).where(eq(valesCajaChica.id, data.vale_id)).limit(1);
+    if (!vale) return { error: "No se encontró el vale seleccionado" };
+    if (vale.tipo !== "gastos_varios" || vale.estado !== "Activo") return { error: "Ese vale no está activo" };
+
     await db.update(fondoRotativoPagos).set({
       estado: "Pendiente FRI",
+      fecha_pago: data.fecha_pago,
+      numero_vale: String(vale.numero).padStart(7, "0"),
+      vale_id: vale.id,
       fecha_liquidacion_caja_chica: fechaGuatemala(),
     }).where(eq(fondoRotativoPagos.id, id));
     return { ok: true };
