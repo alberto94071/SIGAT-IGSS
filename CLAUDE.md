@@ -1,4 +1,11 @@
-# SIGAT-IGSS / CIP — guía para trabajar en este repo
+# CIP — guía para trabajar en este repo
+
+**El programa se llama CIP** (así aparece en el login, el launcher y todos los
+documentos impresos). El nombre del repositorio de GitHub quedó como
+`SIGAT-IGSS` por pereza de renombrarlo — es solo el nombre del repo, no el
+nombre del producto. No usar "SIGAT" en texto nuevo de cara al usuario
+(pantallas, documentos, manuales); solo aparece ya en algunos comentarios y
+archivos de docs viejos que no vale la pena tocar uno por uno.
 
 Sistema de Control Interno Presupuestario para **IGSS Tejutla/Tacaná, San Marcos**
 (instalación de un solo cliente — no multi-tenant). Cubre todo el ciclo de
