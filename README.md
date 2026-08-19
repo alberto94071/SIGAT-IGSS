@@ -134,19 +134,10 @@ Password: Admin@IGSS2026!
 
 ---
 
-## Módulos implementados (Sprint 1)
+## Estado actual del sistema
 
-- [x] Autenticación con NextAuth v5
-- [x] Roles: superadmin, admin, operador, consulta
-- [x] Permisos granulares por módulo (toggle por usuario)
-- [x] Panel de usuarios: crear, editar, reset contraseña, habilitar/deshabilitar
-- [x] Catálogo de insumos: CRUD + habilitar/deshabilitar temporalmente
-- [x] Configuración del sistema (datos institucionales)
-- [x] Dashboard con métricas del fondo
-- [x] Log de auditoría automático
-
-## Próximos sprints
-
-- [ ] Sprint 2: Servicios, Pagos, Banco, Caja Chica
-- [ ] Sprint 3: Liquidación, Conciliación, Reportes
-- [ ] Sprint 4: Generación de documentos (SIAF, DAB-60, Vale, Baucher)
+Este README documenta el setup inicial del proyecto (Sprint 1) y ya no
+refleja los módulos reales — el sistema creció mucho más allá de esto
+(compras, adjudicación, presupuesto, almacén, fondo rotativo, pasajes,
+viáticos, catálogos maestros). Para la estructura y las reglas de negocio
+actuales, ver `CLAUDE.md` en la raíz del repo.
