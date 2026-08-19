@@ -44,7 +44,7 @@ const POS_DEFAULT: Record<string, Pos> = {
   monto_cheque:    { top: 19.8,  left: 161.3, width: 30, height: 5 },
   destinatario:    { top: 29.2,  left: 50.8,  width: 150, height: 5 },
   monto_letras:    { top: 36.8,  left: 40.6,  width: 163, height: 6 },
-  banco_datos:     { top: 88.0,  left: 15.2,  width: 163, height: 6 },
+  banco_datos:     { top: 83.0,  left: 15.2,  width: 163, height: 6 },
   cuenta_no:       { top: 96.0,  left: 15.2,  width: 25, height: 5 },
   concepto:        { top: 96.0,  left: 43.2,  width: 99, height: 5 },
   debe:            { top: 96.0,  left: 148.6, width: 22, height: 5 },
