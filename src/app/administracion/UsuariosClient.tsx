@@ -222,7 +222,7 @@ export default function UsuariosClient({ usuarios: init, rol, currentUserId }: P
                           className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
                           <Pencil className="w-4 h-4" />
                         </button>
-                        {isSuperAdmin && (
+                        {isSuperAdmin && u.id !== currentUserId && (
                           <button onClick={() => openPermisos(u)}
                             title="Permisos"
                             className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors">
