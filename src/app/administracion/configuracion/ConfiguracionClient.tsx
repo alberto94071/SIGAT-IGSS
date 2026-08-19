@@ -13,6 +13,7 @@ type Config = {
   nombre_unidad_ejecutora?: string; centro_costo_nombre?: string;
   direccion_unidad?: string; justificacion_siaf?: string;
   banco_nombre?: string; cuenta_numero?: string; cuenta_nombre?: string;
+  siaf_compras_numero_inicial?: number; siaf_compras_numero_inicial_anio?: number;
 };
 type Firmante = { id: number; nombre: string; cargo: string; unidad: string | null; activo: boolean };
 
@@ -176,6 +177,12 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
           <textarea className="input min-h-[60px] resize-none"
             value={String(form.justificacion_siaf ?? "")}
             onChange={e => set("justificacion_siaf", e.target.value)} />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Correlativo de partida (último SIAF ya usado)" k="siaf_compras_numero_inicial" type="number"
+            helper='Si la unidad ya venía llevando SIAF fuera del sistema, poné el último número usado (ej. 105) y el siguiente que genere el sistema será 106. Dejalo en 0 si no aplica.' />
+          <Field label="Año de ese correlativo" k="siaf_compras_numero_inicial_anio" type="number"
+            helper="Solo cuenta para este año; el que viene arranca en 1 de nuevo." />
         </div>
       </section>
 

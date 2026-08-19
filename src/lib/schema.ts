@@ -55,6 +55,15 @@ export const configuracion = pgTable("configuracion", {
   // Marca el último cuatrimestre ya cerrado (formato "2026-1") para la
   // caducidad de saldo programado — ver cierre-cuatrimestre.ts.
   ultimo_cuatrimestre_cerrado: text("ultimo_cuatrimestre_cerrado"),
+  // Piso del correlativo A-01 SIAF para el año indicado — para cuando la
+  // unidad ya venía llevando un correlativo en papel/otro sistema antes de
+  // empezar a usar este, y hay que continuar la numeración en vez de volver
+  // a arrancar en 1. Solo aplica mientras `anio` actual == numero_inicial_anio
+  // (ver getNextSiafNumeroCompras en a01-siaf/actions.ts); el año siguiente
+  // vuelve a arrancar en 1 automáticamente. Sobrevive a "Reiniciar Sistema"
+  // porque configuracion no se trunca.
+  siaf_compras_numero_inicial:      integer("siaf_compras_numero_inicial").notNull().default(0),
+  siaf_compras_numero_inicial_anio: integer("siaf_compras_numero_inicial_anio").notNull().default(0),
   updated_at:           text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
