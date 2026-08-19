@@ -1,3 +1,8 @@
+> **Archivado.** Este documento es el registro de una ronda de trabajo
+> específica (Fases 1-12, módulo de Presupuesto). Ya no se actualiza y no
+> refleja el estado actual del sistema — para eso ver `CLAUDE.md` en la raíz
+> del repo. Se conserva como referencia histórica de esas fases.
+
 # Plan de implementación — Módulo de Presupuesto y Finanzas (SIGAT-IGSS)
 
 ## Contexto
