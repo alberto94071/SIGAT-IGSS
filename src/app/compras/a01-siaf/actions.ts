@@ -2,7 +2,7 @@
 import { fechaGuatemala, fechaHoraGuatemala } from "@/lib/date-utils";
 
 import { db } from "@/lib/db";
-import { siafCompras, siafComprasItems, catalogoCompras, consolidaciones, presupuestoRenglones, cotizacionesAnuales, cotizacionesAnualesItems } from "@/lib/schema";
+import { siafCompras, siafComprasItems, catalogoCompras, consolidaciones, presupuestoRenglones, cotizacionesAnuales, cotizacionesAnualesItems, configuracion } from "@/lib/schema";
 import { eq, and, sql, inArray, desc } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { crearNotificacion } from "@/lib/notificaciones";
@@ -82,7 +82,17 @@ export async function getNextSiafNumeroCompras(): Promise<number> {
   const result = await db.execute(
     sql`SELECT COALESCE(MAX(numero), 0) + 1 AS next FROM siaf_compras WHERE anio = ${year}`
   );
-  return Number((result.rows[0] as any).next) || 1;
+  const next = Number((result.rows[0] as any).next) || 1;
+
+  // Piso configurado (ej. la unidad ya llevaba 105 SIAF fuera del sistema
+  // antes de empezar a usarlo) — solo aplica para el año que se configuró.
+  const [cfg] = await db.select({
+    piso: configuracion.siaf_compras_numero_inicial,
+    piso_anio: configuracion.siaf_compras_numero_inicial_anio,
+  }).from(configuracion).limit(1);
+  const piso = cfg && cfg.piso_anio === year ? cfg.piso : 0;
+
+  return Math.max(next, piso + 1);
 }
 
 export async function crearSolicitud(data: {
