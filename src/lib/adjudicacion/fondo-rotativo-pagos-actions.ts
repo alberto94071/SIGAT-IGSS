@@ -397,36 +397,25 @@ export async function devolverPagoASiaf04(id: number): Promise<{ ok: true } | { 
   }
 }
 
-// El pago en efectivo se liga al vale de "gastos varios" activo (con cheque ya
-// asignado en Fondo Rotativo/Vales) generado en Caja Chica/Vale. Un mismo vale
-// puede financiar varios pagos en efectivo antes de liquidarse, así que aquí
-// NO se marca el vale como usado — solo se liquida como un todo desde Caja
-// Chica/Liquidación una vez que Caja Chica termina de usarlo.
-export async function registrarFormaPagoEfectivo(id: number, data: {
-  fecha_pago: string; vale_id: number;
-}): Promise<{ ok: true } | { error: string }> {
+// Elegir "Efectivo" en Fondo Rotativo/Pagos solo marca la forma de pago y
+// envía el registro a Caja Chica/Pagos — NO asigna vale ni fecha de pago
+// aquí. Es en Caja Chica/Pagos donde se elige el vale de "gastos varios"
+// activo y se confirma el pago (o se espera si todavía no hay vale/efectivo
+// disponible) — ver liquidarPago en caja-chica-liquidacion-actions.ts.
+export async function registrarFormaPagoEfectivo(id: number): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireCompras();
     if ("error" in check) return check;
-    if (!data.fecha_pago || !data.vale_id)
-      return { error: "Fecha de pago y vale son obligatorios" };
 
     const [pago] = await db.select().from(fondoRotativoPagos).where(eq(fondoRotativoPagos.id, id)).limit(1);
     if (!pago) return { error: "No se encontró el registro" };
     if (pago.estado !== "Pendiente forma de pago") return { error: "Este registro ya tiene forma de pago asignada" };
-
-    const [vale] = await db.select().from(valesCajaChica).where(eq(valesCajaChica.id, data.vale_id)).limit(1);
-    if (!vale) return { error: "No se encontró el vale seleccionado" };
-    if (vale.tipo !== "gastos_varios" || vale.estado !== "Activo") return { error: "Ese vale no está activo" };
 
     const esGrupo100 = await esPagoGrupo100(pago.consolidacion_id);
 
     await db.transaction(async (tx) => {
       await tx.update(fondoRotativoPagos).set({
         forma_pago: "efectivo",
-        fecha_pago: data.fecha_pago,
-        numero_vale: String(vale.numero).padStart(7, "0"),
-        vale_id: vale.id,
         estado: esGrupo100 ? "Pendiente FRI" : "Enviado a Liquidación",
       }).where(eq(fondoRotativoPagos.id, id));
 
