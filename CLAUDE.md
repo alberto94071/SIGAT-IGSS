@@ -116,10 +116,19 @@ mergeado), actualizá este archivo antes de dar el trabajo por cerrado:
 - **IVA es `costo / 1.12`, no `costo * 0.88`.** Son parecidos pero no iguales;
   ya se corrigió en todo el sistema una vez — si aparece una fórmula nueva de
   IVA, usar la división.
-- **El pago de Fondo Rotativo en efectivo exige un Vale de Caja Chica
-  (`gastos_varios`) ya activo**, creado antes en Caja Chica/Vale — no se
-  genera al momento de pagar. Si no hay vale activo, el sistema lo dice
-  explícitamente; no es un bug.
+- **La asignación del vale y la confirmación del pago en efectivo son
+  exclusivas de Caja Chica/Pagos — Fondo Rotativo/Pagos nunca las hace**
+  (confirmado por el cliente 2026-08-19, revirtió el comportamiento
+  anterior). Elegir "Efectivo" en Fondo Rotativo/Pagos (`registrarFormaPagoEfectivo`)
+  solo marca `forma_pago` y manda el registro a `estado = "Enviado a
+  Liquidación"` (o directo a `"Pendiente FRI"` si el renglón es 100-199,
+  que nunca pasa por Caja Chica) — no pide vale ni fecha de pago. Es
+  `liquidarPago` (`caja-chica-liquidacion-actions.ts`), en Caja Chica/Pagos,
+  el que exige el vale de Caja Chica (`gastos_varios`) ya activo y la fecha
+  de pago, y recién ahí mueve a `"Pendiente FRI"`. Si no hay vale activo
+  todavía, el pago se queda esperando en la lista de Caja Chica/Pagos — no
+  es un bug, es el diseño ("que espere el proceso mientras se cuenta con
+  el efectivo").
 - **El firmante "Encargado(a) de Unidad" ya no es un campo fijo de
   Configuración** — se eligió así porque la persona que estaba ahí
   (`nombre_encargado_unidad`) dejó de trabajar en la unidad. Ahora es un
