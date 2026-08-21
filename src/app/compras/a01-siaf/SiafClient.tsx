@@ -909,11 +909,13 @@ export default function SiafClient({
                         const selQty    = subprodSelections.get(c.id) ?? "";
                         const isChecked = subprodSelections.has(c.id);
                         const autorizado = c.cantidad ?? 0;
-                        const enDB = solicitudes.flatMap(s => s.items)
-                          .filter(i => i.codigo_igss === c.codigo_igss && i.subproducto === c.subproducto)
+                        const enDB = solicitudes
+                          .filter(s => s.estado !== "Rechazado" && (!editMode || s.id !== editingSolId))
+                          .flatMap(s => s.items)
+                          .filter(i => i.codigo_igss === c.codigo_igss && i.subproducto === c.subproducto && i.nombre === c.nombre)
                           .reduce((sum, i) => sum + i.cantidad_solicitada, 0);
                         const enModal = modalItems
-                          .filter(i => i.codigo_igss === c.codigo_igss && i.subproducto === c.subproducto)
+                          .filter(i => i.codigo_igss === c.codigo_igss && i.subproducto === c.subproducto && i.nombre === c.nombre)
                           .reduce((sum, i) => sum + i.cantidad_solicitada, 0);
                         const disponible = autorizado - enDB - enModal;
                         return (

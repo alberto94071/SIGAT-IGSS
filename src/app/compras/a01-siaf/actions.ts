@@ -29,11 +29,20 @@ async function validarItemsEnPac(items: { catalogo_id: number }[]): Promise<stri
 type ItemPacExcedido = { nombre: string; disponible: number; requerido: number };
 
 // Cantidad todavía disponible en el PAC para un insumo (código IGSS +
-// subproducto) del año dado: la cantidad autorizada en el catálogo, menos lo
-// que ya está pedido en otros SIAF del mismo año que no estén Rechazados
-// (Borrador o Aprobado — un Borrador también aparta cantidad, para que dos
-// solicitudes en trámite a la vez no se pisen entre sí). Excluye la propia
-// solicitud que se está aprobando, para no restarse a sí misma dos veces.
+// subproducto + nombre) del año dado: la cantidad autorizada en el
+// catálogo, menos lo que ya está pedido en otros SIAF del mismo año que no
+// estén Rechazados (Borrador o Aprobado — un Borrador también aparta
+// cantidad, para que dos solicitudes en trámite a la vez no se pisen entre
+// sí). Excluye la propia solicitud que se está aprobando, para no restarse
+// a sí misma dos veces.
+//
+// El nombre es parte de la clave a propósito — mismo patrón "S/C" de
+// siempre (ver CLAUDE.md): puede haber varias filas del PAC con el mismo
+// codigo_igss+subproducto pero que en realidad son insumos distintos (ej.
+// "Arrendamiento... Septiembre" / "...Octubre" / "...Noviembre", todas con
+// codigo_igss "SC-990510" y subproducto "001-001-0001", cada una con su
+// propia cantidad autorizada). Sin el nombre en la clave, usar la cuota de
+// una contaminaba la disponibilidad de las otras.
 async function verificarPacDisponible(
   items: { codigo_igss: string | null; subproducto: string; nombre: string; cantidad_solicitada: number }[],
   anio: number, solicitudIdActual: number,
@@ -41,7 +50,7 @@ async function verificarPacDisponible(
   const porClave = new Map<string, { codigo_igss: string; subproducto: string; nombre: string; monto: number }>();
   for (const item of items) {
     if (!item.codigo_igss) continue; // sin código IGSS no hay con qué cruzar la cantidad del PAC
-    const key = `${item.codigo_igss}::${item.subproducto}`;
+    const key = `${item.codigo_igss}::${item.subproducto}::${item.nombre}`;
     const existente = porClave.get(key);
     if (existente) existente.monto += item.cantidad_solicitada;
     else porClave.set(key, { codigo_igss: item.codigo_igss, subproducto: item.subproducto, nombre: item.nombre, monto: item.cantidad_solicitada });
@@ -50,7 +59,7 @@ async function verificarPacDisponible(
   const excedidos: ItemPacExcedido[] = [];
   for (const { codigo_igss, subproducto, nombre, monto } of porClave.values()) {
     const [cat] = await db.select({ cantidad: catalogoCompras.cantidad }).from(catalogoCompras)
-      .where(and(eq(catalogoCompras.codigo_igss, codigo_igss), eq(catalogoCompras.subproducto, subproducto))).limit(1);
+      .where(and(eq(catalogoCompras.codigo_igss, codigo_igss), eq(catalogoCompras.subproducto, subproducto), eq(catalogoCompras.nombre, nombre))).limit(1);
     // Sin cantidad configurada en el PAC para este insumo no hay límite que
     // verificar (no es lo mismo que "cero disponible") — se deja pasar.
     if (cat?.cantidad == null) continue;
@@ -60,7 +69,7 @@ async function verificarPacDisponible(
       SELECT COALESCE(SUM(sci.cantidad_solicitada), 0) AS total
       FROM siaf_compras_items sci
       JOIN siaf_compras sc ON sc.id = sci.solicitud_id
-      WHERE sci.codigo_igss = ${codigo_igss} AND sci.subproducto = ${subproducto}
+      WHERE sci.codigo_igss = ${codigo_igss} AND sci.subproducto = ${subproducto} AND sci.nombre = ${nombre}
         AND sc.anio = ${anio} AND sc.estado != 'Rechazado' AND sc.id != ${solicitudIdActual}
     `);
     const yaReservado = Number((res.rows[0] as any).total) || 0;
