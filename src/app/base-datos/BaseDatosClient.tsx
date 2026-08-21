@@ -343,11 +343,13 @@ export default function BaseDatosClient({
                   <label className="label">Código IGSS</label>
                   <input className="input" value={form.codigo_igss}
                     onChange={e => setF("codigo_igss", e.target.value)} placeholder="Ej: SC-990831" />
+                  <p className="text-xs text-gray-400 mt-1">Solo se usa si &quot;Código&quot; está vacío.</p>
                 </div>
                 <div>
                   <label className="label">Código</label>
                   <input className="input" value={form.codigo}
                     onChange={e => setF("codigo", e.target.value)} placeholder="Ej: 277" />
+                  <p className="text-xs text-gray-400 mt-1">Este es el que se usa al agregar el insumo al Catálogo (PAC).</p>
                 </div>
               </div>
               <div>
