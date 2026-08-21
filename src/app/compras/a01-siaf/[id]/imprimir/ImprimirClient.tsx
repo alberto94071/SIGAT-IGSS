@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Printer, ChevronDown, X, ArrowLeft } from "lucide-react";
 
 type Item = {
-  id: number; nombre: string; codigo_igss: number | null; codigo_ppr: string | null;
+  id: number; nombre: string; codigo_igss: string | null; codigo_ppr: string | null;
   subproducto: string; unidad_medida: string | null; cantidad_solicitada: number;
 };
 type Solicitud = { id: number; numero: number; anio: number; fecha: string; estado: string };
@@ -35,8 +35,20 @@ const H_FIRMA = 78;    // Recuadros de firma
 const H_JUST = 88;    // Justificación — más alta para que quepan justificaciones largas
 const GAP = 4;     // px entre recuadros
 
-const W_COD = 72;     // Ancho columna Código
+const W_COD = 84;     // Ancho columna Código
 const W_CANT = 88;     // Ancho columna Cantidad
+
+// Algunos insumos de Base de Datos Central traen el código como un rango
+// ("32327 - 35227") en vez de un número corto — sin esto se cortaba a dos
+// líneas dentro de la columna. Encoge la letra según el largo para que
+// siempre quepa en una sola línea, sin truncar el código.
+function codigoFontSize(texto: string): string {
+  const len = texto.length;
+  if (len <= 6) return "8pt";
+  if (len <= 9) return "7.2pt";
+  if (len <= 13) return "6.4pt";
+  return "5.8pt";
+}
 
 // Alturas del bloque tabla, iguales en todas las hojas (el resumen de
 // subproductos no cambia el alto total, solo cuánto de su cuerpo se llena)
@@ -285,7 +297,7 @@ export default function ImprimirClient({
 
                     {page.items.map(item => (
                       <div key={item.id} style={{ display: "flex", height: ROW_H, alignItems: "center", fontFamily: FONT, color: C }}>
-                        <div style={{ width: W_COD, textAlign: "center", flexShrink: 0, fontFamily: "monospace", fontSize: "8pt" }}>
+                        <div style={{ width: W_COD, textAlign: "center", flexShrink: 0, fontFamily: "monospace", fontSize: codigoFontSize(String(item.codigo_igss ?? "")), whiteSpace: "nowrap", overflow: "hidden" }}>
                           {item.codigo_igss ?? ""}
                         </div>
                         <div style={{ flex: 1, padding: "0 8px", display: "flex", justifyContent: mostrarSubproducto ? "space-between" : "flex-start", alignItems: "center", overflow: "hidden" }}>
