@@ -96,13 +96,23 @@ mergeado), actualizá este archivo antes de dar el trabajo por cerrado:
 
 ## Trampas y reglas que ya mordieron a alguien
 
-- **"S/C" no es un código compartido real.** Muchos insumos sin código IGSS
-  usan el placeholder `"S/C"` como `codigo_igss` — no significa que compartan
-  identidad. Agrupar/matchear solo por `codigo_igss + subproducto` mezcla
-  insumos distintos entre sí. Siempre agregar `nombre` a la clave (ya
+- **"S/C" no es un código compartido real — y tampoco lo son los códigos de
+  servicio tipo `"SC-990510"`.** Muchos insumos sin código IGSS usan el
+  placeholder `"S/C"` como `codigo_igss`, y varios servicios (ej.
+  "Arrendamiento de Inmuebles", una fila del PAC por mes) comparten un mismo
+  código de servicio + subproducto genérico — en ningún caso significa que
+  compartan identidad. Agrupar/matchear solo por `codigo_igss + subproducto`
+  mezcla insumos distintos entre sí. Siempre agregar `nombre` a la clave (ya
   aplicado en `catalogo_compras`, `siaf_compras_items`, `base_datos_central`,
-  cotizaciones — pero es el primer sospechoso si aparece un bug de "se pisan
-  los datos de dos insumos distintos").
+  cotizaciones, y en el cálculo de "Disponible" del PAC tanto en
+  `SiafClient.tsx` como en `verificarPacDisponible` de `a01-siaf/actions.ts`
+  — pero es el primer sospechoso si aparece un bug de "se pisan los datos de
+  dos insumos distintos" o "el disponible de uno se contamina con el de
+  otro"). Además, estas filas de servicio no siempre tienen contraparte en
+  Base de Datos Central — `editarInsumoCompras` (catálogo) solo revalida el
+  código contra Base de Datos Central si el código realmente cambió, para no
+  bloquear la edición de filas ya existentes que nunca tuvieron esa
+  contraparte.
 - **`consolidaciones.destino` y `consolidaciones.regularizado` son cosas
   distintas, no las confundas.** `destino` (`"presupuesto"` | `"fondo_rotativo"`
   | null) decide si el caso va a Compras/Órdenes o a Fondo Rotativo/SIAF-04.
