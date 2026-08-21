@@ -145,8 +145,18 @@ export async function editarInsumoCompras(id: number, data: InsumoComprasInput):
     if (!data.nombre.trim()) return { error: "El nombre es obligatorio" };
     if (!data.subproducto.trim()) return { error: "El subproducto es obligatorio" };
     if (!(data.cantidad > 0)) return { error: "Ingresa una cantidad válida" };
-    if (data.codigo_igss?.trim()) {
-      const errCodigo = await validarCodigoCentral(data.codigo_igss.trim());
+
+    // Solo revalidar contra Base de Datos Central si el código realmente
+    // cambió. Hay insumos del catálogo (ej. servicios como "Arrendamiento de
+    // Inmuebles") que se cargaron sin pasar por Base de Datos Central y no
+    // tienen contraparte ahí — sin esto, cualquier edición de esas filas
+    // (aunque solo fuera para ajustar la cantidad autorizada) quedaba
+    // bloqueada con "El código no existe en Base de Datos Central".
+    const [actual] = await db.select({ codigo_igss: catalogoCompras.codigo_igss })
+      .from(catalogoCompras).where(eq(catalogoCompras.id, id)).limit(1);
+    const codigoNuevo = data.codigo_igss?.trim() || null;
+    if (codigoNuevo && codigoNuevo !== actual?.codigo_igss) {
+      const errCodigo = await validarCodigoCentral(codigoNuevo);
       if (errCodigo) return { error: errCodigo };
     }
 
