@@ -28,6 +28,8 @@ export default async function InsumosPage({ searchParams }: PageProps) {
         ilike(baseDatosCentral.nombre, `%${q}%`),
         ilike(baseDatosCentral.caracteristicas, `%${q}%`),
         ilike(baseDatosCentral.presentacion, `%${q}%`),
+        ilike(baseDatosCentral.descripcion_igss, `%${q}%`),
+        ilike(baseDatosCentral.codigo, `%${q}%`),
         sql`${baseDatosCentral.codigo_ppr}::text ILIKE ${'%' + q + '%'}`,
         sql`${baseDatosCentral.codigo_igss}::text ILIKE ${'%' + q + '%'}`
       )
