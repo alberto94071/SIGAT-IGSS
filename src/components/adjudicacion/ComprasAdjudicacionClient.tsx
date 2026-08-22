@@ -1,6 +1,7 @@
 "use client";
 import { fechaGuatemala } from "@/lib/date-utils";
 import { netoDeIva } from "@/lib/iva-utils";
+import { esGrupo100 } from "@/lib/programacion-constants";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -96,7 +97,7 @@ export default function ComprasAdjudicacionClient({ consolidaciones: init, canEd
                 <XCircle className="w-3 h-3" /> Rechazar
               </button>
             )}
-            {c.regularizado === true && (
+            {c.regularizado === true && c.precios.length > 0 && c.precios.every(p => esGrupo100(p.renglon)) && (
               <Link href={`/compras/adjudicacion/${c.id}/conformidad`}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
                 <Printer className="w-3 h-3" /> Carta de Conformidad
