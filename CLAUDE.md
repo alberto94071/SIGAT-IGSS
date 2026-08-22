@@ -275,6 +275,13 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   confirmó que NO debe cambiar a solo la columna "Código" (eso es aparte, ya
   aplicado, en la leyenda "Código PpR:" del A-01 SIAF). Esto solo se aplicó
   a SIAF-04/A-04 — Órdenes/Orden de Compra queda fuera, no se tocó.
+- **A-04 impreso de un solo renglón (`ImprimirA04Client.tsx`): "Precio
+  Unitario" es `montoBruto ÷ cantidad`, no `montoBruto` directo** — con
+  varios renglones esto ya se calculaba bien; el caso de un solo renglón
+  (compras Regularizado con `a04_cantidad` capturado a mano) imprimía el
+  mismo monto en unitario y en total sin dividir entre la cantidad (con
+  cantidad 10 y total Q500 salía "Precio Unitario: Q500" en vez de Q50) —
+  detectado por el cliente al revisar una captura de prueba.
 - **DAB-60 (`ImprimirDab60Client.tsx`) tiene "campos ocultables" persistentes
   por navegador, independiente de "Ver posiciones"**: cada campo impreso
   tiene un botón "×" (`.dab-hide-btn`, no imprime) que lo oculta para
