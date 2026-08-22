@@ -233,6 +233,20 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   `ImprimirClient.tsx`) recorta al número de la izquierda del guión solo
   cuando ambos lados son numéricos — no toca el dato guardado. Códigos de
   servicio tipo `"SC-990510"` (izquierda no numérica) se imprimen completos.
+- **El Catálogo (PAC) guarda dos descripciones distintas de Base de Datos
+  Central, no una** (confirmado por el cliente 2026-08-22): `nombre`
+  (Código + Nombre) alimenta Órdenes, SIAF-04 y DAB-60; `descripcion_igss`
+  (Código IGSS + Descripción IGSS, columna nueva en `catalogo_compras` y
+  `siaf_compras_items`) alimenta específicamente el A-01 SIAF
+  (`ImprimirClient.tsx` usa `item.descripcion_igss || item.nombre`, nunca
+  queda en blanco). Antes `elegirInsumo` (`CatalogoComprasClient.tsx`)
+  guardaba `descripcion_igss || nombre` como el único `nombre` — mezclaba
+  las dos; ya no. Los ~1,634 insumos que ya estaban en el catálogo antes de
+  este cambio se respaldaron con `descripcion_igss = nombre` (ese `nombre`
+  ya venía de `descripcion_igss` por el comportamiento anterior, así que no
+  cambia nada de lo que ya se imprimía) — no se reinterpretaron contra Base
+  de Datos Central porque un mismo código puede tener varias presentaciones
+  y no se puede desambiguar solo por código.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

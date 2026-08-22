@@ -315,6 +315,14 @@ export const catalogoCompras = pgTable("catalogo_compras", {
   // Columnas del PAC (Plan Anual de Compras)
   codigo_igss:             text("codigo_igss"),       // "SC-122080" — texto, no entero
   nombre:                  text("nombre").notNull(),
+  // Snapshot de base_datos_central.descripcion_igss al elegir el insumo — el
+  // A-01 SIAF usa esta columna (Código IGSS + Descripción IGSS); "nombre" de
+  // arriba (Código + Descripción PpR de Base de Datos Central) sigue
+  // alimentando Órdenes, SIAF-04 y DAB-60 (confirmado por el cliente
+  // 2026-08-22). Puede venir null en insumos sin contraparte en Base de
+  // Datos Central (ej. servicios "S/C") — ver descripcionParaImprimir en
+  // a01-siaf/[id]/imprimir/ImprimirClient.tsx para el respaldo.
+  descripcion_igss:        text("descripcion_igss"),
   renglon:                 integer("renglon"),
   subproducto:             text("subproducto").notNull(),
   cantidad:                doublePrecision("cantidad"),
@@ -605,6 +613,7 @@ export const siafComprasItems = pgTable("siaf_compras_items", {
   codigo_igss:         text("codigo_igss"),   // texto para coincidir con catalogoCompras.codigo_igss
   codigo_ppr:          text("codigo_ppr"),
   nombre:              text("nombre").notNull(),
+  descripcion_igss:    text("descripcion_igss"), // snapshot de catalogoCompras.descripcion_igss — ver comentario ahí
   subproducto:         text("subproducto").notNull(),
   unidad_medida:       text("unidad_medida"),
   cantidad_antes:      doublePrecision("cantidad_antes"),

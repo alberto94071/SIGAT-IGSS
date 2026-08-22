@@ -77,6 +77,7 @@ type InsumoComprasInput = {
   subproducto: string;
   cantidad: number;
   codigo_igss?: string | null;
+  descripcion_igss?: string | null;
   renglon?: number | null;
   precio_estimado?: number | null;
 };
@@ -84,13 +85,14 @@ type InsumoComprasInput = {
 function toValues(data: InsumoComprasInput) {
   const precio = data.precio_estimado ?? null;
   return {
-    nombre:          data.nombre,
-    subproducto:     data.subproducto,
-    cantidad:        data.cantidad,
-    codigo_igss:     data.codigo_igss || null,
-    renglon:         data.renglon ?? null,
-    precio_estimado: data.precio_estimado ?? null,
-    monto:           precio != null ? precio * data.cantidad : null,
+    nombre:           data.nombre,
+    subproducto:      data.subproducto,
+    cantidad:         data.cantidad,
+    codigo_igss:      data.codigo_igss || null,
+    descripcion_igss: data.descripcion_igss || null,
+    renglon:          data.renglon ?? null,
+    precio_estimado:  data.precio_estimado ?? null,
+    monto:            precio != null ? precio * data.cantidad : null,
   };
 }
 
