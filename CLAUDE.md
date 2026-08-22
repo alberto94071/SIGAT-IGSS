@@ -247,6 +247,21 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   cambia nada de lo que ya se imprimía) — no se reinterpretaron contra Base
   de Datos Central porque un mismo código puede tener varias presentaciones
   y no se puede desambiguar solo por código.
+- **DAB-60 (`ImprimirDab60Client.tsx`) tiene "campos ocultables" persistentes
+  por navegador, independiente de "Ver posiciones"**: cada campo impreso
+  tiene un botón "×" (`.dab-hide-btn`, no imprime) que lo oculta para
+  siempre — la lista de ids ocultos vive en `localStorage["cip-dab60-campos-
+  ocultos"]`, así que aplica a TODOS los DAB-60 (Normal y Fondo Rotativo,
+  comparten el mismo componente) que se impriman después en ese navegador,
+  hasta que el usuario le da clic a "Reiniciar campos ocultos" (solo aparece
+  cuando hay al menos uno oculto). No confundir con "Restablecer" del modo
+  "Ver posiciones", que resetea posiciones/tamaño, no visibilidad. La
+  columna Código IGSS-PPR (`codigosPpr`) solo concatena ambos números con
+  guion cuando son distintos entre sí — si son el mismo número se imprime
+  una sola vez. `renglon`, `metodo_compra`, `marca` y `modelo` llevan su
+  etiqueta literal ("Renglón:", "Tipo de compra:", "Marca:", "Modelo:")
+  concatenada al valor antes de pasar por `campo()` — no son etiquetas de
+  UI, salen impresas en el papel.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
