@@ -19,24 +19,13 @@ type Usuario = {
   last_login: Date | null; created_at: Date | null;
 };
 
-const MODULOS: { key: keyof Permisos; label: string }[] = [
-  { key: "servicios",     label: "Servicios"      },
-  { key: "pagos",         label: "Pagos"          },
-  { key: "banco",         label: "Banco"          },
-  { key: "caja_chica",    label: "Caja Chica"     },
-  { key: "liquidacion",   label: "Liquidación"    },
-  { key: "catalogos",     label: "Catálogos"      },
-  { key: "reportes",      label: "Reportes"       },
-  { key: "documentos",    label: "Documentos"     },
-];
-
 const MODULOS_LAUNCHER: { key: keyof Permisos; label: string }[] = [
   { key: "mod_fondo_rotativo",        label: "Fondo Rotativo"         },
   { key: "mod_compras",               label: "Compras"                },
   { key: "mod_presupuesto",           label: "Presupuesto"            },
   { key: "mod_junta_adjudicadora",    label: "Junta Adjudicadora"     },
   { key: "mod_almacen",               label: "Almacén"                },
-  { key: "mod_caja_chica",            label: "Caja Chica (launcher)"  },
+  { key: "mod_caja_chica",            label: "Caja Chica"             },
   { key: "mod_viaticos",              label: "Pago de Viáticos"       },
   { key: "mod_pasajes",               label: "Pago de Pasajes"        },
   { key: "mod_contrato_cotizaciones", label: "Contrato y Cotizaciones"},
@@ -44,6 +33,84 @@ const MODULOS_LAUNCHER: { key: keyof Permisos; label: string }[] = [
   { key: "mod_administracion",        label: "Administración (Usuarios + Configuración)" },
   { key: "mod_hoja_de_ruta",          label: "Hoja de Ruta"           },
 ];
+
+// Pestañas de cada módulo — cada una es su propio permiso, para que dos
+// personas puedan tener el mismo módulo pero pestañas distintas visibles
+// (ver también src/lib/permisos.ts, NAV_ITEMS y cada layout.tsx de módulo,
+// que son los que realmente ocultan la pestaña según esto). Los módulos que
+// no aparecen acá (Contrato y Cotizaciones, Hoja de Ruta) son de una sola
+// pantalla, sin pestañas propias que ocultar.
+const TABS_POR_MODULO: Partial<Record<keyof Permisos, { key: keyof Permisos; label: string }[]>> = {
+  mod_fondo_rotativo: [
+    { key: "tab_fr_siaf04",             label: "SIAF-04" },
+    { key: "tab_fr_vales",              label: "Vales" },
+    { key: "tab_fr_pagos",              label: "Pagos" },
+    { key: "tab_fr_fri",                label: "Pago/FRI" },
+    { key: "tab_fr_bancos",             label: "Bancos" },
+    { key: "tab_fr_libro_bancos",       label: "Libro Bancos" },
+    { key: "tab_fr_libro_conciliacion", label: "Libro Conciliación" },
+    { key: "tab_fr_archivo",            label: "Archivo" },
+  ],
+  mod_compras: [
+    { key: "tab_compras_catalogo",      label: "Catálogo" },
+    { key: "tab_compras_a01siaf",       label: "A-01 SIAF" },
+    { key: "tab_compras_consolidacion", label: "Consolidación" },
+    { key: "tab_compras_adjudicacion",  label: "Adjudicación" },
+    { key: "tab_compras_ordenes",       label: "Órdenes" },
+    { key: "tab_compras_archivo",       label: "Archivo" },
+  ],
+  mod_junta_adjudicadora: [
+    { key: "tab_junta_adjudicacion", label: "Adjudicación" },
+    { key: "tab_junta_acta",         label: "Acta" },
+    { key: "tab_junta_historial",    label: "Historial" },
+  ],
+  mod_almacen: [
+    { key: "tab_almacen_catalogo",   label: "Catálogo" },
+    { key: "tab_almacen_dab60",      label: "DAB-60" },
+    { key: "tab_almacen_dab75",      label: "DAB-75" },
+    { key: "tab_almacen_cuadricula", label: "Cuadrícula" },
+    { key: "tab_almacen_archivo",    label: "Archivo" },
+  ],
+  mod_presupuesto: [
+    { key: "tab_presupuesto_general",                  label: "General" },
+    { key: "tab_presupuesto_compromiso",                label: "Compromiso" },
+    { key: "tab_presupuesto_devengado",                 label: "Devengado" },
+    { key: "tab_presupuesto_programacion",              label: "Programación y Reprogramación — Programación" },
+    { key: "tab_presupuesto_reprogramacion",            label: "Programación y Reprogramación — Reprogramación" },
+    { key: "tab_presupuesto_autorizar_reprogramacion",  label: "Programación y Reprogramación — Autorizar" },
+    { key: "tab_presupuesto_modif_ingru",               label: "Modificaciones — Ingru" },
+    { key: "tab_presupuesto_modif_ampliacion",          label: "Modificaciones — Ampliación" },
+    { key: "tab_presupuesto_modif_transferencia",       label: "Modificaciones — Transferencia" },
+    { key: "tab_presupuesto_autorizar_modificaciones",  label: "Modificaciones — Autorizar" },
+    { key: "tab_presupuesto_ejecucion",                 label: "Ejecución" },
+  ],
+  mod_caja_chica: [
+    { key: "tab_cajachica_vale",        label: "Vale" },
+    { key: "tab_cajachica_pagos",       label: "Pagos" },
+    { key: "tab_cajachica_liquidacion", label: "Liquidación" },
+    { key: "tab_cajachica_libro",       label: "Libro Caja Chica" },
+  ],
+  mod_pasajes: [
+    { key: "tab_pasajes_solicitud", label: "Solicitud Pasaje" },
+    { key: "tab_pasajes_tarifario", label: "Tarifario" },
+    { key: "tab_pasajes_dpd23",     label: "DPD-23" },
+    { key: "tab_pasajes_poliza",    label: "Póliza" },
+  ],
+  mod_viaticos: [
+    { key: "tab_viaticos_entrega",  label: "Entrega de Formulario" },
+    { key: "tab_viaticos_comision", label: "Registro de Comisión" },
+  ],
+  mod_base_datos: [
+    { key: "tab_basedatos_insumos",     label: "Insumos" },
+    { key: "tab_basedatos_tarifario",   label: "Tarifario de Pasajes" },
+    { key: "tab_basedatos_proveedores", label: "Proveedores" },
+    { key: "tab_basedatos_afiliados",   label: "Afiliados" },
+  ],
+  mod_administracion: [
+    { key: "tab_admin_usuarios",      label: "Usuarios y Permisos" },
+    { key: "tab_admin_configuracion", label: "Configuración General" },
+  ],
+};
 
 interface Props {
   usuarios:      Usuario[];
@@ -375,59 +442,53 @@ export default function UsuariosClient({ usuarios: init, rol, currentUserId }: P
 
             <div>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                Módulos del sistema (launcher)
+                Módulos y pestañas
               </p>
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <div className="table-header px-4 py-2 grid grid-cols-2 text-xs">
-                  <span>Módulo</span>
-                  <span className="text-center">Acceso</span>
-                </div>
-                {MODULOS_LAUNCHER.map(m => (
-                  <div key={m.key}
-                    className="grid grid-cols-2 px-4 py-2.5 border-t border-gray-100 hover:bg-gray-50 items-center">
-                    <span className="text-sm text-gray-700">{m.label}</span>
-                    <div className="flex justify-center">
-                      <button
-                        onClick={() => setPermEdit(prev => ({ ...prev, [m.key]: !prev[m.key] }))}
-                        className={`w-10 h-5 rounded-full transition-colors relative ${permEdit[m.key] ? "bg-brand-500" : "bg-gray-200"}`}
-                      >
-                        <span className={`absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${permEdit[m.key] ? "translate-x-5" : "translate-x-0"}`} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                Fondo Rotativo (submenús internos)
+              <p className="text-xs text-gray-400 mb-2">
+                El interruptor grande da o quita el módulo completo. Con el módulo activo, cada pestaña
+                de abajo se puede ocultar por separado — así dos personas pueden tener el mismo módulo
+                con pestañas distintas visibles.
               </p>
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <div className="table-header px-4 py-2 grid grid-cols-2 text-xs">
-                  <span>Módulo</span>
-                  <span className="text-center">Acceso</span>
-                </div>
-                {MODULOS.map(m => (
-                  <div key={m.key}
-                    className="grid grid-cols-2 px-4 py-2.5 border-t border-gray-100 hover:bg-gray-50 items-center">
-                    <span className="text-sm text-gray-700">{m.label}</span>
-                    <div className="flex justify-center">
-                      <button
-                        onClick={() => setPermEdit(prev => ({ ...prev, [m.key]: !prev[m.key] }))}
-                        className={`w-10 h-5 rounded-full transition-colors relative ${permEdit[m.key] ? "bg-brand-500" : "bg-gray-200"}`}
-                      >
-                        <span className={`absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${permEdit[m.key] ? "translate-x-5" : "translate-x-0"}`} />
-                      </button>
+              <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100">
+                {MODULOS_LAUNCHER.map(m => {
+                  const tabs = TABS_POR_MODULO[m.key];
+                  return (
+                    <div key={m.key}>
+                      <div className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 bg-gray-50/50">
+                        <span className="text-sm font-medium text-gray-800">{m.label}</span>
+                        <Toggle checked={!!permEdit[m.key]} onToggle={() => setPermEdit(prev => ({ ...prev, [m.key]: !prev[m.key] }))} />
+                      </div>
+                      {permEdit[m.key] && tabs && (
+                        <div className="bg-white">
+                          {tabs.map(t => (
+                            <div key={t.key} className="flex items-center justify-between pl-8 pr-4 py-2 border-t border-gray-50 hover:bg-gray-50">
+                              <span className="text-sm text-gray-600">{t.label}</span>
+                              <Toggle checked={!!permEdit[t.key]} onToggle={() => setPermEdit(prev => ({ ...prev, [t.key]: !prev[t.key] }))} />
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
         </ModalBase>
       )}
     </div>
+  );
+}
+
+// ── Interruptor pequeño reutilizable (módulos y pestañas) ─────────────────────
+function Toggle({ checked, onToggle }: { checked: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`w-10 h-5 rounded-full transition-colors relative shrink-0 ${checked ? "bg-brand-500" : "bg-gray-200"}`}
+    >
+      <span className={`absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${checked ? "translate-x-5" : "translate-x-0"}`} />
+    </button>
   );
 }
 

@@ -4,7 +4,7 @@ import NavBaseDatos from "./NavBaseDatos";
 import { requireModuloAccess } from "@/lib/modulo-access";
 
 export default async function BaseDatosLayout({ children }: { children: React.ReactNode }) {
-  await requireModuloAccess("mod_base_datos");
+  const { permisos } = await requireModuloAccess("mod_base_datos");
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
@@ -26,7 +26,7 @@ export default async function BaseDatosLayout({ children }: { children: React.Re
             ← Menú principal
           </Link>
         </div>
-        <NavBaseDatos />
+        <NavBaseDatos permisos={permisos} />
       </header>
 
       <main className="flex-1 w-full px-6 py-6">

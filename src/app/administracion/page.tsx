@@ -1,10 +1,10 @@
 import { db } from "@/lib/db";
 import { usuarios } from "@/lib/schema";
-import { requireModuloAccess } from "@/lib/modulo-access";
+import { requireTabAccess } from "@/lib/modulo-access";
 import UsuariosClient from "./UsuariosClient";
 
 export default async function AdministracionPage() {
-  const { session, rol } = await requireModuloAccess("mod_administracion");
+  const { session, rol } = await requireTabAccess("mod_administracion", "tab_admin_usuarios");
 
   const lista = await db
     .select({

@@ -1,15 +1,11 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import { type Rol } from "@/lib/permisos";
+import { requireTabAccess } from "@/lib/modulo-access";
 import { listarTarifarioPaginado } from "@/lib/pasajes-actions";
 import TarifarioClient from "@/components/TarifarioClient";
 
 interface Props { searchParams: Promise<{ q?: string; delegacion?: string; page?: string }> }
 
 export default async function TarifarioPage({ searchParams }: Props) {
-  const session = await auth();
-  if (!session) redirect("/login");
-  const rol = session.user.rol as Rol;
+  const { rol } = await requireTabAccess("mod_pasajes", "tab_pasajes_tarifario");
   const canEdit = rol !== "consulta";
 
   const { q, delegacion, page } = await searchParams;

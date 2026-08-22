@@ -1,8 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, CheckCircle, XCircle, ArrowRightLeft, Printer } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CheckCircle, XCircle, ArrowRightLeft, Printer, ClipboardCheck } from "lucide-react";
 import { CUATRIMESTRES, TIPOS_MODIFICACION, type TipoModificacion } from "@/lib/programacion-constants";
+import { type Permisos } from "@/lib/permisos";
 import {
   buscarRenglones, getSubproductosDeRenglon, getSubproductosConDisponible,
   guardarModificacion, getModificaciones, aprobarModificacion, rechazarModificacion,
@@ -27,6 +28,14 @@ function badgeEstado(estado: string) {
 const Q = (n: number) =>
   `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+// Cada pestaña principal de Modificaciones tiene su propio permiso — una
+// persona puede tener acceso a solicitar Ingru sin poder solicitar
+// Transferencias, o viceversa. "Autorizar" es un permiso aparte de los tres.
+const PERMISO_TIPO: Record<TipoModificacion, keyof Permisos> = {
+  ingru:      "tab_presupuesto_modif_ingru",
+  ampliacion: "tab_presupuesto_modif_ampliacion",
+};
+
 type FilaModificacion = {
   subProducto: string;
   descripcion: string;
@@ -37,8 +46,8 @@ type FilaModificacion = {
   ok: boolean;
 };
 
-export default function ModificacionesClient() {
-  const [tipoModificacion, setTipoModificacion] = useState<TipoModificacion | "transferencia" | null>(null);
+export default function ModificacionesClient({ permisos }: { permisos: Permisos }) {
+  const [tipoModificacion, setTipoModificacion] = useState<TipoModificacion | "transferencia" | "autorizar" | null>(null);
   const [cuatrimestre, setCuatrimestre] = useState<number | null>(null);
 
   const [modificaciones, setModificaciones] = useState<ModificacionRow[]>([]);
@@ -48,22 +57,9 @@ export default function ModificacionesClient() {
   const [renglonSeleccionado, setRenglonSeleccionado] = useState<number | null>(null);
   const [filasModificacion, setFilasModificacion] = useState<FilaModificacion[]>([]);
 
-  const [accionesModificacion, setAccionesModificacion] = useState<Record<number, { cargando: boolean; error: string | null }>>({});
-
   const recargarModificaciones = useCallback(() => {
     getModificaciones().then(setModificaciones);
   }, []);
-
-  const ejecutarAccionModificacion = async (id: number, accion: (id: number) => Promise<{ ok: true } | { error: string }>) => {
-    setAccionesModificacion(prev => ({ ...prev, [id]: { cargando: true, error: null } }));
-    const res = await accion(id);
-    if ("error" in res) {
-      setAccionesModificacion(prev => ({ ...prev, [id]: { cargando: false, error: res.error } }));
-    } else {
-      setAccionesModificacion(prev => ({ ...prev, [id]: { cargando: false, error: null } }));
-      recargarModificaciones();
-    }
-  };
 
   useEffect(() => {
     if (tipoModificacion !== null && tipoModificacion !== "transferencia") recargarModificaciones();
@@ -100,7 +96,7 @@ export default function ModificacionesClient() {
   };
 
   const guardarFilaModificacion = async (idx: number) => {
-    if (renglonSeleccionado === null || !tipoModificacion || tipoModificacion === "transferencia") return;
+    if (renglonSeleccionado === null || !tipoModificacion || tipoModificacion === "transferencia" || tipoModificacion === "autorizar") return;
     const fila = filasModificacion[idx];
     actualizarFilaModificacion(idx, { guardando: true, error: null, ok: false });
     const res = await guardarModificacion({
@@ -118,12 +114,13 @@ export default function ModificacionesClient() {
   };
 
   const cuatrimestreInfo = cuatrimestre !== null ? CUATRIMESTRES.find(c => c.id === cuatrimestre)! : null;
-  const tipoModificacionInfo = tipoModificacion !== null && tipoModificacion !== "transferencia"
+  const tipoModificacionInfo = tipoModificacion !== null && tipoModificacion !== "transferencia" && tipoModificacion !== "autorizar"
     ? TIPOS_MODIFICACION.find(t => t.id === tipoModificacion)!
     : null;
 
   // ── Paso 1: elegir tipo de modificación ──
   if (tipoModificacion === null) {
+    const tiposVisibles = TIPOS_MODIFICACION.filter(t => permisos[PERMISO_TIPO[t.id]]);
     return (
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="flex items-start justify-between gap-4">
@@ -139,7 +136,7 @@ export default function ModificacionesClient() {
           </Link>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {TIPOS_MODIFICACION.map(t => (
+          {tiposVisibles.map(t => (
             <button
               key={t.id}
               onClick={() => setTipoModificacion(t.id)}
@@ -148,17 +145,34 @@ export default function ModificacionesClient() {
               <div className="font-bold text-gray-900">{t.label}</div>
             </button>
           ))}
-          <button
-            onClick={() => setTipoModificacion("transferencia")}
-            className="bg-white border-2 border-gray-200 hover:border-amber-500 rounded-xl p-5 text-left shadow-sm transition-colors"
-          >
-            <ArrowRightLeft className="w-5 h-5 text-amber-600 mb-2" />
-            <div className="font-bold text-gray-900">Transferencia entre renglón/sub-producto</div>
-            <p className="text-xs text-gray-500 mt-1">Quita presupuesto disponible de un renglón/sub-producto y se lo asigna a otro.</p>
-          </button>
+          {permisos.tab_presupuesto_modif_transferencia && (
+            <button
+              onClick={() => setTipoModificacion("transferencia")}
+              className="bg-white border-2 border-gray-200 hover:border-amber-500 rounded-xl p-5 text-left shadow-sm transition-colors"
+            >
+              <ArrowRightLeft className="w-5 h-5 text-amber-600 mb-2" />
+              <div className="font-bold text-gray-900">Transferencia entre renglón/sub-producto</div>
+              <p className="text-xs text-gray-500 mt-1">Quita presupuesto disponible de un renglón/sub-producto y se lo asigna a otro.</p>
+            </button>
+          )}
+          {permisos.tab_presupuesto_autorizar_modificaciones && (
+            <button
+              onClick={() => setTipoModificacion("autorizar")}
+              className="bg-white border-2 border-teal-200 hover:border-teal-500 rounded-xl p-5 text-left shadow-sm transition-colors"
+            >
+              <ClipboardCheck className="w-5 h-5 text-teal-600 mb-2" />
+              <div className="font-bold text-gray-900">Autorizar</div>
+              <p className="text-xs text-gray-500 mt-1">Aprobar o rechazar las Modificaciones y Transferencias ya solicitadas — solo del 15 al 20 de cada mes.</p>
+            </button>
+          )}
         </div>
       </div>
     );
+  }
+
+  // ── Autorizar: aprobar/rechazar todo lo pendiente (Modificaciones + Transferencias) ──
+  if (tipoModificacion === "autorizar") {
+    return <AutorizarView onVolver={() => setTipoModificacion(null)} />;
   }
 
   // ── Transferencia real (no pasa por "elegir cuatrimestre": mueve presupuesto del año completo) ──
@@ -319,53 +333,25 @@ export default function ModificacionesClient() {
                   <th className="px-3 py-2 text-left font-semibold text-gray-700">Sub-Producto</th>
                   <th className="px-3 py-2 text-right font-semibold text-gray-700">Valor</th>
                   <th className="px-3 py-2 text-left font-semibold text-gray-700">Estado</th>
-                  <th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
                 {modificaciones.filter(m => m.tipo === tipoModificacion).length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-8 text-center text-gray-400">
+                    <td colSpan={5} className="px-3 py-8 text-center text-gray-400">
                       Aún no hay {tipoModificacionInfo!.label.toLowerCase()} registradas.
                     </td>
                   </tr>
                 ) : (
-                  modificaciones.filter(m => m.tipo === tipoModificacion).map(m => {
-                    const a = accionesModificacion[m.id];
-                    const esSolicitado = m.estado === "Solicitado";
-                    return (
-                      <tr key={m.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="px-3 py-2 font-semibold text-gray-900">{m.renglon}</td>
-                        <td className="px-3 py-2 text-gray-700 max-w-[220px] truncate">{m.descripcion}</td>
-                        <td className="px-3 py-2 font-mono text-xs text-gray-600">{m.subProducto}</td>
-                        <td className="px-3 py-2 text-right text-gray-600">{Q(m.valor)}</td>
-                        <td className="px-3 py-2">{badgeEstado(m.estado)}</td>
-                        <td className="px-3 py-2">
-                          {esSolicitado && (
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => ejecutarAccionModificacion(m.id, aprobarModificacion)}
-                                disabled={a?.cargando}
-                                title="Aprobar"
-                                className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-50"
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => ejecutarAccionModificacion(m.id, rechazarModificacion)}
-                                disabled={a?.cargando}
-                                title="Rechazar"
-                                className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50"
-                              >
-                                <XCircle className="w-4 h-4" />
-                              </button>
-                            </div>
-                          )}
-                          {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[180px]">{a.error}</p>}
-                        </td>
-                      </tr>
-                    );
-                  })
+                  modificaciones.filter(m => m.tipo === tipoModificacion).map(m => (
+                    <tr key={m.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-3 py-2 font-semibold text-gray-900">{m.renglon}</td>
+                      <td className="px-3 py-2 text-gray-700 max-w-[220px] truncate">{m.descripcion}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-gray-600">{m.subProducto}</td>
+                      <td className="px-3 py-2 text-right text-gray-600">{Q(m.valor)}</td>
+                      <td className="px-3 py-2">{badgeEstado(m.estado)}</td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
@@ -473,21 +459,9 @@ function TransferenciaView({ onVolver }: { onVolver: () => void }) {
   const [error, setError] = useState("");
   const [ok, setOk] = useState(false);
   const [historial, setHistorial] = useState<TransferenciaRow[]>([]);
-  const [accionesTransferencia, setAccionesTransferencia] = useState<Record<number, { cargando: boolean; error: string | null }>>({});
 
   const recargarHistorial = useCallback(() => { getTransferencias().then(setHistorial); }, []);
   useEffect(() => { recargarHistorial(); }, [recargarHistorial]);
-
-  const ejecutarAccionTransferencia = async (id: number, accion: (id: number) => Promise<{ ok: true } | { error: string }>) => {
-    setAccionesTransferencia(prev => ({ ...prev, [id]: { cargando: true, error: null } }));
-    const res = await accion(id);
-    if ("error" in res) {
-      setAccionesTransferencia(prev => ({ ...prev, [id]: { cargando: false, error: res.error } }));
-    } else {
-      setAccionesTransferencia(prev => ({ ...prev, [id]: { cargando: false, error: null } }));
-      recargarHistorial();
-    }
-  };
 
   async function confirmar() {
     if (!origen || !destino) return setError("Elige el renglón/sub-producto de origen y de destino");
@@ -573,45 +547,181 @@ function TransferenciaView({ onVolver }: { onVolver: () => void }) {
                   <th className="px-3 py-2 text-right font-semibold text-gray-700">Monto</th>
                   <th className="px-3 py-2 text-left font-semibold text-gray-700">Motivo</th>
                   <th className="px-3 py-2 text-left font-semibold text-gray-700">Estado</th>
-                  <th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
                 {historial.length === 0 ? (
-                  <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">Aún no hay transferencias registradas.</td></tr>
+                  <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">Aún no hay transferencias registradas.</td></tr>
                 ) : (
-                  historial.map(t => {
-                    const a = accionesTransferencia[t.id];
-                    const esSolicitado = t.estado === "Solicitado";
+                  historial.map(t => (
+                    <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{t.fecha}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-gray-700">{t.renglonOrigen} / {t.subProductoOrigen}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-gray-700">{t.renglonDestino} / {t.subProductoDestino}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-gray-900">{Q(t.monto)}</td>
+                      <td className="px-3 py-2 text-gray-600 max-w-[240px] truncate">{t.motivo ?? "—"}</td>
+                      <td className="px-3 py-2">{badgeEstado(t.estado)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Autorizar: aprobar/rechazar todo lo pendiente de Modificaciones —
+// Modificaciones (Ingru/Ampliación) y Transferencias comparten esta misma
+// pestaña porque comparten también permiso y ventana de fecha de
+// aprobación (ver ventanaAprobacionModificacionAbierta en
+// programacion-fechas.ts). Solo accesible con tab_presupuesto_autorizar_modificaciones. ──
+function AutorizarView({ onVolver }: { onVolver: () => void }) {
+  const [modificaciones, setModificaciones] = useState<ModificacionRow[]>([]);
+  const [transferencias, setTransferencias] = useState<TransferenciaRow[]>([]);
+  const [acciones, setAcciones] = useState<Record<string, { cargando: boolean; error: string | null }>>({});
+
+  const recargar = useCallback(() => {
+    getModificaciones().then(setModificaciones);
+    getTransferencias().then(setTransferencias);
+  }, []);
+  useEffect(() => { recargar(); }, [recargar]);
+
+  const ejecutar = async (key: string, id: number, accion: (id: number) => Promise<{ ok: true } | { error: string }>) => {
+    setAcciones(prev => ({ ...prev, [key]: { cargando: true, error: null } }));
+    const res = await accion(id);
+    if ("error" in res) {
+      setAcciones(prev => ({ ...prev, [key]: { cargando: false, error: res.error } }));
+    } else {
+      setAcciones(prev => ({ ...prev, [key]: { cargando: false, error: null } }));
+      recargar();
+    }
+  };
+
+  const modsPendientes = modificaciones.filter(m => m.estado === "Solicitado");
+  const transfPendientes = transferencias.filter(t => t.estado === "Solicitado");
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <button onClick={onVolver} className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 mb-1">
+          <ArrowLeft className="w-4 h-4" /> Volver
+        </button>
+        <h1 className="text-xl font-bold text-gray-900">Autorizar Modificaciones</h1>
+        <p className="text-sm text-gray-500 mt-1">Solo se pueden aprobar o rechazar del 15 al 20 de cada mes.</p>
+      </div>
+
+      <div className="space-y-2">
+        <h2 className="text-lg font-bold text-gray-900">Modificaciones (Ingru/Ampliación) pendientes</h2>
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Tipo</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Renglón</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Descripción</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Sub-Producto</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-700">Valor</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {modsPendientes.length === 0 ? (
+                  <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">No hay modificaciones pendientes de autorizar.</td></tr>
+                ) : (
+                  modsPendientes.map(m => {
+                    const key = `m-${m.id}`;
+                    const a = acciones[key];
+                    const tipoLabel = TIPOS_MODIFICACION.find(t => t.id === m.tipo)?.label ?? m.tipo;
                     return (
-                      <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <tr key={key} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="px-3 py-2 text-gray-700">{tipoLabel}</td>
+                        <td className="px-3 py-2 font-semibold text-gray-900">{m.renglon}</td>
+                        <td className="px-3 py-2 text-gray-700 max-w-[220px] truncate">{m.descripcion}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-600">{m.subProducto}</td>
+                        <td className="px-3 py-2 text-right text-gray-600">{Q(m.valor)}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => ejecutar(key, m.id, aprobarModificacion)}
+                              disabled={a?.cargando}
+                              title="Aprobar"
+                              className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-50"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => ejecutar(key, m.id, rechazarModificacion)}
+                              disabled={a?.cargando}
+                              title="Rechazar"
+                              className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          </div>
+                          {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[180px]">{a.error}</p>}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <h2 className="text-lg font-bold text-gray-900">Transferencias pendientes</h2>
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Fecha</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Origen</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Destino</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-700">Monto</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Motivo</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {transfPendientes.length === 0 ? (
+                  <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">No hay transferencias pendientes de autorizar.</td></tr>
+                ) : (
+                  transfPendientes.map(t => {
+                    const key = `t-${t.id}`;
+                    const a = acciones[key];
+                    return (
+                      <tr key={key} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{t.fecha}</td>
                         <td className="px-3 py-2 font-mono text-xs text-gray-700">{t.renglonOrigen} / {t.subProductoOrigen}</td>
                         <td className="px-3 py-2 font-mono text-xs text-gray-700">{t.renglonDestino} / {t.subProductoDestino}</td>
                         <td className="px-3 py-2 text-right font-semibold text-gray-900">{Q(t.monto)}</td>
                         <td className="px-3 py-2 text-gray-600 max-w-[240px] truncate">{t.motivo ?? "—"}</td>
-                        <td className="px-3 py-2">{badgeEstado(t.estado)}</td>
                         <td className="px-3 py-2">
-                          {esSolicitado && (
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => ejecutarAccionTransferencia(t.id, aprobarTransferencia)}
-                                disabled={a?.cargando}
-                                title="Aprobar"
-                                className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-50"
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => ejecutarAccionTransferencia(t.id, rechazarTransferencia)}
-                                disabled={a?.cargando}
-                                title="Rechazar"
-                                className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50"
-                              >
-                                <XCircle className="w-4 h-4" />
-                              </button>
-                            </div>
-                          )}
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => ejecutar(key, t.id, aprobarTransferencia)}
+                              disabled={a?.cargando}
+                              title="Aprobar"
+                              className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-50"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => ejecutar(key, t.id, rechazarTransferencia)}
+                              disabled={a?.cargando}
+                              title="Rechazar"
+                              className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          </div>
                           {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[180px]">{a.error}</p>}
                         </td>
                       </tr>

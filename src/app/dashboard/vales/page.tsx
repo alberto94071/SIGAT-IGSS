@@ -1,13 +1,9 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import { type Rol } from "@/lib/permisos";
+import { requireTabAccess } from "@/lib/modulo-access";
 import { getValesPendientesAutorizacion, getSaldoFondoRotativo, getVales } from "@/lib/vale-actions";
 import ValesClient from "./ValesClient";
 
 export default async function FondoRotativoValesPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
-  const rol = session.user.rol as Rol;
+  const { rol } = await requireTabAccess("mod_fondo_rotativo", "tab_fr_vales");
   const canEdit = rol !== "consulta";
 
   const [pendientes, saldo, todos] = await Promise.all([

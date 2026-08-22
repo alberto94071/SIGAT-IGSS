@@ -1,16 +1,12 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { siafCompras, siafComprasItems } from "@/lib/schema";
 import { desc, asc, eq } from "drizzle-orm";
-import { type Rol } from "@/lib/permisos";
+import { requireTabAccess } from "@/lib/modulo-access";
 import { renglonLookupMap } from "@/lib/adjudicacion/renglon-utils";
 import ConsolidacionClient from "./ConsolidacionClient";
 
 export default async function ConsolidacionPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
-  const rol = session.user.rol as Rol;
+  const { rol } = await requireTabAccess("mod_compras", "tab_compras_consolidacion");
   const canEdit = rol !== "consulta";
 
   const [solicitudesList, itemsList, renglonMap] = await Promise.all([

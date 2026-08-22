@@ -94,6 +94,57 @@ mergeado), actualizá este archivo antes de dar el trabajo por cerrado:
 | `administracion/` | Usuarios, permisos, Configuración General, Firmantes |
 | `developer/` | Herramientas de superadmin (backup/reset) |
 
+## Permisos por pestaña (`src/lib/permisos.ts`)
+
+Cada módulo del launcher (`mod_*`) tiene además un permiso `tab_*` por cada
+pestaña de su nav — dos personas pueden tener el mismo módulo con pestañas
+distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
+
+- **`Permisos`** (`src/lib/permisos.ts`): claves `mod_*` (módulo completo,
+  como antes) + claves `tab_*` (una por pestaña). Los `tab_*` de "ver/usar"
+  vienen en `true` por defecto para los 4 roles (nadie pierde acceso al
+  activar esto); solo `tab_presupuesto_autorizar_reprogramacion` y
+  `tab_presupuesto_autorizar_modificaciones` vienen en `false` para
+  operador/consulta (ver `AUTORIZAR_CERRADO`/`AUTORIZAR_ADMIN`).
+- **Ocultar la pestaña**: cada `layout.tsx` de módulo filtra su `NAV_*`
+  (ahora con campo `permiso`) contra `permisos` antes de pasarlo a
+  `DashboardShell`. Presupuesto es especial: "Programación y Reprogramación"
+  y "Modificaciones" son UN nav item que engloba varios permisos internos
+  (ver `PRESUPUESTO_NAV` en `presupuesto/layout.tsx`) — se muestra si el
+  usuario tiene al menos uno de esos permisos.
+- **Que no baste con ocultarla**: cada `page.tsx` detrás de una pestaña
+  vuelve a validar con `requireTabAccess(modulo, tab)` (redirige a
+  `/launcher` si falta) — `requireModuloAccess` sola ya no alcanza, porque
+  solo protege el módulo completo, no la pestaña puntual. Para acciones de
+  servidor (aprobar/rechazar) existe el equivalente
+  `requireTabAccessAction(modulo, tab)`.
+- **Editar desde la UI**: `UsuariosClient.tsx` (Administración → Usuarios →
+  ícono de escudo) ya no tiene las dos listas planas de antes — ahora es una
+  sola lista agrupada por módulo (`TABS_POR_MODULO`), con las pestañas de
+  cada módulo indentadas debajo y visibles solo si el módulo está prendido.
+- **Fondo Rotativo (`NAV_ITEMS` en `permisos.ts`) era la referencia rota**:
+  antes tenía 8 pestañas con `permiso: null` en todas — la sección
+  "Fondo Rotativo (submenús internos)" de la UI de permisos existía pero no
+  controlaba nada (dead code, confirmado por investigación 2026-08-22). Ya
+  tiene sus 8 `tab_fr_*` reales conectados — si aparece un módulo nuevo con
+  pestañas, seguir este mismo patrón (nunca dejar `permiso: null`).
+- **Nueva pestaña "Autorizar" en Modificaciones**
+  (`presupuesto/modificaciones/ModificacionesClient.tsx`): antes Aprobar/
+  Rechazar aparecían inline en la misma tabla donde cualquiera con
+  `mod_presupuesto` solicitaba (sin permiso propio). Ahora es una pestaña
+  aparte, gateada por `tab_presupuesto_autorizar_modificaciones`, que junta
+  lo pendiente de Modificaciones (Ingru/Ampliación) y de Transferencias — los
+  botones inline se quitaron de las tablas de solicitudes. Las 4 acciones
+  server-side (`aprobarModificacion`/`rechazarModificacion`/
+  `aprobarTransferencia`/`rechazarTransferencia` en `programacion-actions.ts`)
+  exigen ese mismo permiso, no solo `mod_presupuesto`.
+- **"Reprogramaciones pendientes" pasó de gate por rol a gate por permiso**:
+  antes `requireAdminPresupuesto()` exigía `rol === "admin" | "superadmin"`
+  a mano; ahora exige `tab_presupuesto_autorizar_reprogramacion` (permiso
+  configurable por persona, no atado al rol) — el escape de "forzar fuera de
+  la ventana de fecha" (`esMaster`) sigue siendo exclusivo de superadmin, eso
+  no cambió.
+
 ## Trampas y reglas que ya mordieron a alguien
 
 - **"S/C" no es un código compartido real — y tampoco lo son los códigos de

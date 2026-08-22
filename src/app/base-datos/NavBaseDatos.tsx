@@ -2,21 +2,23 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Map, Users2, Package, IdCard } from "lucide-react";
+import { type Permisos } from "@/lib/permisos";
 
 const TABS = [
-  { label: "Insumos",             href: "/base-datos/insumos",             icon: Package },
-  { label: "Tarifario de Pasajes", href: "/base-datos/tarifario-pasajes",  icon: Map     },
-  { label: "Proveedores",         href: "/base-datos/proveedores",         icon: Users2  },
-  { label: "Afiliados",           href: "/base-datos/afiliados",           icon: IdCard  },
-];
+  { label: "Insumos",             href: "/base-datos/insumos",             icon: Package, permiso: "tab_basedatos_insumos"     },
+  { label: "Tarifario de Pasajes", href: "/base-datos/tarifario-pasajes",  icon: Map,     permiso: "tab_basedatos_tarifario"   },
+  { label: "Proveedores",         href: "/base-datos/proveedores",         icon: Users2,  permiso: "tab_basedatos_proveedores" },
+  { label: "Afiliados",           href: "/base-datos/afiliados",           icon: IdCard,  permiso: "tab_basedatos_afiliados"   },
+] as const;
 
-export default function NavBaseDatos() {
+export default function NavBaseDatos({ permisos }: { permisos: Permisos }) {
   const pathname = usePathname();
+  const tabs = TABS.filter(t => permisos[t.permiso]);
 
   return (
     <div className="w-full px-6">
       <nav className="flex gap-1 pb-0 pt-1">
-        {TABS.map(({ label, href, icon: Icon }) => {
+        {tabs.map(({ label, href, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
             <Link

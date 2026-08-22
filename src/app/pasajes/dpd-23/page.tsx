@@ -1,13 +1,9 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import { type Rol } from "@/lib/permisos";
+import { requireTabAccess } from "@/lib/modulo-access";
 import { listarSolicitudesPendientes, listarPagosPasajes } from "@/lib/pasajes-actions";
 import Dpd23BandejaClient from "./Dpd23BandejaClient";
 
 export default async function Dpd23ListaPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
-  const rol = session.user.rol as Rol;
+  const { rol } = await requireTabAccess("mod_pasajes", "tab_pasajes_dpd23");
   const canEdit = rol !== "consulta";
 
   const [pendientes, pagos] = await Promise.all([

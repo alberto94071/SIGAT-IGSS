@@ -1,19 +1,15 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { siafCompras, siafComprasItems, catalogoCompras, catalogoFirmantes, usuarios } from "@/lib/schema";
 import { desc, asc, eq } from "drizzle-orm";
-import { type Rol } from "@/lib/permisos";
+import { requireTabAccess } from "@/lib/modulo-access";
 import SiafClient from "./SiafClient";
 
 interface Props { searchParams: Promise<{ ver?: string }> }
 
 export default async function A01SiafPage({ searchParams }: Props) {
-  const session = await auth();
-  if (!session) redirect("/login");
+  const { session, rol } = await requireTabAccess("mod_compras", "tab_compras_a01siaf");
 
   const { ver } = await searchParams;
-  const rol     = session.user.rol as Rol;
   const canEdit = rol !== "consulta";
 
   const [solicitudesList, itemsList, catalogoList, firmantesList, usuariosList] = await Promise.all([
