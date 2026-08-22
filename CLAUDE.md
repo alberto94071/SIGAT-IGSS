@@ -162,16 +162,19 @@ mergeado), actualizá este archivo antes de dar el trabajo por cerrado:
   siguiera en 106). Solo aplica mientras el año actual coincida con el año
   configurado — el año siguiente vuelve a arrancar en 1 solo. Sobrevive a
   "Reiniciar Sistema" porque `configuracion` no se trunca ahí.
-- **`siaf_compras_items.codigo_ppr` solo se llena en Consolidación**
-  (`guardarPprSeleccion`, `renglon-utils.ts`) — un A-01 SIAF recién creado
-  (antes de consolidarse) siempre lo tiene `null`, aunque el insumo ya tenga
-  su código PPR en `base_datos_central` desde siempre. La impresión del A-01
-  SIAF (`[id]/imprimir/page.tsx`) usa `codigoPprLookupMap` como respaldo —
-  si el ítem no tiene `codigo_ppr` propio, lo busca en `base_datos_central`
-  por `codigo_igss::nombre` (mismo patrón acotado que `unidadMedidaLookupMap`/
-  `codigoLookupMap`) — para que la leyenda "Código PpR: ..." (renglones que
-  no son 182, ver punto de la leyenda condicional más abajo en el código) no
-  quede vacía en SIAFs que todavía no pasaron por esa selección.
+- **La leyenda "Código PpR: ..." del A-01 SIAF (renglones que no son 182)
+  imprime la columna "Código" de Base de Datos Central, NO su columna interna
+  `codigo_ppr`** (confirmado por el cliente 2026-08-22 — son campos
+  distintos, el nombre de la leyenda no corresponde con el nombre de la
+  columna). `codigoPprLookupMap` (`renglon-utils.ts`) selecciona
+  `baseDatosCentral.codigo` (mismo patrón acotado por código que
+  `unidadMedidaLookupMap`/`codigoLookupMap`, cruzando por
+  `codigo_igss::nombre`) — se usa como respaldo porque
+  `siaf_compras_items.codigo_ppr` (el campo real, distinto del anterior)
+  solo se llena en Consolidación vía `guardarPprSeleccion`, y un A-01 SIAF
+  recién creado todavía no pasó por ahí. El valor recuperado pasa por
+  `codigoParaImprimir` igual que la columna "Código" de la tabla (mismo
+  recorte de rango, ver punto siguiente), para que ambos coincidan.
 - **Muchos códigos IGSS de Base de Datos Central vienen como un rango**
   (`"128843 - 135227"`) — corregirlo registro por registro no es viable
   (~207 mil filas). La impresión del A-01 SIAF (`codigoParaImprimir` en

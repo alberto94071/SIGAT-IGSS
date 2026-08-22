@@ -185,24 +185,24 @@ export async function codigoLookupMap(codigos?: string[]): Promise<Map<string, s
   return map;
 }
 
-// Mismo cruce que unidadMedidaLookupMap/codigoLookupMap, pero para el código
-// PPR de Base de Datos Central. codigo_ppr en siaf_compras_items solo se
-// llena vía guardarPprSeleccion, durante Consolidación — un A-01 SIAF recién
-// creado (antes de consolidarse) todavía no lo tiene, aunque el insumo ya
-// tenga su código PPR en Base de Datos Central desde siempre. Se usa como
-// respaldo al imprimir el A-01 SIAF para renglones que no son 182 (ver
-// textoCodigosPpr en ImprimirClient.tsx), para que la leyenda "Código PpR:"
-// no quede vacía solo porque el SIAF todavía no pasó por esa selección.
+// Mismo cruce que unidadMedidaLookupMap/codigoLookupMap, para la leyenda
+// "Código PpR: ..." que se imprime en el A-01 SIAF (renglones que no son
+// 182, ver textoCodigosPpr en ImprimirClient.tsx) cuando el ítem todavía no
+// tiene codigo_ppr propio (ese campo de siaf_compras_items solo se llena en
+// Consolidación, vía guardarPprSeleccion — un SIAF recién creado no pasó por
+// ahí todavía). El valor que se imprime junto a esa leyenda es el de la
+// columna "Código" de Base de Datos Central (no el de su columna interna
+// "codigo_ppr", que es un campo distinto) — confirmado por el cliente.
 export async function codigoPprLookupMap(codigos?: string[]): Promise<Map<string, string | null>> {
   if (codigos && codigos.length === 0) return new Map();
   const rows = await db.select({
     codigo_igss: baseDatosCentral.codigo_igss, nombre: baseDatosCentral.nombre,
-    codigo_ppr: baseDatosCentral.codigo_ppr,
+    codigo: baseDatosCentral.codigo,
   }).from(baseDatosCentral).where(codigos
     ? and(isNotNull(baseDatosCentral.codigo_igss), inArray(baseDatosCentral.codigo_igss, codigos))
     : isNotNull(baseDatosCentral.codigo_igss));
   const map = new Map<string, string | null>();
-  for (const r of rows) if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.codigo_ppr != null ? String(r.codigo_ppr) : null);
+  for (const r of rows) if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.codigo ?? null);
   return map;
 }
 
