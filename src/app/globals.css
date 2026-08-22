@@ -139,4 +139,18 @@
   table { page-break-inside: avoid; }
   tr { page-break-inside: avoid; }
   h1, h2 { page-break-after: avoid; }
+
+  /* Varios documentos impresos (A-01 SIAF, DAB-60, A-04, DPD-23, SPS-75...)
+     dibujan líneas divisorias con background-color en vez de border — sin
+     esto, esas líneas dependían de que el usuario tuviera marcada la
+     casilla "Gráficos de fondo" del diálogo de impresión del navegador, y
+     desaparecían si no. Esto fuerza que todo lo que ya se ve en pantalla
+     (fondos, colores) se imprima igual, sin depender de esa casilla — no
+     hay forma de marcarla por código, así que la única forma confiable de
+     que "siempre salga bien" es no depender de ella en absoluto. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
 }
