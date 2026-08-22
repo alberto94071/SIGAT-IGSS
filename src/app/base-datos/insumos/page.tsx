@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { baseDatosCentral } from "@/lib/schema";
 import BaseDatosClient from "../BaseDatosClient";
 import { ilike, or, eq, sql, and } from "drizzle-orm";
+import { requireTabAccess } from "@/lib/modulo-access";
 
 interface PageProps {
   searchParams: Promise<{
@@ -12,6 +13,7 @@ interface PageProps {
 }
 
 export default async function InsumosPage({ searchParams }: PageProps) {
+  await requireTabAccess("mod_base_datos", "tab_basedatos_insumos");
   const params = await searchParams;
   const q = (params.q || "").trim();
   const renglonStr = (params.renglon || "").trim();

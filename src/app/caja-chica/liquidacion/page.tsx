@@ -1,7 +1,9 @@
 import { getValeActivo, getUsoValePasajes, getUsoValeGastosVarios } from "@/lib/vale-actions";
+import { requireTabAccess } from "@/lib/modulo-access";
 import LiquidacionClient from "./LiquidacionClient";
 
 export default async function CajaChicaLiquidacionPage() {
+  await requireTabAccess("mod_caja_chica", "tab_cajachica_liquidacion");
   const [valePasajes, valeGastosVarios] = await Promise.all([
     getValeActivo("pasajes"),
     getValeActivo("gastos_varios"),

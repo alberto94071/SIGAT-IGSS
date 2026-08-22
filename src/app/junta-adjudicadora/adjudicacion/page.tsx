@@ -1,15 +1,11 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import { type Rol } from "@/lib/permisos";
+import { requireTabAccess } from "@/lib/modulo-access";
 import { getConsolidacionesConDetalles } from "@/lib/adjudicacion/actions";
 import JuntaAdjudicacionClient from "@/components/adjudicacion/JuntaAdjudicacionClient";
 
 export default async function JuntaAdjudicacionPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
+  const { rol } = await requireTabAccess("mod_junta_adjudicadora", "tab_junta_adjudicacion");
   const consolidaciones = (await getConsolidacionesConDetalles())
     .filter(c => c.estado === "Enviado a Junta");
-  const rol = session.user.rol as Rol;
   const canEdit = rol !== "consulta";
   return <JuntaAdjudicacionClient consolidaciones={consolidaciones} canEdit={canEdit} />;
 }

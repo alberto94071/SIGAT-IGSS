@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { programacionEntradas, presupuestoRenglones, reprogramaciones, modificacionesPresupuestarias, reprogramacionLotes } from "@/lib/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { requireModuloAccessAction } from "@/lib/modulo-access";
+import { requireModuloAccessAction, requireTabAccessAction } from "@/lib/modulo-access";
 import { PRESUPUESTO_DATA } from "@/lib/presupuesto-general-data";
 import { GRUPOS, grupoDeRenglon, TIPOS_MODIFICACION, type TipoModificacion } from "@/lib/programacion-constants";
 import { getSaldoRenglon, EJERCICIO_FISCAL } from "@/lib/presupuesto-disponible";
@@ -24,18 +24,17 @@ async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   return { uid: Number(session.user.id) };
 }
 
-// Aprobar/rechazar Reprogramaciones queda solo para Administrador y
-// Administrador Máster — un operador puede solicitarlas pero no aprobarlas.
-// Ver también ProgramacionClient.tsx, que ni siquiera muestra la opción
-// "Reprogramaciones pendientes" a quien no tenga uno de estos dos roles.
+// Aprobar/rechazar Reprogramaciones exige el permiso puntual
+// tab_presupuesto_autorizar_reprogramacion (configurable por persona desde
+// Administración → Usuarios → Permisos) — no un rol fijo. Ver también
+// ProgramacionClient.tsx, que ni siquiera muestra la opción "Reprogramaciones
+// pendientes" a quien no tenga ese permiso. Forzar fuera de la ventana de
+// fecha permitida sigue siendo exclusivo del Administrador Máster (esMaster).
 async function requireAdminPresupuesto(): Promise<{ error: string } | { uid: number; esMaster: boolean }> {
-  const moduloCheck = await requireModuloAccessAction("mod_presupuesto");
-  if ("error" in moduloCheck) return moduloCheck;
+  const check = await requireTabAccessAction("mod_presupuesto", "tab_presupuesto_autorizar_reprogramacion");
+  if ("error" in check) return check;
   const session = await auth();
-  if (session?.user.rol !== "admin" && session?.user.rol !== "superadmin") {
-    return { error: "Solo un Administrador puede aprobar o rechazar Reprogramaciones" };
-  }
-  return { ...moduloCheck, esMaster: session.user.rol === "superadmin" };
+  return { ...check, esMaster: session?.user.rol === "superadmin" };
 }
 
 export type SubproductoDisponible = {
@@ -574,7 +573,7 @@ export async function guardarModificacion(input: GuardarModificacionInput): Prom
  * modificacion_entre_renglones vía transferirPresupuesto.
  */
 export async function aprobarModificacion(id: number): Promise<{ ok: true } | { error: string }> {
-  const check = await requireModuloAccessAction("mod_presupuesto");
+  const check = await requireTabAccessAction("mod_presupuesto", "tab_presupuesto_autorizar_modificaciones");
   if ("error" in check) return check;
 
   const [fila] = await db.select().from(modificacionesPresupuestarias)
@@ -618,7 +617,7 @@ export async function aprobarModificacion(id: number): Promise<{ ok: true } | { 
 
 /** Rechaza una modificación Ingru/Ampliación mientras siga "Solicitado" — solo quien tenga acceso a mod_presupuesto. */
 export async function rechazarModificacion(id: number): Promise<{ ok: true } | { error: string }> {
-  const check = await requireModuloAccessAction("mod_presupuesto");
+  const check = await requireTabAccessAction("mod_presupuesto", "tab_presupuesto_autorizar_modificaciones");
   if ("error" in check) return check;
 
   const [fila] = await db.select({ estado: modificacionesPresupuestarias.estado })
@@ -767,7 +766,7 @@ export async function transferirPresupuesto(input: TransferenciaInput): Promise<
  * antes de mover el dinero.
  */
 export async function aprobarTransferencia(id: number): Promise<{ ok: true } | { error: string }> {
-  const check = await requireModuloAccessAction("mod_presupuesto");
+  const check = await requireTabAccessAction("mod_presupuesto", "tab_presupuesto_autorizar_modificaciones");
   if ("error" in check) return check;
 
   const [fila] = await db.select().from(reprogramaciones).where(eq(reprogramaciones.id, id)).limit(1);
@@ -795,7 +794,7 @@ export async function aprobarTransferencia(id: number): Promise<{ ok: true } | {
 
 /** Rechaza una transferencia mientras siga "Solicitado" — solo quien tenga acceso a mod_presupuesto. */
 export async function rechazarTransferencia(id: number): Promise<{ ok: true } | { error: string }> {
-  const check = await requireModuloAccessAction("mod_presupuesto");
+  const check = await requireTabAccessAction("mod_presupuesto", "tab_presupuesto_autorizar_modificaciones");
   if ("error" in check) return check;
 
   const [fila] = await db.select({ estado: reprogramaciones.estado })

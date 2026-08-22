@@ -1,14 +1,10 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import { type Rol } from "@/lib/permisos";
+import { requireTabAccess } from "@/lib/modulo-access";
 import { listarDpd23SinPoliza, listarPolizas } from "@/lib/poliza-actions";
 import { getValeActivo } from "@/lib/vale-actions";
 import PolizaClient from "./PolizaClient";
 
 export default async function PolizaPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
-  const rol = session.user.rol as Rol;
+  const { rol } = await requireTabAccess("mod_pasajes", "tab_pasajes_poliza");
   const canEdit = rol !== "consulta";
 
   const [dpd23SinPoliza, polizas, valeActivo] = await Promise.all([

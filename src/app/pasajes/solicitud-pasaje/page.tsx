@@ -1,13 +1,9 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import { type Rol } from "@/lib/permisos";
+import { requireTabAccess } from "@/lib/modulo-access";
 import { listarSolicitudesPasaje, listarDelegaciones } from "@/lib/pasajes-actions";
 import SolicitudPasajeClient from "./SolicitudPasajeClient";
 
 export default async function SolicitudPasajePage() {
-  const session = await auth();
-  if (!session) redirect("/login");
-  const rol = session.user.rol as Rol;
+  const { rol } = await requireTabAccess("mod_pasajes", "tab_pasajes_solicitud");
   const canEdit = rol !== "consulta";
 
   const [solicitudes, delegaciones] = await Promise.all([

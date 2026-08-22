@@ -5,7 +5,7 @@ import { ArrowLeft, CheckCircle2, CheckCircle, ClipboardList, RefreshCw, XCircle
 import { CUATRIMESTRES } from "@/lib/programacion-constants";
 import { fechaGuatemala } from "@/lib/date-utils";
 import { mesDelCuatrimestreYaPaso } from "@/lib/programacion-fechas";
-import { type Rol } from "@/lib/permisos";
+import { type Permisos } from "@/lib/permisos";
 import {
   buscarRenglones, getSubproductosDeRenglon, getGrupos, getProgramadoDelGrupo,
   getEntradas, guardarEntrada, aprobarEntrada, rechazarEntrada, eliminarEntrada,
@@ -33,12 +33,14 @@ type FilaEdicion = {
   ok: boolean;
 };
 
-export default function ProgramacionClient({ rol }: { rol: Rol }) {
-  // Aprobar/rechazar Reprogramaciones queda solo para Administrador y
-  // Administrador Máster — a un operador/consulta ni se le muestra la
-  // opción "Reprogramaciones pendientes" (ver también aprobarLote/
-  // rechazarLote en programacion-actions.ts, que lo exigen del lado servidor).
-  const puedeAprobar = rol === "admin" || rol === "superadmin";
+export default function ProgramacionClient({ permisos }: { permisos: Permisos }) {
+  // Cada submódulo de esta pestaña tiene su propio permiso, configurable por
+  // persona desde Administración → Usuarios → Permisos — no por rol fijo
+  // (ver también aprobarLote/rechazarLote/aprobarEntrada/rechazarEntrada en
+  // programacion-actions.ts, que lo exigen del lado servidor).
+  const puedeProgramar = permisos.tab_presupuesto_programacion;
+  const puedeReprogramar = permisos.tab_presupuesto_reprogramacion;
+  const puedeAprobar = permisos.tab_presupuesto_autorizar_reprogramacion;
   const [modo, setModo] = useState<Modo | null>(null);
   const [cuatrimestre, setCuatrimestre] = useState<number | null>(null);
 
@@ -177,6 +179,7 @@ export default function ProgramacionClient({ rol }: { rol: Rol }) {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row justify-center gap-5">
+          {puedeProgramar && (
           <button
             onClick={() => setModo("programacion")}
             className="flex-1 sm:max-w-xs bg-white border-2 border-brand-200 hover:border-brand-500 rounded-2xl p-8 shadow-sm transition-colors text-left"
@@ -185,6 +188,8 @@ export default function ProgramacionClient({ rol }: { rol: Rol }) {
             <h2 className="text-lg font-bold text-gray-900">Programación</h2>
             <p className="text-sm text-gray-500 mt-1">Asignar por primera vez el monto de un renglón para un cuatrimestre.</p>
           </button>
+          )}
+          {puedeReprogramar && (
           <button
             onClick={() => setModo("reprogramacion")}
             className="flex-1 sm:max-w-xs bg-white border-2 border-amber-200 hover:border-amber-500 rounded-2xl p-8 shadow-sm transition-colors text-left"
@@ -193,6 +198,7 @@ export default function ProgramacionClient({ rol }: { rol: Rol }) {
             <h2 className="text-lg font-bold text-gray-900">Reprogramación</h2>
             <p className="text-sm text-gray-500 mt-1">Asignar o cambiar el monto de un renglón dentro de un cuatrimestre ya en curso — se puede solicitar cualquier día, aunque el renglón no tuviera nada programado todavía.</p>
           </button>
+          )}
           {puedeAprobar && (
             <button
               onClick={() => setModo("aprobaciones")}
