@@ -1,10 +1,10 @@
 "use client";
 import { fechaGuatemala } from "@/lib/date-utils";
 import { useState, useEffect } from "react";
-import { FileCheck, Loader2, CheckCircle2, Wallet, X, Clock } from "lucide-react";
+import { FileCheck, Loader2, CheckCircle2, Wallet, X, Clock, Undo2 } from "lucide-react";
 import { liquidarPago } from "@/lib/caja-chica-liquidacion-actions";
 import { getValesGastosVariosDisponibles } from "@/lib/vale-actions";
-import type { PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import { devolverAFormaPago, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 import ExpandableRow from "@/components/ExpandableRow";
 import TrazabilidadPanel from "@/components/TrazabilidadPanel";
 
@@ -18,6 +18,18 @@ export default function PagosCajaChicaClient({ pagos: init }: Props) {
   const [pagos, setPagos] = useState(init);
   const [modalFor, setModalFor] = useState<PagoFondoRotativo | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [procesando, setProcesando] = useState<number | null>(null);
+  const [rowError, setRowError] = useState<Record<number, string>>({});
+
+  async function handleDevolver(p: PagoFondoRotativo) {
+    if (!confirm("¿Devolver este pago a Fondo Rotativo/Pagos para elegir otra forma de pago? Se deshace el efectivo ya registrado (y lo que ya se posteó en Ejecución)."))
+      return;
+    setProcesando(p.id); setRowError(prev => ({ ...prev, [p.id]: "" }));
+    const res = await devolverAFormaPago(p.id);
+    setProcesando(null);
+    if ("error" in res) { setRowError(prev => ({ ...prev, [p.id]: res.error })); return; }
+    setPagos(prev => prev.filter(x => x.id !== p.id));
+  }
 
   return (
     <div className="space-y-6">
@@ -72,10 +84,18 @@ export default function PagosCajaChicaClient({ pagos: init }: Props) {
                       {p.total != null ? Q(p.total) : "—"}
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                      <button onClick={() => setModalFor(p)}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors ml-auto">
-                        <FileCheck className="w-3 h-3" /> Confirmar pago
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button onClick={() => handleDevolver(p)} disabled={procesando === p.id}
+                          title="Devolver a Fondo Rotativo/Pagos para elegir otra forma de pago"
+                          className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">
+                          {procesando === p.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                        </button>
+                        <button onClick={() => setModalFor(p)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors">
+                          <FileCheck className="w-3 h-3" /> Confirmar pago
+                        </button>
+                      </div>
+                      {rowError[p.id] && <p className="text-[10px] text-red-600 mt-1 max-w-[180px] text-right ml-auto">{rowError[p.id]}</p>}
                     </td>
                   </ExpandableRow>
                 ))}

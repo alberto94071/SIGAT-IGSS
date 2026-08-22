@@ -2,8 +2,8 @@
 import { useState } from "react";
 import { fechaGuatemala } from "@/lib/date-utils";
 import Link from "next/link";
-import { Landmark, X, Loader2, Send, CheckCircle2, Printer, FileEdit } from "lucide-react";
-import { completarVoucherBancos, type PagoFondoRotativo, type TipoDocumentoPago } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import { Landmark, X, Loader2, Send, CheckCircle2, Printer, FileEdit, Undo2 } from "lucide-react";
+import { completarVoucherBancos, devolverAFormaPago, type PagoFondoRotativo, type TipoDocumentoPago } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 import { montoEnLetras } from "@/lib/adjudicacion/deletreo";
 import ExpandableRow from "@/components/ExpandableRow";
 import TrazabilidadPanel from "@/components/TrazabilidadPanel";
@@ -16,6 +16,18 @@ export default function BancosClient({ pagos: init }: Props) {
   const [pagos, setPagos] = useState(init);
   const [modalFor, setModalFor] = useState<PagoFondoRotativo | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [procesando, setProcesando] = useState<number | null>(null);
+  const [rowError, setRowError] = useState<Record<number, string>>({});
+
+  async function handleDevolver(p: PagoFondoRotativo) {
+    if (!confirm("¿Devolver este pago a Fondo Rotativo/Pagos para elegir otra forma de pago? Se deshacen los datos de cheque ya capturados (y lo que ya se posteó en Ejecución)."))
+      return;
+    setProcesando(p.id); setRowError(prev => ({ ...prev, [p.id]: "" }));
+    const res = await devolverAFormaPago(p.id);
+    setProcesando(null);
+    if ("error" in res) { setRowError(prev => ({ ...prev, [p.id]: res.error })); return; }
+    setPagos(prev => prev.filter(x => x.id !== p.id));
+  }
 
   return (
     <div className="space-y-5">
@@ -68,24 +80,32 @@ export default function BancosClient({ pagos: init }: Props) {
                     {p.total != null ? Q(p.total) : "—"}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                    {p.numero_cheque == null ? (
-                      <button onClick={() => setModalFor(p)}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors ml-auto">
-                        <FileEdit className="w-3 h-3" /> Completar datos
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button onClick={() => handleDevolver(p)} disabled={procesando === p.id}
+                        title="Devolver a Fondo Rotativo/Pagos para elegir otra forma de pago"
+                        className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">
+                        {procesando === p.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
                       </button>
-                    ) : (
-                      <div className="flex items-center justify-end gap-1.5">
+                      {p.numero_cheque == null ? (
                         <button onClick={() => setModalFor(p)}
-                          title="Corregir datos"
-                          className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100">
-                          <FileEdit className="w-4 h-4" />
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors">
+                          <FileEdit className="w-3 h-3" /> Completar datos
                         </button>
-                        <Link href={`/dashboard/bancos/${p.id}/imprimir`}
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
-                          <Printer className="w-3 h-3" /> Imprimir Voucher
-                        </Link>
-                      </div>
-                    )}
+                      ) : (
+                        <>
+                          <button onClick={() => setModalFor(p)}
+                            title="Corregir datos"
+                            className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100">
+                            <FileEdit className="w-4 h-4" />
+                          </button>
+                          <Link href={`/dashboard/bancos/${p.id}/imprimir`}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+                            <Printer className="w-3 h-3" /> Imprimir Voucher
+                          </Link>
+                        </>
+                      )}
+                    </div>
+                    {rowError[p.id] && <p className="text-[10px] text-red-600 mt-1 max-w-[180px] text-right ml-auto">{rowError[p.id]}</p>}
                   </td>
                 </ExpandableRow>
               ))}

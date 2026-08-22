@@ -51,6 +51,29 @@ async function reflejarEnEjecucion(tx: Tx, consolidacionId: number): Promise<voi
   }
 }
 
+// Inverso exacto de reflejarEnEjecucion — para cuando se devuelve un pago
+// que ya había elegido forma de pago (ver devolverAFormaPago) y hay que
+// deshacer lo que ya se posteó en Ejecución, o al volver a elegir forma de
+// pago quedaría contado dos veces.
+async function revertirEjecucion(tx: Tx, consolidacionId: number): Promise<void> {
+  const [con] = await tx.select({ exento_iva: consolidaciones.exento_iva })
+    .from(consolidaciones).where(eq(consolidaciones.id, consolidacionId)).limit(1);
+  const exentoIva = con?.exento_iva ?? false;
+
+  const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
+  for (const r of renglones) {
+    const montoNeto = exentoIva ? r.total : netoDeIva(r.total);
+    await tx.update(presupuestoRenglones).set({
+      devengado_regularizado: sql`GREATEST(COALESCE(${presupuestoRenglones.devengado_regularizado}, 0) - ${montoNeto}, 0)`,
+      pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${montoNeto}`,
+    }).where(and(
+      eq(presupuestoRenglones.renglon, r.renglon as number),
+      eq(presupuestoRenglones.subproducto, r.subproducto),
+      eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+    ));
+  }
+}
+
 async function requireCompras(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
   if (!session) return { error: "No autorizado" };
@@ -394,6 +417,44 @@ export async function devolverPagoASiaf04(id: number): Promise<{ ok: true } | { 
     return { ok: true };
   } catch {
     return { error: "Error al devolver a SIAF-04" };
+  }
+}
+
+// Por si se eligió mal la forma de pago (ej. Efectivo sin tener efectivo
+// disponible, o Cheque cuando debía ser Efectivo) — devuelve el pago a
+// "Pendiente forma de pago" en Fondo Rotativo/Pagos para volver a elegir.
+// Se puede llamar desde Caja Chica/Pagos ("Enviado a Liquidación", todavía
+// sin vale/fecha de pago asignados — si ya se liquidó, el estado ya avanzó a
+// "Pendiente FRI" y esto ya no aplica) o desde Bancos ("Enviado a Bancos",
+// que es terminal para pagos que no son grupo 100 — el número de cheque
+// puede estar completado o no, ambos casos se limpian igual). No aplica a
+// pagos de grupo 100 (renglón 100-199): esos van directo a Pendiente FRI sin
+// pasar por ninguna de las dos pantallas, así que nunca llegan a este botón.
+export async function devolverAFormaPago(id: number): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireCompras();
+    if ("error" in check) return check;
+
+    const [pago] = await db.select().from(fondoRotativoPagos).where(eq(fondoRotativoPagos.id, id)).limit(1);
+    if (!pago) return { error: "No se encontró el registro" };
+    if (pago.estado !== "Enviado a Liquidación" && pago.estado !== "Enviado a Bancos")
+      return { error: "Este pago no está pendiente de vale ni en Bancos — ya no se puede devolver" };
+    if (pago.conciliado) return { error: "Este cheque ya fue conciliado con el banco — ya no se puede devolver" };
+
+    await db.transaction(async (tx) => {
+      await tx.update(fondoRotativoPagos).set({
+        forma_pago: null,
+        estado: "Pendiente forma de pago",
+        numero_cheque: null, fecha_emision_cheque: null, tipo_documento_pago: null,
+        monto_cheque: null, monto_letras: null, concepto_voucher: null,
+      }).where(eq(fondoRotativoPagos.id, id));
+
+      await revertirEjecucion(tx, pago.consolidacion_id);
+    });
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al devolver el pago" };
   }
 }
 
