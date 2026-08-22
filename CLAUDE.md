@@ -172,9 +172,10 @@ mergeado), actualizá este archivo antes de dar el trabajo por cerrado:
   `codigo_igss::nombre`) — se usa como respaldo porque
   `siaf_compras_items.codigo_ppr` (el campo real, distinto del anterior)
   solo se llena en Consolidación vía `guardarPprSeleccion`, y un A-01 SIAF
-  recién creado todavía no pasó por ahí. El valor recuperado pasa por
-  `codigoParaImprimir` igual que la columna "Código" de la tabla (mismo
-  recorte de rango, ver punto siguiente), para que ambos coincidan.
+  recién creado todavía no pasó por ahí. A diferencia de la columna "Código"
+  de la tabla (ver punto siguiente), esta leyenda **no** recorta el rango —
+  el cliente pidió el número completo tal como está guardado (confirmado
+  2026-08-22, revirtió el recorte que se le había aplicado por consistencia).
 - **Muchos códigos IGSS de Base de Datos Central vienen como un rango**
   (`"128843 - 135227"`) — corregirlo registro por registro no es viable
   (~207 mil filas). La impresión del A-01 SIAF (`codigoParaImprimir` en
