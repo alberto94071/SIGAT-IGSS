@@ -198,6 +198,20 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   todavía, el pago se queda esperando en la lista de Caja Chica/Pagos — no
   es un bug, es el diseño ("que espere el proceso mientras se cuenta con
   el efectivo").
+- **Se puede "Devolver" la forma de pago elegida (Efectivo ↔ Cheque) desde
+  Caja Chica/Pagos o Bancos** — por si el usuario se equivocó (eligió
+  Efectivo sin tener efectivo, o Cheque cuando debía ser Efectivo).
+  `devolverAFormaPago` (`fondo-rotativo-pagos-actions.ts`) regresa el pago a
+  `"Pendiente forma de pago"` en Fondo Rotativo/Pagos — aplica a
+  `"Enviado a Liquidación"` (Caja Chica/Pagos, antes de asignar vale) o
+  `"Enviado a Bancos"` (Bancos, con o sin datos de cheque ya completados;
+  bloqueado si el cheque ya fue conciliado). **No aplica a grupo 100**
+  (renglón 100-199): esos van directo a `"Pendiente FRI"` sin pasar por
+  ninguna de las dos pantallas, así que nunca llegan a este botón. Deshace
+  también el posteo a Ejecución que se hizo al elegir la forma de pago
+  (`reflejarEnEjecucion`) vía su inverso `revertirEjecucion` — si esto se
+  omite, volver a elegir forma de pago cuenta el monto dos veces en
+  `devengado_regularizado`/`pre_compromiso`.
 - **El firmante "Encargado(a) de Unidad" ya no es un campo fijo de
   Configuración** — se eligió así porque la persona que estaba ahí
   (`nombre_encargado_unidad`) dejó de trabajar en la unidad. Ahora es un
