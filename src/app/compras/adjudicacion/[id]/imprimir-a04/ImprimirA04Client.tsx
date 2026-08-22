@@ -125,15 +125,22 @@ export default function ImprimirA04Client({
           total, iva: ivaFila, liquido: total - ivaFila,
         };
       })
-    : [{
-        codigoPpr: codigoPprMostrar(renglon?.codigo_ppr, renglon?.codigo_igss),
-        renglonNum: renglon?.renglon != null ? String(renglon.renglon) : "—",
-        categoria: (renglon?.renglon != null ? NOMBRE_RENGLON.get(renglon.renglon) : null) ?? null,
-        descripcion: (c.a04_descripcion || renglon?.descripcion_igss || renglon?.nombre || "—").toUpperCase(),
-        unidad: c.a04_unidad_medida ?? renglon?.unidad_medida ?? "—",
-        cantidad: (c.a04_cantidad ?? renglon?.cantidad)?.toLocaleString("es-GT") ?? "—",
-        precioUnitario: montoBruto, total: montoBruto, iva, liquido,
-      }];
+    : (() => {
+        const cantidadNum = c.a04_cantidad ?? renglon?.cantidad ?? null;
+        return [{
+          codigoPpr: codigoPprMostrar(renglon?.codigo_ppr, renglon?.codigo_igss),
+          renglonNum: renglon?.renglon != null ? String(renglon.renglon) : "—",
+          categoria: (renglon?.renglon != null ? NOMBRE_RENGLON.get(renglon.renglon) : null) ?? null,
+          descripcion: (c.a04_descripcion || renglon?.descripcion_igss || renglon?.nombre || "—").toUpperCase(),
+          unidad: c.a04_unidad_medida ?? renglon?.unidad_medida ?? "—",
+          cantidad: cantidadNum?.toLocaleString("es-GT") ?? "—",
+          // Precio unitario = total ÷ cantidad (mismo cálculo que el caso de
+          // varios renglones) — antes se imprimía el monto bruto completo
+          // como si fuera el unitario, sin dividir entre la cantidad.
+          precioUnitario: cantidadNum && cantidadNum > 0 ? montoBruto / cantidadNum : montoBruto,
+          total: montoBruto, iva, liquido,
+        }];
+      })();
 
   return (
     <>
