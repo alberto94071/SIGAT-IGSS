@@ -112,6 +112,7 @@ export async function crearSolicitud(data: {
     codigo_igss: string | null;
     codigo_ppr: string | null;
     nombre: string;
+    descripcion_igss: string | null;
     subproducto: string;
     unidad_medida: string | null;
     cantidad_solicitada: number;
@@ -171,6 +172,7 @@ export async function crearSolicitud(data: {
         codigo_igss:         item.codigo_igss,
         codigo_ppr:          item.codigo_ppr,
         nombre:              item.nombre,
+        descripcion_igss:    item.descripcion_igss,
         subproducto:         item.subproducto,
         unidad_medida:       item.unidad_medida,
         cantidad_antes,
@@ -481,6 +483,7 @@ export async function editarSolicitud(id: number, data: {
     codigo_igss: string | null;
     codigo_ppr: string | null;
     nombre: string;
+    descripcion_igss: string | null;
     subproducto: string;
     unidad_medida: string | null;
     cantidad_solicitada: number;
@@ -536,6 +539,7 @@ export async function editarSolicitud(id: number, data: {
         codigo_igss:         item.codigo_igss,
         codigo_ppr:          item.codigo_ppr,
         nombre:              item.nombre,
+        descripcion_igss:    item.descripcion_igss,
         subproducto:         item.subproducto,
         unidad_medida:       item.unidad_medida,
         cantidad_antes,

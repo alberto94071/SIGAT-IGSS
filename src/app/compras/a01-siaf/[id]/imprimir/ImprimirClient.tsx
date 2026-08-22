@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Printer, ChevronDown, X, ArrowLeft } from "lucide-react";
 
 type Item = {
-  id: number; nombre: string; codigo_igss: string | null; codigo_ppr: string | null;
+  id: number; nombre: string; descripcion_igss: string | null; codigo_igss: string | null; codigo_ppr: string | null;
   subproducto: string; unidad_medida: string | null; cantidad_solicitada: number;
 };
 type Solicitud = { id: number; numero: number; anio: number; fecha: string; estado: string };
@@ -324,7 +324,7 @@ export default function ImprimirClient({
                           {codigoParaImprimir(String(item.codigo_igss ?? ""))}
                         </div>
                         <div style={{ flex: 1, padding: "0 8px", display: "flex", justifyContent: mostrarSubproducto ? "space-between" : "flex-start", alignItems: "center", overflow: "hidden" }}>
-                          <span style={{ textTransform: "uppercase", fontSize: "8pt", lineHeight: 1.2, width: mostrarSubproducto ? undefined : "100%" }}>{item.nombre}</span>
+                          <span style={{ textTransform: "uppercase", fontSize: "8pt", lineHeight: 1.2, width: mostrarSubproducto ? undefined : "100%" }}>{item.descripcion_igss || item.nombre}</span>
                           {mostrarSubproducto && (
                             <span style={{ fontSize: "7.5pt", color: "#333", whiteSpace: "nowrap", marginLeft: "8px", flexShrink: 0 }}>
                               {item.subproducto}

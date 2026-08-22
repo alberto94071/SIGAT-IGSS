@@ -22,7 +22,7 @@ const ACCIONABLES = ["Borrador", "Rechazado"];
 type SolicitudItem = {
   id: number; solicitud_id: number; catalogo_id: number | null;
   codigo_igss: string | null; codigo_ppr: string | null;
-  nombre: string; subproducto: string; unidad_medida: string | null;
+  nombre: string; descripcion_igss: string | null; subproducto: string; unidad_medida: string | null;
   cantidad_antes: number | null; cantidad_solicitada: number;
 };
 type Solicitud = {
@@ -35,13 +35,13 @@ type Solicitud = {
 };
 type CatEntry = {
   id: number; codigo_igss: string | null; codigo_ppr: string | null;
-  nombre: string; subproducto: string; unidad_medida: string | null;
+  nombre: string; descripcion_igss: string | null; subproducto: string; unidad_medida: string | null;
   cantidad: number | null; renglon: number | null;
 };
 type ModalItem = {
   key: number; catalogo_id: number;
   codigo_igss: string | null; codigo_ppr: string | null;
-  nombre: string; subproducto: string; unidad_medida: string | null;
+  nombre: string; descripcion_igss: string | null; subproducto: string; unidad_medida: string | null;
   cantidad_solicitada: number;
 };
 
@@ -238,6 +238,7 @@ export default function SiafClient({
         codigo_igss:        i.codigo_igss,
         codigo_ppr:         i.codigo_ppr,
         nombre:             i.nombre,
+        descripcion_igss:   i.descripcion_igss,
         subproducto:        i.subproducto,
         unidad_medida:      i.unidad_medida,
         cantidad_solicitada: i.cantidad_solicitada,
@@ -259,7 +260,7 @@ export default function SiafClient({
       newItems.push({
         key: Date.now() + catId, catalogo_id: entry.id,
         codigo_igss: entry.codigo_igss, codigo_ppr: entry.codigo_ppr,
-        nombre: entry.nombre, subproducto: entry.subproducto,
+        nombre: entry.nombre, descripcion_igss: entry.descripcion_igss, subproducto: entry.subproducto,
         unidad_medida: unidadManual.trim() || entry.unidad_medida, cantidad_solicitada: qty,
       });
     });
@@ -277,7 +278,7 @@ export default function SiafClient({
 
     const itemData = modalItems.map(i => ({
       catalogo_id: i.catalogo_id, codigo_igss: i.codigo_igss,
-      codigo_ppr: i.codigo_ppr, nombre: i.nombre, subproducto: i.subproducto,
+      codigo_ppr: i.codigo_ppr, nombre: i.nombre, descripcion_igss: i.descripcion_igss, subproducto: i.subproducto,
       unidad_medida: i.unidad_medida, cantidad_solicitada: i.cantidad_solicitada,
     }));
 

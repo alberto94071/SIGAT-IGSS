@@ -10,6 +10,7 @@ type Insumo = {
   id: number;
   codigo_igss: string | null;
   nombre: string;
+  descripcion_igss: string | null;
   renglon: number | null;
   subproducto: string;
   cantidad: number | null;
@@ -390,6 +391,7 @@ function ResultadoImportarModal({ resultado, onClose, onVerInstructivo }: {
 
 function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | null; onClose: () => void; onCreado: (i: Insumo) => void }) {
   const [nombre, setNombre] = useState(insumo?.nombre || "");
+  const [descripcionIgss, setDescripcionIgss] = useState(insumo?.descripcion_igss || "");
   const [subproducto, setSubproducto] = useState(insumo?.subproducto || "");
   const [cantidad, setCantidad] = useState(insumo?.cantidad?.toString() || "");
   const [codigoIgss, setCodigoIgss] = useState(insumo?.codigo_igss || "");
@@ -417,8 +419,14 @@ function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | null; onC
     return () => { vivo = false; clearTimeout(t); };
   }, [query, buscando]);
 
+  // "Nombre" (Código + Nombre de Base de Datos Central) alimenta Órdenes,
+  // SIAF-04 y DAB-60; "Descripción IGSS" (Código IGSS + Descripción IGSS) es
+  // aparte y alimenta específicamente el A-01 SIAF — confirmado por el
+  // cliente 2026-08-22. Antes acá se usaba descripcion_igss como respaldo de
+  // nombre, mezclando los dos; ya no.
   function elegirInsumo(r: InsumoCentralAgrupado) {
-    setNombre(r.descripcion_igss || r.nombre);
+    setNombre(r.nombre);
+    setDescripcionIgss(r.descripcion_igss || r.nombre);
     setCodigoIgss(r.codigo);
     setRenglon(r.renglon != null ? String(r.renglon) : "");
     setBuscando(false); setQuery(""); setResultados([]);
@@ -434,6 +442,7 @@ function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | null; onC
 
     const payload = {
       nombre: nombre.trim(),
+      descripcion_igss: descripcionIgss.trim() || null,
       subproducto: subproducto.trim(),
       cantidad: cantidadNum,
       codigo_igss: codigoIgss.trim() || null,
@@ -506,6 +515,12 @@ function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | null; onC
                 <button type="button" onClick={() => setBuscando(true)} className="text-xs font-medium text-brand-600 hover:text-brand-700 shrink-0">Cambiar</button>
               </div>
             )}
+          </div>
+          <div>
+            <label className="label">Descripción IGSS (para el A-01 SIAF)</label>
+            <textarea className="input text-sm" rows={2} value={descripcionIgss}
+              onChange={e => setDescripcionIgss(e.target.value)}
+              placeholder="Descripción que se imprime en el A-01 SIAF — el Nombre de arriba es el que se usa en Órdenes, SIAF-04 y DAB-60" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
