@@ -116,8 +116,10 @@ function paginarItems(items: Item[], capacidad: number): PageInfo[] {
 // Cuando la hoja no tiene ningún insumo del renglón 182 (mostrarSubproducto
 // en false), la leyenda de "productos homologados... SIGES" no aplica —
 // en su lugar se imprime el/los código(s) PpR de los insumos de esa hoja.
+// A diferencia de la columna "Código" de la tabla, acá NO se recorta el
+// rango — el cliente pidió el número completo tal como está guardado.
 function textoCodigosPpr(items: Item[]): string {
-  const codigos = [...new Set(items.map(i => i.codigo_ppr).filter((c): c is string => !!c).map(codigoParaImprimir))];
+  const codigos = [...new Set(items.map(i => i.codigo_ppr).filter((c): c is string => !!c))];
   return codigos.length > 0 ? `Código PpR: ${codigos.join(", ")}` : "";
 }
 
