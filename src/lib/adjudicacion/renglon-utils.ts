@@ -185,6 +185,27 @@ export async function codigoLookupMap(codigos?: string[]): Promise<Map<string, s
   return map;
 }
 
+// Mismo cruce que unidadMedidaLookupMap/codigoLookupMap, pero para el código
+// PPR de Base de Datos Central. codigo_ppr en siaf_compras_items solo se
+// llena vía guardarPprSeleccion, durante Consolidación — un A-01 SIAF recién
+// creado (antes de consolidarse) todavía no lo tiene, aunque el insumo ya
+// tenga su código PPR en Base de Datos Central desde siempre. Se usa como
+// respaldo al imprimir el A-01 SIAF para renglones que no son 182 (ver
+// textoCodigosPpr en ImprimirClient.tsx), para que la leyenda "Código PpR:"
+// no quede vacía solo porque el SIAF todavía no pasó por esa selección.
+export async function codigoPprLookupMap(codigos?: string[]): Promise<Map<string, string | null>> {
+  if (codigos && codigos.length === 0) return new Map();
+  const rows = await db.select({
+    codigo_igss: baseDatosCentral.codigo_igss, nombre: baseDatosCentral.nombre,
+    codigo_ppr: baseDatosCentral.codigo_ppr,
+  }).from(baseDatosCentral).where(codigos
+    ? and(isNotNull(baseDatosCentral.codigo_igss), inArray(baseDatosCentral.codigo_igss, codigos))
+    : isNotNull(baseDatosCentral.codigo_igss));
+  const map = new Map<string, string | null>();
+  for (const r of rows) if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.codigo_ppr != null ? String(r.codigo_ppr) : null);
+  return map;
+}
+
 export type GrupoRenglon = {
   renglon: number | null; codigo_igss: string | null; codigo_ppr: string | null; subproducto: string;
   nombre: string; cantidad: number; total: number;
