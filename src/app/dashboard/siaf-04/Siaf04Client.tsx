@@ -219,13 +219,19 @@ function GenerarSiafModal({ consolidacion: c, onClose, onDone }: {
       setError("No. de Factura, Serie y Fecha de Emisión son obligatorios");
       return;
     }
-    const seleccionPpr: { codigo_igss: string; subproducto: string; nombre: string; codigo_ppr: string }[] = [];
+    const seleccionPpr: { codigo_igss: string; subproducto: string; nombre: string; codigo_ppr: string; descripcion_igss: string | null }[] = [];
     for (const r of c.precios) {
       const opciones = pprsPorCodigo[clavePprDeItem(r)];
       if (!opciones?.length) continue;
       const elegido = seleccion[keyDe(r)];
       if (!elegido) { setError(`Selecciona el PPR/presentación de "${r.nombre}"`); return; }
-      seleccionPpr.push({ codigo_igss: r.codigo_igss!, subproducto: r.subproducto, nombre: r.nombre, codigo_ppr: elegido });
+      // La descripción de la presentación elegida (no la genérica del
+      // insumo) es la que después imprime el SIAF-04 — ver guardarPprSeleccion.
+      const opcionElegida = opciones.find(o => codigoDeOpcion(o) === elegido);
+      seleccionPpr.push({
+        codigo_igss: r.codigo_igss!, subproducto: r.subproducto, nombre: r.nombre, codigo_ppr: elegido,
+        descripcion_igss: opcionElegida?.descripcion_igss ?? null,
+      });
     }
 
     setLoading(true); setError("");

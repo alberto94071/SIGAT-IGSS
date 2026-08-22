@@ -33,7 +33,7 @@ export async function getPendientesSiaf04(): Promise<Consolidacion[]> {
 
 export async function generarSiaf04(consolidacionId: number, data: {
   no_factura: string; serie_factura: string; fecha_emision: string;
-  seleccionPpr: { codigo_igss: string; subproducto: string; nombre: string; codigo_ppr: string }[];
+  seleccionPpr: { codigo_igss: string; subproducto: string; nombre: string; codigo_ppr: string; descripcion_igss?: string | null }[];
 }): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireCompras();

@@ -23,7 +23,7 @@ type Consolidacion = {
 };
 type Renglon = {
   renglon: number | null; codigo_igss: string | null; codigo_ppr: string | null; nombre: string;
-  cantidad: number; total: number; unidad_medida: string | null;
+  cantidad: number; total: number; unidad_medida: string | null; descripcion_igss: string | null;
 };
 type Firmante = { id: number; nombre: string; cargo: string; unidad: string | null };
 
@@ -118,7 +118,7 @@ export default function ImprimirA04Client({
           codigoPpr: codigoPprMostrar(r.codigo_ppr, r.codigo_igss),
           renglonNum: r.renglon != null ? String(r.renglon) : "—",
           categoria: (r.renglon != null ? NOMBRE_RENGLON.get(r.renglon) : null) ?? null,
-          descripcion: r.nombre.toUpperCase(),
+          descripcion: (r.descripcion_igss || r.nombre).toUpperCase(),
           unidad: r.unidad_medida ?? "—",
           cantidad: r.cantidad.toLocaleString("es-GT"),
           precioUnitario: r.cantidad > 0 ? total / r.cantidad : 0,
@@ -129,7 +129,7 @@ export default function ImprimirA04Client({
         codigoPpr: codigoPprMostrar(renglon?.codigo_ppr, renglon?.codigo_igss),
         renglonNum: renglon?.renglon != null ? String(renglon.renglon) : "—",
         categoria: (renglon?.renglon != null ? NOMBRE_RENGLON.get(renglon.renglon) : null) ?? null,
-        descripcion: (c.a04_descripcion || renglon?.nombre || "—").toUpperCase(),
+        descripcion: (c.a04_descripcion || renglon?.descripcion_igss || renglon?.nombre || "—").toUpperCase(),
         unidad: c.a04_unidad_medida ?? renglon?.unidad_medida ?? "—",
         cantidad: (c.a04_cantidad ?? renglon?.cantidad)?.toLocaleString("es-GT") ?? "—",
         precioUnitario: montoBruto, total: montoBruto, iva, liquido,
