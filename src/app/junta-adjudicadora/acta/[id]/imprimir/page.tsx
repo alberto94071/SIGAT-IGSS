@@ -3,7 +3,6 @@ import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { actasAdjudicacion, consolidaciones, configuracion, oferentes, catalogoFirmantes } from "@/lib/schema";
 import { eq, asc } from "drizzle-orm";
-import { marcarActaPrevisualizada } from "@/lib/adjudicacion/actas-adjudicacion-actions";
 import ImprimirActaClient from "./ImprimirActaClient";
 
 interface Props { params: Promise<{ id: string }> }
@@ -26,10 +25,6 @@ export default async function ImprimirActaPage({ params }: Props) {
     db.select().from(configuracion).limit(1).then(r => r[0]),
     db.select().from(catalogoFirmantes).where(eq(catalogoFirmantes.activo, true)).orderBy(asc(catalogoFirmantes.nombre)),
   ]);
-
-  if (!acta.previsualizada) {
-    await marcarActaPrevisualizada(acta.id);
-  }
 
   return (
     <ImprimirActaClient
