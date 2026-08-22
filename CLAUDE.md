@@ -177,6 +177,14 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
 - **IVA es `costo / 1.12`, no `costo * 0.88`.** Son parecidos pero no iguales;
   ya se corrigió en todo el sistema una vez — si aparece una fórmula nueva de
   IVA, usar la división.
+- **Carta de Conformidad (`/compras/adjudicacion/[id]/conformidad`) solo
+  aplica a compras Regularizadas de renglón 100-199 (subgrupo 100, servicios
+  personales)** — no a Regularizado en general. Gateado dos veces: el botón
+  en `ComprasAdjudicacionClient.tsx` exige `regularizado === true` y que
+  `c.precios.every(p => esGrupo100(p.renglon))`; la página server-side repite
+  el mismo chequeo con `gruposRenglonDeConsolidacion` + `esGrupo100`
+  (`programacion-constants.ts`) y devuelve 404 si no aplica — así no se
+  puede llegar por URL directa a una consolidación de otro renglón.
 - **La asignación del vale y la confirmación del pago en efectivo son
   exclusivas de Caja Chica/Pagos — Fondo Rotativo/Pagos nunca las hace**
   (confirmado por el cliente 2026-08-19, revirtió el comportamiento
