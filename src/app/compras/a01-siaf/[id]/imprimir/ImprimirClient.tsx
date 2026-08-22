@@ -50,6 +50,19 @@ function codigoFontSize(texto: string): string {
   return "5.8pt";
 }
 
+// Muchos códigos IGSS de Base de Datos Central vienen como un rango numérico
+// ("128843 - 135227") que en la práctica es un solo insumo con dos números de
+// referencia — el cliente solo necesita el de la izquierda impreso en el
+// SIAF, y corregirlo en Base de Datos Central implicaría tocar uno por uno
+// entre ~207 mil registros. No aplica a códigos de servicio tipo "SC-990510"
+// (el lado izquierdo del guión ahí no es numérico), esos se imprimen
+// completos como siempre. Es solo un recorte para la impresión — no modifica
+// el dato guardado.
+function codigoParaImprimir(texto: string): string {
+  const m = texto.match(/^(\d+)\s*-\s*\d+\s*$/);
+  return m ? m[1] : texto;
+}
+
 // Alturas del bloque tabla, iguales en todas las hojas (el resumen de
 // subproductos no cambia el alto total, solo cuánto de su cuerpo se llena)
 const HEADER_H = 26;
@@ -305,8 +318,8 @@ export default function ImprimirClient({
 
                     {page.items.map(item => (
                       <div key={item.id} style={{ display: "flex", height: ROW_H, alignItems: "center", fontFamily: FONT, color: C }}>
-                        <div style={{ width: W_COD, textAlign: "center", flexShrink: 0, fontFamily: "monospace", fontSize: codigoFontSize(String(item.codigo_igss ?? "")), whiteSpace: "nowrap", overflow: "hidden" }}>
-                          {item.codigo_igss ?? ""}
+                        <div style={{ width: W_COD, textAlign: "center", flexShrink: 0, fontFamily: "monospace", fontSize: codigoFontSize(codigoParaImprimir(String(item.codigo_igss ?? ""))), whiteSpace: "nowrap", overflow: "hidden" }}>
+                          {codigoParaImprimir(String(item.codigo_igss ?? ""))}
                         </div>
                         <div style={{ flex: 1, padding: "0 8px", display: "flex", justifyContent: mostrarSubproducto ? "space-between" : "flex-start", alignItems: "center", overflow: "hidden" }}>
                           <span style={{ textTransform: "uppercase", fontSize: "8pt", lineHeight: 1.2, width: mostrarSubproducto ? undefined : "100%" }}>{item.nombre}</span>
