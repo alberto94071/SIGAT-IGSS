@@ -1,15 +1,17 @@
 "use client";
 import { fechaGuatemala } from "@/lib/date-utils";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
 import { deletrearCodigo, fechaEnLetras, horaEnLetras } from "@/lib/adjudicacion/deletreo";
 import PrintPages from "@/components/print-pages/PrintPages";
 import SelectorFirmante, { type Firmante } from "@/components/SelectorFirmante";
+import { marcarActaPrevisualizada } from "@/lib/adjudicacion/actas-adjudicacion-actions";
 
 type Acta = {
   id: number; no_formulario: string; no_acta: string; lugar: string; fecha: string; hora: string;
+  previsualizada: boolean;
 };
 type Consolidacion = {
   id: number; numero: number; anio: number; tipo_compra: string | null;
@@ -32,6 +34,15 @@ export default function ImprimirActaClient({
   const router = useRouter();
   const [municipioNombre, departamento] = municipio.split(",").map(s => s.trim());
   const dep = departamento || "San Marcos";
+
+  // Se marca desde el cliente (no durante el render del server component) para
+  // poder revalidar /junta-adjudicadora/acta al mismo tiempo — si no, el
+  // Router Cache de esa lista queda desactualizado y el botón "Aprobar" no
+  // aparece hasta recargar la página a mano al volver de esta vista previa.
+  useEffect(() => {
+    if (!acta.previsualizada) marcarActaPrevisualizada(acta.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acta.id]);
 
   // Encargado(a) de Unidad que preside la Junta — antes venía fijo ("Lilia
   // Zucely Pérez Fuentes"); ahora se elige de Configuración → Firmantes en

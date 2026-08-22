@@ -1,5 +1,6 @@
 "use server";
 import { fechaHoraGuatemala } from "@/lib/date-utils";
+import { revalidatePath } from "next/cache";
 
 import { db } from "@/lib/db";
 import {
@@ -69,6 +70,13 @@ export async function generarActa(consolidacionId: number, data: {
 export async function marcarActaPrevisualizada(actaId: number): Promise<{ ok: true } | { error: string }> {
   try {
     await db.update(actasAdjudicacion).set({ previsualizada: true }).where(eq(actasAdjudicacion.id, actaId));
+    // Sin esto, la lista de Actas (/junta-adjudicadora/acta) queda con el
+    // Router Cache de Next.js desactualizado — al volver de la vista previa
+    // el botón "Aprobar" no aparece hasta recargar la página a mano, porque
+    // aprobarActa exige acta.previsualizada=true y esa lectura la hace fresca
+    // desde la BD, pero la LISTA que el usuario ve seguía usando el snapshot
+    // de antes de generar/previsualizar el acta.
+    revalidatePath("/junta-adjudicadora/acta");
     return { ok: true };
   } catch {
     return { error: "Error al marcar el acta como previsualizada" };
