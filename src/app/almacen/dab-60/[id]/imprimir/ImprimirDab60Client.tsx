@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useLayoutEffect, useCallback, type RefObject } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft, Eye, EyeOff, Save, RotateCcw } from "lucide-react";
 import { guardarPosicionesDab60, getFondoDab60 } from "@/lib/adjudicacion/dab60-actions";
@@ -45,6 +45,12 @@ const DEFAULT_FONT_PT = 9;
 const MIN_FONT_PT = 4;
 
 type Pos = { top: number; left: number; width?: number; height?: number };
+
+// Campos ocultados con la "×" — se guardan en el navegador y aplican a TODOS
+// los DAB-60 que se impriman después, hasta que el usuario le dé clic a
+// "Reiniciar campos ocultos". No es por documento, es una preferencia del
+// que imprime (por eso una sola clave, no una por id de orden).
+const OCULTOS_KEY = "cip-dab60-campos-ocultos";
 
 // Posiciones por defecto (mm desde la esquina superior izquierda de la hoja
 // carta) — punto de partida calibrado contra un DAB-60 real. Se guarda lo que
@@ -227,12 +233,28 @@ function ResizeHandle({ handlers, label }: { handlers: Handlers; label?: string 
   );
 }
 
+// Botón para ocultar un campo permanentemente (hasta "Reiniciar campos
+// ocultos") — visible siempre en pantalla, nunca en el papel impreso.
+function HideButton({ onClick, label }: { onClick: () => void; label?: string }) {
+  return (
+    <button
+      type="button" className="dab-hide-btn no-print"
+      title={label ? `Ocultar — ${label}` : "Ocultar este campo"}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick(); }}
+    >
+      ×
+    </button>
+  );
+}
+
 function Campo({
-  id, texto, hojaRef, pos, onChange, editable, style, label, onTextChange, multiline = false,
+  id, texto, hojaRef, pos, onChange, editable, style, label, onTextChange, multiline = false, onHide,
 }: {
   id: string; texto: string; hojaRef: RefObject<HTMLDivElement | null>; pos: Pos;
   onChange: (id: string, pos: Pos) => void; editable: boolean; style?: React.CSSProperties;
   label?: string; onTextChange?: (id: string, texto: string) => void; multiline?: boolean;
+  onHide?: () => void;
 }) {
   // El wrapper externo (outerRef) define la posición y el tamaño del campo y
   // aloja las manijas de mover/redimensionar SIN recortarlas; el recorte
@@ -285,6 +307,7 @@ function Campo({
       </div>
       {editable && <DragHandle handlers={drag} label={label} />}
       {editable && <ResizeHandle handlers={resize} label={label} />}
+      {onHide && <HideButton onClick={onHide} label={label} />}
     </div>
   );
 }
@@ -323,11 +346,11 @@ function ColumnaLinea({
 }
 
 function ColumnaCampo({
-  id, valores, hojaRef, pos, onChange, editable, align = "left", label, onTextChange,
+  id, valores, hojaRef, pos, onChange, editable, align = "left", label, onTextChange, onHide,
 }: {
   id: string; valores: string[]; hojaRef: RefObject<HTMLDivElement | null>; pos: Pos;
   onChange: (id: string, pos: Pos) => void; editable: boolean; align?: "left" | "right" | "center";
-  label?: string; onTextChange?: (idx: number, texto: string) => void;
+  label?: string; onTextChange?: (idx: number, texto: string) => void; onHide?: () => void;
 }) {
   const fieldRef = useRef<HTMLDivElement>(null);
   const drag = useDrag(hojaRef, id, pos, onChange, editable);
@@ -355,6 +378,7 @@ function ColumnaCampo({
       ))}
       {editable && <DragHandle handlers={drag} label={label} />}
       {editable && <ResizeHandle handlers={resize} label={label} />}
+      {onHide && <HideButton onClick={onHide} label={label} />}
     </div>
   );
 }
@@ -368,7 +392,32 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
   const [fondo, setFondo] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
+  const [ocultos, setOcultos] = useState<string[]>([]);
   const hojaRef = useRef<HTMLDivElement>(null);
+
+  // Se lee después del montaje (nunca durante el render inicial) para que el
+  // primer render en el servidor y en el cliente coincidan — el mismo patrón
+  // que ya usa DashboardShell para su preferencia de sidebar colapsado.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(OCULTOS_KEY);
+      if (raw) setOcultos(JSON.parse(raw));
+    } catch { /* localStorage no disponible — sigue mostrando todo */ }
+  }, []);
+
+  const ocultarCampo = useCallback((id: string) => {
+    setOcultos(prev => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      try { localStorage.setItem(OCULTOS_KEY, JSON.stringify(next)); } catch { /* ignorar */ }
+      return next;
+    });
+  }, []);
+
+  function reiniciarOcultos() {
+    setOcultos([]);
+    try { localStorage.removeItem(OCULTOS_KEY); } catch { /* ignorar */ }
+  }
 
   // El fondo se ve siempre en pantalla (para previsualizar cómo va a quedar
   // el recibo real) — solo se oculta al imprimir (.no-print), nunca sale en
@@ -410,7 +459,13 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
   const cantidades       = renglones.map(r => r.cantidad.toLocaleString("es-GT"));
   const unidades         = renglones.map(r => r.unidad_medida ?? "");
   const codigos          = renglones.map(r => r.codigo ?? "");
-  const codigosPpr       = renglones.map(r => r.codigo_igss && r.codigo_ppr ? `${r.codigo_igss}-${r.codigo_ppr}` : "");
+  // Si el código IGSS y el código PPR son exactamente el mismo número, se
+  // imprime una sola vez (no "128843-128843") — solo se unen con guion
+  // cuando de verdad son distintos.
+  const codigosPpr       = renglones.map(r => {
+    if (!r.codigo_igss || !r.codigo_ppr) return "";
+    return r.codigo_igss === r.codigo_ppr ? r.codigo_igss : `${r.codigo_igss}-${r.codigo_ppr}`;
+  });
   // El formulario DAB-60 lleva costo unitario y valor total SIN IVA (el
   // bruto con IVA incluido es el que se maneja en A-04/consolidación). El
   // total se recalcula como cantidad × costo unitario neto (no se usa
@@ -423,16 +478,19 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
   const valoresTotales   = renglones.map((r, i) => r.cantidad > 0 ? Q(costosUnitariosNetos[i] * r.cantidad) : Q(0));
 
   const campo = (id: string, textoDefault: string, opts?: { style?: React.CSSProperties; multiline?: boolean }) => {
+    if (ocultos.includes(id)) return null;
     const texto = overrides[id] ?? textoDefault;
     return (
       <Campo
         id={id} texto={texto} hojaRef={hojaRef} pos={pos[id] ?? POS_DEFAULT[id]} onChange={onChangePos}
         editable={verPosiciones} style={opts?.style} label={FIELD_LABELS[id] ?? id}
         onTextChange={onTextChange} multiline={opts?.multiline}
+        onHide={() => ocultarCampo(id)}
       />
     );
   };
   const columna = (id: string, valoresDefault: string[], align?: "left" | "right" | "center") => {
+    if (ocultos.includes(id)) return null;
     const overrideArr = colOverrides[id];
     const valores = overrideArr ? valoresDefault.map((v, i) => overrideArr[i] ?? v) : valoresDefault;
     return (
@@ -440,6 +498,7 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
         id={id} valores={valores} hojaRef={hojaRef} pos={pos[id] ?? POS_DEFAULT[id]} onChange={onChangePos}
         editable={verPosiciones} align={align} label={FIELD_LABELS[id] ?? id}
         onTextChange={(idx, t) => onColTextChange(id, idx, t)}
+        onHide={() => ocultarCampo(id)}
       />
     );
   };
@@ -469,6 +528,12 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
                 <Save className="w-3.5 h-3.5" /> {guardando ? "Guardando…" : guardado ? "Guardado ✓" : "Guardar posiciones"}
               </button>
             </>
+          )}
+          {ocultos.length > 0 && (
+            <button onClick={reiniciarOcultos}
+              className="flex items-center gap-2 px-3 py-1.5 border border-red-200 bg-red-50 text-red-700 rounded-lg text-xs hover:bg-red-100">
+              <RotateCcw className="w-3.5 h-3.5" /> Reiniciar campos ocultos ({ocultos.length})
+            </button>
           )}
           <button onClick={() => setVerPosiciones(p => !p)}
             className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">
@@ -501,8 +566,8 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
           {campo("a01_siaf", datos.a01Siaf)}
           {campo("no_compromiso", o.no_compromiso ?? "")}
           {campo("proveedor_nombre", o.proveedor_nombre ?? "")}
-          {campo("metodo_compra", datos.metodoCompra)}
-          {campo("renglon", datos.renglon)}
+          {campo("metodo_compra", `Tipo de compra: ${datos.metodoCompra}`)}
+          {campo("renglon", `Renglón: ${datos.renglon}`)}
 
           {columna("col_cantidad", cantidades, "center")}
           {columna("col_unidad", unidades, "left")}
@@ -511,7 +576,7 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
           {columna("col_v_unitario", vUnitarios, "right")}
           {columna("col_valor_total", valoresTotales, "right")}
 
-          {campo("marca", o.marca ?? "")}
+          {campo("marca", `Marca: ${o.marca ?? ""}`)}
           {campo("lote", o.lote ?? "")}
           {campo("fecha_vencimiento", o.fecha_vencimiento ?? "")}
           {campo("descripcion", datos.descripcion, { style: { lineHeight: 1.35 }, multiline: true })}
@@ -519,7 +584,7 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
 
           {campo("fecha_emision", o.fecha_emision ?? "")}
           {campo("fecha_ingreso", o.fecha_ingreso_producto ?? "")}
-          {campo("modelo", o.modelo ?? "")}
+          {campo("modelo", `Modelo: ${o.modelo ?? ""}`)}
           {campo("serie", o.serie ?? "")}
           {campo("serie_factura", o.serie_factura ?? "")}
           {campo("proveedor_nit", o.proveedor_nit ?? "")}
@@ -536,6 +601,13 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
           box-shadow: 0 4px 32px rgba(0,0,0,0.22); box-sizing: border-box; overflow: hidden;
         }
         .no-print { display: block; }
+        .dab-hide-btn {
+          position: absolute; top: -2mm; right: -2mm; width: 3.2mm; height: 3.2mm; border-radius: 50%;
+          background: #ef4444; color: #fff; border: none; cursor: pointer; z-index: 12; padding: 0;
+          font-size: 7px; line-height: 1; display: flex; align-items: center; justify-content: center;
+          opacity: 0.5;
+        }
+        .dab-hide-btn:hover { opacity: 1; }
         @media print {
           @page { size: letter portrait; margin: 0; }
           .no-print { display: none !important; }
