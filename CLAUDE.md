@@ -255,6 +255,26 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   cambia nada de lo que ya se imprimía) — no se reinterpretaron contra Base
   de Datos Central porque un mismo código puede tener varias presentaciones
   y no se puede desambiguar solo por código.
+- **El selector de PPR/presentación (Órdenes y SIAF-04) SÍ existe** — antes
+  de generar la Orden de Compra o el SIAF-04, si un insumo tiene varias
+  presentaciones en Base de Datos Central (mismo `codigo`/`codigo_igss`,
+  distinto `codigo_ppr`), un `<select>` en el modal ("PPR / Presentación por
+  insumo") obliga a elegir una (`getPprsPorItems`/`getPprsParaRenglones` en
+  `renglon-utils.ts`, duplicado como `GenerarOrdenModal`/`GenerarSiafModal`
+  en `OrdenesClient.tsx`/`Siaf04Client.tsx`). Lo que SÍ estaba roto (ya
+  corregido): el A-04 impreso ignoraba cuál presentación se había elegido y
+  siempre mostraba en "Descripción" el nombre genérico del insumo
+  (`siaf_compras_items.nombre`), no la descripción de la presentación
+  puntual (`descripcion_igss` de esa fila de Base de Datos Central — cada
+  presentación tiene la suya, pueden ser distintas). Ahora el modal manda
+  también el `descripcion_igss` de la opción elegida, `guardarPprSeleccion`
+  lo persiste en `siaf_compras_items.descripcion_igss` (sobreescribe el
+  snapshot genérico), y `ImprimirA04Client.tsx` usa
+  `descripcion_igss || nombre`. El "Código PpR" impreso se queda con su
+  formato compuesto actual (`código-ppr`, ej. "36823-2") — el cliente
+  confirmó que NO debe cambiar a solo la columna "Código" (eso es aparte, ya
+  aplicado, en la leyenda "Código PpR:" del A-01 SIAF). Esto solo se aplicó
+  a SIAF-04/A-04 — Órdenes/Orden de Compra queda fuera, no se tocó.
 - **DAB-60 (`ImprimirDab60Client.tsx`) tiene "campos ocultables" persistentes
   por navegador, independiente de "Ver posiciones"**: cada campo impreso
   tiene un botón "×" (`.dab-hide-btn`, no imprime) que lo oculta para
