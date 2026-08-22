@@ -117,7 +117,7 @@ function paginarItems(items: Item[], capacidad: number): PageInfo[] {
 // en false), la leyenda de "productos homologados... SIGES" no aplica —
 // en su lugar se imprime el/los código(s) PpR de los insumos de esa hoja.
 function textoCodigosPpr(items: Item[]): string {
-  const codigos = [...new Set(items.map(i => i.codigo_ppr).filter((c): c is string => !!c))];
+  const codigos = [...new Set(items.map(i => i.codigo_ppr).filter((c): c is string => !!c).map(codigoParaImprimir))];
   return codigos.length > 0 ? `Código PpR: ${codigos.join(", ")}` : "";
 }
 
