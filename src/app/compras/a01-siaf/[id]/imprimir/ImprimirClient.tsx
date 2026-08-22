@@ -100,6 +100,14 @@ function paginarItems(items: Item[], capacidad: number): PageInfo[] {
   return pages;
 }
 
+// Cuando la hoja no tiene ningún insumo del renglón 182 (mostrarSubproducto
+// en false), la leyenda de "productos homologados... SIGES" no aplica —
+// en su lugar se imprime el/los código(s) PpR de los insumos de esa hoja.
+function textoCodigosPpr(items: Item[]): string {
+  const codigos = [...new Set(items.map(i => i.codigo_ppr).filter((c): c is string => !!c))];
+  return codigos.length > 0 ? `Código PpR: ${codigos.join(", ")}` : "";
+}
+
 export default function ImprimirClient({
   solicitud, items, config, todosFirmantes, firmantesSeleccionados: initFirmantes, mostrarSubproducto, impresoPor,
 }: Props) {
@@ -342,7 +350,9 @@ export default function ImprimirClient({
                   <div style={{ position: "absolute", right: W_CANT, top: 0, bottom: 0, width: "2px", background: "#1a1a1a", zIndex: 1 }} />
                   <div style={{ width: W_COD, flexShrink: 0 }} />
                   <span style={{ flex: 1, padding: "0 8px", fontSize: "6.5pt", color: "#555", fontFamily: FONT }}>
-                    Los productos de los listados institucionales, se encuentran homologados con el catálogo general de insumos del SIGES, Presupuesto por Resultados (PpR)
+                    {mostrarSubproducto
+                      ? "Los productos de los listados institucionales, se encuentran homologados con el catálogo general de insumos del SIGES, Presupuesto por Resultados (PpR)"
+                      : textoCodigosPpr(page.items)}
                   </span>
                   <div style={{ width: W_CANT, flexShrink: 0 }} />
                 </div>
