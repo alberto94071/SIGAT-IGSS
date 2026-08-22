@@ -102,14 +102,20 @@ export async function getPprsPorItems(items: ItemParaPpr[]): Promise<Record<stri
 // El nombre entra al WHERE por la misma razón que en el resto del código: un
 // codigo_igss "S/C" se reutiliza entre insumos distintos que comparten
 // subproducto — sin el nombre, guardar el PPR de uno pisaba el de otro.
-export async function guardarPprSeleccion(consolidacionId: number, seleccion: { codigo_igss: string; subproducto: string; nombre: string; codigo_ppr: string }[]): Promise<void> {
+export async function guardarPprSeleccion(consolidacionId: number, seleccion: { codigo_igss: string; subproducto: string; nombre: string; codigo_ppr: string; descripcion_igss?: string | null }[]): Promise<void> {
   if (seleccion.length === 0) return;
   const siafIds = (await db.select({ id: siafCompras.id }).from(siafCompras)
     .where(eq(siafCompras.consolidacion_id, consolidacionId))).map(s => s.id);
   if (siafIds.length === 0) return;
 
   for (const s of seleccion) {
-    await db.update(siafComprasItems).set({ codigo_ppr: s.codigo_ppr })
+    // descripcion_igss (si se manda) es la de la presentación elegida, NO la
+    // genérica que ya traía el ítem desde el catálogo/PAC — sobreescribe ese
+    // snapshot para que la impresión (ej. SIAF-04) muestre la descripción de
+    // lo que el usuario realmente eligió, no la del insumo en general.
+    const valores: { codigo_ppr: string; descripcion_igss?: string } = { codigo_ppr: s.codigo_ppr };
+    if (s.descripcion_igss) valores.descripcion_igss = s.descripcion_igss;
+    await db.update(siafComprasItems).set(valores)
       .where(and(
         inArray(siafComprasItems.solicitud_id, siafIds),
         eq(siafComprasItems.codigo_igss, s.codigo_igss),
@@ -209,7 +215,7 @@ export async function codigoPprLookupMap(codigos?: string[]): Promise<Map<string
 export type GrupoRenglon = {
   renglon: number | null; codigo_igss: string | null; codigo_ppr: string | null; subproducto: string;
   nombre: string; cantidad: number; total: number;
-  unidad_medida: string | null; codigo: string | null;
+  unidad_medida: string | null; codigo: string | null; descripcion_igss: string | null;
 };
 
 // Agrupa los insumos de los SIAF consolidados de una consolidación por
@@ -232,6 +238,7 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
     unidad_medida:       siafComprasItems.unidad_medida,
     cantidad_solicitada: siafComprasItems.cantidad_solicitada,
     precio_unitario:     siafComprasItems.precio_unitario,
+    descripcion_igss:    siafComprasItems.descripcion_igss,
   }).from(siafComprasItems).where(inArray(siafComprasItems.solicitud_id, siafIds));
 
   // Un solo query para el catálogo completo (misma tabla que ya carga
@@ -271,6 +278,7 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
         // insumos "S/C".
         unidad_medida: item.unidad_medida?.trim() || unidades.get(fichaKey) || null,
         codigo: codigos.get(fichaKey) ?? null,
+        descripcion_igss: item.descripcion_igss ?? null,
       });
     }
   }
