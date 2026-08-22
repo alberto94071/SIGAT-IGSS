@@ -270,6 +270,22 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   etiqueta literal ("Renglón:", "Tipo de compra:", "Marca:", "Modelo:")
   concatenada al valor antes de pasar por `campo()` — no son etiquetas de
   UI, salen impresas en el papel.
+- **Una escritura a la BD que ocurre durante el render de un Server Component
+  (ej. dentro del `page.tsx` de una ruta `/imprimir`, antes del `return`) NO
+  puede invalidar el Router Cache de Next.js con `revalidatePath`** —
+  revienta ("no se puede llamar durante el render") o, si no truena, la
+  lista que depende de ese dato queda con el snapshot de ANTES de la
+  mutación hasta que el usuario recarga a mano. Pasó con
+  `marcarActaPrevisualizada` (Junta Adjudicadora → Acta): se llamaba dentro
+  de `imprimir/page.tsx`, y al volver de la vista previa con "Volver"
+  (`router.back()`) el botón "Aprobar" no aparecía en
+  `/junta-adjudicadora/acta` hasta un F5 — confirmado reproduciendo el bug
+  en producción real antes de corregirlo. Fix: mover la escritura al
+  cliente (un `useEffect` en el componente de impresión que llama a la
+  Server Action de verdad, no durante el render de la página), y ahí sí
+  `revalidatePath("/ruta/de/la/lista")` funciona y refresca la lista sola.
+  Cualquier otra pantalla `/imprimir` que en el futuro necesite marcar algo
+  como "visto" al abrirse (no solo Actas) debe seguir este mismo patrón.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
