@@ -51,16 +51,18 @@ function codigoFontSize(texto: string): string {
 }
 
 // Muchos códigos IGSS de Base de Datos Central vienen como un rango numérico
-// ("128843 - 135227") que en la práctica es un solo insumo con dos números de
-// referencia — el cliente solo necesita el de la izquierda impreso en el
-// SIAF, y corregirlo en Base de Datos Central implicaría tocar uno por uno
-// entre ~207 mil registros. No aplica a códigos de servicio tipo "SC-990510"
-// (el lado izquierdo del guión ahí no es numérico), esos se imprimen
-// completos como siempre. Es solo un recorte para la impresión — no modifica
-// el dato guardado.
+// ("128843 - 135227") — un placeholder de importación masiva, no un código
+// real de un insumo puntual. Antes se imprimía el número de la izquierda del
+// rango, pero el cliente confirmó que eso podía leerse como si fuera el
+// código real del insumo; ahora se imprime "SC" (Sin Código) en su lugar.
+// Dos casos NO entran en esta regla y se imprimen tal cual están guardados:
+// códigos de servicio tipo "SC-990510" (ya vienen con el prefijo "SC", el
+// lado izquierdo del guión ahí no es numérico) y códigos que son solo
+// números sin guión (un código real de un insumo puntual, no un rango). Es
+// solo un cambio para la impresión — no modifica el dato guardado.
 function codigoParaImprimir(texto: string): string {
-  const m = texto.match(/^(\d+)\s*-\s*\d+\s*$/);
-  return m ? m[1] : texto;
+  const esRangoNumerico = /^\d+\s*-\s*\d+\s*$/.test(texto);
+  return esRangoNumerico ? "SC" : texto;
 }
 
 // Alturas del bloque tabla, iguales en todas las hojas (el resumen de
