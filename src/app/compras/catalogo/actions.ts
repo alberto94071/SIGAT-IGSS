@@ -28,18 +28,13 @@ export type InsumoCentralAgrupado = {
 // insumo compra, y la presentación se decide después, al generar la Orden de
 // Compra o el SIAF-04, cuando ya se sabe qué puede entregar el proveedor.
 //
-// El "código base" que agrupa puede venir de dos columnas distintas (ver
-// mismo comentario en renglon-utils.ts): "código" (el específico de una
-// presentación) o, si ese insumo todavía no tiene ninguna presentación
-// cargada, "código IGSS" (el compartido) — para que un insumo recién
-// agregado a Base de Datos Central sin "código" propio todavía se pueda
-// encontrar y elegir aquí, en vez de parecer que "no existe".
+// El "código base" que agrupa es codigo_igss — solo ~15% de Base de Datos
+// Central lo tiene (el resto son insumos sin código real todavía).
 export async function buscarInsumosCentral(q: string): Promise<InsumoCentralAgrupado[]> {
   if (!q || q.trim().length < 2) return [];
   try {
     const results = await db
       .select({
-        codigo:           baseDatosCentral.codigo,
         codigo_igss:      baseDatosCentral.codigo_igss,
         nombre:           baseDatosCentral.nombre,
         descripcion_igss: baseDatosCentral.descripcion_igss,
@@ -48,12 +43,11 @@ export async function buscarInsumosCentral(q: string): Promise<InsumoCentralAgru
       .from(baseDatosCentral)
       .where(
         and(
-          or(isNotNull(baseDatosCentral.codigo), isNotNull(baseDatosCentral.codigo_igss)),
+          isNotNull(baseDatosCentral.codigo_igss),
           or(
             ilike(baseDatosCentral.nombre, `%${q}%`),
             ilike(baseDatosCentral.descripcion_igss, `%${q}%`),
             ilike(baseDatosCentral.caracteristicas, `%${q}%`),
-            ilike(baseDatosCentral.codigo, `%${q}%`),
             ilike(baseDatosCentral.codigo_igss, `%${q}%`),
           ),
         )
@@ -62,7 +56,7 @@ export async function buscarInsumosCentral(q: string): Promise<InsumoCentralAgru
 
     const porCodigo = new Map<string, InsumoCentralAgrupado>();
     for (const r of results) {
-      const codigo = r.codigo ?? r.codigo_igss;
+      const codigo = r.codigo_igss;
       if (!codigo || porCodigo.has(codigo)) continue;
       porCodigo.set(codigo, { codigo, nombre: r.nombre, descripcion_igss: r.descripcion_igss, renglon: r.renglon });
     }
@@ -98,11 +92,10 @@ function toValues(data: InsumoComprasInput) {
 
 // El insumo debe existir en Base de Datos Central — si no está ahí, no existe
 // para efectos de compras. Se valida también aquí, no solo en la UI, por si
-// alguna vez se llama esta acción con un código inventado. Busca por
-// "código" o "código IGSS" (ver buscarInsumosCentral arriba).
+// alguna vez se llama esta acción con un código inventado.
 async function validarCodigoCentral(codigo: string): Promise<string | null> {
-  const [existe] = await db.select({ codigo: baseDatosCentral.codigo }).from(baseDatosCentral)
-    .where(or(eq(baseDatosCentral.codigo, codigo), eq(baseDatosCentral.codigo_igss, codigo))).limit(1);
+  const [existe] = await db.select({ codigo_igss: baseDatosCentral.codigo_igss }).from(baseDatosCentral)
+    .where(eq(baseDatosCentral.codigo_igss, codigo)).limit(1);
   return existe ? null : `El código "${codigo}" no existe en Base de Datos Central`;
 }
 

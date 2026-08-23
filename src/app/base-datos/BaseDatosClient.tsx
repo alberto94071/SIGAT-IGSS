@@ -8,8 +8,7 @@ type Insumo = {
   id: number;
   codigo_igss: string | null;
   descripcion_igss: string | null;
-  codigo: string | null;
-  codigo_ppr: number | null;
+  codigo_ppr: string | null;
   nombre: string;
   caracteristicas: string | null;
   presentacion: string | null;
@@ -18,11 +17,10 @@ type Insumo = {
   activo: boolean;
 };
 
-const EMPTY = { 
-  codigo_igss: "", 
+const EMPTY = {
+  codigo_igss: "",
   descripcion_igss: "",
-  codigo: "",
-  codigo_ppr: "", 
+  codigo_ppr: "",
   nombre: "", 
   caracteristicas: "", 
   presentacion: "", 
@@ -158,8 +156,7 @@ export default function BaseDatosClient({
     setForm({
       codigo_igss:     String(r.codigo_igss ?? ""),
       descripcion_igss: r.descripcion_igss ?? "",
-      codigo:          r.codigo ?? "",
-      codigo_ppr:      String(r.codigo_ppr ?? ""),
+      codigo_ppr:      r.codigo_ppr ?? "",
       nombre:          r.nombre,
       caracteristicas: r.caracteristicas ?? "",
       presentacion:    r.presentacion ?? "",
@@ -175,8 +172,7 @@ export default function BaseDatosClient({
     const data = {
       codigo_igss:     form.codigo_igss.trim() || null,
       descripcion_igss: form.descripcion_igss.trim() || null,
-      codigo:          form.codigo.trim() || null,
-      codigo_ppr:      form.codigo_ppr ? Number(form.codigo_ppr) : null,
+      codigo_ppr:      form.codigo_ppr.trim() || null,
       nombre:          form.nombre.trim(),
       caracteristicas: form.caracteristicas.trim() || null,
       presentacion:    form.presentacion.trim() || null,
@@ -254,7 +250,6 @@ export default function BaseDatosClient({
                 <th className="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10 px-4 py-3 text-center whitespace-nowrap border-b border-gray-100 shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)]">Renglón</th>
                 <th className="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10 px-4 py-3 text-left whitespace-nowrap border-b border-gray-100 shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)]">Cód. IGSS</th>
                 <th className="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10 px-4 py-3 text-left border-b border-gray-100 shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)] min-w-[200px]">Descripción IGSS</th>
-                <th className="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10 px-4 py-3 text-left whitespace-nowrap border-b border-gray-100 shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)]">Código</th>
                 <th className="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10 px-4 py-3 text-left whitespace-nowrap border-b border-gray-100 shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)]">PpR</th>
                 <th className="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10 px-4 py-3 text-left border-b border-gray-100 shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)] min-w-[220px]">Descripción PpR</th>
                 <th className="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10 px-4 py-3 text-left border-b border-gray-100 shadow-[inset_0_-1px_0_rgba(0,0,0,0.05)] min-w-[200px]">Característica PpR</th>
@@ -278,9 +273,6 @@ export default function BaseDatosClient({
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-600 max-w-[250px]">
                     <CeldaTruncada texto={r.descripcion_igss ?? ""} />
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">
-                    {r.codigo ?? <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">
                     {r.codigo_ppr ?? <span className="text-gray-300">—</span>}
@@ -367,19 +359,11 @@ export default function BaseDatosClient({
               </button>
             </div>
             <div className="px-5 py-4 space-y-4 text-left">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Código IGSS</label>
-                  <input className="input" value={form.codigo_igss}
-                    onChange={e => setF("codigo_igss", e.target.value)} placeholder="Ej: SC-990831" />
-                  <p className="text-xs text-gray-400 mt-1">Solo se usa si &quot;Código&quot; está vacío.</p>
-                </div>
-                <div>
-                  <label className="label">Código</label>
-                  <input className="input" value={form.codigo}
-                    onChange={e => setF("codigo", e.target.value)} placeholder="Ej: 277" />
-                  <p className="text-xs text-gray-400 mt-1">Este es el que se usa al agregar el insumo al Catálogo (PAC).</p>
-                </div>
+              <div>
+                <label className="label">Código IGSS</label>
+                <input className="input" value={form.codigo_igss}
+                  onChange={e => setF("codigo_igss", e.target.value)} placeholder="Ej: SC-990831" />
+                <p className="text-xs text-gray-400 mt-1">El código real del insumo. Se usa al agregarlo al Catálogo (PAC). Se deja vacío si no tiene.</p>
               </div>
               <div>
                 <label className="label">Descripción IGSS</label>
@@ -389,8 +373,8 @@ export default function BaseDatosClient({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Código PPR</label>
-                  <input className="input" type="number" value={form.codigo_ppr}
-                    onChange={e => setF("codigo_ppr", e.target.value)} placeholder="Ej: 58527" />
+                  <input className="input" value={form.codigo_ppr}
+                    onChange={e => setF("codigo_ppr", e.target.value)} placeholder="Ej: 4877 - 67341" />
                 </div>
                 <div>
                   <label className="label">Renglón</label>
