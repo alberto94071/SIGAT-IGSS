@@ -296,6 +296,22 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   mismo monto en unitario y en total sin dividir entre la cantidad (con
   cantidad 10 y total Q500 salía "Precio Unitario: Q500" en vez de Q50) —
   detectado por el cliente al revisar una captura de prueba.
+- **Filas de altura fija + `overflow:hidden` cortan descripciones largas —
+  cuidado con este patrón en cualquier documento impreso nuevo.** Pasó en
+  el A-01 SIAF (`ImprimirClient.tsx`): cada fila de ítem tenía 24px fijos
+  (`ROW_H`) con el texto centrado verticalmente: una descripción que
+  necesitaba varias líneas se recortaba arriba y abajo, mostrando solo el
+  pedazo centrado en esos 24px ("empezaba a la mitad"). El fix mide en una
+  pasada oculta (mismo layout real, altura natural, ver `useLayoutEffect` +
+  `medirRefs`) cuántas franjas de `ROW_H` necesita cada ítem, y
+  `paginarItems` reparte hojas por franjas ocupadas (no por cantidad de
+  ítems) — reservando franja para "Vienen.../Van..." igual que antes.
+  Aparte y sin relación: la columna "Descripción IGSS" (y PpR/Característica/
+  Presentación) de Base de Datos Central (`BaseDatosClient.tsx`) usaba el
+  atributo `title` nativo del navegador como tooltip — se corta solo si el
+  navegador lo posiciona cerca del borde de la pantalla, fuera del control
+  de la app. Reemplazado por `CeldaTruncada`, un panel propio anclado a la
+  derecha de la celda (nunca crece hacia la derecha, que es donde se salía).
 - **DAB-60 (`ImprimirDab60Client.tsx`) tiene "campos ocultables" persistentes
   por navegador, independiente de "Ver posiciones"**: cada campo impreso
   tiene un botón "×" (`.dab-hide-btn`, no imprime) que lo oculta para
