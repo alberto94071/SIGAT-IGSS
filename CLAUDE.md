@@ -235,20 +235,33 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   siguiera en 106). Solo aplica mientras el año actual coincida con el año
   configurado — el año siguiente vuelve a arrancar en 1 solo. Sobrevive a
   "Reiniciar Sistema" porque `configuracion` no se trunca ahí.
-- **La leyenda "Código PpR: ..." del A-01 SIAF (renglones que no son 182)
-  imprime la columna "Código" de Base de Datos Central, NO su columna interna
-  `codigo_ppr`** (confirmado por el cliente 2026-08-22 — son campos
-  distintos, el nombre de la leyenda no corresponde con el nombre de la
-  columna). `codigoPprLookupMap` (`renglon-utils.ts`) selecciona
-  `baseDatosCentral.codigo` (mismo patrón acotado por código que
-  `unidadMedidaLookupMap`/`codigoLookupMap`, cruzando por
-  `codigo_igss::nombre`) — se usa como respaldo porque
-  `siaf_compras_items.codigo_ppr` (el campo real, distinto del anterior)
-  solo se llena en Consolidación vía `guardarPprSeleccion`, y un A-01 SIAF
-  recién creado todavía no pasó por ahí. A diferencia de la columna "Código"
-  de la tabla (ver punto siguiente), esta leyenda **no** recorta el rango —
-  el cliente pidió el número completo tal como está guardado (confirmado
-  2026-08-22, revirtió el recorte que se le había aplicado por consistencia).
+- **Base de Datos Central se reimportó por completo el 2026-08-23** (207,821
+  filas) desde un Excel limpio que el cliente preparó, tras confirmarse que
+  el `codigo_ppr` del import anterior (`import-homologados.mjs`, ya no se
+  usa) estaba mal mapeado desde el origen: traía un número pequeño (1, 2,
+  3...) de la columna equivocada del Excel viejo. **El código PPR correcto
+  es el de formato "número - número"** (ej. `"153739 - 179973"`, confirmado
+  por el cliente) — es además único en el 100% de las filas, a diferencia de
+  `codigo_igss` (código real), que solo existe en ~15% del catálogo; el
+  resto queda `NULL` (ya no se rellena con un rango ni con "SC"). Import
+  nuevo: `scripts/import-base-datos-central-v2.cjs` (recibe el .xlsx como
+  argumento, trunca y recarga la tabla en un solo paso; usa `require` en vez
+  de `import` porque la build ESM de la librería `xlsx` falla con "Cannot
+  access file" al leer un archivo de este tamaño). De paso se eliminó la
+  columna `codigo` (duplicada de `codigo_igss` — el Excel nuevo ya no tiene
+  esa ambigüedad de dos campos de código real; `codigoPprLookupMap`/
+  `codigoLookupMap`/`getPprsPorItems` en `renglon-utils.ts` ya no buscan por
+  ambos campos, solo por `codigo_igss`). La leyenda "Código PpR: ..." del
+  A-01 SIAF (`codigoPprLookupMap`) ahora lee directamente
+  `baseDatosCentral.codigo_ppr` — antes leía la columna "Código" como parche
+  porque el `codigo_ppr` real venía mal. **Efecto en datos ya existentes**:
+  los SIAF/Órdenes/Consolidaciones creados ANTES de esta reimportación
+  guardaron su `codigo_igss` bajo el significado viejo — no cruzan
+  automáticamente contra el catálogo nuevo (verificado: de 12 códigos reales
+  distintos en `siaf_compras_items`, solo 1 coincidió). No es un bug — el
+  cruce funciona bien hacia adelante, para cualquier insumo elegido después
+  de la reimportación. Esta leyenda **no** recorta el rango — el cliente
+  pidió el número completo tal como está guardado.
 - **Muchos códigos IGSS de Base de Datos Central vienen como un rango**
   (`"128843 - 135227"`) — corregirlo registro por registro no es viable
   (~207 mil filas). La impresión del A-01 SIAF (`codigoParaImprimir` en
@@ -277,8 +290,8 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   y no se puede desambiguar solo por código.
 - **El selector de PPR/presentación (Órdenes y SIAF-04) SÍ existe** — antes
   de generar la Orden de Compra o el SIAF-04, si un insumo tiene varias
-  presentaciones en Base de Datos Central (mismo `codigo`/`codigo_igss`,
-  distinto `codigo_ppr`), un `<select>` en el modal ("PPR / Presentación por
+  presentaciones en Base de Datos Central (mismo `codigo_igss`, distinto
+  `codigo_ppr`), un `<select>` en el modal ("PPR / Presentación por
   insumo") obliga a elegir una (`getPprsPorItems`/`getPprsParaRenglones` en
   `renglon-utils.ts`, duplicado como `GenerarOrdenModal`/`GenerarSiafModal`
   en `OrdenesClient.tsx`/`Siaf04Client.tsx`). Lo que SÍ estaba roto (ya

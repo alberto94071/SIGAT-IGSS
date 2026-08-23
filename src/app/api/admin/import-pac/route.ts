@@ -50,13 +50,13 @@ export async function POST(req: NextRequest) {
     .from(baseDatosCentral);
   const existingSet = new Set(existingPpr.map((r) => r.ppr));
 
-  const newBdc = pacData.bdc.filter((r) => !existingSet.has(r.ppr));
+  const newBdc = pacData.bdc.filter((r) => !existingSet.has(String(r.ppr)));
   let bdcInserted = 0;
   for (let i = 0; i < newBdc.length; i += BATCH) {
     const chunk = newBdc.slice(i, i + BATCH);
     await db.insert(baseDatosCentral).values(
       chunk.map((r) => ({
-        codigo_ppr:      r.ppr,
+        codigo_ppr:      String(r.ppr),
         codigo_rango:    (r as any).rango || null,
         nombre:          r.nombre,
         caracteristicas: r.caract || null,

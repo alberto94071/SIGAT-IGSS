@@ -4,14 +4,13 @@ import { eq, and, or, inArray, ilike, isNotNull } from "drizzle-orm";
 
 // ─── PPR (presentación) por código base ──────────────────────────────────────
 // Un mismo insumo puede tener varias presentaciones/PPR registradas en Base de
-// Datos Central (galón, litro, unidad...), cada una con su propio codigo_ppr.
-// El campo que las agrupa no es siempre el mismo: para algunos insumos (ej.
-// combustible) el "código" (base_datos_central.codigo) es el que se repite
-// entre presentaciones; para otros (ej. medicamentos, cargados antes de que
-// existiera este selector) lo que ya venía guardado como codigo_igss en
-// catalogo_compras/siaf_compras_items es en realidad el valor compartido de
-// base_datos_central.codigo_igss, no de .codigo. Por eso se busca por ambos
-// campos a la vez.
+// Datos Central (galón, litro, unidad...), cada una con su propio codigo_ppr
+// (formato "número - número", único por fila — reimportado 2026-08-23 desde
+// el Excel limpio del cliente; antes de eso codigo_ppr traía un número
+// pequeño mal mapeado, ver CLAUDE.md). Base de Datos Central ya no tiene un
+// campo "código" separado de codigo_igss (se eliminó esa duplicación en la
+// misma reimportación) — codigo_igss es el único campo de código real, y
+// existe solo para el ~15% de las filas que sí lo tienen.
 //
 // "S/C" (sin código) es un caso aparte: NO es un código compartido de un
 // mismo insumo con varias presentaciones — es un marcador que usan muchos
@@ -22,7 +21,7 @@ import { eq, and, or, inArray, ilike, isNotNull } from "drizzle-orm";
 // distingue uno de otro es el nombre + el renglón (base_datos_central no
 // tiene columna de sub-producto).
 export type PprOpcion = {
-  id: number; codigo: string | null; codigo_igss: string | null; codigo_ppr: number | null;
+  id: number; codigo: string | null; codigo_igss: string | null; codigo_ppr: string | null;
   nombre: string; descripcion_igss: string | null;
   caracteristicas: string | null; presentacion: string | null; unidad_medida: string | null;
 };
@@ -45,7 +44,7 @@ export function clavePprDeItem(r: ItemParaPpr): string {
 
 const SELECT_COLUMNAS = {
   id:               baseDatosCentral.id,
-  codigo:           baseDatosCentral.codigo,
+  codigo:           baseDatosCentral.codigo_igss,
   codigo_igss:      baseDatosCentral.codigo_igss,
   codigo_ppr:       baseDatosCentral.codigo_ppr,
   nombre:           baseDatosCentral.nombre,
@@ -67,10 +66,10 @@ export async function getPprsPorItems(items: ItemParaPpr[]): Promise<Record<stri
   const codigosReales = [...new Set(conCodigo.map(i => i.codigo_igss!))];
   if (codigosReales.length > 0) {
     const rows = await db.select(SELECT_COLUMNAS).from(baseDatosCentral)
-      .where(or(inArray(baseDatosCentral.codigo, codigosReales), inArray(baseDatosCentral.codigo_igss, codigosReales)))
+      .where(inArray(baseDatosCentral.codigo_igss, codigosReales))
       .orderBy(baseDatosCentral.codigo_ppr);
     for (const codigo of codigosReales) {
-      const opciones = rows.filter(r => r.codigo === codigo || r.codigo_igss === codigo);
+      const opciones = rows.filter(r => r.codigo_igss === codigo);
       if (opciones.length > 0) out[codigo] = opciones;
     }
   }
@@ -175,19 +174,20 @@ export async function unidadMedidaLookupMap(codigos?: string[]): Promise<Map<str
   return map;
 }
 
-// Mismo cruce que unidadMedidaLookupMap, pero para "codigo" (columna aparte de
-// Base de Datos Central, distinta de código IGSS y de código PPR) — es la que
-// se imprime en la columna "CODIGO" del DAB-60.
+// Mismo cruce que unidadMedidaLookupMap, para "código" (el que se imprime en
+// la columna "CODIGO" del DAB-60) — desde la reimportación 2026-08-23, Base
+// de Datos Central ya no tiene una columna "codigo" separada de codigo_igss,
+// así que este mapa devuelve codigo_igss (se mantiene como función propia
+// porque el llamador la usa con esa forma/nombre).
 export async function codigoLookupMap(codigos?: string[]): Promise<Map<string, string | null>> {
   if (codigos && codigos.length === 0) return new Map();
   const rows = await db.select({
     codigo_igss: baseDatosCentral.codigo_igss, nombre: baseDatosCentral.nombre,
-    codigo: baseDatosCentral.codigo,
   }).from(baseDatosCentral).where(codigos
     ? and(isNotNull(baseDatosCentral.codigo_igss), inArray(baseDatosCentral.codigo_igss, codigos))
     : isNotNull(baseDatosCentral.codigo_igss));
   const map = new Map<string, string | null>();
-  for (const r of rows) if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.codigo);
+  for (const r of rows) if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.codigo_igss);
   return map;
 }
 
@@ -196,19 +196,20 @@ export async function codigoLookupMap(codigos?: string[]): Promise<Map<string, s
 // 182, ver textoCodigosPpr en ImprimirClient.tsx) cuando el ítem todavía no
 // tiene codigo_ppr propio (ese campo de siaf_compras_items solo se llena en
 // Consolidación, vía guardarPprSeleccion — un SIAF recién creado no pasó por
-// ahí todavía). El valor que se imprime junto a esa leyenda es el de la
-// columna "Código" de Base de Datos Central (no el de su columna interna
-// "codigo_ppr", que es un campo distinto) — confirmado por el cliente.
+// ahí todavía). Devuelve baseDatosCentral.codigo_ppr directamente — desde la
+// reimportación 2026-08-23 ese campo SÍ es el código PPR correcto (formato
+// "número - número", confirmado por el cliente); antes de eso traía un valor
+// mal mapeado y por eso esta función usaba la columna "Código" como parche.
 export async function codigoPprLookupMap(codigos?: string[]): Promise<Map<string, string | null>> {
   if (codigos && codigos.length === 0) return new Map();
   const rows = await db.select({
     codigo_igss: baseDatosCentral.codigo_igss, nombre: baseDatosCentral.nombre,
-    codigo: baseDatosCentral.codigo,
+    codigo_ppr: baseDatosCentral.codigo_ppr,
   }).from(baseDatosCentral).where(codigos
     ? and(isNotNull(baseDatosCentral.codigo_igss), inArray(baseDatosCentral.codigo_igss, codigos))
     : isNotNull(baseDatosCentral.codigo_igss));
   const map = new Map<string, string | null>();
-  for (const r of rows) if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.codigo ?? null);
+  for (const r of rows) if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.codigo_ppr ?? null);
   return map;
 }
 
