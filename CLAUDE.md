@@ -252,9 +252,15 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
 - **Muchos códigos IGSS de Base de Datos Central vienen como un rango**
   (`"128843 - 135227"`) — corregirlo registro por registro no es viable
   (~207 mil filas). La impresión del A-01 SIAF (`codigoParaImprimir` en
-  `ImprimirClient.tsx`) recorta al número de la izquierda del guión solo
-  cuando ambos lados son numéricos — no toca el dato guardado. Códigos de
-  servicio tipo `"SC-990510"` (izquierda no numérica) se imprimen completos.
+  `ImprimirClient.tsx`) imprime **"SC"** (Sin Código) cuando el código
+  guardado es un rango puramente numérico — no toca el dato guardado, es
+  solo el texto impreso. (Antes se imprimía el número de la izquierda del
+  rango; el cliente confirmó que eso podía leerse como si fuera el código
+  real de ese insumo puntual, cuando el rango es solo un placeholder de
+  importación masiva sin código real asignado.) Dos casos NO entran en esta
+  regla: códigos de servicio tipo `"SC-990510"` (ya vienen con el prefijo
+  SC) y códigos que son solo números sin guion (código real de un insumo
+  puntual) — ambos se imprimen tal cual están guardados.
 - **El Catálogo (PAC) guarda dos descripciones distintas de Base de Datos
   Central, no una** (confirmado por el cliente 2026-08-22): `nombre`
   (Código + Nombre) alimenta Órdenes, SIAF-04 y DAB-60; `descripcion_igss`
