@@ -30,6 +30,35 @@ const EMPTY = {
   renglon: "" 
 };
 
+// Reemplaza el atributo `title` nativo (tooltip del navegador) para texto
+// truncado — el tooltip nativo se posiciona pegado al cursor y no respeta el
+// borde de la pantalla, así que en columnas cerca del borde derecho (ej.
+// "Descripción IGSS") el texto se cortaba sin que el usuario pudiera leerlo
+// completo. Este panel sí lo controlamos: se ancla a la derecha de la celda
+// (nunca crece hacia la derecha, que es donde se salía de pantalla) y el
+// texto hace salto de línea normal dentro de un ancho máximo.
+function CeldaTruncada({ texto, className, lineas = 1 }: { texto: string; className?: string; lineas?: number }) {
+  const [hover, setHover] = useState(false);
+  if (!texto) return <span className="text-gray-300">—</span>;
+  return (
+    <div className="relative" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+      <span
+        className={`block ${className ?? ""}`}
+        style={lineas > 1
+          ? { display: "-webkit-box", WebkitLineClamp: lineas, WebkitBoxOrient: "vertical", overflow: "hidden" }
+          : { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+      >
+        {texto}
+      </span>
+      {hover && (
+        <div className="absolute z-50 top-full right-0 mt-1 w-max max-w-[min(90vw,420px)] rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-lg whitespace-normal break-words">
+          {texto}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface BaseDatosClientProps {
   registros: Insumo[];
   totalCount: number;
@@ -247,8 +276,8 @@ export default function BaseDatosClient({
                   <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">
                     {r.codigo_igss ?? <span className="text-gray-300">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-600 max-w-[250px] truncate" title={r.descripcion_igss ?? ""}>
-                    {r.descripcion_igss ?? <span className="text-gray-300">—</span>}
+                  <td className="px-4 py-3 text-xs text-gray-600 max-w-[250px]">
+                    <CeldaTruncada texto={r.descripcion_igss ?? ""} />
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">
                     {r.codigo ?? <span className="text-gray-300">—</span>}
@@ -257,13 +286,13 @@ export default function BaseDatosClient({
                     {r.codigo_ppr ?? <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-4 py-3 max-w-[280px]">
-                    <p className="font-medium text-gray-900 leading-tight truncate-2-lines" title={r.nombre}>{r.nombre}</p>
+                    <CeldaTruncada texto={r.nombre} className="font-medium text-gray-900 leading-tight" lineas={2} />
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-400 max-w-[250px] truncate" title={r.caracteristicas ?? ""}>
-                    {r.caracteristicas ?? <span className="text-gray-300">—</span>}
+                  <td className="px-4 py-3 text-xs text-gray-400 max-w-[250px]">
+                    <CeldaTruncada texto={r.caracteristicas ?? ""} />
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-500 max-w-[150px] truncate" title={r.presentacion ?? ""}>
-                    {r.presentacion ?? <span className="text-gray-300">—</span>}
+                  <td className="px-4 py-3 text-xs text-gray-500 max-w-[150px]">
+                    <CeldaTruncada texto={r.presentacion ?? ""} />
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
                     {r.unidad_medida ?? <span className="text-gray-300">—</span>}

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Printer, ChevronDown, X, ArrowLeft } from "lucide-react";
 
@@ -73,44 +73,90 @@ const SUBPROD_MIN_ROWS = 6;
 const TOTAL_H = 24;
 const ROW_H = 24;
 
+// Cada ítem ocupa 1 o más "franjas" de ROW_H — más de una cuando su
+// descripción es tan larga que necesita varias líneas (ver medición en el
+// componente principal). filaSlots viene de ahí, indexado igual que items.
+type ItemConSlots = { item: Item; slots: number };
 type PageInfo = {
-  items: Item[];
+  items: ItemConSlots[];
   vienen: number | null;  // cantidad que "vienen" de la hoja anterior (null si es la primera)
   van: number | null;     // cantidad que "van" a la hoja siguiente (null si es la última)
   totalCantidad: number;  // total acumulado hasta el final de esta hoja
 };
 
-// Reparte los ítems en hojas, reservando una fila para "Vienen..." al inicio
-// de cada hoja que no sea la primera, y una fila para "Van..." al final de
-// cada hoja que no sea la última.
-function paginarItems(items: Item[], capacidad: number): PageInfo[] {
-  if (items.length <= capacidad) {
+// Reparte los ítems en hojas por FRANJAS ocupadas (no por cantidad de
+// ítems) — un ítem con descripción larga puede ocupar 2 o más franjas de
+// ROW_H. Reserva una franja para "Vienen..." al inicio de cada hoja que no
+// sea la primera, y una franja para "Van..." al final de cada hoja que no
+// sea la última.
+function paginarItems(items: Item[], filaSlots: number[], capacidad: number): PageInfo[] {
+  const conSlots: ItemConSlots[] = items.map((item, i) => ({ item, slots: filaSlots[i] ?? 1 }));
+  const totalSlots = conSlots.reduce((s, x) => s + x.slots, 0);
+  if (totalSlots <= capacidad) {
     const total = items.reduce((s, i) => s + i.cantidad_solicitada, 0);
-    return [{ items, vienen: null, van: null, totalCantidad: total }];
+    return [{ items: conSlots, vienen: null, van: null, totalCantidad: total }];
   }
   const pages: PageInfo[] = [];
   let idx = 0;
   let cumulative = 0;
   let isFirst = true;
-  while (idx < items.length) {
-    const remaining = items.length - idx;
+  while (idx < conSlots.length) {
     const capSinVan = capacidad - (isFirst ? 0 : 1);
-    let pageItems: Item[];
-    if (remaining <= capSinVan) {
-      pageItems = items.slice(idx, idx + remaining);
-      idx += remaining;
-    } else {
-      const capConVan = capSinVan - 1;
-      pageItems = items.slice(idx, idx + capConVan);
-      idx += capConVan;
+    let usedSlots = 0;
+    let endIdx = idx;
+    while (endIdx < conSlots.length && usedSlots + conSlots[endIdx].slots <= capSinVan) {
+      usedSlots += conSlots[endIdx].slots;
+      endIdx++;
     }
+    // Un ítem cuya descripción es tan larga que no cabe ni solo en una hoja
+    // llena igual se imprime (ocupando la hoja completa) — para no quedar en
+    // un loop infinito sin avanzar.
+    if (endIdx === idx) { endIdx = idx + 1; usedSlots = conSlots[idx].slots; }
+    const hayMasDespues = endIdx < conSlots.length;
+    if (hayMasDespues) {
+      // Si falta espacio para la franja de "Van...", se devuelve el último
+      // ítem agregado a la siguiente hoja (excepto si es el único de esta hoja).
+      while (endIdx > idx + 1 && usedSlots + 1 > capSinVan) {
+        endIdx--;
+        usedSlots -= conSlots[endIdx].slots;
+      }
+    }
+    const pageItems = conSlots.slice(idx, endIdx);
     const vienenValue = isFirst ? null : cumulative;
-    cumulative += pageItems.reduce((s, i) => s + i.cantidad_solicitada, 0);
-    const isLast = idx >= items.length;
+    cumulative += pageItems.reduce((s, x) => s + x.item.cantidad_solicitada, 0);
+    idx = endIdx;
+    const isLast = idx >= conSlots.length;
     pages.push({ items: pageItems, vienen: vienenValue, van: isLast ? null : cumulative, totalCantidad: cumulative });
     isFirst = false;
   }
   return pages;
+}
+
+// Contenido de una fila de ítem (Código / Descripción [+ Subproducto] /
+// Cantidad) — compartido entre la pasada de medición (oculta, altura
+// natural) y el render real (altura fija en franjas de ROW_H), para que lo
+// que se mide sea EXACTAMENTE lo que se imprime.
+function FilaItemContenido({ item, mostrarSubproducto }: { item: Item; mostrarSubproducto: boolean }) {
+  return (
+    <>
+      <div style={{ width: W_COD, textAlign: "center", flexShrink: 0, fontFamily: "monospace", fontSize: codigoFontSize(codigoParaImprimir(String(item.codigo_igss ?? ""))), whiteSpace: "nowrap", overflow: "hidden" }}>
+        {codigoParaImprimir(String(item.codigo_igss ?? ""))}
+      </div>
+      <div style={{ flex: 1, padding: "3px 8px", display: "flex", justifyContent: mostrarSubproducto ? "space-between" : "flex-start", alignItems: "center" }}>
+        <span style={{ textTransform: "uppercase", fontSize: "8pt", lineHeight: 1.2, width: mostrarSubproducto ? undefined : "100%" }}>
+          {item.descripcion_igss || item.nombre}
+        </span>
+        {mostrarSubproducto && (
+          <span style={{ fontSize: "7.5pt", color: "#333", whiteSpace: "nowrap", marginLeft: "8px", flexShrink: 0 }}>
+            {item.subproducto}
+          </span>
+        )}
+      </div>
+      <div style={{ width: W_CANT, textAlign: "center", flexShrink: 0, fontSize: "9pt" }}>
+        {item.cantidad_solicitada.toLocaleString("es-GT")}
+      </div>
+    </>
+  );
 }
 
 // Cuando la hoja no tiene ningún insumo del renglón 182 (mostrarSubproducto
@@ -130,6 +176,26 @@ export default function ImprimirClient({
   const [firmantes, setFirmantes] = useState<Firmante[]>(initFirmantes);
   const [showSelector, setShowSelector] = useState(initFirmantes.length === 0);
   const [slot, setSlot] = useState<0 | 1>(0);
+
+  // Descripciones largas necesitan más de una franja de ROW_H para no
+  // quedar recortadas a la mitad (antes la fila tenía altura fija de 24px
+  // con overflow:hidden y se comía el texto que no cabía en una sola línea).
+  // Antes de saber cuántas hojas/filas hacen falta, se mide en una pasada
+  // oculta cuántas franjas ocupa cada ítem con su descripción real, usando
+  // exactamente el mismo layout que la fila visible (ver FilaItemContenido)
+  // para que lo medido sea lo que se imprime.
+  const [rowSlots, setRowSlots] = useState<number[] | null>(null);
+  const medirRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  useLayoutEffect(() => {
+    if (rowSlots !== null) return;
+    const slots = items.map((_, i) => {
+      const h = medirRefs.current[i]?.getBoundingClientRect().height ?? ROW_H;
+      return Math.max(1, Math.ceil(h / ROW_H));
+    });
+    setRowSlots(slots);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
 
   function pickFirmante(idx: 0 | 1, f: Firmante) {
     setFirmantes(p => { const n = [...p]; n[idx] = f; return n; });
@@ -153,7 +219,7 @@ export default function ImprimirClient({
   const rowsArea = H_TABLE - HEADER_H - FOOTER_H;
   const maxRows = Math.floor(rowsArea / ROW_H);
 
-  const pages = paginarItems(items, maxRows);
+  const pages = rowSlots !== null ? paginarItems(items, rowSlots, maxRows) : [];
 
   return (
     <>
@@ -209,13 +275,33 @@ export default function ImprimirClient({
         </div>
       )}
 
+      {/* Pasada de medición oculta: mismo layout que la fila real (mismo ancho
+          de columna, mismo tamaño de letra), pero con altura natural en vez
+          de fija — para saber cuántas franjas de ROW_H necesita cada ítem
+          antes de repartirlos en hojas. No se pinta (visibility:hidden +
+          height:0 en el contenedor), pero SÍ participa del layout, así que
+          getBoundingClientRect() en cada fila da su alto real. */}
+      {rowSlots === null && (
+        <div aria-hidden style={{ position: "absolute", top: 0, left: 0, visibility: "hidden", height: 0, overflow: "hidden" }}>
+          <div className="a4-sheet" style={{ boxShadow: "none", margin: 0 }}>
+            <div style={{ border: B, display: "flex", flexDirection: "column" }}>
+              {items.map((item, i) => (
+                <div key={item.id} ref={el => { medirRefs.current[i] = el; }} style={{ display: "flex", alignItems: "center", fontFamily: FONT, color: C }}>
+                  <FilaItemContenido item={item} mostrarSubproducto={mostrarSubproducto} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ══════════════ HOJAS A4 (una por página) ══════════════ */}
       <div id="print-wrapper">
         {pages.map((page, i) => {
           const pageNum = i + 1;
           const totalPages = pages.length;
           const esUltima = pageNum === totalPages;
-          const usedRows = page.items.length + (page.vienen !== null ? 1 : 0) + (page.van !== null ? 1 : 0);
+          const usedRows = page.items.reduce((s, x) => s + x.slots, 0) + (page.vienen !== null ? 1 : 0) + (page.van !== null ? 1 : 0);
           const emptyRows = Math.max(0, maxRows - usedRows);
           const subprodEmptyRows = esUltima ? subprodRows - resumenSubproductos.length : subprodRows;
 
@@ -318,22 +404,9 @@ export default function ImprimirClient({
                       </div>
                     )}
 
-                    {page.items.map(item => (
-                      <div key={item.id} style={{ display: "flex", height: ROW_H, alignItems: "center", fontFamily: FONT, color: C }}>
-                        <div style={{ width: W_COD, textAlign: "center", flexShrink: 0, fontFamily: "monospace", fontSize: codigoFontSize(codigoParaImprimir(String(item.codigo_igss ?? ""))), whiteSpace: "nowrap", overflow: "hidden" }}>
-                          {codigoParaImprimir(String(item.codigo_igss ?? ""))}
-                        </div>
-                        <div style={{ flex: 1, padding: "0 8px", display: "flex", justifyContent: mostrarSubproducto ? "space-between" : "flex-start", alignItems: "center", overflow: "hidden" }}>
-                          <span style={{ textTransform: "uppercase", fontSize: "8pt", lineHeight: 1.2, width: mostrarSubproducto ? undefined : "100%" }}>{item.descripcion_igss || item.nombre}</span>
-                          {mostrarSubproducto && (
-                            <span style={{ fontSize: "7.5pt", color: "#333", whiteSpace: "nowrap", marginLeft: "8px", flexShrink: 0 }}>
-                              {item.subproducto}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ width: W_CANT, textAlign: "center", flexShrink: 0, fontSize: "9pt" }}>
-                          {item.cantidad_solicitada.toLocaleString("es-GT")}
-                        </div>
+                    {page.items.map(({ item, slots }) => (
+                      <div key={item.id} style={{ display: "flex", height: ROW_H * slots, alignItems: "center", fontFamily: FONT, color: C }}>
+                        <FilaItemContenido item={item} mostrarSubproducto={mostrarSubproducto} />
                       </div>
                     ))}
 
@@ -367,7 +440,7 @@ export default function ImprimirClient({
                   <span style={{ flex: 1, padding: "0 8px", fontSize: "6.5pt", color: "#555", fontFamily: FONT }}>
                     {mostrarSubproducto
                       ? "Los productos de los listados institucionales, se encuentran homologados con el catálogo general de insumos del SIGES, Presupuesto por Resultados (PpR)"
-                      : textoCodigosPpr(page.items)}
+                      : textoCodigosPpr(page.items.map(x => x.item))}
                   </span>
                   <div style={{ width: W_CANT, flexShrink: 0 }} />
                 </div>
