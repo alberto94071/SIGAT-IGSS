@@ -3,7 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { siafCompras, siafComprasItems, catalogoFirmantes, configuracion } from "@/lib/schema";
 import { eq, asc, inArray } from "drizzle-orm";
-import { renglonLookupMap, codigoPprLookupMap, normalizaNombre } from "@/lib/adjudicacion/renglon-utils";
+import { renglonLookupMap, codigoPprLookupMap, codigoPprSinCodigoLookupMap, normalizaNombre, SIN_CODIGO } from "@/lib/adjudicacion/renglon-utils";
 import ImprimirClient from "./ImprimirClient";
 
 interface Props { params: Promise<{ id: string }>; searchParams: Promise<{ firmantes?: string }> }
@@ -38,14 +38,24 @@ export default async function ImprimirPage({ params, searchParams }: Props) {
 
   // Respaldo del código PPR para SIAFs que todavía no pasaron por la
   // selección de Consolidación (ver comentario en codigoPprLookupMap).
-  const codigosItems = [...new Set(items.map(i => i.codigo_igss).filter((c): c is string => c != null))];
+  const codigosItems = [...new Set(
+    items.map(i => i.codigo_igss).filter((c): c is string => c != null && c !== SIN_CODIGO)
+  )];
   const pprMap = await codigoPprLookupMap(codigosItems);
-  const itemsConPpr = items.map(i => ({
-    ...i,
-    codigo_ppr: i.codigo_ppr ?? (i.codigo_igss
-      ? pprMap.get(`${i.codigo_igss}::${normalizaNombre(i.nombre)}`) ?? pprMap.get(i.codigo_igss) ?? null
-      : null),
-  }));
+  // Los ítems "S/C" (sin código real) no tienen codigo_igss por el que
+  // buscar — se resuelven aparte, por nombre (ver codigoPprSinCodigoLookupMap).
+  const pprSinCodigoMap = await codigoPprSinCodigoLookupMap(
+    items.filter(i => i.codigo_ppr == null && (i.codigo_igss == null || i.codigo_igss === SIN_CODIGO))
+      .map(i => ({ nombre: i.nombre, descripcion_igss: i.descripcion_igss }))
+  );
+  const itemsConPpr = items.map(i => {
+    if (i.codigo_ppr) return i;
+    if (i.codigo_igss && i.codigo_igss !== SIN_CODIGO) {
+      return { ...i, codigo_ppr: pprMap.get(`${i.codigo_igss}::${normalizaNombre(i.nombre)}`) ?? pprMap.get(i.codigo_igss) ?? null };
+    }
+    const clave = `${i.nombre.trim()}::${(i.descripcion_igss ?? "").trim()}`;
+    return { ...i, codigo_ppr: pprSinCodigoMap.get(clave) ?? null };
+  });
 
   // Firmantes seleccionados vienen por query param: "1,3"
   const ids = firmantesParam ? firmantesParam.split(",").map(Number).filter(Boolean) : [];
