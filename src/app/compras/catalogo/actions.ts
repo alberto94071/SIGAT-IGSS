@@ -21,7 +21,8 @@ async function checkAuthEdit() {
 }
 
 export type InsumoCentralAgrupado = {
-  codigo: string; codigoReal: boolean; nombre: string; descripcion_igss: string | null; renglon: number | null;
+  codigo: string; codigoReal: boolean; nombre: string; descripcion_igss: string | null;
+  caracteristicas: string | null; renglon: number | null;
 };
 
 // Busca en la Base de Datos Central, agrupado por código base (sin distinguir
@@ -58,11 +59,12 @@ export async function buscarInsumosCentral(q: string): Promise<InsumoCentralAgru
     // si no lo tiene) antes de aplicar el límite, así ningún grupo puede
     // desplazar a otro.
     const rows = await db.execute<{
-      codigo_igss: string | null; nombre: string; descripcion_igss: string | null; renglon: number | null;
+      codigo_igss: string | null; nombre: string; descripcion_igss: string | null;
+      caracteristicas: string | null; renglon: number | null;
     }>(sql`
       SELECT * FROM (
         SELECT DISTINCT ON (COALESCE(codigo_igss, lower(nombre)))
-          codigo_igss, nombre, descripcion_igss, renglon,
+          codigo_igss, nombre, descripcion_igss, caracteristicas, renglon,
           CASE
             WHEN codigo_igss = ${termino} OR codigo_ppr = ${termino} THEN 0
             WHEN nombre ILIKE ${prefijo} THEN 1
@@ -81,7 +83,8 @@ export async function buscarInsumosCentral(q: string): Promise<InsumoCentralAgru
     return rows.rows.map(r => ({
       codigo: r.codigo_igss ?? SIN_CODIGO,
       codigoReal: r.codigo_igss != null,
-      nombre: r.nombre, descripcion_igss: r.descripcion_igss, renglon: r.renglon,
+      nombre: r.nombre, descripcion_igss: r.descripcion_igss,
+      caracteristicas: r.caracteristicas, renglon: r.renglon,
     }));
   } catch {
     return [];

@@ -423,10 +423,16 @@ function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | null; onC
   // SIAF-04 y DAB-60; "Descripción IGSS" (Código IGSS + Descripción IGSS) es
   // aparte y alimenta específicamente el A-01 SIAF — confirmado por el
   // cliente 2026-08-22. Antes acá se usaba descripcion_igss como respaldo de
-  // nombre, mezclando los dos; ya no.
+  // nombre, mezclando los dos; ya no. Base de Datos Central solo trae
+  // "Descripción IGSS" propia para el ~15% con código real — para el resto
+  // (sin código, ej. "Destructora de papel") ese campo viene vacío, así que
+  // el respaldo se arma con nombre + características para no perder el
+  // detalle (capacidad, material, etc.) que el cliente necesita ver en el
+  // A-01 SIAF impreso (reportado 2026-08-24: solo salía "Destructora de
+  // papel", sin el resto de la ficha).
   function elegirInsumo(r: InsumoCentralAgrupado) {
     setNombre(r.nombre);
-    setDescripcionIgss(r.descripcion_igss || r.nombre);
+    setDescripcionIgss(r.descripcion_igss || (r.caracteristicas ? `${r.nombre}; ${r.caracteristicas}` : r.nombre));
     setCodigoIgss(r.codigo);
     setRenglon(r.renglon != null ? String(r.renglon) : "");
     setBuscando(false); setQuery(""); setResultados([]);
