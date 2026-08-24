@@ -278,6 +278,20 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   fix, los SIAF/Órdenes/Consolidaciones creados antes de la reimportación
   con código formato rango SÍ encuentran su presentación real en el
   selector — ya no hace falta re-capturarlos.
+- **`buscarInsumosCentral` (Catálogo/PAC → "Agregar insumo", `catalogo/
+  actions.ts`) excluía por completo el ~85% de Base de Datos Central que no
+  tiene `codigo_igss` real** (ej. "Mesa de conferencia", "Escritorio en L")
+  — el cliente reportó no poder agregar un insumo aunque aparecía en la
+  búsqueda de Base de Datos Central. Fix: ahora busca también por
+  `codigo_ppr` y ya no exige `codigo_igss` no nulo; para insumos sin código
+  real usa `codigo_ppr` como identificador al guardarlo en
+  `catalogo_compras.codigo_igss` (único por fila, sin riesgo de mezclar
+  insumos — mismo mecanismo que ya resuelve `getPprsPorItems` más arriba,
+  así que esos insumos ya funcionan también en el selector de PPR más
+  adelante). `validarCodigoCentral` acepta ambos campos.
+  `InsumoCentralAgrupado` ahora trae `codigoReal: boolean` para que la UI
+  (`CatalogoComprasClient.tsx`) muestre "PPR ..." en vez de "Código ..."
+  cuando no es un código IGSS real.
 - **Muchos códigos IGSS de Base de Datos Central vienen como un rango**
   (`"128843 - 135227"`) — corregirlo registro por registro no es viable
   (~207 mil filas). La impresión del A-01 SIAF (`codigoParaImprimir` en

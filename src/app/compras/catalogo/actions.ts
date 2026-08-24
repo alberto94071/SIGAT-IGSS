@@ -1,7 +1,7 @@
 "use server";
 import { db } from "@/lib/db";
 import { catalogoCompras, baseDatosCentral } from "@/lib/schema";
-import { eq, or, and, ilike, isNotNull } from "drizzle-orm";
+import { eq, or, ilike } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 
 async function checkAuth() {
@@ -20,7 +20,7 @@ async function checkAuthEdit() {
 }
 
 export type InsumoCentralAgrupado = {
-  codigo: string; nombre: string; descripcion_igss: string | null; renglon: number | null;
+  codigo: string; codigoReal: boolean; nombre: string; descripcion_igss: string | null; renglon: number | null;
 };
 
 // Busca en la Base de Datos Central, agrupado por código base (sin distinguir
@@ -28,37 +28,41 @@ export type InsumoCentralAgrupado = {
 // insumo compra, y la presentación se decide después, al generar la Orden de
 // Compra o el SIAF-04, cuando ya se sabe qué puede entregar el proveedor.
 //
-// El "código base" que agrupa es codigo_igss — solo ~15% de Base de Datos
-// Central lo tiene (el resto son insumos sin código real todavía).
+// El "código base" que agrupa es codigo_igss cuando existe — pero solo ~15%
+// de Base de Datos Central lo tiene. Para el resto (insumos sin código real,
+// ej. "Mesa de conferencia") se usa codigo_ppr en su lugar: es único por
+// fila, así que sirve igual de bien como identificador para el catálogo, y
+// getPprsPorItems/gruposRenglonDeConsolidacion (renglon-utils.ts) ya saben
+// resolverlo más adelante aunque quede guardado en el campo codigo_igss del
+// catálogo (mismo mecanismo que ya arregla los códigos legacy formato rango).
 export async function buscarInsumosCentral(q: string): Promise<InsumoCentralAgrupado[]> {
   if (!q || q.trim().length < 2) return [];
   try {
     const results = await db
       .select({
         codigo_igss:      baseDatosCentral.codigo_igss,
+        codigo_ppr:       baseDatosCentral.codigo_ppr,
         nombre:           baseDatosCentral.nombre,
         descripcion_igss: baseDatosCentral.descripcion_igss,
         renglon:          baseDatosCentral.renglon,
       })
       .from(baseDatosCentral)
       .where(
-        and(
-          isNotNull(baseDatosCentral.codigo_igss),
-          or(
-            ilike(baseDatosCentral.nombre, `%${q}%`),
-            ilike(baseDatosCentral.descripcion_igss, `%${q}%`),
-            ilike(baseDatosCentral.caracteristicas, `%${q}%`),
-            ilike(baseDatosCentral.codigo_igss, `%${q}%`),
-          ),
-        )
+        or(
+          ilike(baseDatosCentral.nombre, `%${q}%`),
+          ilike(baseDatosCentral.descripcion_igss, `%${q}%`),
+          ilike(baseDatosCentral.caracteristicas, `%${q}%`),
+          ilike(baseDatosCentral.codigo_igss, `%${q}%`),
+          ilike(baseDatosCentral.codigo_ppr, `%${q}%`),
+        ),
       )
       .limit(60);
 
     const porCodigo = new Map<string, InsumoCentralAgrupado>();
     for (const r of results) {
-      const codigo = r.codigo_igss;
+      const codigo = r.codigo_igss ?? r.codigo_ppr;
       if (!codigo || porCodigo.has(codigo)) continue;
-      porCodigo.set(codigo, { codigo, nombre: r.nombre, descripcion_igss: r.descripcion_igss, renglon: r.renglon });
+      porCodigo.set(codigo, { codigo, codigoReal: r.codigo_igss != null, nombre: r.nombre, descripcion_igss: r.descripcion_igss, renglon: r.renglon });
     }
     return Array.from(porCodigo.values()).slice(0, 10);
   } catch {
@@ -92,10 +96,12 @@ function toValues(data: InsumoComprasInput) {
 
 // El insumo debe existir en Base de Datos Central — si no está ahí, no existe
 // para efectos de compras. Se valida también aquí, no solo en la UI, por si
-// alguna vez se llama esta acción con un código inventado.
+// alguna vez se llama esta acción con un código inventado. Se acepta por
+// codigo_igss O codigo_ppr — buscarInsumosCentral (arriba) usa codigo_ppr
+// como identificador para insumos sin código real.
 async function validarCodigoCentral(codigo: string): Promise<string | null> {
   const [existe] = await db.select({ codigo_igss: baseDatosCentral.codigo_igss }).from(baseDatosCentral)
-    .where(eq(baseDatosCentral.codigo_igss, codigo)).limit(1);
+    .where(or(eq(baseDatosCentral.codigo_igss, codigo), eq(baseDatosCentral.codigo_ppr, codigo))).limit(1);
   return existe ? null : `El código "${codigo}" no existe en Base de Datos Central`;
 }
 
