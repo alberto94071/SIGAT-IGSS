@@ -495,7 +495,7 @@ function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | null; onC
                       <button key={r.codigo} type="button" onClick={() => elegirInsumo(r)}
                         className="w-full text-left px-3 py-2 hover:bg-brand-50 transition-colors">
                         <p className="text-sm text-gray-900">{r.descripcion_igss || r.nombre}</p>
-                        <p className="text-xs text-gray-400 font-mono">Código {r.codigo}{r.renglon != null ? ` · Renglón ${r.renglon}` : ""}</p>
+                        <p className="text-xs text-gray-400 font-mono">{r.codigoReal ? "Código" : "PPR"} {r.codigo}{r.renglon != null ? ` · Renglón ${r.renglon}` : ""}</p>
                       </button>
                     ))}
                   </div>
