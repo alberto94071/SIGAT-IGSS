@@ -28,7 +28,7 @@ export type PprOpcion = {
 
 export type ItemParaPpr = { codigo_igss: string | null; nombre: string; renglon: number | null };
 
-const SIN_CODIGO = "S/C";
+export const SIN_CODIGO = "S/C";
 
 function tieneCodigoReal(codigoIgss: string | null): boolean {
   return !!codigoIgss && codigoIgss !== SIN_CODIGO;
