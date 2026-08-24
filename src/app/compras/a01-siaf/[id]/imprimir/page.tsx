@@ -42,7 +42,9 @@ export default async function ImprimirPage({ params, searchParams }: Props) {
   const pprMap = await codigoPprLookupMap(codigosItems);
   const itemsConPpr = items.map(i => ({
     ...i,
-    codigo_ppr: i.codigo_ppr ?? (i.codigo_igss ? pprMap.get(`${i.codigo_igss}::${normalizaNombre(i.nombre)}`) ?? null : null),
+    codigo_ppr: i.codigo_ppr ?? (i.codigo_igss
+      ? pprMap.get(`${i.codigo_igss}::${normalizaNombre(i.nombre)}`) ?? pprMap.get(i.codigo_igss) ?? null
+      : null),
   }));
 
   // Firmantes seleccionados vienen por query param: "1,3"
