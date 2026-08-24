@@ -306,6 +306,16 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   `InsumoCentralAgrupado` ahora trae `codigoReal: boolean` para que la UI
   (`CatalogoComprasClient.tsx`) muestre "Sin código real (S/C)" en vez de
   "Código ..." cuando no es un código IGSS real.
+- **Para insumos sin código real, "Descripción IGSS" (la que imprime el A-01
+  SIAF) se arma con nombre + características, no solo nombre** — Base de
+  Datos Central solo trae una "Descripción IGSS" propia para el ~15% con
+  código real (columna "Descripcion" del Excel); el resto la trae vacía.
+  `elegirInsumo` (`CatalogoComprasClient.tsx`) ahora hace ese respaldo con
+  `${nombre}; ${caracteristicas}` en vez de solo `nombre` — antes se perdía
+  todo el detalle (capacidad, material, tipo...) en el A-01 SIAF impreso
+  (reportado por el cliente 2026-08-24 con "Destructora de papel": imprimía
+  solo eso, sin el resto de la ficha). `InsumoCentralAgrupado`/
+  `buscarInsumosCentral` ahora también traen `caracteristicas`.
 - **Muchos códigos IGSS de Base de Datos Central vienen como un rango**
   (`"128843 - 135227"`) — corregirlo registro por registro no es viable
   (~207 mil filas). La impresión del A-01 SIAF (`codigoParaImprimir` en
