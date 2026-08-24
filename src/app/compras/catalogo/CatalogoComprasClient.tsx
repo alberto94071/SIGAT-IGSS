@@ -492,10 +492,10 @@ function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | null; onC
                 {resultados.length > 0 && (
                   <div className="border border-gray-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto divide-y divide-gray-100">
                     {resultados.map(r => (
-                      <button key={r.codigo} type="button" onClick={() => elegirInsumo(r)}
+                      <button key={`${r.codigo}::${r.nombre}`} type="button" onClick={() => elegirInsumo(r)}
                         className="w-full text-left px-3 py-2 hover:bg-brand-50 transition-colors">
                         <p className="text-sm text-gray-900">{r.descripcion_igss || r.nombre}</p>
-                        <p className="text-xs text-gray-400 font-mono">{r.codigoReal ? "Código" : "PPR"} {r.codigo}{r.renglon != null ? ` · Renglón ${r.renglon}` : ""}</p>
+                        <p className="text-xs text-gray-400 font-mono">{r.codigoReal ? `Código ${r.codigo}` : "Sin código real (S/C)"}{r.renglon != null ? ` · Renglón ${r.renglon}` : ""}</p>
                       </button>
                     ))}
                   </div>

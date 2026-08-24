@@ -280,18 +280,32 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   selector — ya no hace falta re-capturarlos.
 - **`buscarInsumosCentral` (Catálogo/PAC → "Agregar insumo", `catalogo/
   actions.ts`) excluía por completo el ~85% de Base de Datos Central que no
-  tiene `codigo_igss` real** (ej. "Mesa de conferencia", "Escritorio en L")
-  — el cliente reportó no poder agregar un insumo aunque aparecía en la
-  búsqueda de Base de Datos Central. Fix: ahora busca también por
-  `codigo_ppr` y ya no exige `codigo_igss` no nulo; para insumos sin código
-  real usa `codigo_ppr` como identificador al guardarlo en
-  `catalogo_compras.codigo_igss` (único por fila, sin riesgo de mezclar
-  insumos — mismo mecanismo que ya resuelve `getPprsPorItems` más arriba,
-  así que esos insumos ya funcionan también en el selector de PPR más
-  adelante). `validarCodigoCentral` acepta ambos campos.
+  tiene `codigo_igss` real** (ej. "Mesa de conferencia") — el cliente
+  reportó no poder agregar un insumo aunque aparecía en la búsqueda de Base
+  de Datos Central. Ya no exige `codigo_igss` no nulo, y agrupa por
+  `codigo_igss` cuando existe o por **nombre normalizado** cuando no —
+  **no** por `codigo_ppr` (primer intento, revertido): un insumo sin código
+  real puede tener docenas de presentaciones, cada una con su propio
+  `codigo_ppr` — agrupar por ese campo las mostraba como insumos distintos y
+  un solo producto (ej. "Servidor", 60+ presentaciones) llenaba las 10
+  opciones visibles sin dejar aparecer nada más. El valor que se guarda para
+  estos es literal **`"S/C"`** (el placeholder `SIN_CODIGO`, ahora exportado
+  desde `renglon-utils.ts`, que ya usa el resto del sistema) — la
+  presentación puntual se sigue eligiendo después, al generar la Orden o el
+  SIAF-04 (`getPprsPorItems` ya agrupa ese caso por nombre). `validarCodigoCentral`
+  acepta `"S/C"` sin buscarlo en Base de Datos Central (no corresponde a
+  ninguna fila puntual). El agrupado se hace con `DISTINCT ON` en SQL crudo
+  (`db.execute`), no después de traer un `LIMIT` de filas planas — con
+  `LIMIT` plano, un producto con muchas presentaciones podía acaparar el
+  límite completo antes de llegar a agrupar, dejando fuera productos
+  distintos que sí coincidían con la búsqueda (detectado 2026-08-24 con una
+  muestra de insumos sin código: la mayoría no aparecía buscando por su
+  propio nombre). También se agregó una `relevancia` (coincidencia exacta >
+  nombre que empieza con el término > el resto) para que, con más de 10
+  productos distintos coincidiendo, salgan primero los más específicos.
   `InsumoCentralAgrupado` ahora trae `codigoReal: boolean` para que la UI
-  (`CatalogoComprasClient.tsx`) muestre "PPR ..." en vez de "Código ..."
-  cuando no es un código IGSS real.
+  (`CatalogoComprasClient.tsx`) muestre "Sin código real (S/C)" en vez de
+  "Código ..." cuando no es un código IGSS real.
 - **Muchos códigos IGSS de Base de Datos Central vienen como un rango**
   (`"128843 - 135227"`) — corregirlo registro por registro no es viable
   (~207 mil filas). La impresión del A-01 SIAF (`codigoParaImprimir` en

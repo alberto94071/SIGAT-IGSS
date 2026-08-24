@@ -1,8 +1,9 @@
 "use server";
 import { db } from "@/lib/db";
 import { catalogoCompras, baseDatosCentral } from "@/lib/schema";
-import { eq, or, ilike } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
+import { SIN_CODIGO } from "@/lib/adjudicacion/renglon-utils";
 
 async function checkAuth() {
   const s = await auth();
@@ -30,41 +31,58 @@ export type InsumoCentralAgrupado = {
 //
 // El "código base" que agrupa es codigo_igss cuando existe — pero solo ~15%
 // de Base de Datos Central lo tiene. Para el resto (insumos sin código real,
-// ej. "Mesa de conferencia") se usa codigo_ppr en su lugar: es único por
-// fila, así que sirve igual de bien como identificador para el catálogo, y
-// getPprsPorItems/gruposRenglonDeConsolidacion (renglon-utils.ts) ya saben
-// resolverlo más adelante aunque quede guardado en el campo codigo_igss del
-// catálogo (mismo mecanismo que ya arregla los códigos legacy formato rango).
+// ej. "Mesa de conferencia", "Olla de presión") se agrupa por NOMBRE, no por
+// codigo_ppr: un mismo insumo sin código puede tener docenas de
+// presentaciones (tamaños, capacidades...), cada una con su propio
+// codigo_ppr — agrupar por codigo_ppr las mostraba como si fueran insumos
+// distintos y llenaba las 10 opciones visibles con variantes del mismo
+// producto (detectado 2026-08-24: "Olla de presión" con 25+ presentaciones
+// desplazaba cualquier otro resultado). El valor que se guarda para estos es
+// literal "S/C" — el mismo placeholder que ya usa el resto del sistema
+// (`SIN_CODIGO` en renglon-utils.ts) para "sin código real"; la
+// presentación puntual se sigue eligiendo después, al generar la Orden o el
+// SIAF-04 (getPprsPorItems ya sabe agrupar ese caso por nombre).
 export async function buscarInsumosCentral(q: string): Promise<InsumoCentralAgrupado[]> {
   if (!q || q.trim().length < 2) return [];
   try {
-    const results = await db
-      .select({
-        codigo_igss:      baseDatosCentral.codigo_igss,
-        codigo_ppr:       baseDatosCentral.codigo_ppr,
-        nombre:           baseDatosCentral.nombre,
-        descripcion_igss: baseDatosCentral.descripcion_igss,
-        renglon:          baseDatosCentral.renglon,
-      })
-      .from(baseDatosCentral)
-      .where(
-        or(
-          ilike(baseDatosCentral.nombre, `%${q}%`),
-          ilike(baseDatosCentral.descripcion_igss, `%${q}%`),
-          ilike(baseDatosCentral.caracteristicas, `%${q}%`),
-          ilike(baseDatosCentral.codigo_igss, `%${q}%`),
-          ilike(baseDatosCentral.codigo_ppr, `%${q}%`),
-        ),
-      )
-      .limit(60);
+    const termino = q.trim();
+    const like = `%${termino}%`;
+    const prefijo = `${termino}%`;
+    // Agrupar EN SQL (DISTINCT ON), no después de traer un LIMIT de filas
+    // planas: un solo insumo sin código real puede tener docenas de
+    // presentaciones (ej. "Servidor" con 60+ filas) — con un LIMIT plano
+    // esas filas por sí solas llenaban el límite entero y ningún otro
+    // insumo (ej. "Servidor de almacenamiento en red") llegaba a aparecer,
+    // aunque existiera (detectado 2026-08-24). DISTINCT ON se queda con la
+    // fila más relevante de cada grupo (código real, o nombre normalizado
+    // si no lo tiene) antes de aplicar el límite, así ningún grupo puede
+    // desplazar a otro.
+    const rows = await db.execute<{
+      codigo_igss: string | null; nombre: string; descripcion_igss: string | null; renglon: number | null;
+    }>(sql`
+      SELECT * FROM (
+        SELECT DISTINCT ON (COALESCE(codigo_igss, lower(nombre)))
+          codigo_igss, nombre, descripcion_igss, renglon,
+          CASE
+            WHEN codigo_igss = ${termino} OR codigo_ppr = ${termino} THEN 0
+            WHEN nombre ILIKE ${prefijo} THEN 1
+            WHEN codigo_igss ILIKE ${prefijo} OR codigo_ppr ILIKE ${prefijo} THEN 2
+            ELSE 3
+          END AS relevancia
+        FROM base_datos_central
+        WHERE nombre ILIKE ${like} OR descripcion_igss ILIKE ${like} OR caracteristicas ILIKE ${like}
+           OR codigo_igss ILIKE ${like} OR codigo_ppr ILIKE ${like}
+        ORDER BY COALESCE(codigo_igss, lower(nombre)), relevancia, nombre
+      ) agrupado
+      ORDER BY relevancia, nombre
+      LIMIT 10
+    `);
 
-    const porCodigo = new Map<string, InsumoCentralAgrupado>();
-    for (const r of results) {
-      const codigo = r.codigo_igss ?? r.codigo_ppr;
-      if (!codigo || porCodigo.has(codigo)) continue;
-      porCodigo.set(codigo, { codigo, codigoReal: r.codigo_igss != null, nombre: r.nombre, descripcion_igss: r.descripcion_igss, renglon: r.renglon });
-    }
-    return Array.from(porCodigo.values()).slice(0, 10);
+    return rows.rows.map(r => ({
+      codigo: r.codigo_igss ?? SIN_CODIGO,
+      codigoReal: r.codigo_igss != null,
+      nombre: r.nombre, descripcion_igss: r.descripcion_igss, renglon: r.renglon,
+    }));
   } catch {
     return [];
   }
@@ -96,12 +114,14 @@ function toValues(data: InsumoComprasInput) {
 
 // El insumo debe existir en Base de Datos Central — si no está ahí, no existe
 // para efectos de compras. Se valida también aquí, no solo en la UI, por si
-// alguna vez se llama esta acción con un código inventado. Se acepta por
-// codigo_igss O codigo_ppr — buscarInsumosCentral (arriba) usa codigo_ppr
-// como identificador para insumos sin código real.
+// alguna vez se llama esta acción con un código inventado. "S/C" es un caso
+// aparte: no corresponde a ninguna fila puntual de Base de Datos Central (es
+// el placeholder para insumos sin código real, ver SIN_CODIGO en
+// renglon-utils.ts), así que siempre se acepta sin buscarlo ahí.
 async function validarCodigoCentral(codigo: string): Promise<string | null> {
+  if (codigo === SIN_CODIGO) return null;
   const [existe] = await db.select({ codigo_igss: baseDatosCentral.codigo_igss }).from(baseDatosCentral)
-    .where(or(eq(baseDatosCentral.codigo_igss, codigo), eq(baseDatosCentral.codigo_ppr, codigo))).limit(1);
+    .where(eq(baseDatosCentral.codigo_igss, codigo)).limit(1);
   return existe ? null : `El código "${codigo}" no existe en Base de Datos Central`;
 }
 
