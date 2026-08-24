@@ -65,11 +65,20 @@ export async function getPprsPorItems(items: ItemParaPpr[]): Promise<Record<stri
   const conCodigo = items.filter(i => tieneCodigoReal(i.codigo_igss));
   const codigosReales = [...new Set(conCodigo.map(i => i.codigo_igss!))];
   if (codigosReales.length > 0) {
+    // También se busca por codigo_ppr, no solo por codigo_igss: los
+    // catalogo_compras/siaf_compras_items creados ANTES de la reimportación
+    // de Base de Datos Central (2026-08-23) guardaron en su propio
+    // codigo_igss el valor "número - número" que en ESA época venía en la
+    // columna codigo_igss de la BDC vieja (un placeholder de importación) —
+    // ese mismo valor, confirmado contra el catálogo real, es exactamente
+    // el codigo_ppr de esa fila en la BDC nueva. Sin este fallback, esos
+    // insumos (ej. "Escritorio en L", código "108241 - 125834") no
+    // encuentran ninguna opción aunque sí exista una sola fila exacta.
     const rows = await db.select(SELECT_COLUMNAS).from(baseDatosCentral)
-      .where(inArray(baseDatosCentral.codigo_igss, codigosReales))
+      .where(or(inArray(baseDatosCentral.codigo_igss, codigosReales), inArray(baseDatosCentral.codigo_ppr, codigosReales)))
       .orderBy(baseDatosCentral.codigo_ppr);
     for (const codigo of codigosReales) {
-      const opciones = rows.filter(r => r.codigo_igss === codigo);
+      const opciones = rows.filter(r => r.codigo_igss === codigo || r.codigo_ppr === codigo);
       if (opciones.length > 0) out[codigo] = opciones;
     }
   }
@@ -161,16 +170,34 @@ export function normalizaNombre(s: string): string {
 // la tabla completa en cada impresión de DAB-60/A-04 o cada carga de listas
 // de consolidaciones ya no es viable; el llamador conoce de antemano qué
 // códigos necesita (los de los ítems que está resolviendo).
+// Trae, para una lista de códigos (valores que YA vienen guardados como
+// codigo_igss en catalogo_compras/siaf_compras_items), las filas de Base de
+// Datos Central que matchean — por codigo_igss real (`código::nombre`,
+// ambiguo por sí solo, requiere nombre porque un mismo código real puede
+// cubrir varios nombres distintos) O por codigo_ppr (sin ambigüedad posible,
+// es único en toda la tabla: ver comentario de getPprsPorItems arriba sobre
+// por qué un código guardado antes de la reimportación 2026-08-23 puede
+// coincidir con un codigo_ppr de hoy en vez de con un codigo_igss).
+async function filasPorCodigoIgssOPpr(codigos?: string[]) {
+  return db.select({
+    codigo_igss: baseDatosCentral.codigo_igss, codigo_ppr: baseDatosCentral.codigo_ppr,
+    nombre: baseDatosCentral.nombre, unidad_medida: baseDatosCentral.unidad_medida,
+  }).from(baseDatosCentral).where(codigos
+    ? or(
+        and(isNotNull(baseDatosCentral.codigo_igss), inArray(baseDatosCentral.codigo_igss, codigos)),
+        inArray(baseDatosCentral.codigo_ppr, codigos),
+      )
+    : isNotNull(baseDatosCentral.codigo_igss));
+}
+
 export async function unidadMedidaLookupMap(codigos?: string[]): Promise<Map<string, string | null>> {
   if (codigos && codigos.length === 0) return new Map();
-  const rows = await db.select({
-    codigo_igss: baseDatosCentral.codigo_igss, nombre: baseDatosCentral.nombre,
-    unidad_medida: baseDatosCentral.unidad_medida,
-  }).from(baseDatosCentral).where(codigos
-    ? and(isNotNull(baseDatosCentral.codigo_igss), inArray(baseDatosCentral.codigo_igss, codigos))
-    : isNotNull(baseDatosCentral.codigo_igss));
+  const rows = await filasPorCodigoIgssOPpr(codigos);
   const map = new Map<string, string | null>();
-  for (const r of rows) if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.unidad_medida);
+  for (const r of rows) {
+    if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.unidad_medida);
+    if (r.codigo_ppr && codigos?.includes(r.codigo_ppr)) map.set(r.codigo_ppr, r.unidad_medida);
+  }
   return map;
 }
 
@@ -181,13 +208,12 @@ export async function unidadMedidaLookupMap(codigos?: string[]): Promise<Map<str
 // porque el llamador la usa con esa forma/nombre).
 export async function codigoLookupMap(codigos?: string[]): Promise<Map<string, string | null>> {
   if (codigos && codigos.length === 0) return new Map();
-  const rows = await db.select({
-    codigo_igss: baseDatosCentral.codigo_igss, nombre: baseDatosCentral.nombre,
-  }).from(baseDatosCentral).where(codigos
-    ? and(isNotNull(baseDatosCentral.codigo_igss), inArray(baseDatosCentral.codigo_igss, codigos))
-    : isNotNull(baseDatosCentral.codigo_igss));
+  const rows = await filasPorCodigoIgssOPpr(codigos);
   const map = new Map<string, string | null>();
-  for (const r of rows) if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.codigo_igss);
+  for (const r of rows) {
+    if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.codigo_igss);
+    if (r.codigo_ppr && codigos?.includes(r.codigo_ppr)) map.set(r.codigo_ppr, r.codigo_ppr);
+  }
   return map;
 }
 
@@ -202,14 +228,12 @@ export async function codigoLookupMap(codigos?: string[]): Promise<Map<string, s
 // mal mapeado y por eso esta función usaba la columna "Código" como parche.
 export async function codigoPprLookupMap(codigos?: string[]): Promise<Map<string, string | null>> {
   if (codigos && codigos.length === 0) return new Map();
-  const rows = await db.select({
-    codigo_igss: baseDatosCentral.codigo_igss, nombre: baseDatosCentral.nombre,
-    codigo_ppr: baseDatosCentral.codigo_ppr,
-  }).from(baseDatosCentral).where(codigos
-    ? and(isNotNull(baseDatosCentral.codigo_igss), inArray(baseDatosCentral.codigo_igss, codigos))
-    : isNotNull(baseDatosCentral.codigo_igss));
+  const rows = await filasPorCodigoIgssOPpr(codigos);
   const map = new Map<string, string | null>();
-  for (const r of rows) if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.codigo_ppr ?? null);
+  for (const r of rows) {
+    if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.codigo_ppr ?? null);
+    if (r.codigo_ppr && codigos?.includes(r.codigo_ppr)) map.set(r.codigo_ppr, r.codigo_ppr);
+  }
   return map;
 }
 
@@ -268,6 +292,10 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
     }
     else {
       const fichaKey = `${item.codigo_igss}::${normalizaNombre(item.nombre)}`;
+      // Si no matchea por codigo_igss::nombre, se intenta el código crudo
+      // solo (cubre el caso de items guardados antes de la reimportación de
+      // Base de Datos Central, cuyo codigo_igss es en realidad un codigo_ppr
+      // de la base nueva — ver comentario en filasPorCodigoIgssOPpr).
       grupos.set(key, {
         renglon, codigo_igss: item.codigo_igss, codigo_ppr: item.codigo_ppr,
         subproducto: item.subproducto, nombre: item.nombre, cantidad: item.cantidad_solicitada,
@@ -277,8 +305,8 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
         // ese snapshot vino vacío (ver mismo patrón en a01-siaf/actions.ts),
         // y su búsqueda además exige codigo_igss real, así que nunca cubre
         // insumos "S/C".
-        unidad_medida: item.unidad_medida?.trim() || unidades.get(fichaKey) || null,
-        codigo: codigos.get(fichaKey) ?? null,
+        unidad_medida: item.unidad_medida?.trim() || unidades.get(fichaKey) || unidades.get(item.codigo_igss ?? "") || null,
+        codigo: codigos.get(fichaKey) ?? codigos.get(item.codigo_igss ?? "") ?? null,
         descripcion_igss: item.descripcion_igss ?? null,
       });
     }

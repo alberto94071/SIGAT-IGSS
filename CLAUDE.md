@@ -254,14 +254,30 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   ambos campos, solo por `codigo_igss`). La leyenda "Código PpR: ..." del
   A-01 SIAF (`codigoPprLookupMap`) ahora lee directamente
   `baseDatosCentral.codigo_ppr` — antes leía la columna "Código" como parche
-  porque el `codigo_ppr` real venía mal. **Efecto en datos ya existentes**:
-  los SIAF/Órdenes/Consolidaciones creados ANTES de esta reimportación
-  guardaron su `codigo_igss` bajo el significado viejo — no cruzan
-  automáticamente contra el catálogo nuevo (verificado: de 12 códigos reales
-  distintos en `siaf_compras_items`, solo 1 coincidió). No es un bug — el
-  cruce funciona bien hacia adelante, para cualquier insumo elegido después
-  de la reimportación. Esta leyenda **no** recorta el rango — el cliente
-  pidió el número completo tal como está guardado.
+  porque el `codigo_ppr` real venía mal. Esta leyenda **no** recorta el
+  rango — el cliente pidió el número completo tal como está guardado.
+- **Efecto en datos ya existentes de la reimportación de arriba: el
+  `codigo_igss` guardado ANTES del 2026-08-24 en `catalogo_compras`/
+  `siaf_compras_items` a veces es en realidad un `codigo_ppr` de la base
+  nueva, no un `codigo_igss`.** Detectado con un caso real del cliente (SIAF
+  con "PPR 108241-125834" que no traía opciones en el selector, pese a
+  existir una sola fila exacta en Base de Datos Central) y confirmado contra
+  toda la base: **los 181 códigos de `catalogo_compras` con formato
+  "número - número" coinciden 100% con un `codigo_ppr` de la base nueva, y
+  0% con un `codigo_igss`** — ese rango es justo el placeholder que traía la
+  columna `codigo_igss` de la Base de Datos Central VIEJA (antes de la
+  reimportación), y por casualidad de cómo el cliente organizó su Excel
+  nuevo, ese mismo valor terminó siendo el `codigo_ppr` de esa fila hoy. Fix:
+  `getPprsPorItems`/`unidadMedidaLookupMap`/`codigoLookupMap`/
+  `codigoPprLookupMap` (`renglon-utils.ts`) ahora buscan también por
+  `codigo_ppr` cuando no matchea por `codigo_igss` (`filasPorCodigoIgssOPpr`)
+  — sin riesgo de ambigüedad, porque `codigo_ppr` es único en el 100% de las
+  207,821 filas (a diferencia de `codigo_igss`, donde un mismo código real
+  puede cubrir varios nombres distintos — hasta 8 en un caso — por eso ESE
+  cruce sí necesita `nombre` en la clave y el de `codigo_ppr` no). Con este
+  fix, los SIAF/Órdenes/Consolidaciones creados antes de la reimportación
+  con código formato rango SÍ encuentran su presentación real en el
+  selector — ya no hace falta re-capturarlos.
 - **Muchos códigos IGSS de Base de Datos Central vienen como un rango**
   (`"128843 - 135227"`) — corregirlo registro por registro no es viable
   (~207 mil filas). La impresión del A-01 SIAF (`codigoParaImprimir` en
