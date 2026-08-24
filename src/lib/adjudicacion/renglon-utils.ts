@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { siafCompras, siafComprasItems, catalogoCompras, baseDatosCentral } from "@/lib/schema";
-import { eq, and, or, inArray, ilike, isNotNull } from "drizzle-orm";
+import { eq, and, or, inArray, ilike, isNotNull, isNull } from "drizzle-orm";
 
 // ─── PPR (presentación) por código base ──────────────────────────────────────
 // Un mismo insumo puede tener varias presentaciones/PPR registradas en Base de
@@ -233,6 +233,49 @@ export async function codigoPprLookupMap(codigos?: string[]): Promise<Map<string
   for (const r of rows) {
     if (r.codigo_igss) map.set(`${r.codigo_igss}::${normalizaNombre(r.nombre)}`, r.codigo_ppr ?? null);
     if (r.codigo_ppr && codigos?.includes(r.codigo_ppr)) map.set(r.codigo_ppr, r.codigo_ppr);
+  }
+  return map;
+}
+
+// Mismo respaldo que codigoPprLookupMap, pero para ítems SIN código real
+// (S/C) — ahí no hay codigo_igss por el que buscar, así que se busca por
+// nombre. Un mismo nombre puede tener cientos de presentaciones distintas
+// en Base de Datos Central (ej. "Planta generadora de electricidad" con 272
+// variantes, cada una con su propio codigo_ppr) — para no imprimir el PPR
+// de una presentación equivocada, solo se resuelve cuando es inequívoco:
+// hay una sola presentación con ese nombre, o la descripción completa
+// (nombre + características) coincide exacta con alguna — que es
+// justamente el formato que arma elegirInsumo (CatalogoComprasClient.tsx)
+// al agregar el insumo, así que los insumos agregados por ese camino
+// siempre matchean.
+export async function codigoPprSinCodigoLookupMap(
+  items: { nombre: string; descripcion_igss: string | null }[]
+): Promise<Map<string, string>> {
+  const nombresUnicos = [...new Set(items.map(i => i.nombre.trim()).filter(n => n.length > 0))];
+  if (nombresUnicos.length === 0) return new Map();
+  const rows = await db.select({
+    nombre: baseDatosCentral.nombre, codigo_ppr: baseDatosCentral.codigo_ppr, caracteristicas: baseDatosCentral.caracteristicas,
+  }).from(baseDatosCentral).where(
+    and(isNull(baseDatosCentral.codigo_igss), or(...nombresUnicos.map(n => ilike(baseDatosCentral.nombre, n))))
+  );
+
+  const porNombre = new Map<string, { codigo_ppr: string; caracteristicas: string | null }[]>();
+  for (const r of rows) {
+    if (!r.codigo_ppr) continue;
+    const key = r.nombre.trim().toLowerCase();
+    if (!porNombre.has(key)) porNombre.set(key, []);
+    porNombre.get(key)!.push({ codigo_ppr: r.codigo_ppr, caracteristicas: r.caracteristicas });
+  }
+
+  const map = new Map<string, string>();
+  for (const item of items) {
+    const candidatos = porNombre.get(item.nombre.trim().toLowerCase()) ?? [];
+    if (candidatos.length === 0) continue;
+    const descripcionCompleta = (item.descripcion_igss ?? "").trim();
+    const elegido = candidatos.length === 1
+      ? candidatos[0]
+      : candidatos.find(c => `${item.nombre.trim()}; ${c.caracteristicas ?? ""}`.trim() === descripcionCompleta);
+    if (elegido) map.set(`${item.nombre.trim()}::${descripcionCompleta}`, elegido.codigo_ppr);
   }
   return map;
 }

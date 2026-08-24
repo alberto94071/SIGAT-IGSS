@@ -316,6 +316,21 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   (reportado por el cliente 2026-08-24 con "Destructora de papel": imprimía
   solo eso, sin el resto de la ficha). `InsumoCentralAgrupado`/
   `buscarInsumosCentral` ahora también traen `caracteristicas`.
+- **La leyenda "Código PpR:" del A-01 SIAF también se resuelve para ítems
+  sin código real (S/C), no solo con código real** — `codigoPprLookupMap`
+  (por `codigo_igss`) no aplica ahí porque no hay `codigo_igss` por el que
+  buscar. `codigoPprSinCodigoLookupMap` (`renglon-utils.ts`) busca por
+  nombre en su lugar, pero un mismo nombre puede tener cientos de
+  presentaciones distintas en Base de Datos Central (ej. "Planta generadora
+  de electricidad" con 272 variantes, cada una con su propio `codigo_ppr`)
+  — para no imprimir el PPR de una presentación equivocada, solo se
+  resuelve cuando es inequívoco: una sola presentación con ese nombre, o la
+  descripción completa (nombre + características) coincide exacta con
+  alguna (el mismo formato que arma `elegirInsumo` al agregar el insumo, así
+  que los insumos agregados por ese camino siempre matchean). Reportado por
+  el cliente 2026-08-24 ("Planta generadora de electricidad", SIAF 47/2026)
+  — confirmado que sí hay una coincidencia exacta única en Base de Datos
+  Central para ese caso.
 - **Muchos códigos IGSS de Base de Datos Central vienen como un rango**
   (`"128843 - 135227"`) — corregirlo registro por registro no es viable
   (~207 mil filas). La impresión del A-01 SIAF (`codigoParaImprimir` en
