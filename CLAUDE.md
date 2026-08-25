@@ -467,6 +467,33 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   `revalidatePath("/ruta/de/la/lista")` funciona y refresca la lista sola.
   Cualquier otra pantalla `/imprimir` que en el futuro necesite marcar algo
   como "visto" al abrirse (no solo Actas) debe seguir este mismo patrón.
+- **El Acta de Adjudicación tiene dos formatos distintos según `tipo_compra`,
+  no uno solo** (agregado 2026-08-25, a partir de un modelo Word que mandó el
+  proveedor): cuando `consolidacion.tipo_compra === "Compra Directa"`,
+  `ImprimirActaClient.tsx` imprime un cuerpo distinto — comisión fija de 3
+  personas (`COMISION_COMPRA_DIRECTA`, hardcodeada igual que los otros 2
+  firmantes fijos del Acta genérica), cita legal específica de Compra Directa
+  (Decreto 57-92 art. 43 inciso b + Acuerdo 22-2025 Gerencia IGSS) en vez del
+  texto genérico, y 3 firmas de cierre en vez de 2. El preámbulo "EL
+  INFRASCRITO... CERTIFICA... HABER TENIDO A LA VISTA..." y el cierre "copia
+  Certificada" **se mantienen iguales para ambos** (decisión explícita del
+  cliente — no se separaron en un modo "para hoja membretada" y otro "para
+  certificación", eso queda pendiente de que el cliente confirme si hace
+  falta). El "No. de Acta" de este tipo es correlativo **automático**
+  ("N/año", arranca en 1 cada año, sin piso configurable —
+  `getNextActaCompraDirectaNumero` en `actas-adjudicacion-actions.ts`), a
+  diferencia de los demás tipos que lo siguen escribiendo a mano en `GenerarActaModal`
+  (`ActaClient.tsx`); si la consolidación ya tiene una acta de Compra Directa
+  (p. ej. una rechazada que se está regenerando), `generarActa` reutiliza ese
+  mismo número en vez de sacar uno nuevo, para no quemar correlativo en actas
+  que nunca se llegaron a usar. La descripción del insumo que se imprime usa
+  `descripcion_igss` (trae características, ej. "Refrigerador; Material:
+  Acero inoxidable; ..."), no `nombre` como hace el DAB-60 — el modelo del
+  cliente necesita la ficha completa, no solo el nombre corto. Lugar/fecha/
+  hora se siguen escribiendo a mano igual que en el Acta genérica (no salen
+  de `fecha_evento`, la reunión de comisión puede ser días después del
+  evento Guatecompras) — el hint del campo "Lugar" cambia según el tipo
+  porque la frase donde se inserta es distinta en cada plantilla.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

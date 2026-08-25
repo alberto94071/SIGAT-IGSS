@@ -185,6 +185,10 @@ export default function ActaClient({ rows: init, canEdit }: Props) {
 function GenerarActaModal({ consolidacion: c, onClose, onCreado }: {
   consolidacion: Consolidacion; onClose: () => void; onCreado: (acta: Acta) => void;
 }) {
+  // El Acta de Compra Directa con Oferta Electrónica (modelo del cliente,
+  // 2026-08-25) tiene correlativo automático — no pide No. de Folio ni No.
+  // de Acta a mano, y su frase de lugar es distinta a la del Acta genérica.
+  const esCompraDirecta = c.tipo_compra === "Compra Directa";
   const now = new Date();
   const [noFormulario, setNoFormulario] = useState("");
   const [noActa, setNoActa] = useState("");
@@ -195,8 +199,10 @@ function GenerarActaModal({ consolidacion: c, onClose, onCreado }: {
   const [error, setError] = useState("");
 
   async function handleGuardar() {
-    if (!noFormulario.trim()) return setError("El No. de Folio es obligatorio");
-    if (!noActa.trim()) return setError("El No. de Acta es obligatorio");
+    if (!esCompraDirecta) {
+      if (!noFormulario.trim()) return setError("El No. de Folio es obligatorio");
+      if (!noActa.trim()) return setError("El No. de Acta es obligatorio");
+    }
     if (!lugar.trim()) return setError("El lugar es obligatorio");
     setSaving(true); setError("");
     const res = await generarActa(c.id, { no_formulario: noFormulario.trim(), no_acta: noActa.trim(), lugar: lugar.trim(), fecha, hora });
@@ -213,18 +219,30 @@ function GenerarActaModal({ consolidacion: c, onClose, onCreado }: {
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X className="w-4 h-4" /></button>
         </div>
         <div className="px-5 py-4 space-y-3">
+          {esCompraDirecta ? (
+            <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+              Se asignará automáticamente el siguiente número de Acta de Compra Directa (No. de Formulario no aplica a este tipo de acta).
+            </p>
+          ) : (
+            <>
+              <div>
+                <label className="label">No. de Folio <span className="text-red-500 font-semibold">*</span></label>
+                <input className="input font-mono" value={noFormulario} onChange={e => setNoFormulario(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">No. de Acta <span className="text-red-500 font-semibold">*</span></label>
+                <input className="input font-mono" value={noActa} onChange={e => setNoActa(e.target.value)} />
+              </div>
+            </>
+          )}
           <div>
-            <label className="label">No. de Folio <span className="text-red-500 font-semibold">*</span></label>
-            <input className="input font-mono" value={noFormulario} onChange={e => setNoFormulario(e.target.value)} />
-          </div>
-          <div>
-            <label className="label">No. de Acta <span className="text-red-500 font-semibold">*</span></label>
-            <input className="input font-mono" value={noActa} onChange={e => setNoActa(e.target.value)} />
-          </div>
-          <div>
-            <label className="label">Lugar (municipio) <span className="text-red-500 font-semibold">*</span></label>
+            <label className="label">Lugar {esCompraDirecta ? "" : "(municipio)"} <span className="text-red-500 font-semibold">*</span></label>
             <input className="input" value={lugar} onChange={e => setLugar(e.target.value)} placeholder="Ej. Tacaná" />
-            <p className="text-xs text-gray-400 mt-1">Se usará en la frase &ldquo;En el Municipio de ___, del Departamento de ___&rdquo;.</p>
+            <p className="text-xs text-gray-400 mt-1">
+              {esCompraDirecta
+                ? "Se usará en la frase “En ___, siendo las [hora] del día [fecha]...”."
+                : "Se usará en la frase “En el Municipio de ___, del Departamento de ___”."}
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
