@@ -494,6 +494,22 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   de `fecha_evento`, la reunión de comisión puede ser días después del
   evento Guatecompras) — el hint del campo "Lugar" cambia según el tipo
   porque la frase donde se inserta es distinta en cada plantilla.
+- **El bloqueo temporal de login (5 intentos fallidos → 15 min, `auth.ts`)
+  mostraba el mismo mensaje genérico "Credenciales incorrectas" tanto si la
+  contraseña estaba mal como si la cuenta ya estaba bloqueada** — reportado
+  por el cliente 2026-08-25 ("ya ni el super admin, lo sacó del sistema"):
+  usuarios reales se bloqueaban solos reintentando sin saber que estaban
+  bloqueados (cada intento durante el bloqueo lo reinicia). Fix:
+  `estadoLoginUsuario` (`src/lib/auth-actions.ts`, nueva, lee
+  `intentos_fallidos`/`bloqueado_hasta` directo de la fila — misma fuente que
+  actualiza `authorize()`) se consulta desde `LoginClient.tsx` justo después
+  de un intento fallido, y distingue "Contraseña incorrecta, te quedan N
+  intentos" de "Cuenta bloqueada, faltan X:XX" con cuenta regresiva en vivo
+  (se limpia sola al llegar a 0). `MAX_INTENTOS_FALLIDOS` se exportó de
+  `auth.ts` para que ambos archivos usen el mismo número sin duplicarlo.
+  Verificado en vivo con un usuario de prueba desechable (nunca contra una
+  cuenta real, para no arriesgarse a bloquearla) — los 5 intentos muestran
+  4/3/2/1 y luego el bloqueo con el contador bajando en tiempo real.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

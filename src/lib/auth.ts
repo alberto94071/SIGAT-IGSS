@@ -10,7 +10,7 @@ import { eq } from "drizzle-orm";
 // (fuerza bruta). Se guarda en la fila del usuario (no en memoria del
 // proceso) para que el bloqueo sea real en un despliegue serverless, donde
 // cada request puede caer en una instancia distinta.
-const MAX_INTENTOS_FALLIDOS = 5;
+export const MAX_INTENTOS_FALLIDOS = 5;
 const BLOQUEO_MS = 15 * 60 * 1000;
 
 export const { handlers, signIn, signOut, auth } = NextAuth({

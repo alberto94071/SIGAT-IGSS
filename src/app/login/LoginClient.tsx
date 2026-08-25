@@ -2,8 +2,15 @@
 import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { estadoLoginUsuario } from "@/lib/auth-actions";
 
 const INTERVALO_MS = 7000;
+
+function formatoMMSS(totalSegundos: number): string {
+  const m = Math.floor(totalSegundos / 60);
+  const s = totalSegundos % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 export default function LoginClient({ fotos }: { fotos: string[] }) {
   const router = useRouter();
@@ -11,6 +18,10 @@ export default function LoginClient({ fotos }: { fotos: string[] }) {
   const [password, setPassword] = useState("");
   const [error,    setError]    = useState("");
   const [loading,  setLoading]  = useState(false);
+  // Cuando el último intento fallido activó (o sigue dentro de) el bloqueo
+  // temporal, se muestra la cuenta regresiva en vez del mensaje de error
+  // genérico — se limpia sola al llegar a 0 para que puedan reintentar.
+  const [segundosRestantes, setSegundosRestantes] = useState<number | null>(null);
 
   const [idx, setIdx] = useState(0);
   useEffect(() => {
@@ -19,16 +30,35 @@ export default function LoginClient({ fotos }: { fotos: string[] }) {
     return () => clearInterval(t);
   }, [fotos.length]);
 
+  useEffect(() => {
+    if (segundosRestantes === null) return;
+    if (segundosRestantes <= 0) { setSegundosRestantes(null); return; }
+    const t = setTimeout(() => setSegundosRestantes(s => (s ?? 1) - 1), 1000);
+    return () => clearTimeout(t);
+  }, [segundosRestantes]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setSegundosRestantes(null);
     const res = await signIn("credentials", {
       email, password, redirect: false,
     });
-    setLoading(false);
     if (res?.error) {
-      setError("Credenciales incorrectas. Verifique su correo y contraseña.");
+      const estado = await estadoLoginUsuario(email);
+      if (estado.bloqueado) {
+        setSegundosRestantes(estado.segundosRestantes);
+      } else if (estado.intentosRestantes > 0) {
+        setError(
+          `Contraseña incorrecta. Te queda${estado.intentosRestantes === 1 ? "" : "n"} ` +
+          `${estado.intentosRestantes} intento${estado.intentosRestantes === 1 ? "" : "s"} ` +
+          "antes de que la cuenta se bloquee temporalmente."
+        );
+      } else {
+        setError("Credenciales incorrectas. Verifique su correo y contraseña.");
+      }
+      setLoading(false);
     } else {
       router.push("/launcher");
     }
@@ -120,13 +150,18 @@ export default function LoginClient({ fotos }: { fotos: string[] }) {
               />
             </div>
 
-            {error && (
+            {segundosRestantes !== null ? (
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3">
+                Cuenta bloqueada temporalmente por varios intentos fallidos.
+                Podrás volver a intentar en <strong className="font-mono">{formatoMMSS(segundosRestantes)}</strong>.
+              </div>
+            ) : error && (
               <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
                 {error}
               </div>
             )}
 
-            <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-2.5 rounded-xl">
+            <button type="submit" disabled={loading || segundosRestantes !== null} className="btn-primary w-full justify-center py-2.5 rounded-xl">
               {loading ? "Verificando..." : "Ingresar al sistema"}
             </button>
           </form>
