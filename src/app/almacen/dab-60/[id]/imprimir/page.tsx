@@ -61,7 +61,7 @@ export default async function ImprimirDab60Page({ params }: Props) {
   const fechaFormulario = orden.fecha_ingreso_producto ?? orden.fecha;
   const datos = {
     lugarFecha: cfg ? `${cfg.municipio}, ${fechaCorta(fechaFormulario)}` : fechaCorta(fechaFormulario),
-    dependencia: cfg ? `${cfg.codigo_contable}-${cfg.nombre_unidad}`.toUpperCase() : "",
+    dependencia: cfg ? cfg.nombre_unidad.toUpperCase() : "",
     claveAdministrativa: cfg?.codigo_centro_costo ?? "",
     ordenCompra: `No. O/C: ${orden.numero}`,
     a01Siaf: a01SiafCorrelativos.join(", "),

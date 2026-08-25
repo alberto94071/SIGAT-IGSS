@@ -68,7 +68,7 @@ export default async function ImprimirDab60FondoRotativoPage({ params }: Props) 
   const fechaFormulario = pago.dab60_fecha_ingreso_producto ?? fecha;
   const datos = {
     lugarFecha: cfg ? `${cfg.municipio}, ${fechaCorta(fechaFormulario)}` : fechaCorta(fechaFormulario),
-    dependencia: cfg ? `${cfg.codigo_contable}-${cfg.nombre_unidad}`.toUpperCase() : "",
+    dependencia: cfg ? cfg.nombre_unidad.toUpperCase() : "",
     claveAdministrativa: cfg?.codigo_centro_costo ?? "",
     ordenCompra: `A-04 ${numeroA04}`,
     a01Siaf: a01SiafCorrelativos.join(", "),
