@@ -84,7 +84,7 @@ export default function ArchivoClient({
 
   const q = query.toLowerCase().trim();
   const filtered = useMemo(() => !q ? ordenes : ordenes.filter(o =>
-    `${o.numero}/${o.anio}`.includes(q) ||
+    String(o.numero).includes(q) ||
     (o.proveedor_nombre ?? "").toLowerCase().includes(q) ||
     (o.no_factura ?? "").toLowerCase().includes(q) ||
     (o.no_devengado ?? "").toLowerCase().includes(q) ||
@@ -192,7 +192,7 @@ export default function ArchivoClient({
                   {filtered.map(o => (
                     <tr key={o.id} className="hover:bg-gray-50 align-top">
                       <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
-                        OC-{String(o.numero).padStart(3, "0")}/{o.anio}
+                        OC-{String(o.numero).padStart(3, "0")}
                       </td>
                       <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{o.dab60_generado_en ?? "—"}</td>
                       <td className="px-4 py-3">

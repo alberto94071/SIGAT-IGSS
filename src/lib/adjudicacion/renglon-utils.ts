@@ -286,6 +286,38 @@ export type GrupoRenglon = {
   unidad_medida: string | null; codigo: string | null; descripcion_igss: string | null;
 };
 
+// siaf_compras_items.codigo_ppr NO guarda el PpR puro — guarda la clave
+// completa que arma el selector de presentación (codigoDeOpcion en
+// OrdenesClient.tsx/Siaf04Client.tsx): "código-ppr" para insumos con código
+// real (ej. "92890-5477 - 5697"), o "S/C-{id de Base de Datos Central}" para
+// insumos sin código real (el id, no un ppr — se usa como llave única entre
+// presentaciones que comparten "S/C"). El A-04 SÍ necesita ese formato
+// compuesto tal cual (confirmado por el cliente, ver "Código PpR" en
+// ImprimirA04Client.tsx) — esta función es aparte, solo para el DAB-60, que
+// el cliente pidió que lleve ÚNICAMENTE el número de PpR (2026-08-25). Para
+// el caso "S/C-{id}" el id embebido es EXACTAMENTE la fila que se eligió, así
+// que se resuelve con precisión total (no es una aproximación por nombre,
+// a diferencia de codigoPprSinCodigoLookupMap).
+export async function pprPuroParaImprimir(valoresGuardados: (string | null)[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const idsSinCodigo = new Set<number>();
+  for (const v of valoresGuardados) {
+    const m = v?.match(/^S\/C-(\d+)$/);
+    if (m) idsSinCodigo.add(Number(m[1]));
+  }
+  if (idsSinCodigo.size > 0) {
+    const rows = await db.select({ id: baseDatosCentral.id, codigo_ppr: baseDatosCentral.codigo_ppr })
+      .from(baseDatosCentral).where(inArray(baseDatosCentral.id, [...idsSinCodigo]));
+    for (const r of rows) if (r.codigo_ppr) map.set(`S/C-${r.id}`, r.codigo_ppr);
+  }
+  for (const v of valoresGuardados) {
+    if (!v || map.has(v)) continue;
+    const i = v.indexOf("-");
+    map.set(v, i === -1 ? v : v.slice(i + 1).trim());
+  }
+  return map;
+}
+
 // Agrupa los insumos de los SIAF consolidados de una consolidación por
 // renglón + subproducto + nombre (misma terna identidad que usa el resto del
 // código — ver catalogo_compras_codigo_subproducto_idx en schema.ts). No

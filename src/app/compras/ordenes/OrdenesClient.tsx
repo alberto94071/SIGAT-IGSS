@@ -87,7 +87,7 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
     (c.proveedor_nombre ?? "").toLowerCase().includes(q) ||
     (c.nog ?? "").includes(q));
   const enProcesoF = !q ? enProceso : enProceso.filter(o =>
-    `OC-${String(o.numero).padStart(3, "0")}/${o.anio}`.includes(q) ||
+    `OC-${String(o.numero).padStart(3, "0")}`.includes(q) ||
     (o.proveedor_nombre ?? "").toLowerCase().includes(q) ||
     (o.nog ?? "").includes(q));
 
@@ -195,12 +195,12 @@ export default function OrdenesClient({ pendientes: initP, enProceso: initE }: {
                     onToggle={() => setExpandedProceso(p => p === o.id ? null : o.id)}
                     rowClassName="border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
                     detail={<TrazabilidadPanel
-                      titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}/${o.anio}`}
-                      cadena={[{ label: "N° Orden", value: `${o.numero}/${o.anio}` }]}
+                      titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}`}
+                      cadena={[{ label: "N° Orden", value: String(o.numero) }]}
                       traz={o.traz}
                     />}>
                     <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
-                      OC-{String(o.numero).padStart(3, "0")}/{o.anio}
+                      OC-{String(o.numero).padStart(3, "0")}
                     </td>
                     <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{o.codigo_ppr ?? "—"}</td>
                     <td className="px-4 py-3">

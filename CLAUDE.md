@@ -408,13 +408,44 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   comparten el mismo componente) que se impriman después en ese navegador,
   hasta que el usuario le da clic a "Reiniciar campos ocultos" (solo aparece
   cuando hay al menos uno oculto). No confundir con "Restablecer" del modo
-  "Ver posiciones", que resetea posiciones/tamaño, no visibilidad. La
-  columna Código IGSS-PPR (`codigosPpr`) solo concatena ambos números con
-  guion cuando son distintos entre sí — si son el mismo número se imprime
-  una sola vez. `renglon`, `metodo_compra`, `marca` y `modelo` llevan su
-  etiqueta literal ("Renglón:", "Tipo de compra:", "Marca:", "Modelo:")
-  concatenada al valor antes de pasar por `campo()` — no son etiquetas de
-  UI, salen impresas en el papel.
+  "Ver posiciones", que resetea posiciones/tamaño, no visibilidad.
+  `renglon`, `metodo_compra`, `marca`, `modelo` y `serie` llevan su etiqueta
+  literal ("Renglón:", "Tipo de compra:", "Marca:", "Modelo:", "Serie:")
+  concatenada al valor (Marca/Modelo/Serie además en mayúsculas) antes de
+  pasar por `campo()` — no son etiquetas de UI, salen impresas en el papel;
+  igual `serie_factura` ("SERIE: ...") y `no_factura` ("No. ..."). La
+  columna "CODIGO" ya no es la concatenación "Código IGSS-PPR" — el cliente
+  pidió que lleve únicamente el número de PpR (2026-08-25), así que la
+  columna separada que existía para eso (`col_codigo_ppr`) se eliminó del
+  todo (quedaba superpuesta sobre "CODIGO").
+- **`siaf_compras_items.codigo_ppr` NO guarda el PpR puro — guarda la clave
+  completa de selección del selector de presentación** (`codigoDeOpcion` en
+  `OrdenesClient.tsx`/`Siaf04Client.tsx`, ej. `"92890-5477 - 5697"` para
+  insumos con código real, o `"S/C-185613"` para insumos sin código real,
+  donde el número tras "S/C-" es el `id` de esa fila en Base de Datos
+  Central, NO un PpR). El A-04 SÍ necesita ese formato compuesto tal cual —
+  confirmado por el cliente que no debe cambiar (ver "Código PpR" en
+  `ImprimirA04Client.tsx`). Para el DAB-60, que pidió el PpR puro, se agregó
+  `pprPuroParaImprimir` (`renglon-utils.ts`) — se llama solo desde los dos
+  `page.tsx` de impresión de DAB-60 (Normal y Fondo Rotativo), nunca desde
+  `gruposRenglonDeConsolidacion` en sí, para no afectar al A-04. Separa el
+  prefijo "código-" cuando hay código real, y para "S/C-{id}" resuelve el
+  PpR real contra Base de Datos Central por ese `id` — con precisión total
+  (es exactamente la fila que se eligió), a diferencia de
+  `codigoPprSinCodigoLookupMap` (que adivina por nombre porque no tiene un
+  id exacto disponible).
+- **"No. O/C:" y sin "/año" es el estándar de cómo se identifica una Orden
+  de Compra en toda la pestaña de Órdenes** (confirmado por el cliente
+  2026-08-25) — a diferencia de A-01 SIAF, Acta, FRI, Hoja de Ruta,
+  Consolidación y Póliza, que siguen mostrando su propio "número/año".
+  Aplicado en `OrdenesClient.tsx`, `DevengadoClient.tsx`,
+  `Dab60Client.tsx` y `ArchivoClient.tsx` (búsqueda y despliegue), y en el
+  DAB-60 impreso (`ordenCompra: "No. O/C: ${orden.numero}"` en
+  `dab-60/[id]/imprimir/page.tsx` — el gemelo de Fondo Rotativo usa
+  `"A-04 ${numeroA04}"` en su lugar, no se tocó, no es una Orden de
+  Compra). "LUGAR Y FECHA" del DAB-60 también pasó a formato numérico
+  (`fechaCorta`, `dd/mm/aaaa`) en vez de la fecha en letras, en ambas rutas
+  de impresión.
 - **Una escritura a la BD que ocurre durante el render de un Server Component
   (ej. dentro del `page.tsx` de una ruta `/imprimir`, antes del `return`) NO
   puede invalidar el Router Cache de Next.js con `revalidatePath`** —

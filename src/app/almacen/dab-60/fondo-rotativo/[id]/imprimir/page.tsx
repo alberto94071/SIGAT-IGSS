@@ -3,19 +3,18 @@ import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { fondoRotativoPagos, consolidaciones, configuracion } from "@/lib/schema";
 import { eq } from "drizzle-orm";
-import { gruposRenglonDeConsolidacion, siafCorrelativosDeConsolidacion } from "@/lib/adjudicacion/renglon-utils";
+import { gruposRenglonDeConsolidacion, siafCorrelativosDeConsolidacion, pprPuroParaImprimir } from "@/lib/adjudicacion/renglon-utils";
 import { getPosicionesDab60 } from "@/lib/adjudicacion/dab60-actions";
 import ImprimirDab60Client from "../../../[id]/imprimir/ImprimirDab60Client";
 
 interface Props { params: Promise<{ id: string }> }
 
-const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
-  "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
-
-function fechaLarga(iso: string): string {
+// "2026-06-23" → "23/06/2026" — mismo formato que la ruta Normal (el
+// cliente pidió fecha en formato fecha, no en letras — 2026-08-24).
+function fechaCorta(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
   if (!y || !m || !d) return iso;
-  return `${d} de ${MESES[m - 1]} de ${y}`;
+  return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
 }
 
 // Mismo talonario físico DAB-60 que Almacén/Compromiso, pero para pagos
@@ -34,12 +33,16 @@ export default async function ImprimirDab60FondoRotativoPage({ params }: Props) 
   const [con] = await db.select().from(consolidaciones).where(eq(consolidaciones.id, pago.consolidacion_id)).limit(1);
   if (!con) notFound();
 
-  const [renglones, a01SiafCorrelativos, config, posicionesGuardadas] = await Promise.all([
+  const [renglonesCrudos, a01SiafCorrelativos, config, posicionesGuardadas] = await Promise.all([
     gruposRenglonDeConsolidacion(con.id),
     siafCorrelativosDeConsolidacion(con.id),
     db.select().from(configuracion).limit(1),
     getPosicionesDab60(),
   ]);
+  const pprPuro = await pprPuroParaImprimir(renglonesCrudos.map(r => r.codigo_ppr));
+  const renglones = renglonesCrudos.map(r => ({
+    ...r, codigo_ppr: r.codigo_ppr ? (pprPuro.get(r.codigo_ppr) ?? r.codigo_ppr) : r.codigo_ppr,
+  }));
 
   const cfg = config[0];
   const renglonesUnicos = [...new Set(renglones.map(r => r.renglon).filter((r): r is number => r != null))];
@@ -64,7 +67,7 @@ export default async function ImprimirDab60FondoRotativoPage({ params }: Props) 
   // del producto a bodega, no la del A-04/consolidación.
   const fechaFormulario = pago.dab60_fecha_ingreso_producto ?? fecha;
   const datos = {
-    lugarFecha: cfg ? `${cfg.municipio}, ${fechaLarga(fechaFormulario)}` : fechaLarga(fechaFormulario),
+    lugarFecha: cfg ? `${cfg.municipio}, ${fechaCorta(fechaFormulario)}` : fechaCorta(fechaFormulario),
     dependencia: cfg ? `${cfg.codigo_contable}-${cfg.nombre_unidad}`.toUpperCase() : "",
     claveAdministrativa: cfg?.codigo_centro_costo ?? "",
     ordenCompra: `A-04 ${numeroA04}`,
