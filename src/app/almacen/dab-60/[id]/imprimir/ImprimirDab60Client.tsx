@@ -26,10 +26,11 @@ type Datos = {
 interface Props {
   orden: Orden; renglones: Renglon[]; datos: Datos;
   posicionesGuardadas: Record<string, Pos>;
-  // Por defecto el encabezado en pantalla muestra "OC-XXX/AAAA" (Orden de
-  // Compra) — Fondo Rotativo no tiene número de orden, así que su página de
-  // impresión pasa este override (ej. "A-04 4/2026") en su lugar. Solo
-  // afecta el título mostrado en pantalla, no el papel impreso.
+  // Por defecto el encabezado en pantalla muestra "OC-XXX" (Orden de
+  // Compra, sin año — confirmado por el cliente 2026-08-24) — Fondo
+  // Rotativo no tiene número de orden, así que su página de impresión pasa
+  // este override (ej. "A-04 4/2026") en su lugar. Solo afecta el título
+  // mostrado en pantalla, no el papel impreso.
   tituloOverride?: string;
 }
 
@@ -72,7 +73,6 @@ const POS_DEFAULT: Record<string, Pos> = {
   col_cantidad:          { top: 90,  left: 48 },
   col_unidad:            { top: 90,  left: 80 },
   col_codigo:            { top: 90,  left: 148 },
-  col_codigo_ppr:        { top: 96,  left: 148 },
   col_v_unitario:        { top: 90,  left: 178 },
   col_valor_total:       { top: 90,  left: 200 },
   marca:                 { top: 96,  left: 48 },
@@ -106,8 +106,7 @@ const FIELD_LABELS: Record<string, string> = {
   renglon:              "Renglón presupuestario",
   col_cantidad:         "Columna: Cantidad",
   col_unidad:           "Columna: Unidad de medida",
-  col_codigo:           "Columna: Código",
-  col_codigo_ppr:       "Columna: Código IGSS-PPR",
+  col_codigo:           "Columna: Código (PpR)",
   col_v_unitario:       "Columna: Valor unitario",
   col_valor_total:      "Columna: Valor total",
   marca:                "Marca",
@@ -454,18 +453,19 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
     setPos({ ...POS_DEFAULT });
   }
 
-  const numeroOrden = tituloOverride ?? `OC-${String(o.numero).padStart(3, "0")}/${o.anio}`;
+  const numeroOrden = tituloOverride ?? `OC-${String(o.numero).padStart(3, "0")}`;
 
   const cantidades       = renglones.map(r => r.cantidad.toLocaleString("es-GT"));
   const unidades         = renglones.map(r => r.unidad_medida ?? "");
-  const codigos          = renglones.map(r => r.codigo ?? "");
-  // Si el código IGSS y el código PPR son exactamente el mismo número, se
-  // imprime una sola vez (no "128843-128843") — solo se unen con guion
-  // cuando de verdad son distintos.
-  const codigosPpr       = renglones.map(r => {
-    if (!r.codigo_igss || !r.codigo_ppr) return "";
-    return r.codigo_igss === r.codigo_ppr ? r.codigo_igss : `${r.codigo_igss}-${r.codigo_ppr}`;
-  });
+  // El cliente pidió que la columna "Código" lleve solo el número de PpR
+  // (no el código IGSS ni ningún otro texto) — confirmado 2026-08-24/25. Esto
+  // hizo redundante la columna "Código IGSS-PPR" (col_codigo_ppr) que
+  // existía aparte para mostrar ambos combinados — se eliminó del papel,
+  // porque quedaba superpuesta sobre esta misma columna. `r.codigo_ppr` ya
+  // llega resuelto a PpR puro desde page.tsx (pprPuroParaImprimir) — el
+  // valor crudo de siaf_compras_items.codigo_ppr trae la clave completa de
+  // selección ("código-ppr" o "S/C-{id}"), no el PpR solo.
+  const codigos          = renglones.map(r => r.codigo_ppr ?? "");
   // El formulario DAB-60 lleva costo unitario y valor total SIN IVA (el
   // bruto con IVA incluido es el que se maneja en A-04/consolidación). El
   // total se recalcula como cantidad × costo unitario neto (no se usa
@@ -559,7 +559,7 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
           {campo("lugar_fecha", datos.lugarFecha)}
           {campo("no_recibo_almacen", o.no_recibo_almacen ?? "")}
           {campo("serie_recibo_almacen", o.serie_recibo_almacen ?? "")}
-          {campo("no_factura", o.no_factura ?? "")}
+          {campo("no_factura", o.no_factura ? `No. ${o.no_factura}` : "")}
           {campo("dependencia", datos.dependencia)}
           {campo("clave_administrativa", datos.claveAdministrativa)}
           {campo("orden_compra", datos.ordenCompra)}
@@ -572,11 +572,10 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
           {columna("col_cantidad", cantidades, "center")}
           {columna("col_unidad", unidades, "left")}
           {columna("col_codigo", codigos, "center")}
-          {columna("col_codigo_ppr", codigosPpr, "center")}
           {columna("col_v_unitario", vUnitarios, "right")}
           {columna("col_valor_total", valoresTotales, "right")}
 
-          {campo("marca", `Marca: ${o.marca ?? ""}`)}
+          {campo("marca", `Marca: ${(o.marca ?? "").toUpperCase()}`)}
           {campo("lote", o.lote ?? "")}
           {campo("fecha_vencimiento", o.fecha_vencimiento ?? "")}
           {campo("descripcion", datos.descripcion, { style: { lineHeight: 1.35 }, multiline: true })}
@@ -584,9 +583,9 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
 
           {campo("fecha_emision", o.fecha_emision ?? "")}
           {campo("fecha_ingreso", o.fecha_ingreso_producto ?? "")}
-          {campo("modelo", `Modelo: ${o.modelo ?? ""}`)}
-          {campo("serie", o.serie ?? "")}
-          {campo("serie_factura", o.serie_factura ?? "")}
+          {campo("modelo", `Modelo: ${(o.modelo ?? "").toUpperCase()}`)}
+          {campo("serie", `Serie: ${(o.serie ?? "").toUpperCase()}`)}
+          {campo("serie_factura", o.serie_factura ? `SERIE: ${o.serie_factura}` : "")}
           {campo("proveedor_nit", o.proveedor_nit ?? "")}
         </div>
       </div>

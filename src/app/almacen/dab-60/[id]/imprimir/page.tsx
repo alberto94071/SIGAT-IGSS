@@ -3,20 +3,18 @@ import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { ordenesCompra, configuracion } from "@/lib/schema";
 import { eq } from "drizzle-orm";
-import { gruposRenglonDeConsolidacion, siafCorrelativosDeConsolidacion } from "@/lib/adjudicacion/renglon-utils";
+import { gruposRenglonDeConsolidacion, siafCorrelativosDeConsolidacion, pprPuroParaImprimir } from "@/lib/adjudicacion/renglon-utils";
 import { getPosicionesDab60 } from "@/lib/adjudicacion/dab60-actions";
 import ImprimirDab60Client from "./ImprimirDab60Client";
 
 interface Props { params: Promise<{ id: string }> }
 
-const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
-  "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
-
-// "2026-06-23" → "23 de junio de 2026"
-function fechaLarga(iso: string): string {
+// "2026-06-23" → "23/06/2026" — el cliente pidió formato fecha, no en
+// letras, para el "LUGAR Y FECHA" del DAB-60 (confirmado 2026-08-24).
+function fechaCorta(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
   if (!y || !m || !d) return iso;
-  return `${d} de ${MESES[m - 1]} de ${y}`;
+  return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
 }
 
 export default async function ImprimirDab60Page({ params }: Props) {
@@ -41,12 +39,16 @@ export default async function ImprimirDab60Page({ params }: Props) {
     );
   }
 
-  const [renglones, a01SiafCorrelativos, config, posicionesGuardadas] = await Promise.all([
+  const [renglonesCrudos, a01SiafCorrelativos, config, posicionesGuardadas] = await Promise.all([
     gruposRenglonDeConsolidacion(orden.consolidacion_id),
     siafCorrelativosDeConsolidacion(orden.consolidacion_id),
     db.select().from(configuracion).limit(1),
     getPosicionesDab60(),
   ]);
+  const pprPuro = await pprPuroParaImprimir(renglonesCrudos.map(r => r.codigo_ppr));
+  const renglones = renglonesCrudos.map(r => ({
+    ...r, codigo_ppr: r.codigo_ppr ? (pprPuro.get(r.codigo_ppr) ?? r.codigo_ppr) : r.codigo_ppr,
+  }));
 
   const cfg = config[0];
   const renglonesUnicos = [...new Set(renglones.map(r => r.renglon).filter((r): r is number => r != null))];
@@ -58,10 +60,10 @@ export default async function ImprimirDab60Page({ params }: Props) {
   // se cae de vuelta a la fecha de la orden.
   const fechaFormulario = orden.fecha_ingreso_producto ?? orden.fecha;
   const datos = {
-    lugarFecha: cfg ? `${cfg.municipio}, ${fechaLarga(fechaFormulario)}` : fechaLarga(fechaFormulario),
+    lugarFecha: cfg ? `${cfg.municipio}, ${fechaCorta(fechaFormulario)}` : fechaCorta(fechaFormulario),
     dependencia: cfg ? `${cfg.codigo_contable}-${cfg.nombre_unidad}`.toUpperCase() : "",
     claveAdministrativa: cfg?.codigo_centro_costo ?? "",
-    ordenCompra: `${orden.numero}/${orden.anio}`,
+    ordenCompra: `No. O/C: ${orden.numero}`,
     a01Siaf: a01SiafCorrelativos.join(", "),
     metodoCompra: orden.tipo_compra,
     renglon: renglonesUnicos.join(", "),

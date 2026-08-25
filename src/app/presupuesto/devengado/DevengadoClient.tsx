@@ -37,7 +37,7 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
 
   const q = query.toLowerCase().trim();
   const enviadasFiltradas = useMemo(() => !q ? enviadas : enviadas.filter(o =>
-    `OC-${String(o.numero).padStart(3, "0")}/${o.anio}`.toLowerCase().includes(q) ||
+    `OC-${String(o.numero).padStart(3, "0")}`.toLowerCase().includes(q) ||
     (o.no_devengado ?? "").toLowerCase().includes(q) ||
     (o.no_compromiso ?? "").toLowerCase().includes(q) ||
     (o.proveedor_nombre ?? "").toLowerCase().includes(q) ||
@@ -135,12 +135,12 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
                   onToggle={() => setExpandedOrden(p => p === o.id ? null : o.id)}
                   rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
                   detail={<TrazabilidadPanel
-                    titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}/${o.anio}`}
+                    titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}`}
                     cadena={[{ label: "No. Compromiso", value: o.no_compromiso }]}
                     traz={o.traz}
                   />}>
                   <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
-                    OC-{String(o.numero).padStart(3, "0")}/{o.anio}
+                    OC-{String(o.numero).padStart(3, "0")}
                   </td>
                   <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{o.no_compromiso ?? "—"}</td>
                   <td className="px-4 py-3">
@@ -208,12 +208,12 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
                     onToggle={() => setExpandedSolicitada(p => p === o.id ? null : o.id)}
                     rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
                     detail={<TrazabilidadPanel
-                      titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}/${o.anio}`}
+                      titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}`}
                       cadena={[{ label: "No. Compromiso", value: o.no_compromiso }, { label: "No. Devengado", value: o.no_devengado }]}
                       traz={o.traz}
                     />}>
                     <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
-                      OC-{String(o.numero).padStart(3, "0")}/{o.anio}
+                      OC-{String(o.numero).padStart(3, "0")}
                     </td>
                     <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{o.no_devengado ?? "—"}</td>
                     <td className="px-4 py-3">
@@ -334,7 +334,7 @@ function DevengarModal({ orden: o, onClose, onDone }: { orden: Orden; onClose: (
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-gray-900">
-            Devengar OC-{String(o.numero).padStart(3, "0")}/{o.anio}
+            Devengar OC-{String(o.numero).padStart(3, "0")}
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
         </div>
@@ -430,12 +430,12 @@ function FilaSeguimiento({ orden: o, onActualizado, onRegresar, regresando, erro
     <ExpandableRow colSpan={6} expanded={expanded} onToggle={onToggleExpand}
       rowClassName="hover:bg-gray-50 align-top cursor-pointer transition-colors"
       detail={<TrazabilidadPanel
-        titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}/${o.anio}`}
+        titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}`}
         cadena={[{ label: "No. Compromiso", value: o.no_compromiso }, { label: "No. Devengado", value: o.no_devengado }, { label: "Envío a DAF", value: o.fecha_envio_daf }]}
         traz={o.traz}
       />}>
       <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
-        OC-{String(o.numero).padStart(3, "0")}/{o.anio}
+        OC-{String(o.numero).padStart(3, "0")}
       </td>
       <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{o.no_devengado ?? "—"}</td>
       <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{o.fecha_envio_daf ?? "—"}</td>

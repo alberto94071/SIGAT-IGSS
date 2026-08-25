@@ -91,12 +91,12 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
                   onToggle={() => setExpandedOrden(p => p === o.id ? null : o.id)}
                   rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
                   detail={<TrazabilidadPanel
-                    titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}/${o.anio}`}
+                    titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}`}
                     cadena={[{ label: "No. Compromiso", value: o.no_compromiso }]}
                     traz={o.traz}
                   />}>
                   <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
-                    OC-{String(o.numero).padStart(3, "0")}/{o.anio}
+                    OC-{String(o.numero).padStart(3, "0")}
                   </td>
                   <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{o.no_compromiso ?? "—"}</td>
                   <td className="px-4 py-3">
@@ -155,7 +155,7 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
                     onToggle={() => setExpandedPendiente(p => p === o.id ? null : o.id)}
                     rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
                     detail={<TrazabilidadPanel
-                      titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}/${o.anio}`}
+                      titulo={`Detalle de OC-${String(o.numero).padStart(3, "0")}`}
                       cadena={[
                         { label: "No. Compromiso", value: o.no_compromiso },
                         { label: "No./Serie Recibo", value: `${o.no_recibo_almacen ?? "—"} / ${o.serie_recibo_almacen ?? "—"}` },
@@ -164,7 +164,7 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
                       traz={o.traz}
                     />}>
                     <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
-                      OC-{String(o.numero).padStart(3, "0")}/{o.anio}
+                      OC-{String(o.numero).padStart(3, "0")}
                     </td>
                     <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">
                       {o.no_recibo_almacen ?? "—"} / {o.serie_recibo_almacen ?? "—"}
@@ -351,7 +351,7 @@ function Dab60Modal({ orden: o, onClose, onDone }: {
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
       <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-          <h2 className="font-semibold text-gray-900">DAB-60 — OC-{String(o.numero).padStart(3, "0")}/{o.anio}</h2>
+          <h2 className="font-semibold text-gray-900">DAB-60 — OC-{String(o.numero).padStart(3, "0")}</h2>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X className="w-4 h-4" /></button>
         </div>
         <div className="px-5 py-5 grid grid-cols-2 gap-3">
