@@ -445,7 +445,12 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   `"A-04 ${numeroA04}"` en su lugar, no se tocó, no es una Orden de
   Compra). "LUGAR Y FECHA" del DAB-60 también pasó a formato numérico
   (`fechaCorta`, `dd/mm/aaaa`) en vez de la fecha en letras, en ambas rutas
-  de impresión.
+  de impresión. El campo "DEPENDENCIA" del DAB-60 lleva solo
+  `configuracion.nombre_unidad` — antes iba prefijado con
+  `codigo_contable-` (ej. "12.07.04-CONSULTORIO DE TACANÁ..."), el cliente
+  pidió quitar ese número (2026-08-25); `claveAdministrativa` (el campo
+  aparte "CLAVE ADMINISTRATIVA") sigue mostrando `codigo_centro_costo`, no
+  se tocó.
 - **Una escritura a la BD que ocurre durante el render de un Server Component
   (ej. dentro del `page.tsx` de una ruta `/imprimir`, antes del `return`) NO
   puede invalidar el Router Cache de Next.js con `revalidatePath`** —
