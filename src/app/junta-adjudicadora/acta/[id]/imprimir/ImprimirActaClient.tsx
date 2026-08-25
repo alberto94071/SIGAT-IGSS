@@ -16,21 +16,33 @@ type Acta = {
 type Consolidacion = {
   id: number; numero: number; anio: number; tipo_compra: string | null;
   numero_adjudicacion: string | null; razon_adjudicacion: string | null; pre_orden: string | null;
-  cotizacion_anual_id: number | null; referencia: string | null;
+  cotizacion_anual_id: number | null; referencia: string | null; nog: string | null;
 };
 type Oferente = { id: number; nit: string; nombre: string; costo: number; exento_iva: boolean };
 
 interface Props {
   acta: Acta; consolidacion: Consolidacion; oferentes: Oferente[];
   nombreUnidad: string; municipio: string; direccionUnidad: string; nombreResponsable: string;
-  firmantes: Firmante[];
+  firmantes: Firmante[]; descripcion: string;
 }
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+// Comisión fija del Acta de Compra Directa con Oferta Electrónica (modelo
+// del cliente, 2026-08-25) — distinta a los firmantes de la Acta genérica,
+// hardcodeada tal cual la mandó el proveedor (mismo patrón ya usado para
+// "Edwin Baudilio Fuentes Fuentes"/"Elesinda Gabriela Rodríguez Orozco" más
+// abajo, que son igual de fijos).
+const COMISION_COMPRA_DIRECTA = [
+  { nombre: "Licenciada Mirna Magali Mazariegos Pérez", cargo: "Técnico en Trabajo Social, Nombramiento No. 53/2026, Cargo Titular" },
+  { nombre: "Sheny Escalante Díaz", cargo: "Enfermera Graduada, Nombramiento No. 52/2026, Cargo Titular" },
+  { nombre: "Yenífer Paola Hernández Pérez", cargo: "Secretaria “A”, Nombramiento No. 55/2026, Cargo Titular" },
+];
+
 export default function ImprimirActaClient({
-  acta, consolidacion: c, oferentes, nombreUnidad, municipio, direccionUnidad, nombreResponsable, firmantes,
+  acta, consolidacion: c, oferentes, nombreUnidad, municipio, direccionUnidad, nombreResponsable, firmantes, descripcion,
 }: Props) {
+  const esCompraDirecta = c.tipo_compra === "Compra Directa";
   const router = useRouter();
   const [municipioNombre, departamento] = municipio.split(",").map(s => s.trim());
   const dep = departamento || "San Marcos";
@@ -79,19 +91,40 @@ export default function ImprimirActaClient({
         ACTA No. {acta.no_acta}
       </p>
 
-      <p style={{ fontSize: "9pt", textAlign: "justify", lineHeight: 1.4 }}>
-        En el Municipio de {acta.lugar || municipioNombre}, del Departamento de {dep}, siendo las {horaTexto} del
-        día {fechaTexto}, reunidos en el local que ocupa la {nombreUnidad}, del Instituto Guatemalteco de
-        Seguridad Social, las siguientes personas: {nombreEncargadoUnidad}, {cargoEncargadoUnidad},
-        {" "}{nombreResponsable || "Bernon Raúl Miranda González"}, Analista
-        &ldquo;A&rdquo; y Encargado de Presupuesto, Edwin Baudilio Fuentes Fuentes, Bodeguero &ldquo;A&rdquo;,
-        Elesinda Gabriela Rodríguez Orozco, Secretaria &ldquo;A&rdquo; para dejar constancia de lo siguiente:{" "}
-        <strong>PRIMERO:</strong> {nombreEncargadoUnidad}, da la bienvenida a todos los presentes y a
-        continuación da a conocer la necesidad de adquisición de bienes y/o servicios necesarios para el
-        servicio y buen funcionamiento de esta {nombreUnidad}, con el objeto de dar cumplimiento a la Ley de
-        Contrataciones del Estado. <strong>SEGUNDO:</strong> Se procede a la comparación de ofertas recibidas,
-        las cuales se detallan a continuación:
-      </p>
+      {esCompraDirecta ? (
+        <p style={{ fontSize: "9pt", textAlign: "justify", lineHeight: 1.4 }}>
+          En {acta.lugar || municipioNombre}, siendo las {horaTexto} del día {fechaTexto}, las siguientes
+          personas: {COMISION_COMPRA_DIRECTA.map((m, i) => (
+            <span key={m.nombre}>
+              {i > 0 && ", "}{m.nombre}, {m.cargo}{i === COMISION_COMPRA_DIRECTA.length - 1 && ", quien suscribe el acta"}
+            </span>
+          ))}, de la recepción, apertura, calificación y adjudicación de la Compra Directa con Oferta
+          Electrónica de: {descripcion} para {nombreUnidad}, para hacer constar lo siguiente:{" "}
+          <strong>PRIMERO:</strong> La comisión nombrada por la máxima autoridad de este Consultorio, informa
+          que el motivo de la presente es para conocer sobre ADQUISICIÓN DE: {descripcion}; PARA{" "}
+          {nombreUnidad} con número de operación de Guatecompras NOG {c.nog || "—"}.{" "}
+          <strong>SEGUNDO:</strong> de conformidad con lo establecido en el artículo veinticuatro (24) del
+          Decreto 57-92 del Congreso de la República de la Ley de Contrataciones del Estado y Artículo veinte
+          (20) del Acuerdo Gubernativo 122-2016 Reglamento de dicha ley, se procede a la descarga de la
+          documentación electrónica del portal de Guatecompras que corresponde al NOG {c.nog || "—"}, dando
+          lectura a los nombres de los oferentes y el precio total de las ofertas de acuerdo al cuadro
+          siguiente:
+        </p>
+      ) : (
+        <p style={{ fontSize: "9pt", textAlign: "justify", lineHeight: 1.4 }}>
+          En el Municipio de {acta.lugar || municipioNombre}, del Departamento de {dep}, siendo las {horaTexto} del
+          día {fechaTexto}, reunidos en el local que ocupa la {nombreUnidad}, del Instituto Guatemalteco de
+          Seguridad Social, las siguientes personas: {nombreEncargadoUnidad}, {cargoEncargadoUnidad},
+          {" "}{nombreResponsable || "Bernon Raúl Miranda González"}, Analista
+          &ldquo;A&rdquo; y Encargado de Presupuesto, Edwin Baudilio Fuentes Fuentes, Bodeguero &ldquo;A&rdquo;,
+          Elesinda Gabriela Rodríguez Orozco, Secretaria &ldquo;A&rdquo; para dejar constancia de lo siguiente:{" "}
+          <strong>PRIMERO:</strong> {nombreEncargadoUnidad}, da la bienvenida a todos los presentes y a
+          continuación da a conocer la necesidad de adquisición de bienes y/o servicios necesarios para el
+          servicio y buen funcionamiento de esta {nombreUnidad}, con el objeto de dar cumplimiento a la Ley de
+          Contrataciones del Estado. <strong>SEGUNDO:</strong> Se procede a la comparación de ofertas recibidas,
+          las cuales se detallan a continuación:
+        </p>
+      )}
 
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "9pt", margin: "8px 0" }}>
         <thead>
@@ -118,7 +151,27 @@ export default function ImprimirActaClient({
       </table>
 
       <p style={{ fontSize: "9pt", textAlign: "justify", lineHeight: 1.4, margin: "8px 0 0 0" }}>
-        {c.cotizacion_anual_id ? (
+        {esCompraDirecta ? (
+          <>
+            <strong>TERCERO:</strong>{" "}
+            <span style={{ background: "#fde68a" }}>{c.razon_adjudicacion || "—"}</span>. Dicha decisión se
+            fundamenta en la Ley de Contrataciones del Estado, Decreto Número 57-92, artículo 43, inciso b), el
+            cual cita: La modalidad de compra directa consiste en la adquisición de bienes, suministros, obras
+            y servicios a través de una oferta electrónica en el sistema GUATECOMPRAS, prescindiendo de los
+            procedimientos de licitación o cotización, cuando la adquisición sea por montos mayores a
+            veinticinco mil Quetzales (Q.25,000.00) y que no supere los noventa mil Quetzales (Q.90,000.00).
+            Asimismo, se alinea con el Acuerdo Número 22-2025 de la Gerencia del IGSS, de fecha 15 de julio de
+            2025, cuyo artículo 1, segundo párrafo, reitera que la Compra Directa con oferta electrónica no
+            debe superar los noventa mil Quetzales (Q.90,000.00), incluyendo el IVA, y con el artículo 30 del
+            Reglamento de la Ley de Contrataciones del Estado (Acuerdo Gubernativo 1056-92), así como con
+            normativa interna del Instituto. La adjudicación se otorga en base al criterio del precio y por
+            cumplimiento en las bases, tanto como en las especificaciones técnicas solicitadas, y por convenir
+            a los intereses del Instituto. <strong>CUARTO:</strong> No habiendo más que hacer constar, se da
+            por finalizada la presente en el mismo lugar y fecha de su inicio, la que, leída en cada uno de
+            sus puntos, la aceptamos, ratificamos y firmamos de conformidad las personas que en ella
+            intervenimos. Damos fe.
+          </>
+        ) : c.cotizacion_anual_id ? (
           <><strong>TERCERO:</strong> Precios pactados según Cotización Anual No.{" "}
           <span style={{ background: "#fde68a" }}>{c.referencia || "—"}</span>.</>
         ) : (
@@ -136,17 +189,28 @@ export default function ImprimirActaClient({
         debidamente confrontada con su original el día: {hoyTexto}.
       </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginTop: "48px", fontSize: "9pt", textAlign: "center" }}>
-        <div style={{ borderTop: "1.5px solid #222", paddingTop: "6px" }}>
-          <p style={{ margin: 0, fontWeight: "bold" }}>{nombreResponsable || "Bernon Raúl Miranda González"}</p>
-          <p style={{ margin: 0, color: "#444" }}>Analista &ldquo;A&rdquo;/Encargado de Fondo Rotativo</p>
+      {esCompraDirecta ? (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px", marginTop: "48px", fontSize: "9pt", textAlign: "center" }}>
+          {COMISION_COMPRA_DIRECTA.map(m => (
+            <div key={m.nombre} style={{ borderTop: "1.5px solid #222", paddingTop: "6px" }}>
+              <p style={{ margin: 0, fontWeight: "bold" }}>{m.nombre}</p>
+              <p style={{ margin: 0, color: "#444" }}>{m.cargo}</p>
+            </div>
+          ))}
         </div>
-        <div style={{ borderTop: "1.5px solid #222", paddingTop: "6px" }}>
-          <p style={{ margin: 0, fontWeight: "bold" }}>Vo.Bo. {nombreEncargadoUnidad}</p>
-          <p style={{ margin: 0, color: "#444" }}>{cargoEncargadoUnidad}</p>
-          <p style={{ margin: 0, color: "#444" }}>IGSS/UIAADDM en el Municipio de {municipioNombre}, {dep}</p>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginTop: "48px", fontSize: "9pt", textAlign: "center" }}>
+          <div style={{ borderTop: "1.5px solid #222", paddingTop: "6px" }}>
+            <p style={{ margin: 0, fontWeight: "bold" }}>{nombreResponsable || "Bernon Raúl Miranda González"}</p>
+            <p style={{ margin: 0, color: "#444" }}>Analista &ldquo;A&rdquo;/Encargado de Fondo Rotativo</p>
+          </div>
+          <div style={{ borderTop: "1.5px solid #222", paddingTop: "6px" }}>
+            <p style={{ margin: 0, fontWeight: "bold" }}>Vo.Bo. {nombreEncargadoUnidad}</p>
+            <p style={{ margin: 0, color: "#444" }}>{cargoEncargadoUnidad}</p>
+            <p style={{ margin: 0, color: "#444" }}>IGSS/UIAADDM en el Municipio de {municipioNombre}, {dep}</p>
+          </div>
         </div>
-      </div>
+      )}
 
       <p style={{ textAlign: "center", fontSize: "8pt", color: "#666", marginTop: "24px" }}>{direccionUnidad}</p>
     </>
@@ -164,8 +228,12 @@ export default function ImprimirActaClient({
         <span className="text-sm font-semibold text-gray-700">
           Acta {acta.no_acta} · {paginas} {paginas === 1 ? "hoja" : "hojas"} tamaño Carta
         </span>
-        <span className="text-gray-300">|</span>
-        <SelectorFirmante label="Encargado(a) de Unidad" firmantes={firmantes} value={encargadoUnidad} onChange={setEncargadoUnidad} />
+        {!esCompraDirecta && (
+          <>
+            <span className="text-gray-300">|</span>
+            <SelectorFirmante label="Encargado(a) de Unidad" firmantes={firmantes} value={encargadoUnidad} onChange={setEncargadoUnidad} />
+          </>
+        )}
         <button onClick={() => window.print()}
           className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700">
           <Printer className="w-4 h-4" /> Imprimir

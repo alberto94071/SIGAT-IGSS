@@ -13,6 +13,26 @@ import { crearNotificacion } from "@/lib/notificaciones";
 import { LIMITE_POR_TIPO, type TipoCompra } from "./types";
 import { netoDeIva } from "@/lib/iva-utils";
 
+// Correlativo automático "N/AAAA" para el Acta de Compra Directa con Oferta
+// Electrónica (modelo nuevo del cliente, confirmado 2026-08-25) — arranca en
+// 1/año, sin piso configurable (a diferencia del A-01 SIAF no hay conteo
+// previo fuera del sistema que continuar). Las demás actas (Baja Cuantía,
+// Contrato Abierto, Casos de Excepción) siguen con no_acta manual.
+async function getNextActaCompraDirectaNumero(): Promise<string> {
+  const anio = new Date().getFullYear();
+  const rows = await db.select({ no_acta: actasAdjudicacion.no_acta })
+    .from(actasAdjudicacion)
+    .innerJoin(consolidaciones, eq(actasAdjudicacion.consolidacion_id, consolidaciones.id))
+    .where(eq(consolidaciones.tipo_compra, "Compra Directa"));
+  const regex = new RegExp(`^(\\d+)/${anio}$`);
+  let max = 0;
+  for (const r of rows) {
+    const m = r.no_acta.match(regex);
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return `${max + 1}/${anio}`;
+}
+
 async function requireJunta(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
   if (!session) return { error: "No autorizado" };
@@ -37,24 +57,43 @@ export async function generarActa(consolidacionId: number, data: {
     const check = await requireJunta();
     if ("error" in check) return check;
 
-    if (!data.no_formulario.trim()) return { error: "El No. de Formulario es obligatorio" };
-    if (!data.no_acta.trim()) return { error: "El No. de Acta es obligatorio" };
+    const [con] = await db.select({ estado: consolidaciones.estado, tipo_compra: consolidaciones.tipo_compra })
+      .from(consolidaciones).where(eq(consolidaciones.id, consolidacionId)).limit(1);
+    if (!con) return { error: "No se encontró la consolidación" };
+    if (con.estado !== "Adjudicado") return { error: "Solo se puede generar acta de una consolidación Adjudicada" };
+
+    // El Acta de Compra Directa con Oferta Electrónica (modelo del cliente,
+    // 2026-08-25) tiene correlativo automático y no pide No. de Formulario —
+    // ese campo no se imprime en ningún lado del Acta. Las demás actas siguen
+    // con no_formulario/no_acta manuales, igual que siempre.
+    const esCompraDirecta = con.tipo_compra === "Compra Directa";
+    if (!esCompraDirecta) {
+      if (!data.no_formulario.trim()) return { error: "El No. de Formulario es obligatorio" };
+      if (!data.no_acta.trim()) return { error: "El No. de Acta es obligatorio" };
+    }
     if (!data.lugar.trim()) return { error: "El lugar es obligatorio" };
     if (!data.fecha.trim()) return { error: "La fecha es obligatoria" };
     if (!data.hora.trim()) return { error: "La hora es obligatoria" };
 
-    const [con] = await db.select({ estado: consolidaciones.estado }).from(consolidaciones)
-      .where(eq(consolidaciones.id, consolidacionId)).limit(1);
-    if (!con) return { error: "No se encontró la consolidación" };
-    if (con.estado !== "Adjudicado") return { error: "Solo se puede generar acta de una consolidación Adjudicada" };
+    // Si ya existe un acta de Compra Directa para esta misma consolidación
+    // (p. ej. una rechazada que se está corrigiendo), se reutiliza su mismo
+    // número en vez de sacar uno nuevo del correlativo — si no, cada
+    // rechazo/regeneración quemaría un número que nunca se llegó a usar.
+    const [actaExistente] = esCompraDirecta
+      ? await db.select({ no_acta: actasAdjudicacion.no_acta }).from(actasAdjudicacion)
+          .where(eq(actasAdjudicacion.consolidacion_id, consolidacionId)).limit(1)
+      : [];
+    const noActa = esCompraDirecta
+      ? (actaExistente?.no_acta ?? await getNextActaCompraDirectaNumero())
+      : data.no_acta.trim();
 
     // Si ya existe un acta (p. ej. una rechazada que se está corrigiendo), se reemplaza
     await db.delete(actasAdjudicacion).where(eq(actasAdjudicacion.consolidacion_id, consolidacionId));
 
     const [acta] = await db.insert(actasAdjudicacion).values({
       consolidacion_id: consolidacionId,
-      no_formulario: data.no_formulario.trim(),
-      no_acta: data.no_acta.trim(),
+      no_formulario: esCompraDirecta ? "" : data.no_formulario.trim(),
+      no_acta: noActa,
       lugar: data.lugar.trim(),
       fecha: data.fecha,
       hora: data.hora,
