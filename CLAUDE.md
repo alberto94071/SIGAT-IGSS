@@ -510,6 +510,18 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   Verificado en vivo con un usuario de prueba desechable (nunca contra una
   cuenta real, para no arriesgarse a bloquearla) — los 5 intentos muestran
   4/3/2/1 y luego el bloqueo con el contador bajando en tiempo real.
+- **Unidad de medida en blanco en DAB-60/A-04 para insumos "S/C" (sin código
+  real)** — reportado por el cliente 2026-08-25 con un "Aire acondicionado"
+  real (orden 256958). El respaldo contra Base de Datos Central que ya existía
+  en `gruposRenglonDeConsolidacion` (`unidadMedidaLookupMap`) busca por
+  `codigo_igss` real, y "S/C" nunca aparece como valor real en esa tabla (es
+  un placeholder local) — así que ese respaldo nunca cubría insumos sin
+  código, aunque el snapshot (`siaf_compras_items.unidad_medida`) viniera
+  vacío. Fix: mismo patrón que `pprPuroParaImprimir` — `codigo_ppr` para
+  estos insumos guarda `"S/C-{id de Base de Datos Central}"`, y ese id es
+  exactamente la fila elegida, así que `gruposRenglonDeConsolidacion` ahora
+  también resuelve la unidad de medida por ese id antes de dejarla en `null`.
+  Como es la función compartida, arregla DAB-60 y A-04 a la vez.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
