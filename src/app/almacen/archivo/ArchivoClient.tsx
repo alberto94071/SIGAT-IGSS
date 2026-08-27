@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Archive, Search, Printer, Loader2, Construction } from "lucide-react";
 import RenglonBadges from "@/components/RenglonBadges";
 import { getOrdenesArchivadasAlmacen, getPagosFondoRotativoArchivados } from "@/lib/adjudicacion/dab60-actions";
+import HistorialInsumoPanel from "./HistorialInsumoPanel";
 
 type Orden = {
   id: number; numero: number; anio: number;
@@ -60,13 +61,15 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "cuadricula", label: "Cuadrícula" },
 ];
 
+type InsumoParaHistorial = { id: number; codigo_igss: string | null; nombre: string };
+
 export default function ArchivoClient({
   ordenes: ordenesIniciales, hasMore: hasMoreInicial,
   pagosFr: pagosFrIniciales, hasMoreFr: hasMoreFrInicial,
-  requisiciones,
+  requisiciones, insumos,
 }: {
   ordenes: Orden[]; hasMore: boolean; pagosFr: PagoFr[]; hasMoreFr: boolean;
-  requisiciones: Requisicion[];
+  requisiciones: Requisicion[]; insumos: InsumoParaHistorial[];
 }) {
   const [tab, setTab] = useState<Tab>("dab60");
 
@@ -343,6 +346,8 @@ export default function ArchivoClient({
 
       {tab === "dab75" && (
         <div className="space-y-5">
+          <HistorialInsumoPanel insumos={insumos} />
+
           <div>
             <p className="text-sm text-gray-500">
               Historial de requisiciones DAB-75 ({requisiciones.length}).
