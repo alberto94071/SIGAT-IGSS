@@ -12,6 +12,8 @@ import { netoDeIva } from "@/lib/iva-utils";
 import { requiereDab60, cuatrimestreDeFecha } from "@/lib/programacion-constants";
 import { fechaGuatemala, fechaHoraGuatemala } from "@/lib/date-utils";
 import { getDisponible, getDisponibleTx } from "@/lib/presupuesto-disponible";
+import { revertirIngresoAlmacen } from "./dab60-actions";
+import { LoteYaDespachadoEnTransaccion } from "./almacen-errors";
 
 // Igual que PresupuestoExcedidoEnTransaccion en presupuesto-disponible.ts —
 // permite distinguir, en el catch de aprobarCompromiso, "se quedó sin
@@ -427,10 +429,19 @@ export async function regresarADab60(ordenId: number, motivo?: string): Promise<
         fecha_pago: null,
         historial_devoluciones: historial,
       }).where(eq(ordenesCompra.id, ordenId));
+
+      // Deshace el lote que había registrado aprobarDab60 — si no, al
+      // corregir y volver a aprobar se registraría un lote nuevo además del
+      // que ya existía, duplicando la existencia de algo que físicamente
+      // nunca volvió a entrar a la bodega.
+      await revertirIngresoAlmacen(tx, { ordenCompraId: ordenId });
     });
 
     return { ok: true };
-  } catch {
+  } catch (e) {
+    if (e instanceof LoteYaDespachadoEnTransaccion) {
+      return { error: `No se puede devolver: ya se despachó parte de "${e.nombre}" desde Almacén (DAB-75). Ajustá el stock a mano antes de corregir este DAB-60.` };
+    }
     return { error: "Error al devolver la orden a Almacén/DAB-60" };
   }
 }

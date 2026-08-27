@@ -4,12 +4,14 @@ import { fechaHoraGuatemala } from "@/lib/date-utils";
 import { db } from "@/lib/db";
 import { ordenesCompra, dab60Posiciones, fondoRotativoPagos, consolidaciones, almacenInsumos, almacenLotes } from "@/lib/schema";
 import { eq, sql, isNotNull } from "drizzle-orm";
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 import { auth } from "@/lib/auth";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
 import { conDetalle, type PagoFondoRotativo } from "./fondo-rotativo-pagos-actions";
 import { trazabilidadPorConsolidaciones } from "./trazabilidad-utils";
 import { readFile } from "fs/promises";
 import path from "path";
+import { LoteYaDespachadoEnTransaccion } from "./almacen-errors";
 
 // Da de alta existencia en el Catálogo de Almacén cuando un DAB-60 queda
 // firme (aprobado en la vía Normal; generado directo en la vía Fondo
@@ -20,7 +22,7 @@ import path from "path";
 // casi siempre es de un solo insumo (confirmado por el cliente 2026-08-26);
 // si alguna vez trae más de uno, todos heredan el mismo lote de ese
 // documento.
-async function registrarIngresoAlmacen(params: {
+async function registrarIngresoAlmacen(tx: Tx, params: {
   consolidacionId: number; fechaIngreso: string;
   lote: string | null; fechaVencimiento: string | null;
   marca: string | null; modelo: string | null; serie: string | null;
@@ -28,7 +30,7 @@ async function registrarIngresoAlmacen(params: {
 }): Promise<void> {
   const grupos = await gruposRenglonDeConsolidacion(params.consolidacionId);
   for (const g of grupos) {
-    const [insumo] = await db.insert(almacenInsumos).values({
+    const [insumo] = await tx.insert(almacenInsumos).values({
       codigo_igss: g.codigo_igss, subproducto: g.subproducto, nombre: g.nombre,
       descripcion_igss: g.descripcion_igss, renglon: g.renglon, unidad_medida: g.unidad_medida,
     }).onConflictDoUpdate({
@@ -36,12 +38,42 @@ async function registrarIngresoAlmacen(params: {
       set: { nombre: g.nombre },
     }).returning();
 
-    await db.insert(almacenLotes).values({
+    await tx.insert(almacenLotes).values({
       insumo_id: insumo.id, lote: params.lote, fecha_vencimiento: params.fechaVencimiento,
       fecha_ingreso: params.fechaIngreso, cantidad_ingresada: g.cantidad, cantidad_disponible: g.cantidad,
       marca: params.marca, modelo: params.modelo, serie: params.serie,
       orden_compra_id: params.ordenCompraId ?? null, pago_fr_id: params.pagoFrId ?? null,
     });
+  }
+}
+
+// Deshace el ingreso a Almacén que hizo aprobarDab60/generarDab60FondoRotativo
+// para una orden/pago puntual — se usa al devolver una orden rechazada por la
+// DAF de vuelta a Almacén/DAB-60 para corregir datos (ver regresarADab60 en
+// compromiso-actions.ts): sin esto, al corregir y volver a aprobar, aprobarDab60
+// registraba un lote NUEVO además del que ya existía — duplicando existencia
+// de algo que físicamente nunca volvió a entrar a la bodega. Si ya se
+// despachó parte de ese lote por un DAB-75 antes de que se detectara el
+// rechazo (algo salió de bodega con datos que ahora resultan incorrectos), no
+// se puede deshacer solo — se bloquea la devolución para que el encargado de
+// Almacén lo resuelva a mano en vez de dejar cantidades inconsistentes.
+export async function revertirIngresoAlmacen(
+  tx: Tx, filtro: { ordenCompraId?: number; pagoFrId?: number }
+): Promise<void> {
+  const condicion = filtro.ordenCompraId != null
+    ? eq(almacenLotes.orden_compra_id, filtro.ordenCompraId)
+    : eq(almacenLotes.pago_fr_id, filtro.pagoFrId!);
+  const lotes = await tx.select({
+    id: almacenLotes.id, cantidad_ingresada: almacenLotes.cantidad_ingresada,
+    cantidad_disponible: almacenLotes.cantidad_disponible, nombre: almacenInsumos.nombre,
+  }).from(almacenLotes).innerJoin(almacenInsumos, eq(almacenInsumos.id, almacenLotes.insumo_id))
+    .where(condicion);
+
+  for (const l of lotes) {
+    if (l.cantidad_disponible !== l.cantidad_ingresada) throw new LoteYaDespachadoEnTransaccion(l.nombre);
+  }
+  for (const l of lotes) {
+    await tx.delete(almacenLotes).where(eq(almacenLotes.id, l.id));
   }
 }
 
@@ -246,17 +278,22 @@ export async function aprobarDab60(ordenId: number): Promise<{ ok: true } | { er
     if (!orden) return { error: "No se encontró la orden" };
     if (orden.estado !== "DAB-60 Pendiente Aprobación") return { error: "Esta orden no está pendiente de aprobación de DAB-60" };
 
-    await db.update(ordenesCompra).set({ estado: "En Devengado" }).where(eq(ordenesCompra.id, ordenId));
+    // El cambio de estado y el ingreso a Almacén van en una sola transacción
+    // — si el ingreso fallara a la mitad, no debe quedar la orden marcada
+    // "En Devengado" con el stock sin registrar.
+    await db.transaction(async (tx) => {
+      await tx.update(ordenesCompra).set({ estado: "En Devengado" }).where(eq(ordenesCompra.id, ordenId));
 
-    // Recién aquí, no en generarDab60, porque generarDab60 se puede llamar
-    // varias veces corrigiendo datos antes de aprobar — dar de alta stock ahí
-    // duplicaría el ingreso en cada corrección.
-    await registrarIngresoAlmacen({
-      consolidacionId: orden.consolidacion_id,
-      fechaIngreso: orden.fecha_ingreso_producto ?? orden.fecha,
-      lote: orden.lote, fechaVencimiento: orden.fecha_vencimiento,
-      marca: orden.marca, modelo: orden.modelo, serie: orden.serie,
-      ordenCompraId: orden.id,
+      // Recién aquí, no en generarDab60, porque generarDab60 se puede llamar
+      // varias veces corrigiendo datos antes de aprobar — dar de alta stock ahí
+      // duplicaría el ingreso en cada corrección.
+      await registrarIngresoAlmacen(tx, {
+        consolidacionId: orden.consolidacion_id,
+        fechaIngreso: orden.fecha_ingreso_producto ?? orden.fecha,
+        lote: orden.lote, fechaVencimiento: orden.fecha_vencimiento,
+        marca: orden.marca, modelo: orden.modelo, serie: orden.serie,
+        ordenCompraId: orden.id,
+      });
     });
 
     return { ok: true };
@@ -304,27 +341,30 @@ export async function generarDab60FondoRotativo(pagoId: number, data: Dab60DataF
     const serie = data.serie.trim() || null;
     const fechaIngreso = data.fecha_ingreso_producto.trim() || fechaHoraGuatemala().slice(0, 10);
 
-    await db.update(fondoRotativoPagos).set({
-      dab60_no_recibo_almacen:      data.no_recibo_almacen.trim(),
-      dab60_serie_recibo_almacen:   data.serie_recibo_almacen.trim(),
-      dab60_encargado_almacen:      data.encargado_almacen.trim(),
-      dab60_fecha_ingreso_producto: data.fecha_ingreso_producto.trim() || null,
-      dab60_lote:                   lote,
-      dab60_fecha_vencimiento:      fechaVencimiento,
-      dab60_marca:                  marca,
-      dab60_modelo:                 modelo,
-      dab60_serie:                  serie,
-      dab60_generado_en:            fechaHoraGuatemala(),
-      estado:                       "Pendiente forma de pago",
-    }).where(eq(fondoRotativoPagos.id, pagoId));
-
     // Sin etapa de aprobación separada en esta vía (a diferencia de Normal)
     // — el ingreso a Almacén se registra de una vez, porque generarDab60FondoRotativo
     // solo se puede llamar una vez por registro (el guard de arriba lo impide).
-    await registrarIngresoAlmacen({
-      consolidacionId: pago.consolidacion_id,
-      fechaIngreso, lote, fechaVencimiento, marca, modelo, serie,
-      pagoFrId: pagoId,
+    // Igual que en aprobarDab60, ambos pasos van en una sola transacción.
+    await db.transaction(async (tx) => {
+      await tx.update(fondoRotativoPagos).set({
+        dab60_no_recibo_almacen:      data.no_recibo_almacen.trim(),
+        dab60_serie_recibo_almacen:   data.serie_recibo_almacen.trim(),
+        dab60_encargado_almacen:      data.encargado_almacen.trim(),
+        dab60_fecha_ingreso_producto: data.fecha_ingreso_producto.trim() || null,
+        dab60_lote:                   lote,
+        dab60_fecha_vencimiento:      fechaVencimiento,
+        dab60_marca:                  marca,
+        dab60_modelo:                 modelo,
+        dab60_serie:                  serie,
+        dab60_generado_en:            fechaHoraGuatemala(),
+        estado:                       "Pendiente forma de pago",
+      }).where(eq(fondoRotativoPagos.id, pagoId));
+
+      await registrarIngresoAlmacen(tx, {
+        consolidacionId: pago.consolidacion_id,
+        fechaIngreso, lote, fechaVencimiento, marca, modelo, serie,
+        pagoFrId: pagoId,
+      });
     });
 
     return { ok: true };
