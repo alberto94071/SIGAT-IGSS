@@ -29,6 +29,20 @@ export async function getInsumosConExistencia(): Promise<InsumoConExistencia[]> 
   return rows;
 }
 
+export type InsumoParaHistorial = { id: number; codigo_igss: string | null; nombre: string };
+
+// Todos los insumos que alguna vez tuvieron un ingreso (no solo los que
+// tienen existencia ahora) — para el selector de "Descargar historial" en
+// Almacén/Archivo/DAB-75, donde interesa poder consultar el historial
+// completo aunque ya no quede nada disponible.
+export async function getInsumosParaHistorial(): Promise<InsumoParaHistorial[]> {
+  const session = await auth();
+  if (!session) return [];
+  return db.select({ id: almacenInsumos.id, codigo_igss: almacenInsumos.codigo_igss, nombre: almacenInsumos.nombre })
+    .from(almacenInsumos)
+    .orderBy(almacenInsumos.nombre);
+}
+
 // Se despacha por FEFO (First-Expire-First-Out): el lote que vence antes se
 // agota primero, y el que vence después queda bloqueado hasta que el
 // anterior se termine — así nunca sale primero un insumo que vence más

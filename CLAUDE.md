@@ -86,7 +86,7 @@ mergeado), actualizá este archivo antes de dar el trabajo por cerrado:
 | `compras/` | A-01 SIAF, Consolidación, Adjudicación, Órdenes, catálogo de compras |
 | `junta-adjudicadora/` | Actas de adjudicación |
 | `presupuesto/` | Programación, Reprogramación, Modificaciones, Compromiso, Devengado, Ejecución, Presupuesto General |
-| `almacen/` | DAB-60 (Normal y Fondo Rotativo), DAB-75 (requisición con existencia real y FEFO por lote), Catálogo (stock con alertas) |
+| `almacen/` | DAB-60 (Normal y Fondo Rotativo), DAB-75 (requisición con existencia real y FEFO por lote), Catálogo (stock con alertas y reportes Excel con gráfico nativo) |
 | `fondo-rotativo/`, `caja-chica/`, `dashboard/` (pagos/fri/bancos/vales) | Pago de Fondo Rotativo: Pagos → Bancos/Liquidación → Caja Chica → FRI → Reintegro DAF |
 | `pasajes/` | Tarifario, Solicitud de Pasaje (SPS-75), DPD-23, Póliza |
 | `viaticos/` | Planilla de Viático (V-L) |
@@ -590,6 +590,50 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   - **DAB-60s aprobados antes de este cambio no se re-procesaron** — el
     Catálogo arranca vacío y se va llenando solo desde el próximo DAB-60
     que se apruebe en adelante; no hay backfill retroactivo del historial.
+- **`exceljs` (nueva dependencia, 2026-08-27) NO sabe escribir gráficos
+  nativos — ni `exceljs` ni la `xlsx`/SheetJS que ya usaba el proyecto
+  pueden.** El cliente pidió gráficos nativos de verdad (editables al abrir
+  en Excel, no una imagen pegada) para los reportes de Almacén. Se
+  construyó `agregarGraficoBarras` (`src/lib/excel-chart.ts`), que **inyecta
+  a mano las partes OOXML de un gráfico de barras** (vía `jszip`, dependencia
+  transitiva de `exceljs` ahora también directa) sobre el `.xlsx` que
+  `exceljs` ya escribió: `xl/charts/chart1.xml` + `xl/drawings/drawing1.xml`
+  + sus `.rels` + el `<drawing r:id=.../>` en la hoja + los `Override` en
+  `[Content_Types].xml`. **Requisito no negociable de esta técnica: el
+  gráfico tiene que referenciar celdas que existan literalmente en la hoja
+  con los mismos valores que muestra** — no se puede apuntar a datos
+  agregados/reordenados que no correspondan fila a fila con la tabla cruda
+  (un primer intento hacía justo eso — categorías/valores de un top-15
+  agregado apuntando a la tabla de detalle sin agregar — y habría mostrado
+  fechas o nombres desalineados con los valores). Por eso cada reporte con
+  gráfico arma una hoja aparte **"Resumen"** (exactamente las filas que
+  muestra el gráfico) y el gráfico vive ahí, referenciando sus propias
+  celdas — la hoja "Datos" con el detalle completo queda intacta al lado.
+  Verificado con `openpyxl` (`ws._charts` reconoce el objeto `BarChart` con
+  su título) y `xmllint --noout` sobre cada parte del .xlsx generado — sin
+  eso no hay forma de confirmar que Excel no va a pedir "reparar" el
+  archivo, porque este entorno no tiene Excel de verdad para probarlo. Si
+  se necesita más de un gráfico por archivo algún día, hay que parametrizar
+  el índice (`chart1.xml`/`drawing1.xml` están hardcodeados a "el único
+  gráfico de este archivo").
+- **Reportes de Almacén** (`src/app/api/almacen/reporte/route.ts`, Route
+  Handler — no Server Action, porque una Server Action no puede fijar
+  `Content-Disposition`/`Content-Type` de un binario para forzar la
+  descarga): 6 tipos por query param `tipo` (`ingresados_mes`, `almacenados`,
+  `por_vencer`, `vencidos`, `por_renglon`, `renglon`), cada uno con su tabla
+  en "Datos" + gráfico de barras en "Resumen" (top 15 cuando aplica). Botón
+  "Descargar reporte" en `almacen/catalogo`
+  (`ReportesAlmacenPanel.tsx`) — un modal con los 6 tipos como radio buttons
+  y un `<a href=...>` directo a la ruta (sin JS de por medio; el navegador
+  dispara la descarga solo por el `Content-Disposition`). Reporte aparte,
+  más simple, **sin gráfico**: historial cronológico de un insumo puntual
+  (`src/app/api/almacen/dab75-historial/route.ts`, combina ingresos de
+  `almacen_lotes` + egresos de `requisicion_bodega_despachos` con saldo
+  corriente), con su propio selector en `almacen/archivo` → pestaña DAB-75
+  (`HistorialInsumoPanel.tsx`) — lista TODOS los insumos que alguna vez
+  tuvieron un ingreso (`getInsumosParaHistorial`), no solo los que tienen
+  existencia ahora, porque interesa poder consultar el historial completo
+  aunque ya no quede nada disponible.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

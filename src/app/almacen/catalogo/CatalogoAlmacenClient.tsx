@@ -4,6 +4,7 @@ import { fechaGuatemala } from "@/lib/date-utils";
 import { useState, useMemo } from "react";
 import { BookOpen, Search, AlertTriangle, Clock, XCircle, Check } from "lucide-react";
 import { actualizarUmbralesInsumo, type InsumoAlmacen } from "./actions";
+import ReportesAlmacenPanel from "./ReportesAlmacenPanel";
 
 // Umbral de "próximo a vencer" por defecto cuando el insumo no tiene uno
 // configurado — el cliente pidió que sea configurable por insumo
@@ -70,15 +71,22 @@ export default function CatalogoAlmacenClient({ insumos: init, canEdit }: { insu
     await actualizarUmbralesInsumo(id, stockMinimo, diasAlerta);
   }
 
+  const renglonesDisponibles = useMemo(() => [...new Set(
+    insumos.map(i => i.renglon).filter((r): r is number => r != null)
+  )].sort((a, b) => a - b), [insumos]);
+
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <BookOpen className="w-5 h-5" /> Catálogo de Almacén
-        </h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          {insumos.length} insumo(s) con existencia registrada — cada ingreso viene de un DAB-60 aprobado.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <BookOpen className="w-5 h-5" /> Catálogo de Almacén
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {insumos.length} insumo(s) con existencia registrada — cada ingreso viene de un DAB-60 aprobado.
+          </p>
+        </div>
+        <ReportesAlmacenPanel renglonesDisponibles={renglonesDisponibles} />
       </div>
 
       <div className="flex gap-1 border-b border-gray-200">
