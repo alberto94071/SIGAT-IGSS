@@ -575,16 +575,16 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
           {columna("col_v_unitario", vUnitarios, "right")}
           {columna("col_valor_total", valoresTotales, "right")}
 
-          {campo("marca", `Marca: ${(o.marca ?? "").toUpperCase()}`)}
-          {campo("lote", o.lote ?? "")}
-          {campo("fecha_vencimiento", o.fecha_vencimiento ?? "")}
+          {o.marca && campo("marca", `Marca: ${o.marca.toUpperCase()}`)}
+          {o.lote && campo("lote", o.lote)}
+          {o.fecha_vencimiento && campo("fecha_vencimiento", o.fecha_vencimiento)}
           {campo("descripcion", datos.descripcion, { style: { lineHeight: 1.35 }, multiline: true })}
           {campo("encargado_almacen", o.encargado_almacen ?? "")}
 
           {campo("fecha_emision", o.fecha_emision ?? "")}
           {campo("fecha_ingreso", o.fecha_ingreso_producto ?? "")}
-          {campo("modelo", `Modelo: ${(o.modelo ?? "").toUpperCase()}`)}
-          {campo("serie", `Serie: ${(o.serie ?? "").toUpperCase()}`)}
+          {o.modelo && campo("modelo", `Modelo: ${o.modelo.toUpperCase()}`)}
+          {o.serie && campo("serie", `Serie: ${o.serie.toUpperCase()}`)}
           {campo("serie_factura", o.serie_factura ? `SERIE: ${o.serie_factura}` : "")}
           {campo("proveedor_nit", o.proveedor_nit ?? "")}
         </div>

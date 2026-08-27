@@ -522,6 +522,19 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   exactamente la fila elegida, así que `gruposRenglonDeConsolidacion` ahora
   también resuelve la unidad de medida por ese id antes de dejarla en `null`.
   Como es la función compartida, arregla DAB-60 y A-04 a la vez.
+- **DAB-60: Marca/Modelo/Serie/Lote/Fecha de Vencimiento se ocultan por
+  separado, cada uno solo si ese campo puntual viene vacío en esa orden**
+  (confirmado por el cliente 2026-08-26) — a diferencia de los "campos
+  ocultables" con el botón "×" (persistente por navegador, ver abajo), esto
+  es automático y por orden: si esta orden no tiene lote, no se imprime ese
+  renglón; si la siguiente orden sí lo tiene, se imprime normal. En
+  `ImprimirDab60Client.tsx` cada uno de esos 5 campos se envuelve en
+  `{o.campo && campo(...)}` (chequeando el valor crudo, no el texto ya
+  formateado con la etiqueta — para Marca/Modelo/Serie el texto por defecto
+  siempre trae la etiqueta concatenada, así que nunca queda vacío por sí
+  solo). No afecta la posición de los demás campos porque cada uno tiene su
+  propia posición absoluta independiente — simplemente no se renderiza nada
+  ahí cuando falta el dato.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
