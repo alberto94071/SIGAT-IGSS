@@ -2,7 +2,7 @@
 import { fechaGuatemala } from "@/lib/date-utils";
 
 import { useState, useMemo } from "react";
-import { BookOpen, Search, AlertTriangle, Clock, XCircle, Check } from "lucide-react";
+import { BookOpen, Search, AlertTriangle, Clock, XCircle, Check, ShoppingCart } from "lucide-react";
 import { actualizarUmbralesInsumo, type InsumoAlmacen } from "./actions";
 import ReportesAlmacenPanel from "./ReportesAlmacenPanel";
 
@@ -33,7 +33,17 @@ function diasHasta(fechaIso: string): number {
   return Math.round((meta.getTime() - hoy.getTime()) / 86400000);
 }
 
-export default function CatalogoAlmacenClient({ insumos: init, canEdit }: { insumos: InsumoAlmacen[]; canEdit: boolean }) {
+export default function CatalogoAlmacenClient({ insumos: init, canEdit, onAgregarASolicitud }: {
+  insumos: InsumoAlmacen[]; canEdit: boolean;
+  // Cuando se pasa, el Catálogo entra en "modo solicitud" (usado por
+  // solicitar-insumos/catalogo, colaborador): oculta la edición de umbrales
+  // y los reportes (no le corresponden), y en su lugar muestra un botón
+  // "Agregar a solicitud" por fila que delega en este callback — el carrito
+  // en sí (server actions, modal de cantidad) vive en el componente padre
+  // para no acoplar este componente compartido a solicitar-insumos/actions.ts.
+  onAgregarASolicitud?: (insumo: InsumoAlmacen) => void;
+}) {
+  const modoSolicitud = onAgregarASolicitud != null;
   const [insumos, setInsumos] = useState(init);
   const [tab, setTab] = useState<Tab>("todos");
   const [query, setQuery] = useState("");
@@ -86,7 +96,7 @@ export default function CatalogoAlmacenClient({ insumos: init, canEdit }: { insu
             {insumos.length} insumo(s) con existencia registrada — cada ingreso viene de un DAB-60 aprobado.
           </p>
         </div>
-        <ReportesAlmacenPanel renglonesDisponibles={renglonesDisponibles} />
+        {!modoSolicitud && <ReportesAlmacenPanel renglonesDisponibles={renglonesDisponibles} />}
       </div>
 
       <div className="flex gap-1 border-b border-gray-200">
@@ -127,13 +137,19 @@ export default function CatalogoAlmacenClient({ insumos: init, canEdit }: { insu
                 <th className="px-4 py-3 text-right whitespace-nowrap">Ingresado</th>
                 <th className="px-4 py-3 text-right whitespace-nowrap">Disponible</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Próx. vencimiento</th>
-                <th className="px-4 py-3 text-left whitespace-nowrap">Stock mín.</th>
-                <th className="px-4 py-3 text-left whitespace-nowrap">Días alerta</th>
+                {modoSolicitud ? (
+                  <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>
+                ) : (
+                  <>
+                    <th className="px-4 py-3 text-left whitespace-nowrap">Stock mín.</th>
+                    <th className="px-4 py-3 text-left whitespace-nowrap">Días alerta</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {visibles.map(i => (
-                <FilaInsumo key={i.id} insumo={i} canEdit={canEdit} onGuardar={guardarUmbrales} />
+                <FilaInsumo key={i.id} insumo={i} canEdit={canEdit} onGuardar={guardarUmbrales} onAgregarASolicitud={onAgregarASolicitud} />
               ))}
             </tbody>
           </table>
@@ -153,9 +169,10 @@ export default function CatalogoAlmacenClient({ insumos: init, canEdit }: { insu
   );
 }
 
-function FilaInsumo({ insumo: i, canEdit, onGuardar }: {
+function FilaInsumo({ insumo: i, canEdit, onGuardar, onAgregarASolicitud }: {
   insumo: InsumoAlmacen; canEdit: boolean;
   onGuardar: (id: number, stockMinimo: number | null, diasAlerta: number | null) => void;
+  onAgregarASolicitud?: (insumo: InsumoAlmacen) => void;
 }) {
   const [stockMinimo, setStockMinimo] = useState(i.stock_minimo != null ? String(i.stock_minimo) : "");
   const [diasAlerta, setDiasAlerta] = useState(i.dias_alerta_vencimiento != null ? String(i.dias_alerta_vencimiento) : "");
@@ -196,21 +213,32 @@ function FilaInsumo({ insumo: i, canEdit, onGuardar }: {
           </span>
         ) : <span className="text-gray-300">—</span>}
       </td>
-      <td className="px-4 py-3 whitespace-nowrap">
-        {canEdit ? (
-          <input type="number" min={0} className="input w-20 py-1 text-xs" placeholder="—"
-            value={stockMinimo} onChange={e => setStockMinimo(e.target.value)} onBlur={guardar} />
-        ) : (stockMinimo || "—")}
-      </td>
-      <td className="px-4 py-3 whitespace-nowrap">
-        <div className="flex items-center gap-1.5">
-          {canEdit ? (
-            <input type="number" min={0} className="input w-20 py-1 text-xs" placeholder={String(DIAS_ALERTA_VENCIMIENTO_DEFAULT)}
-              value={diasAlerta} onChange={e => setDiasAlerta(e.target.value)} onBlur={guardar} />
-          ) : (diasAlerta || DIAS_ALERTA_VENCIMIENTO_DEFAULT)}
-          {guardado && <Check className="w-3.5 h-3.5 text-emerald-500" />}
-        </div>
-      </td>
+      {onAgregarASolicitud ? (
+        <td className="px-4 py-3 text-right whitespace-nowrap">
+          <button onClick={() => onAgregarASolicitud(i)} disabled={i.cantidad_disponible_total <= 0}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            <ShoppingCart className="w-3.5 h-3.5" /> Agregar
+          </button>
+        </td>
+      ) : (
+        <>
+          <td className="px-4 py-3 whitespace-nowrap">
+            {canEdit ? (
+              <input type="number" min={0} className="input w-20 py-1 text-xs" placeholder="—"
+                value={stockMinimo} onChange={e => setStockMinimo(e.target.value)} onBlur={guardar} />
+            ) : (stockMinimo || "—")}
+          </td>
+          <td className="px-4 py-3 whitespace-nowrap">
+            <div className="flex items-center gap-1.5">
+              {canEdit ? (
+                <input type="number" min={0} className="input w-20 py-1 text-xs" placeholder={String(DIAS_ALERTA_VENCIMIENTO_DEFAULT)}
+                  value={diasAlerta} onChange={e => setDiasAlerta(e.target.value)} onBlur={guardar} />
+              ) : (diasAlerta || DIAS_ALERTA_VENCIMIENTO_DEFAULT)}
+              {guardado && <Check className="w-3.5 h-3.5 text-emerald-500" />}
+            </div>
+          </td>
+        </>
+      )}
     </tr>
   );
 }
