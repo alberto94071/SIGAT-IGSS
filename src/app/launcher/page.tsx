@@ -4,7 +4,7 @@ import Link from "next/link";
 import {
   RotateCcw, MapPin, Bus, ArrowRight, Construction,
   ShoppingCart, Database, Calculator, Wallet,
-  Archive, Gavel, FileSignature, UserCog, Route
+  Archive, Gavel, FileSignature, UserCog, Route, Package
 } from "lucide-react";
 import { type Modulo, type Rol } from "@/lib/permisos";
 import { getPermisosFrescos } from "@/lib/modulo-access";
@@ -171,11 +171,49 @@ const MODULES = [
   },
 ];
 
+// El colaborador no pasa por el sistema mod_*/tab_* (ver PERMISOS_DEFAULT.colaborador
+// en permisos.ts) — sus 2 tarjetas son fijas para todos los colaboradores,
+// no configurables por persona, así que no llevan `permiso`.
+const MODULES_COLABORADOR = [
+  {
+    id: "solicitar-insumos",
+    title: "Solicitar Insumos",
+    description: "Catálogo de Almacén en tiempo real y solicitud de insumos (DAB-75).",
+    href: "/solicitar-insumos/catalogo",
+    icon: Package,
+    color: "bg-teal-500",
+    ring: "ring-teal-200",
+    textColor: "text-teal-600",
+    bgLight: "bg-teal-50",
+    available: true,
+  },
+  {
+    id: "solicitar-viaticos",
+    title: "Solicitar Viáticos",
+    description: "Solicitud de viáticos por comisión de trabajo.",
+    href: "/launcher",
+    icon: MapPin,
+    color: "bg-blue-500",
+    ring: "ring-blue-200",
+    textColor: "text-blue-600",
+    bgLight: "bg-blue-50",
+    available: false,
+  },
+];
+
 export default async function LauncherPage() {
   const session = await auth();
   if (!session) redirect("/login");
 
   const rol = session.user.rol as Rol;
+
+  if (rol === "colaborador") {
+    return (
+      <LauncherBase esSuperAdmin={false} userName={session.user.name ?? "Colaborador"}
+        prefs={await getMisPreferenciasUI()} modules={MODULES_COLABORADOR} />
+    );
+  }
+
   const permisos = await getPermisosFrescos(Number(session.user.id), rol);
   const modules = MODULES.filter(m => m.permiso === null || permisos[m.permiso]);
   // Solo el Super Administrador tiene todos los módulos disponibles a la
@@ -186,6 +224,21 @@ export default async function LauncherPage() {
 
   const userName = session.user.name ?? session.user.email ?? "Usuario";
   const prefs = await getMisPreferenciasUI();
+
+  return <LauncherBase esSuperAdmin={esSuperAdmin} userName={userName} prefs={prefs} modules={modules} />;
+}
+
+type ModuloTile = {
+  id: string; title: string; description: string; href: string;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  color: string; ring: string; textColor: string; bgLight: string; available: boolean;
+};
+
+function LauncherBase({ esSuperAdmin, userName, prefs, modules }: {
+  esSuperAdmin: boolean; userName: string;
+  prefs: Awaited<ReturnType<typeof getMisPreferenciasUI>>;
+  modules: ModuloTile[];
+}) {
   const cm = prefs.color_modulos; // si está definido, sobreescribe el color de cada tarjeta
 
   return (

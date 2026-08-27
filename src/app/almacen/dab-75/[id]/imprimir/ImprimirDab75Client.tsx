@@ -2,10 +2,14 @@
 import { OverlayPrint } from "@/components/overlay-print/OverlayPrint";
 import OverlayField from "@/components/overlay-print/OverlayField";
 
+// Esta pantalla solo se alcanza con estado === "Aprobado" (ver page.tsx),
+// así que en la práctica el encargado de Almacén ya llenó todos estos
+// campos al aprobar — quedan `| null` en el tipo porque así los guarda la
+// base (nacen vacíos como Borrador/Pendiente), no porque puedan faltar acá.
 type Requisicion = {
-  id: number; no_pedido: string; fecha_emision: string; clave_administrativa: string;
-  sala_servicio: string; bodega: string; fecha_despacho: string | null;
-  solicita_nombre: string; solicita_no_empleado: string; solicita_cargo: string;
+  id: number; no_pedido: string | null; fecha_emision: string | null; clave_administrativa: string | null;
+  sala_servicio: string | null; bodega: string | null; fecha_despacho: string | null;
+  solicita_nombre: string | null; solicita_no_empleado: string | null; solicita_cargo: string | null;
   entrega_nombre: string | null; entrega_no_empleado: string | null; entrega_cargo: string | null;
   recibe_nombre: string | null; recibe_no_empleado: string | null; recibe_cargo: string | null;
   director_nombre: string | null;
@@ -30,7 +34,7 @@ const BOXES = {
 
 export default function ImprimirDab75Client({ requisicion: r }: { requisicion: Requisicion }) {
   return (
-    <OverlayPrint storageKey="overlay-offset-dab75" title={`DAB-75 — Pedido ${r.no_pedido}`}>
+    <OverlayPrint storageKey="overlay-offset-dab75" title={`DAB-75 — Pedido ${r.no_pedido ?? ""}`}>
       <OverlayField top={1.30} left={0.30} width={0.9}>{r.no_pedido}</OverlayField>
       <OverlayField top={1.30} left={1.50} width={1.15}>{fechaCorta(r.fecha_emision)}</OverlayField>
       <OverlayField top={1.30} left={3.00} width={1.7}>{r.clave_administrativa}</OverlayField>

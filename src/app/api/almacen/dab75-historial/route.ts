@@ -54,10 +54,10 @@ export async function GET(req: NextRequest) {
         : r.lote ? `DAB-60 (Lote ${r.lote})` : "DAB-60",
     })),
     ...egresos.map((r): Movimiento => ({
-      fecha: r.fecha ?? r.fechaEmision,
+      fecha: r.fecha ?? r.fechaEmision ?? "",
       tipo: "Egreso",
       cantidad: -r.cantidad,
-      documento: `DAB-75 No. ${r.noPedido} — ${r.salaServicio}`,
+      documento: `DAB-75 No. ${r.noPedido ?? "—"} — ${r.salaServicio ?? "—"}`,
     })),
   ].sort((a, b) => a.fecha.localeCompare(b.fecha));
 

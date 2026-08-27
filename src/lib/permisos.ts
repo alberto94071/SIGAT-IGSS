@@ -1,10 +1,14 @@
-export type Rol = "superadmin" | "admin" | "operador" | "consulta";
+// "colaborador" es un rol aparte, no un operador con permisos recortados:
+// no pasa por el sistema mod_*/tab_* en absoluto (ver PERMISOS_DEFAULT.colaborador
+// más abajo) — sus únicas rutas (solicitar-insumos/) se protegen con
+// requireColaborador() en modulo-access.ts, no con requireModuloAccess.
+export type Rol = "superadmin" | "admin" | "operador" | "consulta" | "colaborador";
 
 // Roles que un "admin" (no máster) puede administrar en Usuarios — el día a
 // día del personal operativo. Crear/editar administradores u otros máster,
 // y tocar los accesos (permisos por módulo), sigue siendo exclusivo del
 // Administrador Máster (superadmin). Ver administracion/actions.ts.
-export const ROLES_GESTIONABLES_POR_ADMIN: Rol[] = ["operador", "consulta"];
+export const ROLES_GESTIONABLES_POR_ADMIN: Rol[] = ["operador", "consulta", "colaborador"];
 
 export interface Permisos {
   // ── Módulos del launcher (todo o nada por módulo completo) ──
@@ -174,20 +178,31 @@ export const PERMISOS_DEFAULT: Record<Rol, Permisos> = {
     ...MODULOS_DEFAULT, mod_administracion: false, mod_hoja_de_ruta: false,
     ...TABS_DEFAULT_ABIERTAS, ...AUTORIZAR_CERRADO,
   },
+  // Todo en false — el colaborador no usa el sistema mod_*/tab_* en
+  // absoluto (ver comentario en la definición de Rol). Se calcula a partir
+  // de las mismas claves que ya arman los otros 4 roles, para no tener que
+  // enumerar a mano los ~50 campos de Permisos y arriesgar que se
+  // desincronice si el tipo cambia.
+  colaborador: Object.fromEntries(
+    Object.keys({ ...MODULOS_DEFAULT, mod_administracion: false, mod_hoja_de_ruta: false, ...TABS_DEFAULT_ABIERTAS, ...AUTORIZAR_ADMIN })
+      .map(k => [k, false])
+  ) as unknown as Permisos,
 };
 
 export const ROL_LABELS: Record<Rol, string> = {
-  superadmin: "Super Administrador",
-  admin:      "Administrador",
-  operador:   "Operador",
-  consulta:   "Consulta",
+  superadmin:  "Super Administrador",
+  admin:       "Administrador",
+  operador:    "Operador",
+  consulta:    "Consulta",
+  colaborador: "Colaborador",
 };
 
 export const ROL_COLORS: Record<Rol, string> = {
-  superadmin: "bg-purple-100 text-purple-800",
-  admin:      "bg-blue-100 text-blue-800",
-  operador:   "bg-green-100 text-green-800",
-  consulta:   "bg-gray-100 text-gray-700",
+  superadmin:  "bg-purple-100 text-purple-800",
+  admin:       "bg-blue-100 text-blue-800",
+  operador:    "bg-green-100 text-green-800",
+  consulta:    "bg-gray-100 text-gray-700",
+  colaborador: "bg-teal-100 text-teal-800",
 };
 
 export function parsePermisos(permisos_json: string, rol: Rol): Permisos {

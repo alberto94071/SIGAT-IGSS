@@ -8,7 +8,8 @@ import { Archive, Plus, X, Loader2, AlertTriangle, Printer, Trash2, Search } fro
 import { crearRequisicion, type ItemRequisicion, type InsumoConExistencia } from "./actions";
 
 type Requisicion = {
-  id: number; no_pedido: string; fecha_emision: string; sala_servicio: string; bodega: string;
+  id: number; no_pedido: string | null; fecha_emision: string | null; sala_servicio: string | null; bodega: string | null;
+  estado: string;
   items: { codigo: string; nombre: string; cantidad_solicitada: number }[];
 };
 
@@ -22,10 +23,11 @@ export default function Dab75Client({ requisiciones: init, insumos, canEdit }: {
 
   const q = query.toLowerCase().trim();
   const filtradas = useMemo(() => !q ? requisiciones : requisiciones.filter(r =>
-    r.no_pedido.toLowerCase().includes(q) ||
-    r.fecha_emision.includes(q) ||
-    r.sala_servicio.toLowerCase().includes(q) ||
-    r.bodega.toLowerCase().includes(q) ||
+    (r.no_pedido ?? "").toLowerCase().includes(q) ||
+    (r.fecha_emision ?? "").includes(q) ||
+    (r.sala_servicio ?? "").toLowerCase().includes(q) ||
+    (r.bodega ?? "").toLowerCase().includes(q) ||
+    r.estado.toLowerCase().includes(q) ||
     r.items.some(i => i.nombre.toLowerCase().includes(q) || i.codigo.toLowerCase().includes(q))
   ), [requisiciones, q]);
 
@@ -70,10 +72,10 @@ export default function Dab75Client({ requisiciones: init, insumos, canEdit }: {
             <tbody className="divide-y divide-gray-100">
               {filtradas.map(r => (
                 <tr key={r.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">{r.no_pedido}</td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{r.fecha_emision}</td>
-                  <td className="px-4 py-3 text-gray-700">{r.sala_servicio}</td>
-                  <td className="px-4 py-3 text-gray-700 whitespace-nowrap">Bodega {r.bodega}</td>
+                  <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">{r.no_pedido ?? "—"}</td>
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{r.fecha_emision ?? "—"}</td>
+                  <td className="px-4 py-3 text-gray-700">{r.sala_servicio ?? "—"}</td>
+                  <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{r.bodega ? `Bodega ${r.bodega}` : "—"}</td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{r.items.length} insumo(s)</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <Link href={`/almacen/dab-75/${r.id}/imprimir`}

@@ -72,7 +72,10 @@ export const configuracion = pgTable("configuracion", {
 export const usuarios = pgTable("usuarios", {
   id:             serial("id").primaryKey(),
   nombre:         text("nombre").notNull(),
-  email:          text("email").notNull().unique(),
+  // Nullable: los usuarios rol "colaborador" no tienen correo institucional
+  // y usan `ibm` como identificador de login en su lugar (ver auth.ts). El
+  // resto de roles lo sigue usando exactamente igual que antes.
+  email:          text("email").unique(),
   password_hash:  text("password_hash").notNull(),
   rol:            text("rol").notNull().default("operador"),
   activo:         boolean("activo").notNull().default(true),
@@ -87,6 +90,10 @@ export const usuarios = pgTable("usuarios", {
   // haya bloqueo activo.
   intentos_fallidos: integer("intentos_fallidos").notNull().default(0),
   bloqueado_hasta:   text("bloqueado_hasta"),
+  // Solo para rol "colaborador": número de empleado (identificador de login,
+  // ver auth.ts) y puesto nominal — se muestran en Administración/Colaboradores.
+  ibm:               text("ibm").unique(),
+  puesto_nominal:    text("puesto_nominal"),
 });
 
 // ─── Catálogo de insumos (hoja Cod) ──────────────────────────────────────────
@@ -931,17 +938,24 @@ export const notificaciones = pgTable("notificaciones", {
 // ─── DAB-75: Requisición a Bodega Local (Almacén) ─────────────────────────────
 // Formulario pre-impreso: aquí solo se guardan los datos que luego se imprimen
 // sobre la hoja ya impresa (sin dibujar líneas ni casillas).
+// Ya no se crea de un solo paso — nace como "Borrador" (carrito del
+// colaborador en solicitar-insumos/), pasa a "Pendiente" al enviar (llena
+// sala_servicio/solicita_*), y a "Aprobado"/"Rechazado" cuando el encargado
+// de Almacén la revisa en almacen/dab-75 (llena no_pedido/clave_
+// administrativa/bodega/etc.) — por eso los campos que se llenan en cada
+// etapa posterior son nullable: no reflejan datos opcionales, reflejan que
+// todavía no se llegó a esa etapa.
 export const requisicionesBodega = pgTable("requisiciones_bodega", {
   id:                    serial("id").primaryKey(),
-  no_pedido:             text("no_pedido").notNull(),
-  fecha_emision:         text("fecha_emision").notNull(),
-  clave_administrativa:  text("clave_administrativa").notNull(),
-  sala_servicio:         text("sala_servicio").notNull(),
-  bodega:                text("bodega").notNull(), // "I" | "II"
+  no_pedido:             text("no_pedido"),
+  fecha_emision:         text("fecha_emision"),
+  clave_administrativa:  text("clave_administrativa"),
+  sala_servicio:         text("sala_servicio"),
+  bodega:                text("bodega"), // "I" | "II"
   fecha_despacho:        text("fecha_despacho"),
-  solicita_nombre:       text("solicita_nombre").notNull(),
-  solicita_no_empleado:  text("solicita_no_empleado").notNull(),
-  solicita_cargo:        text("solicita_cargo").notNull(),
+  solicita_nombre:       text("solicita_nombre"),
+  solicita_no_empleado:  text("solicita_no_empleado"),
+  solicita_cargo:        text("solicita_cargo"),
   entrega_nombre:        text("entrega_nombre"),
   entrega_no_empleado:   text("entrega_no_empleado"),
   entrega_cargo:         text("entrega_cargo"),
@@ -950,6 +964,15 @@ export const requisicionesBodega = pgTable("requisiciones_bodega", {
   recibe_cargo:          text("recibe_cargo"),
   director_nombre:       text("director_nombre"),
   creado_por:            integer("creado_por").references(() => usuarios.id),
+  // "Borrador" (carrito en progreso) | "Pendiente" (enviada) | "Aprobado" |
+  // "Rechazado". Filas de antes de este cambio se backfillearon a "Aprobado"
+  // (ya representaban solicitudes completas bajo el flujo viejo).
+  estado:                text("estado").notNull().default("Aprobado"),
+  aprobado_por:          integer("aprobado_por").references(() => usuarios.id),
+  aprobado_en:           text("aprobado_en"),
+  rechazado_por:         integer("rechazado_por").references(() => usuarios.id),
+  rechazado_en:          text("rechazado_en"),
+  motivo_rechazo:        text("motivo_rechazo"),
   created_at:            text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
