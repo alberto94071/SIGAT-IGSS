@@ -11,6 +11,16 @@ export async function getPermisosFrescos(userId: number, rol: Rol): Promise<Perm
   return parsePermisos(row?.permisos ?? "{}", rol);
 }
 
+// Guard para las rutas de solicitar-insumos/ — el rol "colaborador" no pasa
+// por el sistema mod_*/tab_* en absoluto (ver comentario en permisos.ts),
+// así que se protege por rol directo en vez de requireModuloAccess.
+export async function requireColaborador() {
+  const session = await auth();
+  if (!session) redirect("/login");
+  if (session.user.rol !== "colaborador") redirect("/launcher");
+  return { session };
+}
+
 export async function requireModuloAccess(modulo: Modulo) {
   const session = await auth();
   if (!session) redirect("/login");

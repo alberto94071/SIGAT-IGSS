@@ -56,7 +56,7 @@ export default function LoginClient({ fotos }: { fotos: string[] }) {
           "antes de que la cuenta se bloquee temporalmente."
         );
       } else {
-        setError("Credenciales incorrectas. Verifique su correo y contraseña.");
+        setError("Credenciales incorrectas. Verifique su usuario y contraseña.");
       }
       setLoading(false);
     } else {
@@ -130,11 +130,11 @@ export default function LoginClient({ fotos }: { fotos: string[] }) {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="label">Correo electrónico</label>
+              <label className="label">Correo electrónico o IBM</label>
               <input
-                type="email" required
+                type="text" required
                 className="input rounded-xl bg-gray-50 focus:bg-white"
-                placeholder="usuario@igss.gob.gt"
+                placeholder="usuario@igss.gob.gt o número de IBM"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
               />

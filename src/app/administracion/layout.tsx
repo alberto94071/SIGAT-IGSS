@@ -4,6 +4,7 @@ import DashboardShell from "@/components/DashboardShell";
 
 const ADMINISTRACION_NAV = [
   { href: "/administracion",               label: "Usuarios y Permisos",   icon: "Users",    permiso: "tab_admin_usuarios"      },
+  { href: "/administracion/colaboradores", label: "Colaboradores",         icon: "UserCog",  permiso: "tab_admin_usuarios"      },
   { href: "/administracion/configuracion", label: "Configuración General", icon: "Settings", permiso: "tab_admin_configuracion" },
 ] as const;
 

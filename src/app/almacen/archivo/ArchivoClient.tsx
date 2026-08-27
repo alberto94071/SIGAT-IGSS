@@ -30,9 +30,9 @@ type PagoFr = {
 
 type ItemReq = { codigo: string; nombre: string; cantidad_solicitada: number };
 type Requisicion = {
-  id: number; no_pedido: string; fecha_emision: string; clave_administrativa: string;
-  sala_servicio: string; bodega: string; fecha_despacho: string | null;
-  solicita_nombre: string;
+  id: number; no_pedido: string | null; fecha_emision: string | null; clave_administrativa: string | null;
+  sala_servicio: string | null; bodega: string | null; fecha_despacho: string | null;
+  solicita_nombre: string | null; estado: string;
   items: ItemReq[];
 };
 
@@ -52,6 +52,13 @@ const ESTADO_STYLE_FR: Record<string, string> = {
   "Pendiente FRI":           "bg-indigo-100 text-indigo-700",
   "En FRI":                  "bg-indigo-100 text-indigo-700",
   "Reintegrado":             "bg-green-100 text-green-700",
+};
+
+const ESTADO_STYLE_REQ: Record<string, string> = {
+  "Borrador":  "bg-gray-100 text-gray-600",
+  "Pendiente": "bg-blue-100 text-blue-700",
+  "Aprobado":  "bg-green-100 text-green-700",
+  "Rechazado": "bg-red-100 text-red-700",
 };
 
 type Tab = "dab60" | "dab75" | "cuadricula";
@@ -105,10 +112,11 @@ export default function ArchivoClient({
 
   const qReq = queryReq.toLowerCase().trim();
   const filteredReq = useMemo(() => !qReq ? requisiciones : requisiciones.filter(r =>
-    r.no_pedido.toLowerCase().includes(qReq) ||
-    r.sala_servicio.toLowerCase().includes(qReq) ||
-    r.solicita_nombre.toLowerCase().includes(qReq) ||
-    r.clave_administrativa.toLowerCase().includes(qReq) ||
+    (r.no_pedido ?? "").toLowerCase().includes(qReq) ||
+    (r.sala_servicio ?? "").toLowerCase().includes(qReq) ||
+    (r.solicita_nombre ?? "").toLowerCase().includes(qReq) ||
+    (r.clave_administrativa ?? "").toLowerCase().includes(qReq) ||
+    r.estado.toLowerCase().includes(qReq) ||
     r.items.some(i => i.nombre.toLowerCase().includes(qReq) || i.codigo.toLowerCase().includes(qReq))
   ), [requisiciones, qReq]);
 
@@ -370,26 +378,34 @@ export default function ArchivoClient({
                     <th className="px-4 py-3 text-left whitespace-nowrap">Bodega</th>
                     <th className="px-4 py-3 text-left">Solicita</th>
                     <th className="px-4 py-3 text-left">Insumos</th>
+                    <th className="px-4 py-3 text-left whitespace-nowrap">Estado</th>
                     <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredReq.map(r => (
                     <tr key={r.id} className="hover:bg-gray-50 align-top">
-                      <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">{r.no_pedido}</td>
-                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{r.fecha_emision}</td>
-                      <td className="px-4 py-3 text-gray-700">{r.sala_servicio}</td>
-                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">Bodega {r.bodega}</td>
-                      <td className="px-4 py-3 text-gray-700">{r.solicita_nombre}</td>
+                      <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">{r.no_pedido ?? "—"}</td>
+                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{r.fecha_emision ?? "—"}</td>
+                      <td className="px-4 py-3 text-gray-700">{r.sala_servicio ?? "—"}</td>
+                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{r.bodega ? `Bodega ${r.bodega}` : "—"}</td>
+                      <td className="px-4 py-3 text-gray-700">{r.solicita_nombre ?? "—"}</td>
                       <td className="px-4 py-3 text-gray-500">
                         {r.items.slice(0, 2).map(i => i.nombre).join(", ")}
                         {r.items.length > 2 ? ` +${r.items.length - 2} más` : ""}
                       </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${ESTADO_STYLE_REQ[r.estado] ?? "bg-gray-100 text-gray-600"}`}>
+                          {r.estado}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <Link href={`/almacen/dab-75/${r.id}/imprimir`}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
-                          <Printer className="w-3 h-3" /> Imprimir
-                        </Link>
+                        {r.estado === "Aprobado" ? (
+                          <Link href={`/almacen/dab-75/${r.id}/imprimir`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+                            <Printer className="w-3 h-3" /> Imprimir
+                          </Link>
+                        ) : <span className="text-xs text-gray-400">—</span>}
                       </td>
                     </tr>
                   ))}

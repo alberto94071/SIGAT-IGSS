@@ -1,7 +1,7 @@
 "use server";
 import { db } from "@/lib/db";
 import { usuarios } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { MAX_INTENTOS_FALLIDOS } from "@/lib/auth";
 
 export type EstadoLogin =
@@ -16,10 +16,10 @@ export type EstadoLogin =
 // bloqueados, reiniciando el bloqueo cada vez (reportado por el cliente
 // 2026-08-25). Lee intentos_fallidos/bloqueado_hasta directo de la fila del
 // usuario — la misma fuente de verdad que actualiza `authorize()` en auth.ts.
-export async function estadoLoginUsuario(email: string): Promise<EstadoLogin> {
+export async function estadoLoginUsuario(identificador: string): Promise<EstadoLogin> {
   const [user] = await db.select({
     intentos_fallidos: usuarios.intentos_fallidos, bloqueado_hasta: usuarios.bloqueado_hasta,
-  }).from(usuarios).where(eq(usuarios.email, email)).limit(1);
+  }).from(usuarios).where(or(eq(usuarios.email, identificador), eq(usuarios.ibm, identificador))).limit(1);
 
   if (user?.bloqueado_hasta) {
     const restanteMs = new Date(user.bloqueado_hasta).getTime() - Date.now();

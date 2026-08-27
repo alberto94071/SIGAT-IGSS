@@ -3,7 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { usuarios } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 
 // Bloqueo temporal tras varios intentos fallidos seguidos — sin esto, un
 // atacante puede probar contraseñas contra un email conocido sin límite
@@ -26,10 +26,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
+        // El mismo campo de login sirve para correo (la mayoría de roles) o
+        // IBM/número de empleado (rol "colaborador", que no tiene correo
+        // institucional — ver CLAUDE.md).
+        const identificador = credentials.email as string;
         const [user] = await db
           .select()
           .from(usuarios)
-          .where(eq(usuarios.email, credentials.email as string))
+          .where(or(eq(usuarios.email, identificador), eq(usuarios.ibm, identificador)))
           .limit(1);
 
         if (!user || !user.activo) return null;
