@@ -10,6 +10,12 @@ import { verificarMasterPassword } from "./master-password";
 // usuarios, firmantes ni actas de negociación — esos son datos de
 // referencia/configuración que el Administrador Máster arma una sola vez y
 // que sobreviven al reinicio.
+// A propósito NO incluye requisiciones_bodega/requisicion_bodega_items
+// (historial de DAB-75 de cada colaborador — debe sobrevivir para que
+// puedan ver todo lo que han solicitado desde que trabajan acá) ni
+// almacen_insumos/almacen_lotes/requisicion_bodega_despachos (el stock real
+// de Almacén puede tener insumos del año pasado que todavía no se han
+// entregado — confirmado por el cliente 2026-08-27).
 const TABLAS_TRANSACCIONALES = [
   "siaf_compras",
   "siaf_compras_items",
@@ -29,8 +35,6 @@ const TABLAS_TRANSACCIONALES = [
   "caja_chica",
   "vales_caja_chica",
   "polizas",
-  "requisiciones_bodega",
-  "requisicion_bodega_items",
   "viatico_liquidaciones",
   "pasajes_solicitudes",
   "pasajes_pagos",
