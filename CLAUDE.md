@@ -732,6 +732,19 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     transaccionales reales de todo el sistema (SIAF, consolidaciones,
     órdenes, etc.), demasiado destructivo solo para confirmar un cambio de
     dos líneas en un array.
+  - **`almacen/dab-75` es solo la cola de trabajo activa (Pendiente), no un
+    historial** (confirmado por el cliente 2026-08-27 — revirtió el diseño
+    inicial que tenía pestañas Pendientes/Aprobadas/Rechazadas ahí mismo).
+    En cuanto se aprueba o rechaza, la solicitud sale de la bandeja
+    (`getSolicitudesAlmacen` ahora filtra `estado = 'Pendiente'` en vez de
+    `!= 'Borrador'`) y pasa a vivir en Almacén/Archivo → DAB-75
+    (`getRequisiciones` ahora filtra `estado IN ('Aprobado', 'Rechazado')`),
+    donde ya se veía con su badge de estado (verde Aprobado con botón
+    Imprimir, rojo Rechazado sin acción) desde que se agregó esa columna en
+    la ronda anterior — no hizo falta tocar `ArchivoClient.tsx`, solo las
+    dos queries. `Dab75Client.tsx` perdió las pestañas de estado (ya no
+    hacen falta con una sola categoría) y sus botones Aprobar/Rechazar
+    quitan la fila de la lista local en vez de cambiarle el estado in-place.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

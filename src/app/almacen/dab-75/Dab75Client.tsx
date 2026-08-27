@@ -2,10 +2,9 @@
 import { fechaGuatemala } from "@/lib/date-utils";
 
 import { useState, useMemo } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Archive, X, Loader2, AlertTriangle, Printer, Search,
+  Archive, X, Loader2, AlertTriangle, Search,
   ClipboardCheck, Check, Ban,
 } from "lucide-react";
 import { aprobarSolicitud, rechazarSolicitud, type DatosAprobacion } from "./actions";
@@ -16,55 +15,32 @@ type Solicitud = {
   no_pedido: string | null; fecha_emision: string | null; clave_administrativa: string | null;
   sala_servicio: string | null; bodega: string | null; fecha_despacho: string | null;
   solicita_nombre: string | null; solicita_no_empleado: string | null; solicita_cargo: string | null;
-  estado: string; motivo_rechazo: string | null;
+  estado: string;
   items: Item[];
 };
 
-const ESTADO_STYLE: Record<string, string> = {
-  "Pendiente": "bg-blue-100 text-blue-700",
-  "Aprobado":  "bg-green-100 text-green-700",
-  "Rechazado": "bg-red-100 text-red-700",
-};
-
-type Tab = "pendiente" | "aprobado" | "rechazado";
-const TABS: { id: Tab; label: string; estado: string }[] = [
-  { id: "pendiente", label: "Pendientes", estado: "Pendiente" },
-  { id: "aprobado",  label: "Aprobadas",  estado: "Aprobado" },
-  { id: "rechazado", label: "Rechazadas", estado: "Rechazado" },
-];
-
+// Esta bandeja solo muestra Pendientes (ver getSolicitudesAlmacen) — en
+// cuanto se aprueba o rechaza, la solicitud sale de acá y pasa a Almacén/
+// Archivo → DAB-75 (confirmado por el cliente 2026-08-27: esta pantalla es
+// la cola de trabajo activa, no un historial).
 export default function Dab75Client({ solicitudes: init, canEdit }: { solicitudes: Solicitud[]; canEdit: boolean }) {
   const router = useRouter();
   const [solicitudes, setSolicitudes] = useState(init);
-  const [tab, setTab] = useState<Tab>("pendiente");
   const [query, setQuery] = useState("");
   const [revisando, setRevisando] = useState<Solicitud | null>(null);
   const [rechazando, setRechazando] = useState<Solicitud | null>(null);
 
-  const conteos = useMemo(() => ({
-    pendiente: solicitudes.filter(s => s.estado === "Pendiente").length,
-    aprobado:  solicitudes.filter(s => s.estado === "Aprobado").length,
-    rechazado: solicitudes.filter(s => s.estado === "Rechazado").length,
-  }), [solicitudes]);
-
   const q = query.toLowerCase().trim();
-  const filtradas = useMemo(() => {
-    const estadoTab = TABS.find(t => t.id === tab)!.estado;
-    return solicitudes.filter(s => s.estado === estadoTab).filter(s => !q ||
-      (s.no_pedido ?? "").toLowerCase().includes(q) ||
-      (s.sala_servicio ?? "").toLowerCase().includes(q) ||
-      (s.solicita_nombre ?? "").toLowerCase().includes(q) ||
-      s.items.some(i => i.nombre.toLowerCase().includes(q) || i.codigo.toLowerCase().includes(q))
-    );
-  }, [solicitudes, tab, q]);
+  const filtradas = useMemo(() => !q ? solicitudes : solicitudes.filter(s =>
+    (s.no_pedido ?? "").toLowerCase().includes(q) ||
+    (s.sala_servicio ?? "").toLowerCase().includes(q) ||
+    (s.solicita_nombre ?? "").toLowerCase().includes(q) ||
+    s.items.some(i => i.nombre.toLowerCase().includes(q) || i.codigo.toLowerCase().includes(q))
+  ), [solicitudes, q]);
 
-  function onAprobada(id: number) {
-    setSolicitudes(prev => prev.map(s => s.id === id ? { ...s, estado: "Aprobado" } : s));
+  function onResuelta(id: number) {
+    setSolicitudes(prev => prev.filter(s => s.id !== id));
     setRevisando(null);
-    router.refresh();
-  }
-  function onRechazada(id: number) {
-    setSolicitudes(prev => prev.map(s => s.id === id ? { ...s, estado: "Rechazado" } : s));
     setRechazando(null);
     router.refresh();
   }
@@ -76,19 +52,8 @@ export default function Dab75Client({ solicitudes: init, canEdit }: { solicitude
           <Archive className="w-5 h-5" /> DAB-75 — Requisición a Bodega Local
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Solicitudes de insumos hechas por colaboradores — revisá, ajustá cantidades y aprobá o rechazá.
+          Solicitudes pendientes de revisar — al aprobar o rechazar pasan a Almacén/Archivo → DAB-75.
         </p>
-      </div>
-
-      <div className="flex gap-1 border-b border-gray-200">
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
-              tab === t.id ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}>
-            {t.label} {conteos[t.id] > 0 && <span className="text-xs text-gray-400">({conteos[t.id]})</span>}
-          </button>
-        ))}
       </div>
 
       <div className="relative max-w-sm">
@@ -120,12 +85,9 @@ export default function Dab75Client({ solicitudes: init, canEdit }: { solicitude
                   <td className="px-4 py-3 text-gray-500 text-xs">
                     {s.items.slice(0, 2).map(i => i.nombre).join(", ")}
                     {s.items.length > 2 ? ` +${s.items.length - 2} más` : ""}
-                    {s.estado === "Rechazado" && s.motivo_rechazo && (
-                      <p className="text-red-500 mt-1">Motivo: {s.motivo_rechazo}</p>
-                    )}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    {s.estado === "Pendiente" && canEdit ? (
+                    {canEdit ? (
                       <div className="flex items-center justify-end gap-1.5">
                         <button onClick={() => setRechazando(s)}
                           className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors">
@@ -136,11 +98,6 @@ export default function Dab75Client({ solicitudes: init, canEdit }: { solicitude
                           <ClipboardCheck className="w-3.5 h-3.5" /> Revisar
                         </button>
                       </div>
-                    ) : s.estado === "Aprobado" ? (
-                      <Link href={`/almacen/dab-75/${s.id}/imprimir`}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
-                        <Printer className="w-3 h-3" /> Imprimir
-                      </Link>
                     ) : (
                       <span className="text-xs text-gray-400">—</span>
                     )}
@@ -159,10 +116,10 @@ export default function Dab75Client({ solicitudes: init, canEdit }: { solicitude
       </div>
 
       {revisando && (
-        <RevisarModal solicitud={revisando} onClose={() => setRevisando(null)} onAprobada={onAprobada} />
+        <RevisarModal solicitud={revisando} onClose={() => setRevisando(null)} onAprobada={onResuelta} />
       )}
       {rechazando && (
-        <RechazarModal solicitud={rechazando} onClose={() => setRechazando(null)} onRechazada={onRechazada} />
+        <RechazarModal solicitud={rechazando} onClose={() => setRechazando(null)} onRechazada={onResuelta} />
       )}
     </div>
   );

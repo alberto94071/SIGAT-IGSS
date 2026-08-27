@@ -2,7 +2,7 @@
 import { db } from "@/lib/db";
 import { requisicionesBodega, requisicionBodegaItems, requisicionBodegaDespachos, almacenInsumos, almacenLotes } from "@/lib/schema";
 import { auth } from "@/lib/auth";
-import { eq, and, ne, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { fechaHoraGuatemala } from "@/lib/date-utils";
 
 export type InsumoParaHistorial = { id: number; codigo_igss: string | null; nombre: string };
@@ -19,10 +19,16 @@ export async function getInsumosParaHistorial(): Promise<InsumoParaHistorial[]> 
     .orderBy(almacenInsumos.nombre);
 }
 
+// Para Almacén/Archivo → DAB-75: solo lo ya resuelto (Aprobado o
+// Rechazado) — una solicitud "Pendiente" todavía vive en la bandeja de
+// almacen/dab-75, no en el archivo. Los "Borrador" son carritos del
+// colaborador todavía en progreso, tampoco le corresponden al archivo.
 export async function getRequisiciones() {
   const session = await auth();
   if (!session) return [];
-  const rows = await db.select().from(requisicionesBodega).orderBy(sql`id DESC`);
+  const rows = await db.select().from(requisicionesBodega)
+    .where(sql`${requisicionesBodega.estado} IN ('Aprobado', 'Rechazado')`)
+    .orderBy(sql`id DESC`);
   return Promise.all(rows.map(async r => ({
     ...r,
     items: await db.select().from(requisicionBodegaItems)
@@ -42,15 +48,15 @@ export async function getRequisicion(id: number) {
   return { ...r, items };
 }
 
-// Bandeja de Almacén/DAB-75 — todas las solicitudes que ya salieron del
-// carrito de algún colaborador (Pendiente/Aprobado/Rechazado). Los
-// "Borrador" son carritos todavía en progreso, no le corresponden a esta
-// pantalla.
+// Bandeja de Almacén/DAB-75 — solo lo Pendiente de revisar. En cuanto se
+// aprueba o rechaza, la solicitud sale de acá y pasa a Almacén/Archivo →
+// DAB-75 (ver getRequisiciones) — el cliente pidió que esta bandeja sea
+// solo la cola de trabajo activa, no un historial (2026-08-27).
 export async function getSolicitudesAlmacen() {
   const session = await auth();
   if (!session) return [];
   const rows = await db.select().from(requisicionesBodega)
-    .where(ne(requisicionesBodega.estado, "Borrador"))
+    .where(eq(requisicionesBodega.estado, "Pendiente"))
     .orderBy(sql`id DESC`);
   return Promise.all(rows.map(async r => ({
     ...r,
