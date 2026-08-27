@@ -960,6 +960,66 @@ export const requisicionBodegaItems = pgTable("requisicion_bodega_items", {
   nombre:              text("nombre").notNull(),
   cantidad_solicitada: doublePrecision("cantidad_solicitada").notNull(),
   orden:               integer("orden").notNull().default(0),
+  // Nullable porque las requisiciones creadas antes del Catálogo de Almacén
+  // con existencias (2026-08-26) no tienen insumo real detrás, solo el
+  // texto libre de codigo/nombre. Las requisiciones nuevas siempre lo llenan
+  // (ver crearRequisicion en dab-75/actions.ts) — codigo/nombre se quedan
+  // como snapshot para el recibo impreso, no se vuelven a escribir a mano.
+  insumo_id:           integer("insumo_id").references(() => almacenInsumos.id, { onDelete: "set null" }),
+});
+
+// ─── Almacén: Catálogo con existencias (stock por lote, FEFO) ────────────────
+// Un insumo real trackeado en bodega — identidad codigo_igss::subproducto::
+// nombre, la misma terna que ya usa catalogoCompras/gruposRenglonDeConsolidacion
+// en todo el resto del sistema (evita mezclar insumos "S/C" distintos que
+// comparten el mismo código placeholder).
+export const almacenInsumos = pgTable("almacen_insumos", {
+  id:                      serial("id").primaryKey(),
+  codigo_igss:             text("codigo_igss"),
+  subproducto:             text("subproducto").notNull(),
+  nombre:                  text("nombre").notNull(),
+  descripcion_igss:        text("descripcion_igss"),
+  renglon:                 integer("renglon"),
+  unidad_medida:           text("unidad_medida"),
+  // Umbrales configurables por insumo (confirmado por el cliente
+  // 2026-08-26) — null usa el valor por defecto que aplica la UI, no un
+  // umbral global en la base.
+  stock_minimo:            integer("stock_minimo"),
+  dias_alerta_vencimiento: integer("dias_alerta_vencimiento"),
+  created_at:              text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+}, table => ({
+  identidadUnica: uniqueIndex("almacen_insumos_identidad_idx").on(table.codigo_igss, table.subproducto, table.nombre),
+}));
+
+// Un renglón por cada ingreso físico (= por cada DAB-60 aprobado que trae ese
+// insumo) — fuente de verdad de cuánto entró y cuánto queda. cantidad_
+// disponible se decrementa en cada despacho de DAB-75 (ver
+// requisicionBodegaDespachos); un lote nunca se borra, solo llega a 0.
+export const almacenLotes = pgTable("almacen_lotes", {
+  id:                  serial("id").primaryKey(),
+  insumo_id:           integer("insumo_id").notNull().references(() => almacenInsumos.id, { onDelete: "cascade" }),
+  lote:                text("lote"),
+  fecha_vencimiento:   text("fecha_vencimiento"),
+  fecha_ingreso:       text("fecha_ingreso").notNull(),
+  cantidad_ingresada:  doublePrecision("cantidad_ingresada").notNull(),
+  cantidad_disponible: doublePrecision("cantidad_disponible").notNull(),
+  marca:               text("marca"),
+  modelo:              text("modelo"),
+  serie:               text("serie"),
+  precio_unitario:     doublePrecision("precio_unitario"),
+  orden_compra_id:     integer("orden_compra_id").references(() => ordenesCompra.id, { onDelete: "set null" }),
+  pago_fr_id:          integer("pago_fr_id").references(() => fondoRotativoPagos.id, { onDelete: "set null" }),
+  created_at:          text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// Un renglón por cada lote tocado al despachar un ítem de requisición — un
+// mismo ítem puede partirse entre varios lotes por FEFO (el lote que vence
+// antes se agota primero; ver crearRequisicion en dab-75/actions.ts).
+export const requisicionBodegaDespachos = pgTable("requisicion_bodega_despachos", {
+  id:                  serial("id").primaryKey(),
+  requisicion_item_id: integer("requisicion_item_id").notNull().references(() => requisicionBodegaItems.id, { onDelete: "cascade" }),
+  lote_id:             integer("lote_id").notNull().references(() => almacenLotes.id, { onDelete: "restrict" }),
+  cantidad:            doublePrecision("cantidad").notNull(),
 });
 
 // ─── Planilla de Viático — Formulario V-L (Pago de Viáticos) ─────────────────

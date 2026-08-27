@@ -5,14 +5,16 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Archive, Plus, X, Loader2, AlertTriangle, Printer, Trash2, Search } from "lucide-react";
-import { crearRequisicion, type ItemRequisicion } from "./actions";
+import { crearRequisicion, type ItemRequisicion, type InsumoConExistencia } from "./actions";
 
 type Requisicion = {
   id: number; no_pedido: string; fecha_emision: string; sala_servicio: string; bodega: string;
   items: { codigo: string; nombre: string; cantidad_solicitada: number }[];
 };
 
-export default function Dab75Client({ requisiciones: init, canEdit }: { requisiciones: Requisicion[]; canEdit: boolean }) {
+export default function Dab75Client({ requisiciones: init, insumos, canEdit }: {
+  requisiciones: Requisicion[]; insumos: InsumoConExistencia[]; canEdit: boolean;
+}) {
   const router = useRouter();
   const [requisiciones, setRequisiciones] = useState(init);
   const [modal, setModal] = useState(false);
@@ -94,6 +96,7 @@ export default function Dab75Client({ requisiciones: init, canEdit }: { requisic
 
       {modal && (
         <NuevaRequisicionModal
+          insumos={insumos}
           onClose={() => setModal(false)}
           onCreado={(id) => { setModal(false); router.push(`/almacen/dab-75/${id}/imprimir`); }}
         />
@@ -102,9 +105,11 @@ export default function Dab75Client({ requisiciones: init, canEdit }: { requisic
   );
 }
 
-function nuevoItem(): ItemRequisicion { return { codigo: "", nombre: "", cantidad_solicitada: 0 }; }
+function nuevoItem(): ItemRequisicion { return { insumo_id: 0, cantidad_solicitada: 0 }; }
 
-function NuevaRequisicionModal({ onClose, onCreado }: { onClose: () => void; onCreado: (id: number) => void }) {
+function NuevaRequisicionModal({ insumos, onClose, onCreado }: {
+  insumos: InsumoConExistencia[]; onClose: () => void; onCreado: (id: number) => void;
+}) {
   const hoy = fechaGuatemala();
   const [noPedido, setNoPedido] = useState("");
   const [fechaEmision, setFechaEmision] = useState(hoy);
@@ -133,11 +138,14 @@ function NuevaRequisicionModal({ onClose, onCreado }: { onClose: () => void; onC
     if (!claveAdmin.trim()) return setError("La Clave Administrativa es obligatoria");
     if (!salaServicio.trim()) return setError("La Sala o Servicio es obligatoria");
     if (!solNombre.trim() || !solEmpleado.trim() || !solCargo.trim()) return setError("Los datos de quien Solicita son obligatorios");
-    const validItems = items.filter(i => i.codigo.trim() || i.nombre.trim());
+    const validItems = items.filter(i => i.insumo_id > 0);
     if (validItems.length === 0) return setError("Agrega al menos un insumo");
     for (const it of validItems) {
-      if (!it.codigo.trim() || !it.nombre.trim()) return setError("Todos los insumos deben tener Código y Nombre");
       if (!(it.cantidad_solicitada > 0)) return setError("La cantidad solicitada debe ser mayor a cero");
+      const ins = insumos.find(x => x.id === it.insumo_id);
+      if (ins && it.cantidad_solicitada > ins.cantidad_disponible) {
+        return setError(`Solo hay ${ins.cantidad_disponible.toLocaleString("es-GT")} disponible(s) de "${ins.nombre}".`);
+      }
     }
 
     setSaving(true); setError("");
@@ -204,19 +212,40 @@ function NuevaRequisicionModal({ onClose, onCreado }: { onClose: () => void; onC
             )}
           </div>
           <div className="space-y-2">
-            {items.map((it, i) => (
-              <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                <input placeholder="Código" className="input col-span-3 font-mono text-xs"
-                  value={it.codigo} onChange={e => updateItem(i, { codigo: e.target.value })} />
-                <input placeholder="Nombre genérico y presentación" className="input col-span-6 text-xs"
-                  value={it.nombre} onChange={e => updateItem(i, { nombre: e.target.value })} />
-                <input type="number" min="0" step="0.01" placeholder="Cant." className="input col-span-2 text-xs"
-                  value={it.cantidad_solicitada || ""} onChange={e => updateItem(i, { cantidad_solicitada: parseFloat(e.target.value) || 0 })} />
-                <button onClick={() => removeItem(i)} className="col-span-1 p-1.5 text-gray-400 hover:text-red-600" disabled={items.length === 1}>
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
+            {items.map((it, i) => {
+              const seleccionado = insumos.find(x => x.id === it.insumo_id);
+              const excede = seleccionado != null && it.cantidad_solicitada > seleccionado.cantidad_disponible;
+              return (
+                <div key={i}>
+                  <div className="grid grid-cols-12 gap-2 items-center">
+                    <select className="input col-span-7 text-xs" value={it.insumo_id || ""}
+                      onChange={e => updateItem(i, { insumo_id: Number(e.target.value) })}>
+                      <option value="">Selecciona un insumo…</option>
+                      {insumos.map(ins => (
+                        <option key={ins.id} value={ins.id}>
+                          {ins.nombre} — disp. {ins.cantidad_disponible.toLocaleString("es-GT")} {ins.unidad_medida ?? ""}
+                        </option>
+                      ))}
+                    </select>
+                    <input type="number" min="0" step="0.01" placeholder="Cant." className="input col-span-4 text-xs"
+                      value={it.cantidad_solicitada || ""} onChange={e => updateItem(i, { cantidad_solicitada: parseFloat(e.target.value) || 0 })} />
+                    <button onClick={() => removeItem(i)} className="col-span-1 p-1.5 text-gray-400 hover:text-red-600" disabled={items.length === 1}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  {excede && (
+                    <p className="text-xs text-red-600 mt-1 ml-1">
+                      Solo hay {seleccionado.cantidad_disponible.toLocaleString("es-GT")} disponible(s) de este insumo.
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+            {insumos.length === 0 && (
+              <p className="text-xs text-gray-400">
+                Todavía no hay insumos con existencia en el Catálogo de Almacén — se registran solos al aprobar un DAB-60.
+              </p>
+            )}
           </div>
 
           <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider pt-1">Solicita</p>

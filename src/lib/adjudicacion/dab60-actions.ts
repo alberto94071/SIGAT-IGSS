@@ -2,7 +2,7 @@
 import { fechaHoraGuatemala } from "@/lib/date-utils";
 
 import { db } from "@/lib/db";
-import { ordenesCompra, dab60Posiciones, fondoRotativoPagos, consolidaciones } from "@/lib/schema";
+import { ordenesCompra, dab60Posiciones, fondoRotativoPagos, consolidaciones, almacenInsumos, almacenLotes } from "@/lib/schema";
 import { eq, sql, isNotNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
@@ -10,6 +10,40 @@ import { conDetalle, type PagoFondoRotativo } from "./fondo-rotativo-pagos-actio
 import { trazabilidadPorConsolidaciones } from "./trazabilidad-utils";
 import { readFile } from "fs/promises";
 import path from "path";
+
+// Da de alta existencia en el Catálogo de Almacén cuando un DAB-60 queda
+// firme (aprobado en la vía Normal; generado directo en la vía Fondo
+// Rotativo, que no tiene paso de aprobación aparte) — un lote nuevo por cada
+// insumo distinto de la consolidación, con la cantidad que trae ese grupo.
+// Lote/fecha de vencimiento/marca/modelo/serie se capturan una sola vez por
+// documento completo (no por insumo) porque en la práctica un DAB-60 real
+// casi siempre es de un solo insumo (confirmado por el cliente 2026-08-26);
+// si alguna vez trae más de uno, todos heredan el mismo lote de ese
+// documento.
+async function registrarIngresoAlmacen(params: {
+  consolidacionId: number; fechaIngreso: string;
+  lote: string | null; fechaVencimiento: string | null;
+  marca: string | null; modelo: string | null; serie: string | null;
+  ordenCompraId?: number; pagoFrId?: number;
+}): Promise<void> {
+  const grupos = await gruposRenglonDeConsolidacion(params.consolidacionId);
+  for (const g of grupos) {
+    const [insumo] = await db.insert(almacenInsumos).values({
+      codigo_igss: g.codigo_igss, subproducto: g.subproducto, nombre: g.nombre,
+      descripcion_igss: g.descripcion_igss, renglon: g.renglon, unidad_medida: g.unidad_medida,
+    }).onConflictDoUpdate({
+      target: [almacenInsumos.codigo_igss, almacenInsumos.subproducto, almacenInsumos.nombre],
+      set: { nombre: g.nombre },
+    }).returning();
+
+    await db.insert(almacenLotes).values({
+      insumo_id: insumo.id, lote: params.lote, fecha_vencimiento: params.fechaVencimiento,
+      fecha_ingreso: params.fechaIngreso, cantidad_ingresada: g.cantidad, cantidad_disponible: g.cantidad,
+      marca: params.marca, modelo: params.modelo, serie: params.serie,
+      orden_compra_id: params.ordenCompraId ?? null, pago_fr_id: params.pagoFrId ?? null,
+    });
+  }
+}
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -207,12 +241,23 @@ export async function aprobarDab60(ordenId: number): Promise<{ ok: true } | { er
     const check = await requireEdit();
     if ("error" in check) return check;
 
-    const [orden] = await db.select({ estado: ordenesCompra.estado }).from(ordenesCompra)
+    const [orden] = await db.select().from(ordenesCompra)
       .where(eq(ordenesCompra.id, ordenId)).limit(1);
     if (!orden) return { error: "No se encontró la orden" };
     if (orden.estado !== "DAB-60 Pendiente Aprobación") return { error: "Esta orden no está pendiente de aprobación de DAB-60" };
 
     await db.update(ordenesCompra).set({ estado: "En Devengado" }).where(eq(ordenesCompra.id, ordenId));
+
+    // Recién aquí, no en generarDab60, porque generarDab60 se puede llamar
+    // varias veces corrigiendo datos antes de aprobar — dar de alta stock ahí
+    // duplicaría el ingreso en cada corrección.
+    await registrarIngresoAlmacen({
+      consolidacionId: orden.consolidacion_id,
+      fechaIngreso: orden.fecha_ingreso_producto ?? orden.fecha,
+      lote: orden.lote, fechaVencimiento: orden.fecha_vencimiento,
+      marca: orden.marca, modelo: orden.modelo, serie: orden.serie,
+      ordenCompraId: orden.id,
+    });
 
     return { ok: true };
   } catch {
@@ -247,24 +292,40 @@ export async function generarDab60FondoRotativo(pagoId: number, data: Dab60DataF
     if (!data.encargado_almacen.trim())
       return { error: "El nombre del Encargado de Almacén es obligatorio" };
 
-    const [pago] = await db.select({ estado: fondoRotativoPagos.estado }).from(fondoRotativoPagos)
-      .where(eq(fondoRotativoPagos.id, pagoId)).limit(1);
+    const [pago] = await db.select({ estado: fondoRotativoPagos.estado, consolidacion_id: fondoRotativoPagos.consolidacion_id })
+      .from(fondoRotativoPagos).where(eq(fondoRotativoPagos.id, pagoId)).limit(1);
     if (!pago) return { error: "No se encontró el registro" };
     if (pago.estado !== "Pendiente DAB-60") return { error: "Este registro ya fue procesado en DAB-60" };
+
+    const lote = data.lote.trim() || null;
+    const fechaVencimiento = data.fecha_vencimiento.trim() || null;
+    const marca = data.marca.trim() || null;
+    const modelo = data.modelo.trim() || null;
+    const serie = data.serie.trim() || null;
+    const fechaIngreso = data.fecha_ingreso_producto.trim() || fechaHoraGuatemala().slice(0, 10);
 
     await db.update(fondoRotativoPagos).set({
       dab60_no_recibo_almacen:      data.no_recibo_almacen.trim(),
       dab60_serie_recibo_almacen:   data.serie_recibo_almacen.trim(),
       dab60_encargado_almacen:      data.encargado_almacen.trim(),
       dab60_fecha_ingreso_producto: data.fecha_ingreso_producto.trim() || null,
-      dab60_lote:                   data.lote.trim() || null,
-      dab60_fecha_vencimiento:      data.fecha_vencimiento.trim() || null,
-      dab60_marca:                  data.marca.trim() || null,
-      dab60_modelo:                 data.modelo.trim() || null,
-      dab60_serie:                  data.serie.trim() || null,
+      dab60_lote:                   lote,
+      dab60_fecha_vencimiento:      fechaVencimiento,
+      dab60_marca:                  marca,
+      dab60_modelo:                 modelo,
+      dab60_serie:                  serie,
       dab60_generado_en:            fechaHoraGuatemala(),
       estado:                       "Pendiente forma de pago",
     }).where(eq(fondoRotativoPagos.id, pagoId));
+
+    // Sin etapa de aprobación separada en esta vía (a diferencia de Normal)
+    // — el ingreso a Almacén se registra de una vez, porque generarDab60FondoRotativo
+    // solo se puede llamar una vez por registro (el guard de arriba lo impide).
+    await registrarIngresoAlmacen({
+      consolidacionId: pago.consolidacion_id,
+      fechaIngreso, lote, fechaVencimiento, marca, modelo, serie,
+      pagoFrId: pagoId,
+    });
 
     return { ok: true };
   } catch {

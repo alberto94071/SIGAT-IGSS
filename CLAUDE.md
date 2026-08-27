@@ -86,7 +86,7 @@ mergeado), actualizá este archivo antes de dar el trabajo por cerrado:
 | `compras/` | A-01 SIAF, Consolidación, Adjudicación, Órdenes, catálogo de compras |
 | `junta-adjudicadora/` | Actas de adjudicación |
 | `presupuesto/` | Programación, Reprogramación, Modificaciones, Compromiso, Devengado, Ejecución, Presupuesto General |
-| `almacen/` | DAB-60 (Normal y Fondo Rotativo), DAB-75, Catálogo |
+| `almacen/` | DAB-60 (Normal y Fondo Rotativo), DAB-75 (requisición con existencia real y FEFO por lote), Catálogo (stock con alertas) |
 | `fondo-rotativo/`, `caja-chica/`, `dashboard/` (pagos/fri/bancos/vales) | Pago de Fondo Rotativo: Pagos → Bancos/Liquidación → Caja Chica → FRI → Reintegro DAF |
 | `pasajes/` | Tarifario, Solicitud de Pasaje (SPS-75), DPD-23, Póliza |
 | `viaticos/` | Planilla de Viático (V-L) |
@@ -535,6 +535,61 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   solo). No afecta la posición de los demás campos porque cada uno tiene su
   propia posición absoluta independiente — simplemente no se renderiza nada
   ahí cuando falta el dato.
+- **Catálogo de Almacén (stock por lote, FEFO) y DAB-75 real — construido
+  2026-08-26 a partir de una explicación completa del flujo físico del
+  cliente.** Antes `almacen/catalogo` y `almacen/cuadricula` eran
+  placeholders y el DAB-75 (`requisiciones_bodega`/`requisicion_bodega_
+  items`) era texto libre sin ninguna conexión al catálogo ni descuento de
+  existencias. Piezas nuevas:
+  - **`almacen_insumos`** (`src/lib/schema.ts`): un renglón por insumo real
+    en bodega, identidad `codigo_igss::subproducto::nombre` (misma terna que
+    `catalogoCompras`/`gruposRenglonDeConsolidacion` en todo el resto del
+    sistema). `stock_minimo`/`dias_alerta_vencimiento` son **configurables
+    por insumo** (confirmado por el cliente, no un umbral global), editables
+    inline desde `almacen/catalogo`.
+  - **`almacen_lotes`**: un renglón por cada ingreso físico (= por cada
+    DAB-60 aprobado que trae ese insumo) — `cantidad_disponible` se
+    decrementa en cada despacho, nunca se borra un lote.
+  - **El ingreso a Almacén es automático, no manual**: `registrarIngresoAlmacen`
+    (`src/lib/adjudicacion/dab60-actions.ts`) se llama desde `aprobarDab60`
+    (vía Normal — a propósito NO desde `generarDab60`, que se puede llamar
+    varias veces corrigiendo datos antes de aprobar; hacerlo ahí duplicaría
+    el ingreso en cada corrección) y desde `generarDab60FondoRotativo` (vía
+    Fondo Rotativo, que no tiene paso de aprobación aparte, pero solo se
+    puede llamar una vez por registro). Usa
+    `gruposRenglonDeConsolidacion` para saber qué insumo(s) y cuánta
+    cantidad trae ese DAB-60. **Lote/fecha de vencimiento/marca/modelo/
+    serie siguen siendo por documento completo, no por insumo** — el
+    cliente confirmó que en la práctica un DAB-60 real es casi siempre de
+    un solo insumo, así que no hizo falta rediseñar el formulario de
+    "Generar DAB-60"; si algún DAB-60 real trae más de un insumo, todos
+    heredan el mismo lote de ese documento.
+  - **DAB-75 (`crearRequisicion`, `src/app/almacen/dab-75/actions.ts`)
+    ahora despacha por FEFO dentro de una `db.transaction()`**: re-lee los
+    lotes con existencia dentro de la transacción (no confía en lo que el
+    cliente vio al abrir el modal — mismo patrón TOCTOU-safe ya usado en
+    `aprobarCompromiso`), ordena `fecha_vencimiento ASC NULLS LAST,
+    fecha_ingreso ASC` (los insumos sin vencimiento, ej. papelería, caen al
+    final y se despachan FIFO entre ellos), agota cada lote antes de tocar
+    el siguiente, y registra un renglón en la tabla nueva
+    `requisicion_bodega_despachos` por cada lote tocado (un mismo ítem
+    pedido puede partirse entre 2+ lotes). Si la suma disponible no
+    alcanza, lanza `StockInsuficienteEnTransaccion` con un mensaje claro —
+    verificado en vivo con un caso real de dos lotes (3 unidades vence
+    antes + 10 vence después, pedido de 5): el lote que vence antes quedó
+    en 0 y solo se tomaron 2 del que vence después, exactamente como pidió
+    el cliente.
+  - El modal "Nueva Requisición" (`Dab75Client.tsx`) pasó de inputs de
+    código/nombre en texto libre a un `<select>` con los insumos que
+    tienen existencia > 0 (`getInsumosConExistencia`), mostrando
+    disponible en vivo; `codigo`/`nombre` en `requisicion_bodega_items`
+    ahora son un snapshot que se llena solo al elegir el insumo (columna
+    `insumo_id` nueva, nullable para no romper requisiciones viejas de
+    antes de este cambio). El recibo impreso (`ImprimirDab75Client.tsx`,
+    overlay pre-impreso ya armado) no se tocó.
+  - **DAB-60s aprobados antes de este cambio no se re-procesaron** — el
+    Catálogo arranca vacío y se va llenando solo desde el próximo DAB-60
+    que se apruebe en adelante; no hay backfill retroactivo del historial.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
