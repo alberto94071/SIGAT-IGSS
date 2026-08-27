@@ -86,13 +86,14 @@ mergeado), actualizá este archivo antes de dar el trabajo por cerrado:
 | `compras/` | A-01 SIAF, Consolidación, Adjudicación, Órdenes, catálogo de compras |
 | `junta-adjudicadora/` | Actas de adjudicación |
 | `presupuesto/` | Programación, Reprogramación, Modificaciones, Compromiso, Devengado, Ejecución, Presupuesto General |
-| `almacen/` | DAB-60 (Normal y Fondo Rotativo), DAB-75 (requisición con existencia real y FEFO por lote), Catálogo (stock con alertas y reportes Excel con gráfico nativo) |
+| `almacen/` | DAB-60 (Normal y Fondo Rotativo), DAB-75 (bandeja de aprobación de solicitudes de colaboradores, FEFO por lote al aprobar), Catálogo (stock con alertas y reportes Excel con gráfico nativo) |
 | `fondo-rotativo/`, `caja-chica/`, `dashboard/` (pagos/fri/bancos/vales) | Pago de Fondo Rotativo: Pagos → Bancos/Liquidación → Caja Chica → FRI → Reintegro DAF |
 | `pasajes/` | Tarifario, Solicitud de Pasaje (SPS-75), DPD-23, Póliza |
 | `viaticos/` | Planilla de Viático (V-L) |
 | `base-datos/` | Catálogos maestros: Insumos, Tarifario de Pasajes, Proveedores, Afiliados |
-| `administracion/` | Usuarios, permisos, Configuración General, Firmantes |
+| `administracion/` | Usuarios, Colaboradores, permisos, Configuración General, Firmantes |
 | `developer/` | Herramientas de superadmin (backup/reset) |
+| `solicitar-insumos/` | Autoservicio de insumos para el rol "colaborador": Catálogo (con "Agregar a solicitud") y Mis Solicitudes (carrito/borrador + historial) |
 
 ## Permisos por pestaña (`src/lib/permisos.ts`)
 
@@ -634,6 +635,103 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   tuvieron un ingreso (`getInsumosParaHistorial`), no solo los que tienen
   existencia ahora, porque interesa poder consultar el historial completo
   aunque ya no quede nada disponible.
+- **Rol "colaborador" (2026-08-27) — autoservicio de insumos, construido a
+  partir de la explicación completa del cliente de cómo se pide material en
+  la unidad.** Antes cualquiera con `mod_almacen` creaba un DAB-75 completo
+  de un solo paso, sin estado ni aprobación. Ahora nace de un colaborador
+  (usuario sin acceso a nada más del sistema) y el encargado de Almacén lo
+  revisa antes de que se descuente stock. Piezas:
+  - **Login por IBM, no por correo** — el colaborador no tiene correo
+    institucional. `usuarios.email` pasó a nullable (sigue `UNIQUE`,
+    Postgres permite múltiples `NULL`) y se agregó `usuarios.ibm` (`UNIQUE`,
+    nullable) + `usuarios.puesto_nominal`. `authorize()` (`auth.ts`) y
+    `estadoLoginUsuario()` (`auth-actions.ts`) ahora buscan
+    `or(eq(email, x), eq(ibm, x))` — **un solo campo de login** sirve para
+    correo o IBM, no hay pantalla de login separada. El input de
+    `LoginClient.tsx` pasó de `type="email"` a `type="text"` (un IBM
+    numérico no pasa la validación HTML5 de email).
+  - **El colaborador no pasa por el sistema `mod_*`/`tab_*` de permisos.**
+    `PERMISOS_DEFAULT.colaborador` tiene **todo en `false`** (calculado
+    programáticamente a partir de las mismas claves que arman los otros 4
+    roles, para no tener que enumerar ~50 campos a mano) — sus únicas rutas
+    (`solicitar-insumos/`) se protegen con `requireColaborador()`
+    (`modulo-access.ts`), no con `requireModuloAccess`. El launcher
+    (`launcher/page.tsx`) detecta `rol === "colaborador"` y renderiza una
+    variante fija de 2 tarjetas (`MODULES_COLABORADOR`) en vez de filtrar
+    `MODULES` por permisos — "Solicitar Insumos" activo, "Solicitar
+    Viáticos" en "Próximamente" (ese flujo queda pendiente, el cliente solo
+    detalló Insumos por ahora).
+  - **Administración → Colaboradores** (`administracion/colaboradores/`,
+    acciones propias en su propio `actions.ts`, NO en el `actions.ts`
+    general de Usuarios porque el formulario es distinto — sin correo, sin
+    editor de permisos, con IBM/puesto nominal): crear/editar reutilizan
+    patrón de `crearUsuario`, pero **restablecer contraseña e
+    inhabilitar/habilitar reutilizan tal cual `resetPassword`/`toggleActivo`
+    del `actions.ts` general** (son genéricas por `id`) — solo hizo falta
+    agregar `"colaborador"` a `ROLES_GESTIONABLES_POR_ADMIN` para que un
+    `admin` (no solo `superadmin`) también pueda gestionarlos.
+  - **`requisiciones_bodega` ganó un estado real**: `"Borrador"` (carrito en
+    progreso) → `"Pendiente"` (enviada) → `"Aprobado"` | `"Rechazado"`.
+    Filas de antes de este cambio se backfillearon a `"Aprobado"` (ya
+    representaban solicitudes completas bajo el flujo viejo). Los campos que
+    se llenan en etapas posteriores (`no_pedido`, `clave_administrativa`,
+    `bodega`, `sala_servicio`, `solicita_*`, etc.) pasaron a nullable — no
+    son opcionales, es que la fila todavía no llegó a esa etapa.
+  - **División de quién llena qué**: el colaborador (`solicitar-insumos/`)
+    solo llena Sala/Servicio + insumos/cantidades — "Solicita" sale
+    automático de su perfil (nombre/IBM/puesto nominal). El encargado de
+    Almacén (`almacen/dab-75`, ahora una bandeja pura, **ya no crea nada**)
+    completa el resto (No. de Pedido, Clave Administrativa, Bodega, Fecha de
+    Despacho, Entrega, Recibe, Director) y puede editar las cantidades a su
+    discreción, todo junto en el modal "Revisar y Aprobar" — es casi el
+    mismo formulario que existía antes para crear, solo recolocado a la
+    aprobación (Entrega/Recibe ya eran "opcional, se llena al despachar",
+    encaja natural).
+  - **El stock se descuenta al APROBAR, no al enviar la solicitud.** El
+    bloque FEFO (`fecha_vencimiento ASC NULLS LAST, fecha_ingreso ASC`, ya
+    probado en la ronda anterior) se movió de `crearRequisicion` (eliminada)
+    a una función compartida `despacharItemFEFO`, llamada desde
+    `aprobarSolicitud` — una solicitud "Pendiente" no compromete nada
+    todavía porque el encargado puede cambiar cantidades antes de aprobar.
+    Verificado en vivo reproduciendo el escenario FEFO de siempre (lote que
+    vence antes con 3 de existencia + lote que vence después con 10, pedido
+    de 5 al aprobar) → 3 del primero (queda en 0) + 2 del segundo, igual que
+    la ronda anterior.
+  - **El "carrito"** (`solicitar-insumos/actions.ts`): `agregarInsumoASolicitud`
+    hace find-or-create del Borrador activo del colaborador (uno solo a la
+    vez) y, si el insumo ya está en el carrito, **suma la cantidad en vez de
+    duplicar la fila** — verificado en vivo agregando el mismo insumo en 3
+    visitas distintas (10 + 3 → quedó en 13, no en dos filas). El Catálogo
+    de `solicitar-insumos/catalogo` es el mismo componente de
+    `almacen/catalogo` (`CatalogoAlmacenClient.tsx`), extendido con una prop
+    `onAgregarASolicitud` opcional que cuando está presente reemplaza la
+    edición de umbrales por un botón "Agregar a solicitud" — se reutiliza en
+    vez de duplicar la tabla completa.
+  - **Impresión del colaborador vive en una ruta aparte, no en
+    `almacen/dab-75/[id]/imprimir`.** Se intentó primero reutilizar esa
+    misma ruta con un chequeo de dueño+estado dentro del `page.tsx`, pero
+    **nunca se alcanza**: esa ruta cuelga de `almacen/layout.tsx`, que exige
+    `mod_almacen` (el colaborador lo tiene en `false` siempre) — el layout
+    redirige a `/launcher` antes de que el `page.tsx` corra su propio
+    chequeo. Detectado en vivo (un click en "Imprimir" volvía a
+    `/mis-solicitudes` en vez de mostrar el recibo). Fix:
+    `solicitar-insumos/imprimir/[id]/page.tsx`, colgado de
+    `solicitar-insumos/layout.tsx` (protegido con `requireColaborador()`),
+    que reutiliza el mismo `ImprimirDab75Client` y la misma
+    `getRequisicion` — solo cambia el gate (dueño propio + `Aprobado`). La
+    ruta vieja bajo `almacen/` se deja para el resto de roles, que sí
+    tienen `mod_almacen`.
+  - **`reset-actions.ts`**: se quitaron `"requisiciones_bodega"` y
+    `"requisicion_bodega_items"` de `TABLAS_TRANSACCIONALES` — antes
+    "Reiniciar Sistema" SÍ las borraba, lo cual habría borrado el historial
+    del colaborador. `requisicion_bodega_despachos`/`almacen_insumos`/
+    `almacen_lotes` ya no estaban en esa lista desde que se crearon (Fase A
+    de Almacén, ronda anterior), así que el stock real de Almacén ya
+    sobrevivía — confirmado por inspección del archivo, no se re-ejecutó el
+    reset real contra producción para "probarlo" porque truncaría datos
+    transaccionales reales de todo el sistema (SIAF, consolidaciones,
+    órdenes, etc.), demasiado destructivo solo para confirmar un cambio de
+    dos líneas en un array.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

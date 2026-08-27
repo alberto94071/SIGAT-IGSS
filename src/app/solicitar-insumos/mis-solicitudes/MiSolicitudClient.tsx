@@ -151,7 +151,7 @@ export default function MiSolicitudClient({ borrador: borradorInicial, solicitud
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       {s.estado === "Aprobado" ? (
-                        <Link href={`/almacen/dab-75/${s.id}/imprimir`}
+                        <Link href={`/solicitar-insumos/imprimir/${s.id}`}
                           className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
                           <Printer className="w-3 h-3" /> Imprimir
                         </Link>
