@@ -353,6 +353,22 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
     unidadMedidaLookupMap(codigosIgss), codigoLookupMap(codigosIgss), renglonLookupMap(),
   ]);
 
+  // Respaldo adicional para insumos "S/C" (sin código real): unidadMedidaLookupMap
+  // no los cubre porque busca por codigo_igss real, y "S/C" nunca aparece
+  // como codigo_igss en Base de Datos Central (es un placeholder local, no un
+  // valor real de la base). Pero codigo_ppr para estos items guarda "S/C-{id
+  // de Base de Datos Central}" (ver pprPuroParaImprimir) — ese id es
+  // exactamente la fila que se eligió, así que se puede resolver la unidad de
+  // medida con precisión total en vez de dejarla en blanco.
+  const idsSinCodigo = [...new Set(items.map(i => i.codigo_ppr?.match(/^S\/C-(\d+)$/)?.[1])
+    .filter((id): id is string => id != null).map(Number))];
+  const unidadPorIdSinCodigo = new Map<number, string | null>();
+  if (idsSinCodigo.length > 0) {
+    const filas = await db.select({ id: baseDatosCentral.id, unidad_medida: baseDatosCentral.unidad_medida })
+      .from(baseDatosCentral).where(inArray(baseDatosCentral.id, idsSinCodigo));
+    for (const f of filas) unidadPorIdSinCodigo.set(f.id, f.unidad_medida);
+  }
+
   const grupos = new Map<string, GrupoRenglon>();
   for (const item of items) {
     const renglon = item.codigo_igss != null
@@ -367,6 +383,7 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
     }
     else {
       const fichaKey = `${item.codigo_igss}::${normalizaNombre(item.nombre)}`;
+      const idSinCodigo = item.codigo_ppr?.match(/^S\/C-(\d+)$/)?.[1];
       // Si no matchea por codigo_igss::nombre, se intenta el código crudo
       // solo (cubre el caso de items guardados antes de la reimportación de
       // Base de Datos Central, cuyo codigo_igss es en realidad un codigo_ppr
@@ -377,10 +394,12 @@ export async function gruposRenglonDeConsolidacion(consolidacionId: number): Pro
         total: itemTotal,
         // El snapshot guardado al crear el SIAF (item.unidad_medida) tiene
         // prioridad — Base de Datos Central solo se usa de respaldo cuando
-        // ese snapshot vino vacío (ver mismo patrón en a01-siaf/actions.ts),
-        // y su búsqueda además exige codigo_igss real, así que nunca cubre
-        // insumos "S/C".
-        unidad_medida: item.unidad_medida?.trim() || unidades.get(fichaKey) || unidades.get(item.codigo_igss ?? "") || null,
+        // ese snapshot vino vacío (ver mismo patrón en a01-siaf/actions.ts).
+        // Para insumos "S/C" ese respaldo por codigo_igss nunca aplica, así
+        // que se intenta primero por el id exacto embebido en codigo_ppr
+        // (unidadPorIdSinCodigo) antes de caer en null.
+        unidad_medida: item.unidad_medida?.trim() || unidades.get(fichaKey) || unidades.get(item.codigo_igss ?? "")
+          || (idSinCodigo ? unidadPorIdSinCodigo.get(Number(idSinCodigo)) : null) || null,
         codigo: codigos.get(fichaKey) ?? codigos.get(item.codigo_igss ?? "") ?? null,
         descripcion_igss: item.descripcion_igss ?? null,
       });
