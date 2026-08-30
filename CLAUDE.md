@@ -777,6 +777,32 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   despachado, devolver + re-aprobar deja exactamente un lote, no dos; (2)
   con parte del lote ya despachado, la devolución queda bloqueada con el
   mensaje y ni la orden ni el lote cambian (rollback real).
+- **El DAB-75 impreso le faltaba la casilla 10 "Cantidad Recibida"
+  (Números y Letras)** — comparado 2026-08-27 contra un DAB-75 real lleno
+  que mandó el cliente (talonario físico IGSS). El resto de las 14 casillas
+  del formulario ya tenían su dato correspondiente sin pedir nada de más
+  (No. de Pedido, Fecha de Emisión, Clave Administrativa, Sala o Servicio,
+  Bodega I/II, Fecha de Despacho, Código, Nombre y Presentación, Cantidad
+  Solicitada, Solicita/Entrega/Recibe con No. Empleado y Cargo, Vo.Bo.
+  Director) — no hizo falta quitar ni agregar ningún campo de captura.
+  "Cantidad Recibida" tampoco necesitó un campo nuevo que llenar: como
+  `aprobarSolicitud` (despacho FEFO) nunca deja aprobar si no alcanza el
+  stock completo, lo recibido siempre es exactamente lo solicitado — el fix
+  fue puramente de impresión (`ImprimirDab75Client.tsx`), agregando dos
+  columnas más por fila que repiten `cantidad_solicitada`: el número y, con
+  `numeroALetras` (ya existía en `deletreo.ts`, usado para el Acta), la
+  cantidad en palabras en minúsculas (ej. "veintiuno"). Posiciones (en
+  pulgadas, mismo sistema que el resto de `OverlayField`) calibradas a ojo
+  contra la imagen del PDF de referencia, no contra el papel físico real —
+  a diferencia de DAB-60, DAB-75 solo tiene el ajuste global de milímetros
+  (`OverlayPrint`), no posiciones arrastrables por campo, así que si al
+  imprimir en el talonario real estas dos columnas nuevas quedan corridas
+  respecto a las demás, hay que ajustar a mano los `left` de
+  `ImprimirDab75Client.tsx` (el ajuste global no alcanza para corregir solo
+  dos columnas). Verificado visualmente con datos de prueba (incluyendo un
+  caso de dos dígitos, "21 → veintiuno", para confirmar que no se corta ni
+  se encima con las columnas vecinas) — pendiente que el cliente confirme
+  la alineación en una impresión real sobre el talonario físico.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
