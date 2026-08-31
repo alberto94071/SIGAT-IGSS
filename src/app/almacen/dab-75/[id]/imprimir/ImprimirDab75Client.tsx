@@ -1,6 +1,7 @@
 "use client";
 import { OverlayPrint } from "@/components/overlay-print/OverlayPrint";
 import OverlayField from "@/components/overlay-print/OverlayField";
+import { numeroALetras } from "@/lib/adjudicacion/deletreo";
 
 // Esta pantalla solo se alcanza con estado === "Aprobado" (ver page.tsx),
 // así que en la práctica el encargado de Almacén ya llenó todos estos
@@ -20,6 +21,16 @@ function fechaCorta(iso: string | null): string {
   if (!iso) return "";
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y}`;
+}
+
+// La "Cantidad Recibida" (casilla 10 del DAB-75 físico, columnas Números y
+// Letras) no es un dato aparte que alguien capture: el despacho FEFO ya
+// valida disponibilidad completa al aprobar (aprobarSolicitud en actions.ts
+// nunca deja aprobar si no alcanza), así que lo recibido siempre es
+// exactamente lo solicitado — no hace falta pedir un dato nuevo, solo
+// imprimir el mismo cantidad_solicitada dos veces (número y en letras).
+function cantidadEnLetras(n: number): string {
+  return Number.isInteger(n) ? numeroALetras(n) : n.toLocaleString("es-GT", { minimumFractionDigits: 2 });
 }
 
 // Filas de la tabla de insumos del DAB-75, medidas directamente sobre el PDF de
@@ -51,6 +62,12 @@ export default function ImprimirDab75Client({ requisicion: r }: { requisicion: R
           <OverlayField top={ROW_TOPS[i] + 0.10} left={1.25} width={3.4} size={8.5}>{it.nombre}</OverlayField>
           <OverlayField top={ROW_TOPS[i] + 0.10} left={4.9} width={0.65} align="center" size={8.5}>
             {it.cantidad_solicitada.toLocaleString("es-GT")}
+          </OverlayField>
+          <OverlayField top={ROW_TOPS[i] + 0.10} left={5.75} width={0.55} align="center" size={8.5}>
+            {it.cantidad_solicitada.toLocaleString("es-GT")}
+          </OverlayField>
+          <OverlayField top={ROW_TOPS[i] + 0.10} left={6.40} width={1.55} size={8}>
+            {cantidadEnLetras(it.cantidad_solicitada)}
           </OverlayField>
         </div>
       ))}

@@ -745,6 +745,64 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     dos queries. `Dab75Client.tsx` perdió las pestañas de estado (ya no
     hacen falta con una sola categoría) y sus botones Aprobar/Rechazar
     quitan la fila de la lista local en vez de cambiarle el estado in-place.
+- **Devolver un Devengado rechazado por la DAF NUNCA deshace lo que ya se
+  ingresó a Almacén — ni `regresarACompromiso`, ni `regresarADab60`, ni
+  `regresarOrdenAAdjudicacion` (`compromiso-actions.ts`) tocan
+  `almacen_insumos`/`almacen_lotes`.** Esto es intencional (el stock ya
+  entró físicamente a la bodega, devolver la orden en el sistema no lo saca
+  de ahí), pero **"Devolver a Almacén/DAB-60"** (`regresarADab60`, pensado
+  justo para "el dato que capturó Almacén está mal") tenía un bug real hasta
+  2026-08-27: al corregir y volver a darle "Aprobar" en la bandeja de
+  DAB-60, `aprobarDab60` volvía a llamar a `registrarIngresoAlmacen` y
+  registraba un lote NUEVO, duplicando existencia de algo que nunca volvió
+  a entrar a la bodega. Fix: `revertirIngresoAlmacen` (nueva, exportada
+  desde `dab60-actions.ts`) borra el lote que se había creado antes de que
+  `regresarADab60` regrese la orden a la bandeja — así el próximo "Aprobar"
+  crea un lote limpio, no uno de más. Si ya se despachó parte de ese lote
+  por un DAB-75 antes de detectarse el rechazo (`cantidad_disponible !==
+  cantidad_ingresada`), no se puede deshacer solo sin dejar cantidades
+  inconsistentes — se bloquea la devolución con un error claro
+  (`LoteYaDespachadoEnTransaccion`, en `almacen-errors.ts` porque un
+  archivo `"use server"` solo puede exportar funciones async, no clases) y
+  el encargado tiene que resolverlo a mano primero. De paso, `aprobarDab60`
+  y `generarDab60FondoRotativo` pasaron a envolver el cambio de estado de
+  la orden/pago y el ingreso a Almacén en una sola `db.transaction()` —
+  antes eran dos pasos sueltos y un fallo a la mitad podía dejar la orden
+  "En Devengado" con el stock nunca registrado (el mismo síntoma reportado
+  el 2026-08-27 para el DAB-60 de un armario aprobado el 2026-08-24, aunque
+  en ese caso puntual la causa real fue otra: se aprobó antes de que
+  existiera el ingreso automático a Almacén — Fase A2, 2026-08-26 — así que
+  se dio de alta a mano, una sola vez, con un script directo contra la
+  base). Verificado en vivo con una orden de prueba: (1) sin nada
+  despachado, devolver + re-aprobar deja exactamente un lote, no dos; (2)
+  con parte del lote ya despachado, la devolución queda bloqueada con el
+  mensaje y ni la orden ni el lote cambian (rollback real).
+- **El DAB-75 impreso le faltaba la casilla 10 "Cantidad Recibida"
+  (Números y Letras)** — comparado 2026-08-27 contra un DAB-75 real lleno
+  que mandó el cliente (talonario físico IGSS). El resto de las 14 casillas
+  del formulario ya tenían su dato correspondiente sin pedir nada de más
+  (No. de Pedido, Fecha de Emisión, Clave Administrativa, Sala o Servicio,
+  Bodega I/II, Fecha de Despacho, Código, Nombre y Presentación, Cantidad
+  Solicitada, Solicita/Entrega/Recibe con No. Empleado y Cargo, Vo.Bo.
+  Director) — no hizo falta quitar ni agregar ningún campo de captura.
+  "Cantidad Recibida" tampoco necesitó un campo nuevo que llenar: como
+  `aprobarSolicitud` (despacho FEFO) nunca deja aprobar si no alcanza el
+  stock completo, lo recibido siempre es exactamente lo solicitado — el fix
+  fue puramente de impresión (`ImprimirDab75Client.tsx`), agregando dos
+  columnas más por fila que repiten `cantidad_solicitada`: el número y, con
+  `numeroALetras` (ya existía en `deletreo.ts`, usado para el Acta), la
+  cantidad en palabras en minúsculas (ej. "veintiuno"). Posiciones (en
+  pulgadas, mismo sistema que el resto de `OverlayField`) calibradas a ojo
+  contra la imagen del PDF de referencia, no contra el papel físico real —
+  a diferencia de DAB-60, DAB-75 solo tiene el ajuste global de milímetros
+  (`OverlayPrint`), no posiciones arrastrables por campo, así que si al
+  imprimir en el talonario real estas dos columnas nuevas quedan corridas
+  respecto a las demás, hay que ajustar a mano los `left` de
+  `ImprimirDab75Client.tsx` (el ajuste global no alcanza para corregir solo
+  dos columnas). Verificado visualmente con datos de prueba (incluyendo un
+  caso de dos dígitos, "21 → veintiuno", para confirmar que no se corta ni
+  se encima con las columnas vecinas) — pendiente que el cliente confirme
+  la alineación en una impresión real sobre el talonario físico.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
