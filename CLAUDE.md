@@ -89,7 +89,7 @@ mergeado), actualizá este archivo antes de dar el trabajo por cerrado:
 | `almacen/` | DAB-60 (Normal y Fondo Rotativo), DAB-75 (bandeja de aprobación de solicitudes de colaboradores, FEFO por lote al aprobar), Catálogo (stock con alertas y reportes Excel con gráfico nativo) |
 | `fondo-rotativo/`, `caja-chica/`, `dashboard/` (pagos/fri/bancos/vales) | Pago de Fondo Rotativo: Pagos → Bancos/Liquidación → Caja Chica → FRI → Reintegro DAF |
 | `pasajes/` | Tarifario, Solicitud de Pasaje (SPS-75), DPD-23, Póliza |
-| `viaticos/` | Planilla de Viático (V-L) |
+| `viaticos/` | Solicitar → Habilitar → Registro de Comisión → Aprobar → V-A/V-C/V-L (en construcción por fases, ver "Trampas") |
 | `base-datos/` | Catálogos maestros: Insumos, Tarifario de Pasajes, Proveedores, Afiliados |
 | `administracion/` | Usuarios, Colaboradores, permisos, Configuración General, Firmantes |
 | `developer/` | Herramientas de superadmin (backup/reset) |
@@ -803,6 +803,81 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   caso de dos dígitos, "21 → veintiuno", para confirmar que no se corta ni
   se encima con las columnas vecinas) — pendiente que el cliente confirme
   la alineación en una impresión real sobre el talonario físico.
+- **Viáticos — rediseño completo por fases, construido 2026-08-30 a partir
+  de instrucciones detalladas del cliente por WhatsApp + un modelo lleno
+  real de los 3 formularios (V-A Anticipo, V-C Constancia, V-L
+  Liquidación).** El proceso ya no arranca en Fondo Rotativo — arranca en
+  Viáticos: el colaborador (rol ya existente) **pide** el viático desde su
+  cuenta, el encargado de Viáticos lo **habilita** (nombramiento inicial +
+  vencimiento de 10 días hábiles), el colaborador **registra hasta 5
+  comisiones** con sus propios datos y servicios, y el encargado **aprueba**
+  antes de que quede oficial. Eventualmente (fase futura, no construida
+  todavía) el V-L aprobado se vuelve un pago más de Fondo Rotativo.
+  - **Fase A (esquema, esta ronda)**: `viatico_liquidaciones` (sin datos
+    reales en producción) se reemplazó por `viatico_solicitudes` +
+    `viatico_comisiones` — ver `src/lib/schema.ts`. `usuarios` ganó
+    `nit`/`salario`/`grupo`/`categoria_puesto` (nullable, mismo patrón que
+    `ibm`/`puesto_nominal`, editables desde Administración → Colaboradores)
+    para el lookup automático de datos del empleado. `configuracion` ganó
+    precios fijos por servicio (`viatico_precio_desayuno/almuerzo/cena/
+    hospedaje`, Q45/60/45/150) y `viatico_partida_presupuestaria` (fija por
+    ahora, no varía por empleado). Nueva `sumarDiasHabiles(fecha, n)` en
+    `dias-habiles.ts` para el vencimiento — verificada en vivo: jueves
+    2026-07-30 + 10 días hábiles = jueves 2026-08-13 (salta 2 fines de
+    semana, cuenta correcto).
+  - **No se calcula automáticamente qué comidas corresponden por horario de
+    entrada/salida** (el cliente lo pidió así al principio, pero luego
+    simplificó la regla): precio fijo por servicio y el colaborador arma su
+    propia solicitud (cuántos desayunos/almuerzos/cenas/hospedajes pide),
+    **por separado en cada comisión** — el sistema solo multiplica y suma,
+    sin inferir nada por hora. Las cantidades se guardan como enteros
+    (`cantidad_desayuno` etc. en `viatico_comisiones`), no como monto — así
+    un cambio futuro en `configuracion.viatico_precio_*` no altera
+    retroactivamente un viático ya registrado.
+  - **"Nombre y cargo de quien firmó el nombramiento"** (se repite por
+    comisión, se imprime en el V-L) sale de un selector sobre `usuarios`
+    (todos los roles activos, no solo colaboradores — ej. un Director no
+    necesariamente tiene rol colaborador), no de texto libre ni del catálogo
+    `catalogoFirmantes` — `firmante_usuario_id` + `firmante_cargo_manual`
+    (este último solo se usa si el usuario elegido no tiene
+    `puesto_nominal` cargado). Pendiente de construir (Fase D).
+  - **Interpretación del modelo lleno real, no del mensaje de WhatsApp del
+    cliente (que se contradice a sí mismo en el orden de los campos)**: la
+    columna "TIPO DE COMISIÓN" del V-L imprime la Descripción de la
+    Comisión (texto largo, ej. "Capacitación presencial de Registros
+    Médicos"), no el campo corto "Tipo de Comisión" — se guardan ambos
+    (`tipo_comision` corto y `descripcion_comision` largo) porque el
+    cliente pidió los dos, pero solo el segundo se imprime ahí. "Días de
+    comisión" = días de calendario entre `fecha_salida_unidad` y
+    `fecha_entrada_unidad` (inclusive) por comisión — confirmado
+    reconstruyendo el ejemplo real del cliente (salida 30/07 14:00, entrada
+    31/07 21:00 = 2 días, coincide exacto con el V-L lleno que mandó). El
+    "No. de días" que se imprime en el V-L es la **suma** de los días de
+    todas las comisiones de la solicitud.
+  - **`ImprimirViaticoClient.tsx` (impresión del V-L) ya tenía las 31
+    casillas calibradas en pulgadas de una implementación manual anterior**
+    (`OverlayField`, mismo sistema que DAB-60/DAB-75) — se conserva ese
+    archivo como base para adaptar en la Fase E (nueva fuente de datos:
+    sumar `dias_calculados`/`cantidad_*` de todas las comisiones, de-
+    duplicar lugar/tipo/firmante repetidos), no hace falta re-medir el
+    papel desde cero. El `SelectorFirmante` que ya usa (Vo.Bo.) también se
+    reutiliza.
+  - **La pestaña "Entrega de Formulario" quedó temporalmente en "En
+    desarrollo"** (el formulario manual viejo dependía de la tabla
+    eliminada) hasta que la Fase E la reconstruya como el archivo de
+    solicitudes `Aprobado`/`Rechazado` con impresión de V-A/V-C/V-L —
+    "Registro de Comisión" (ya era un stub) se repropone como la bandeja
+    del encargado (habilitar + revisión final), no como el formulario que
+    llena el colaborador (ese vive en `solicitar-viaticos/`, nuevo, del
+    lado del colaborador — mismo patrón que `solicitar-insumos/`).
+  - **Trampa de entorno nueva, además de la ya documentada arriba**: el
+    contenedor de este entorno remoto se puede reiniciar entre turnos por
+    inactividad (perdiendo `node_modules` y `.env.local`, que nunca se
+    suben a git) incluso a mitad de una sesión larga — si un comando
+    Node/`npx tsc` falla con "Cannot find module" en paquetes normales
+    (`react`, `next`, etc.) o el driver HTTP de arriba falla por archivo
+    inexistente, no es un bug del código: hace falta `npm install` de
+    nuevo y volver a pedir las credenciales de `.env.local`.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
