@@ -88,6 +88,21 @@ export function nEsimoDiaHabilDelMes(anio: number, mes1a12: number, n: number): 
   }
 }
 
+// Fecha (YYYY-MM-DD) que resulta de sumarle n días HÁBILES a `fecha` (sin
+// contar `fecha` misma) — para el vencimiento de 10 días hábiles de Viáticos
+// (ver viaticoSolicitudes.fecha_limite en schema.ts): un nombramiento del
+// viernes con n=10 vence hasta el viernes de la semana siguiente-siguiente,
+// saltando fines de semana y feriados.
+export function sumarDiasHabiles(fecha: string, n: number): string {
+  let d = parseISO(fecha);
+  let contador = 0;
+  while (contador < n) {
+    d = sumarDias(d, 1);
+    if (esDiaHabil(toISO(d))) contador++;
+  }
+  return toISO(d);
+}
+
 // ¿La fecha cae dentro de los primeros N días hábiles del mes al que pertenece?
 export function estaEnPrimerosNDiasHabiles(fecha: string, n: number): boolean {
   const d = parseISO(fecha);

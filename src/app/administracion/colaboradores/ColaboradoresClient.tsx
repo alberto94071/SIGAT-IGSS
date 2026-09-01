@@ -19,13 +19,19 @@ export default function ColaboradoresClient({ colaboradores: init }: {
   const [puesto, setPuesto] = useState("");
   const [pass, setPass] = useState("");
   const [newPass, setNewPass] = useState("");
+  const [nit, setNit] = useState("");
+  const [salario, setSalario] = useState("");
+  const [grupo, setGrupo] = useState("");
+  const [categoriaPuesto, setCategoriaPuesto] = useState("");
 
   function openCrear() {
     setNombre(""); setIbm(""); setPuesto(""); setPass(""); setError(""); setShowPass(false);
+    setNit(""); setSalario(""); setGrupo(""); setCategoriaPuesto("");
     setModal("crear");
   }
   function openEditar(c: Colaborador) {
     setSelected(c); setNombre(c.nombre); setIbm(c.ibm ?? ""); setPuesto(c.puesto_nominal ?? ""); setError("");
+    setNit(c.nit ?? ""); setSalario(c.salario != null ? String(c.salario) : ""); setGrupo(c.grupo ?? ""); setCategoriaPuesto(c.categoria_puesto ?? "");
     setModal("editar");
   }
   function openReset(c: Colaborador) {
@@ -37,7 +43,10 @@ export default function ColaboradoresClient({ colaboradores: init }: {
   async function handleCrear() {
     if (!nombre.trim() || !ibm.trim() || !puesto.trim() || !pass) return setError("Complete todos los campos");
     setLoading(true);
-    const res = await crearColaborador({ nombre, ibm, puesto_nominal: puesto, password: pass });
+    const res = await crearColaborador({
+      nombre, ibm, puesto_nominal: puesto, password: pass,
+      nit, grupo, categoria_puesto: categoriaPuesto, salario: salario.trim() ? Number(salario) : null,
+    });
     setLoading(false);
     if ("error" in res) return setError(res.error);
     setLista(prev => [...prev, res.colaborador].sort((a, b) => a.nombre.localeCompare(b.nombre)));
@@ -48,10 +57,16 @@ export default function ColaboradoresClient({ colaboradores: init }: {
     if (!selected) return;
     if (!nombre.trim() || !ibm.trim() || !puesto.trim()) return setError("Complete todos los campos");
     setLoading(true);
-    const res = await editarColaborador({ id: selected.id, nombre, ibm, puesto_nominal: puesto });
+    const res = await editarColaborador({
+      id: selected.id, nombre, ibm, puesto_nominal: puesto,
+      nit, grupo, categoria_puesto: categoriaPuesto, salario: salario.trim() ? Number(salario) : null,
+    });
     setLoading(false);
     if ("error" in res) return setError(res.error);
-    setLista(prev => prev.map(c => c.id === selected.id ? { ...c, nombre, ibm, puesto_nominal: puesto } : c));
+    setLista(prev => prev.map(c => c.id === selected.id ? {
+      ...c, nombre, ibm, puesto_nominal: puesto, nit: nit || null, grupo: grupo || null,
+      categoria_puesto: categoriaPuesto || null, salario: salario.trim() ? Number(salario) : null,
+    } : c));
     closeModal();
   }
 
@@ -165,6 +180,8 @@ export default function ColaboradoresClient({ colaboradores: init }: {
               </div>
               <p className="text-xs text-gray-400 mt-1">El colaborador inicia sesión con su IBM y esta contraseña.</p>
             </div>
+            <DatosViaticoFields nit={nit} setNit={setNit} salario={salario} setSalario={setSalario}
+              grupo={grupo} setGrupo={setGrupo} categoriaPuesto={categoriaPuesto} setCategoriaPuesto={setCategoriaPuesto} />
           </div>
         </ModalBase>
       )}
@@ -185,6 +202,8 @@ export default function ColaboradoresClient({ colaboradores: init }: {
               <label className="label">Puesto nominal</label>
               <input className="input" value={puesto} onChange={e => setPuesto(e.target.value)} />
             </div>
+            <DatosViaticoFields nit={nit} setNit={setNit} salario={salario} setSalario={setSalario}
+              grupo={grupo} setGrupo={setGrupo} categoriaPuesto={categoriaPuesto} setCategoriaPuesto={setCategoriaPuesto} />
           </div>
         </ModalBase>
       )}
@@ -204,6 +223,39 @@ export default function ColaboradoresClient({ colaboradores: init }: {
           </div>
         </ModalBase>
       )}
+    </div>
+  );
+}
+
+// Datos que solo hacen falta para Viáticos (Formulario V-L) — opcionales,
+// un colaborador que solo pide insumos puede no tenerlos nunca.
+function DatosViaticoFields({ nit, setNit, salario, setSalario, grupo, setGrupo, categoriaPuesto, setCategoriaPuesto }: {
+  nit: string; setNit: (v: string) => void;
+  salario: string; setSalario: (v: string) => void;
+  grupo: string; setGrupo: (v: string) => void;
+  categoriaPuesto: string; setCategoriaPuesto: (v: string) => void;
+}) {
+  return (
+    <div className="pt-2 border-t border-gray-100 space-y-3">
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Datos para Viáticos (opcional)</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="label">NIT</label>
+          <input className="input font-mono" value={nit} onChange={e => setNit(e.target.value)} />
+        </div>
+        <div>
+          <label className="label">Salario</label>
+          <input type="number" step="0.01" className="input" value={salario} onChange={e => setSalario(e.target.value)} />
+        </div>
+        <div>
+          <label className="label">Grupo</label>
+          <input className="input" value={grupo} onChange={e => setGrupo(e.target.value)} />
+        </div>
+        <div>
+          <label className="label">Categoría de puesto</label>
+          <input className="input" value={categoriaPuesto} onChange={e => setCategoriaPuesto(e.target.value)} />
+        </div>
+      </div>
     </div>
   );
 }

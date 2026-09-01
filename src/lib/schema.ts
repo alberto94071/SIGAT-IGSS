@@ -64,6 +64,17 @@ export const configuracion = pgTable("configuracion", {
   // porque configuracion no se trunca.
   siaf_compras_numero_inicial:      integer("siaf_compras_numero_inicial").notNull().default(0),
   siaf_compras_numero_inicial_anio: integer("siaf_compras_numero_inicial_anio").notNull().default(0),
+  // Precios fijos por servicio de Viáticos (Q) — el cliente pidió precio fijo
+  // en vez de calcular automáticamente qué comidas corresponden por horario;
+  // el colaborador arma su propia solicitud de servicios a estos precios.
+  viatico_precio_desayuno:  doublePrecision("viatico_precio_desayuno").notNull().default(45),
+  viatico_precio_almuerzo:  doublePrecision("viatico_precio_almuerzo").notNull().default(60),
+  viatico_precio_cena:      doublePrecision("viatico_precio_cena").notNull().default(45),
+  viatico_precio_hospedaje: doublePrecision("viatico_precio_hospedaje").notNull().default(150),
+  // Partida presupuestaria fija para el V-L (Formulario de Liquidación) —
+  // por ahora un solo valor para toda la unidad, no varía por empleado.
+  viatico_partida_presupuestaria: text("viatico_partida_presupuestaria").notNull()
+    .default("2026-1140-0068-407-11-01-000-07-000-011-1201-31"),
   updated_at:           text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
@@ -94,6 +105,13 @@ export const usuarios = pgTable("usuarios", {
   // ver auth.ts) y puesto nominal — se muestran en Administración/Colaboradores.
   ibm:               text("ibm").unique(),
   puesto_nominal:    text("puesto_nominal"),
+  // Datos adicionales para Viáticos (Formulario V-L) — mismo patrón que
+  // ibm/puesto_nominal: nullable, se llenan desde Administración/Colaboradores
+  // y se copian como snapshot a viatico_solicitudes al habilitar un viático.
+  nit:               text("nit"),
+  salario:           doublePrecision("salario"),
+  grupo:             text("grupo"),
+  categoria_puesto:  text("categoria_puesto"),
 });
 
 // ─── Catálogo de insumos (hoja Cod) ──────────────────────────────────────────
@@ -1045,35 +1063,103 @@ export const requisicionBodegaDespachos = pgTable("requisicion_bodega_despachos"
   cantidad:            doublePrecision("cantidad").notNull(),
 });
 
-// ─── Planilla de Viático — Formulario V-L (Pago de Viáticos) ─────────────────
-// Igual que DAB-75: formulario pre-impreso, solo se posicionan los datos.
-export const viaticoLiquidaciones = pgTable("viatico_liquidaciones", {
-  id:                       serial("id").primaryKey(),
-  comisiones_json:          text("comisiones_json").notNull().default("[]"), // [{tipo, lugar}]
-  dias:                     integer("dias").notNull().default(0),
-  gasto_desayuno:           doublePrecision("gasto_desayuno"),
-  gasto_almuerzo:           doublePrecision("gasto_almuerzo"),
-  gasto_cena:               doublePrecision("gasto_cena"),
-  gasto_hospedaje:          doublePrecision("gasto_hospedaje"),
-  otros_gastos:             doublePrecision("otros_gastos").notNull().default(0),
-  recibido_va_no:           text("recibido_va_no"),
-  recibido_va_monto:        doublePrecision("recibido_va_monto"),
-  reintegro:                doublePrecision("reintegro"),
-  complemento:              doublePrecision("complemento"),
-  forma_pago:               text("forma_pago"),
-  fecha_pago:               text("fecha_pago"),
-  persona_nombre:           text("persona_nombre").notNull(),
-  persona_nit:              text("persona_nit").notNull(),
-  persona_cargo:            text("persona_cargo").notNull(),
+// ─── Viáticos: Solicitar → Habilitar → Registro de Comisión → Aprobar ────────
+// Reemplaza viatico_liquidaciones (sin datos reales en producción, se podía
+// rediseñar sin migrar nada). El colaborador pide el viático desde su cuenta
+// (estado "Pendiente"); el encargado de Viáticos lo habilita (llena el
+// nombramiento inicial y el sistema calcula la fecha límite de 10 días
+// hábiles, estado "Habilitado"); el colaborador registra hasta 5 comisiones
+// (viatico_comisiones) y envía (estado "Enviado"); el encargado aprueba o
+// rechaza (estado "Aprobado"/"Rechazado") — recién ahí se puede imprimir
+// V-A/V-C/V-L.
+export const viaticoSolicitudes = pgTable("viatico_solicitudes", {
+  id:                serial("id").primaryKey(),
+  colaborador_id:    integer("colaborador_id").notNull().references(() => usuarios.id),
+  estado:            text("estado").notNull().default("Pendiente"),
+  // No. de talonario físico, compartido entre V-A/V-C/V-L — se llena al habilitar.
+  numero_formulario: text("numero_formulario"),
+  // Nombramiento inicial (el de la primera comisión) — capturado al habilitar.
+  nombramiento_numero: text("nombramiento_numero"),
+  fecha_nombramiento:  text("fecha_nombramiento"),
+  // 10 días hábiles desde fecha_nombramiento (ver sumarDiasHabiles en
+  // dias-habiles.ts) — si se pasa, Registro de Comisión se bloquea del todo.
+  fecha_limite:        text("fecha_limite"),
+  // Snapshot de usuarios al habilitar (mismo patrón que catalogo_compras →
+  // siaf_compras_items en todo el resto del sistema) — no se re-lee en vivo
+  // después, para que un cambio posterior en el perfil del colaborador no
+  // altere retroactivamente un viático ya en trámite.
+  persona_nombre:           text("persona_nombre"),
+  persona_nit:              text("persona_nit"),
+  persona_cargo:            text("persona_cargo"),
+  persona_no_empleado:      text("persona_no_empleado"),
   persona_grupo:            text("persona_grupo"),
-  persona_no_empleado:      text("persona_no_empleado").notNull(),
   persona_sueldo:           doublePrecision("persona_sueldo"),
   persona_categoria_puesto: text("persona_categoria_puesto"),
-  partida_presupuestaria:   text("partida_presupuestaria"),
-  nombramiento_numero:      text("nombramiento_numero"),
-  fecha_nombramiento:       text("fecha_nombramiento"),
-  creado_por:               integer("creado_por").references(() => usuarios.id),
-  created_at:               text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+  // Liquidación (se llena al aprobar) — casi siempre vacíos porque el V-A
+  // de esta unidad siempre imprime "NO UTILIZADO", pero quedan disponibles
+  // por si algún día sí se da un anticipo real.
+  otros_gastos:      doublePrecision("otros_gastos").notNull().default(0),
+  recibido_va_no:    text("recibido_va_no"),
+  recibido_va_monto: doublePrecision("recibido_va_monto"),
+  reintegro:         doublePrecision("reintegro"),
+  complemento:       doublePrecision("complemento"),
+  // Informe de Comisión / Justificación de Estancia — documentos narrativos
+  // libres aparte de los 3 formularios oficiales, editor simple (textarea).
+  informe_comision:        text("informe_comision"),
+  justificacion_estancia:  text("justificacion_estancia"),
+  motivo_rechazo:    text("motivo_rechazo"),
+  rechazado_por:     integer("rechazado_por").references(() => usuarios.id),
+  rechazado_en:      text("rechazado_en"),
+  aprobado_por:      integer("aprobado_por").references(() => usuarios.id),
+  aprobado_en:       text("aprobado_en"),
+  // Encargado de Viáticos que habilitó la solicitud (no confundir con
+  // colaborador_id, que es quien la pidió).
+  creado_por:        integer("creado_por").references(() => usuarios.id),
+  created_at:        text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+});
+
+// Hasta 5 comisiones por solicitud (orden 1-5) — cada una con sus propias
+// fechas/horas, nombramiento y servicios elegidos a precio fijo (ver
+// configuracion.viatico_precio_*). El "No. de días" que se imprime en el
+// V-L es la suma de dias_calculados de todas las comisiones de la solicitud.
+export const viaticoComisiones = pgTable("viatico_comisiones", {
+  id:             serial("id").primaryKey(),
+  solicitud_id:   integer("solicitud_id").notNull().references(() => viaticoSolicitudes.id, { onDelete: "cascade" }),
+  orden:          integer("orden").notNull(),
+  lugar:          text("lugar"),
+  departamento:   text("departamento"),
+  tipo_comision:        text("tipo_comision"),
+  descripcion_comision: text("descripcion_comision"),
+  fecha_salida_unidad:  text("fecha_salida_unidad"),
+  hora_salida_unidad:   text("hora_salida_unidad"),
+  fecha_llegada_lugar:  text("fecha_llegada_lugar"),
+  hora_llegada_lugar:   text("hora_llegada_lugar"),
+  fecha_salida_lugar:   text("fecha_salida_lugar"),
+  hora_salida_lugar:    text("hora_salida_lugar"),
+  fecha_entrada_unidad: text("fecha_entrada_unidad"),
+  hora_entrada_unidad:  text("hora_entrada_unidad"),
+  // Días de calendario entre fecha_salida_unidad y fecha_entrada_unidad
+  // (inclusive) — calculado y guardado al registrar la comisión, no en cada
+  // lectura, para que quede fijo aunque cambien las reglas más adelante.
+  dias_calculados:      integer("dias_calculados"),
+  // Nombramiento propio de esta comisión — la comisión 1 hereda por default
+  // el de la solicitud (ver viaticoSolicitudes.nombramiento_numero) pero es
+  // editable; las comisiones 2-5 siempre se capturan aparte.
+  nombramiento_numero: text("nombramiento_numero"),
+  fecha_nombramiento:  text("fecha_nombramiento"),
+  // "Nombre y cargo de quien firmó el nombramiento" — selector sobre
+  // usuarios (todos los roles, no solo colaboradores). firmante_cargo_manual
+  // solo se usa si el usuario elegido no tiene puesto_nominal cargado.
+  firmante_usuario_id:   integer("firmante_usuario_id").references(() => usuarios.id),
+  firmante_cargo_manual: text("firmante_cargo_manual"),
+  // Servicios elegidos por el colaborador para ESTA comisión, a precio fijo
+  // (no se calcula automáticamente por horario) — cantidad, no monto, para
+  // que un cambio futuro en configuracion.viatico_precio_* no altere
+  // retroactivamente un viático ya registrado.
+  cantidad_desayuno:  integer("cantidad_desayuno").notNull().default(0),
+  cantidad_almuerzo:  integer("cantidad_almuerzo").notNull().default(0),
+  cantidad_cena:      integer("cantidad_cena").notNull().default(0),
+  cantidad_hospedaje: integer("cantidad_hospedaje").notNull().default(0),
 });
 
 // ─── Pago de Pasajes (Caja Chica/Solicitud Pasaje) ───────────────────────────
