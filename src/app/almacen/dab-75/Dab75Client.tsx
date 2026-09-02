@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { aprobarSolicitud, rechazarSolicitud, type DatosAprobacion } from "./actions";
 
-type Item = { id: number; codigo: string; nombre: string; cantidad_solicitada: number };
+type Item = { id: number; codigo: string; nombre: string; cantidad_solicitada: number; descripcion_igss: string | null };
 type Solicitud = {
   id: number;
   no_pedido: string | null; fecha_emision: string | null; clave_administrativa: string | null;
@@ -182,7 +182,12 @@ function RevisarModal({ solicitud: s, onClose, onAprobada }: {
           <div className="space-y-1.5">
             {s.items.map(it => (
               <div key={it.id} className="flex items-center gap-2">
-                <span className="flex-1 text-sm text-gray-900">{it.nombre}</span>
+                <span className="flex-1 text-sm text-gray-900">
+                  {it.nombre}
+                  {it.descripcion_igss && it.descripcion_igss !== it.nombre && (
+                    <span className="block text-xs text-gray-400">{it.descripcion_igss}</span>
+                  )}
+                </span>
                 <input type="number" min={0} step="0.01" className="input w-28 text-sm"
                   value={cantidades[it.id]}
                   onChange={e => setCantidades(prev => ({ ...prev, [it.id]: parseFloat(e.target.value) || 0 }))} />

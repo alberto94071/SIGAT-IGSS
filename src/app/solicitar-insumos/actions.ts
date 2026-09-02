@@ -105,6 +105,23 @@ export async function eliminarItemBorrador(itemId: number): Promise<{ ok: true }
   return { ok: true };
 }
 
+// Trae los items con la descripción completa del insumo (nombre +
+// características) vía almacenInsumos.descripcion_igss — requisicionBodegaItems
+// solo guarda un snapshot de codigo/nombre corto, insuficiente para que el
+// colaborador distinga presentaciones al revisar su carrito/historial
+// (reportado por el cliente 2026-09-02: "en la solicitud de insumos también
+// debe aparecer toda la descripción del ppr").
+async function itemsConDescripcion(requisicionId: number) {
+  return db.select({
+    id: requisicionBodegaItems.id, codigo: requisicionBodegaItems.codigo, nombre: requisicionBodegaItems.nombre,
+    cantidad_solicitada: requisicionBodegaItems.cantidad_solicitada,
+    descripcion_igss: almacenInsumos.descripcion_igss,
+  }).from(requisicionBodegaItems)
+    .leftJoin(almacenInsumos, eq(almacenInsumos.id, requisicionBodegaItems.insumo_id))
+    .where(eq(requisicionBodegaItems.requisicion_id, requisicionId))
+    .orderBy(requisicionBodegaItems.orden);
+}
+
 export async function getMiSolicitudActiva() {
   const me = await getMeColaborador();
   if (!me) return null;
@@ -114,9 +131,7 @@ export async function getMiSolicitudActiva() {
     .limit(1);
   if (!borrador) return null;
 
-  const items = await db.select().from(requisicionBodegaItems)
-    .where(eq(requisicionBodegaItems.requisicion_id, borrador.id))
-    .orderBy(requisicionBodegaItems.orden);
+  const items = await itemsConDescripcion(borrador.id);
   return { ...borrador, items };
 }
 
@@ -129,9 +144,7 @@ export async function getMisSolicitudes() {
     .orderBy(sql`id DESC`);
   return Promise.all(rows.map(async r => ({
     ...r,
-    items: await db.select().from(requisicionBodegaItems)
-      .where(eq(requisicionBodegaItems.requisicion_id, r.id))
-      .orderBy(requisicionBodegaItems.orden),
+    items: await itemsConDescripcion(r.id),
   })));
 }
 

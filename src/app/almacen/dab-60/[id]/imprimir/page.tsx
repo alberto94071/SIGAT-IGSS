@@ -52,7 +52,11 @@ export default async function ImprimirDab60Page({ params }: Props) {
 
   const cfg = config[0];
   const renglonesUnicos = [...new Set(renglones.map(r => r.renglon).filter((r): r is number => r != null))];
-  const descripcion = [...new Set(renglones.map(r => r.nombre.trim()).filter(Boolean))].join("; ");
+  // La descripción impresa usa descripcion_igss (nombre + características de
+  // la presentación elegida) — usar solo r.nombre imprimía "Nebulizador
+  // eléctrico"/"Teléfono"/"Impresora térmica" sin ninguna característica,
+  // reportado por el cliente 2026-09-02.
+  const descripcion = [...new Set(renglones.map(r => (r.descripcion_igss || r.nombre).trim()).filter(Boolean))].join("; ");
 
   // El "LUGAR Y FECHA" del formulario debe ser la fecha de ingreso del
   // producto a bodega (dato que se captura al generar el DAB-60), no la
