@@ -1046,8 +1046,11 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   no depende de renglón 182, depende de si el insumo tiene código IGSS
   real** (`textoNota`/`tieneCodigoIgssReal` en `ImprimirClient.tsx`; el
   cliente probó una primera versión que los mostraba juntos y pidió
-  revertir a uno u otro — 2026-09-02). Sin código real → leyenda; con
-  código real → Código PpR (como antes de renglón 182). Si una hoja mezcla
+  revertir a uno u otro — 2026-09-02). La condición final quedó al revés de
+  lo intuitivo, confirmada explícitamente por el cliente: **CON código IGSS
+  real → leyenda; SIN código real → Código PpR** (un primer intento la puso
+  al revés — sin código → leyenda, con código → PpR — y el cliente pidió
+  invertirla). Si una hoja mezcla
   insumos con y sin código real, gana la leyenda — mismo criterio que ya
   usaba renglón 182 (basta un insumo que la necesite). `tieneCodigoIgssReal`
   usa el mismo criterio que `codigoParaImprimir` (arriba): un código que se
