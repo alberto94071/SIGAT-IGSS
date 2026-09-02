@@ -1041,19 +1041,21 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     (mismo patrón que `CatalogoAlmacenClient.tsx`). El recibo DAB-75
     impreso (`ImprimirDab75Client.tsx`) y el archivo compacto
     (`ArchivoClient.tsx`) no se tocaron — no fueron parte del reporte.
-- **La leyenda "productos homologados... SIGES" del A-01 SIAF ya no es
-  mutuamente excluyente con el "Código PpR:" — ahora se imprimen juntos
-  siempre** (`textoNota` en `ImprimirClient.tsx`, reemplaza el ternario que
-  dependía de `mostrarSubproducto`/renglón 182). Antes solo una hoja con
-  algún insumo de renglón 182 mostraba la leyenda (y nunca el PpR); el resto
-  mostraba el PpR (y nunca la leyenda) — el cliente pidió (2026-09-02) que
-  la leyenda salga siempre, tenga o no código IGSS real el insumo, y que el
-  Código PpR se siga imprimiendo a continuación cuando el insumo lo tenga
-  resuelto (con código real vía `codigoPprLookupMap`, o sin código real vía
-  `codigoPprSinCodigoLookupMap` — ambos ya se resolvían desde antes, el
-  cambio es solo de cuándo se muestran). `mostrarSubproducto` se queda igual
-  para lo que sí seguía siendo suyo (mostrar el sub-producto junto a la
-  descripción) — solo se le quitó el control sobre esta leyenda.
+- **La leyenda "productos homologados... SIGES" del A-01 SIAF y el "Código
+  PpR:" siguen siendo mutuamente excluyentes, pero la condición cambió: ya
+  no depende de renglón 182, depende de si el insumo tiene código IGSS
+  real** (`textoNota`/`tieneCodigoIgssReal` en `ImprimirClient.tsx`; el
+  cliente probó una primera versión que los mostraba juntos y pidió
+  revertir a uno u otro — 2026-09-02). Sin código real → leyenda; con
+  código real → Código PpR (como antes de renglón 182). Si una hoja mezcla
+  insumos con y sin código real, gana la leyenda — mismo criterio que ya
+  usaba renglón 182 (basta un insumo que la necesite). `tieneCodigoIgssReal`
+  usa el mismo criterio que `codigoParaImprimir` (arriba): un código que se
+  imprime como "SC" (rango puramente numérico, placeholder de importación)
+  cuenta como sin código real para esta decisión también, no solo para la
+  columna Código. `mostrarSubproducto` se queda igual para lo que sí seguía
+  siendo suyo (mostrar el sub-producto junto a la descripción) — nunca tuvo
+  que ver con esta leyenda desde que dejó de depender de renglón 182.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

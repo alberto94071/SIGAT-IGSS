@@ -168,16 +168,27 @@ function textoCodigosPpr(items: Item[]): string {
   return codigos.length > 0 ? `Código PpR: ${codigos.join(", ")}` : "";
 }
 
-// La leyenda de "productos homologados... SIGES" ya no depende de que la
-// hoja tenga un insumo de renglón 182 — el cliente pidió (2026-09-02) que
-// se imprima siempre, tenga o no código IGSS real el insumo. Cuando además
-// hay insumos con código IGSS real (que sí traen PpR resuelto), el/los
-// código(s) PpR se imprimen a continuación de la leyenda, en vez de en su
-// lugar como antes.
+// Mismo criterio que codigoParaImprimir (arriba) para decidir si un insumo
+// "tiene código IGSS real": ni vacío/"S/C", ni un rango puramente numérico
+// (placeholder de importación masiva que se imprime como "SC" en la columna
+// Código — para esta decisión cuenta igual que no tener código).
+function tieneCodigoIgssReal(codigoIgss: string | null): boolean {
+  if (!codigoIgss || codigoIgss === "S/C") return false;
+  return !/^\d+\s*-\s*\d+\s*$/.test(codigoIgss);
+}
+
+// La leyenda de "productos homologados... SIGES" y el "Código PpR:" son
+// mutuamente excluyentes (el cliente lo confirmó 2026-09-02 tras una
+// primera versión que los mostraba juntos) — antes la leyenda dependía de
+// que la hoja tuviera algún insumo de renglón 182; ahora depende de si el
+// insumo tiene código IGSS real: sin código real → leyenda; con código
+// real → Código PpR (como antes). Si la hoja mezcla insumos con y sin
+// código real, gana la leyenda (mismo criterio que ya usaba el renglón 182:
+// basta un insumo que la necesite para que se imprima).
 function textoNota(items: Item[]): string {
   const leyenda = "Los productos de los listados institucionales, se encuentran homologados con el catálogo general de insumos del SIGES, Presupuesto por Resultados (PpR)";
-  const codigosPpr = textoCodigosPpr(items);
-  return codigosPpr ? `${leyenda}. ${codigosPpr}` : leyenda;
+  const algunoSinCodigoReal = items.some(i => !tieneCodigoIgssReal(i.codigo_igss));
+  return algunoSinCodigoReal ? leyenda : textoCodigosPpr(items);
 }
 
 export default function ImprimirClient({
