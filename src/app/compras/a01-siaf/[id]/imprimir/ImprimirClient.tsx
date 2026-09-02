@@ -161,14 +161,23 @@ function FilaItemContenido({ item, mostrarSubproducto }: { item: Item; mostrarSu
   );
 }
 
-// Cuando la hoja no tiene ningún insumo del renglón 182 (mostrarSubproducto
-// en false), la leyenda de "productos homologados... SIGES" no aplica —
-// en su lugar se imprime el/los código(s) PpR de los insumos de esa hoja.
 // A diferencia de la columna "Código" de la tabla, acá NO se recorta el
 // rango — el cliente pidió el número completo tal como está guardado.
 function textoCodigosPpr(items: Item[]): string {
   const codigos = [...new Set(items.map(i => i.codigo_ppr).filter((c): c is string => !!c))];
   return codigos.length > 0 ? `Código PpR: ${codigos.join(", ")}` : "";
+}
+
+// La leyenda de "productos homologados... SIGES" ya no depende de que la
+// hoja tenga un insumo de renglón 182 — el cliente pidió (2026-09-02) que
+// se imprima siempre, tenga o no código IGSS real el insumo. Cuando además
+// hay insumos con código IGSS real (que sí traen PpR resuelto), el/los
+// código(s) PpR se imprimen a continuación de la leyenda, en vez de en su
+// lugar como antes.
+function textoNota(items: Item[]): string {
+  const leyenda = "Los productos de los listados institucionales, se encuentran homologados con el catálogo general de insumos del SIGES, Presupuesto por Resultados (PpR)";
+  const codigosPpr = textoCodigosPpr(items);
+  return codigosPpr ? `${leyenda}. ${codigosPpr}` : leyenda;
 }
 
 export default function ImprimirClient({
@@ -440,9 +449,7 @@ export default function ImprimirClient({
                   <div style={{ position: "absolute", right: W_CANT, top: 0, bottom: 0, width: "2px", background: "#1a1a1a", zIndex: 1 }} />
                   <div style={{ width: W_COD, flexShrink: 0 }} />
                   <span style={{ flex: 1, padding: "0 8px", fontSize: "6.5pt", color: "#555", fontFamily: FONT }}>
-                    {mostrarSubproducto
-                      ? "Los productos de los listados institucionales, se encuentran homologados con el catálogo general de insumos del SIGES, Presupuesto por Resultados (PpR)"
-                      : textoCodigosPpr(page.items.map(x => x.item))}
+                    {textoNota(page.items.map(x => x.item))}
                   </span>
                   <div style={{ width: W_CANT, flexShrink: 0 }} />
                 </div>
