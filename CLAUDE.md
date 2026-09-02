@@ -813,7 +813,7 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   comisiones** con sus propios datos y servicios, y el encargado **aprueba**
   antes de que quede oficial. Eventualmente (fase futura, no construida
   todavía) el V-L aprobado se vuelve un pago más de Fondo Rotativo.
-  - **Fase A (esquema, esta ronda)**: `viatico_liquidaciones` (sin datos
+  - **Fase A (esquema)**: `viatico_liquidaciones` (sin datos
     reales en producción) se reemplazó por `viatico_solicitudes` +
     `viatico_comisiones` — ver `src/lib/schema.ts`. `usuarios` ganó
     `nit`/`salario`/`grupo`/`categoria_puesto` (nullable, mismo patrón que
@@ -878,6 +878,19 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     (`react`, `next`, etc.) o el driver HTTP de arriba falla por archivo
     inexistente, no es un bug del código: hace falta `npm install` de
     nuevo y volver a pedir las credenciales de `.env.local`.
+  - **Fase B**: `src/app/solicitar-viaticos/` (nuevo, mismo patrón que
+    `solicitar-insumos/` — layout propio con `requireColaborador()`, no
+    cuelga del launcher). El colaborador pide el viático con un solo botón
+    ("Solicitar Viático" en `MisViaticosClient.tsx`, acción
+    `solicitarViatico()`) — no captura ningún dato en este paso, todo se
+    llena después al habilitar (Fase C) y al registrar comisiones (Fase D).
+    Un colaborador solo puede tener **un trámite activo a la vez**
+    (`estado IN ('Pendiente','Habilitado','Enviado')` bloquea pedir otro,
+    mismo criterio que el borrador único de Solicitar Insumos) — verificado
+    en vivo pidiendo un segundo viático mientras el primero seguía
+    "Pendiente": el botón desaparece y se muestra un aviso en su lugar. El
+    tile "Solicitar Viáticos" del launcher del colaborador
+    (`MODULES_COLABORADOR`) pasó de "Próximamente" a activo.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

@@ -191,13 +191,13 @@ const MODULES_COLABORADOR = [
     id: "solicitar-viaticos",
     title: "Solicitar Viáticos",
     description: "Solicitud de viáticos por comisión de trabajo.",
-    href: "/launcher",
+    href: "/solicitar-viaticos",
     icon: MapPin,
     color: "bg-blue-500",
     ring: "ring-blue-200",
     textColor: "text-blue-600",
     bgLight: "bg-blue-50",
-    available: false,
+    available: true,
   },
 ];
 
