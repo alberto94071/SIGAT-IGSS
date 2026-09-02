@@ -1001,6 +1001,59 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     nombramiento. También se probó el rechazo (con motivo) y que el
     archivo de Entrega de Formulario solo ofrece reimprimir a las
     solicitudes `Aprobado`, nunca a las `Rechazado`.
+- **Lote de bugs de "descripción PPR" reportados por el cliente 2026-09-02
+  (WhatsApp con capturas de pantalla), todos con la misma raíz: varios
+  lugares usaban `nombre` (corto) en vez de `descripcion_igss` (con
+  características), o corrompían la clave compuesta del PPR.**
+  - **DAB-60 impreso (Normal y Fondo Rotativo) imprimía "DESCRIPCION" con
+    `nombre`** — casos reales del cliente: "Nebulizador eléctrico",
+    "Teléfono", "Impresora térmica", sin ninguna característica. Los dos
+    `page.tsx` de impresión ya arman `descripcion` con `descripcion_igss ||
+    nombre` (mismo patrón ya usado en otros lados) — no hace falta backfill,
+    se recalcula en cada impresión.
+  - **"Código IGSS completo" en Órdenes de Compra mostraba el prefijo
+    duplicado** (ej. `S/C-S/C-206310` en vez de `S/C-206310`, o
+    `92890-92890-5477 - 5697` en vez de `92890-5477 - 5697`) —
+    `generarOrdenDeCompra` (`ordenes-actions.ts`) re-prependeaba
+    `codigo_igss-` a `seleccionPpr[].codigo_ppr`, que YA es la clave
+    compuesta completa que arma `codigoDeOpcion()` en el cliente. Fix: usar
+    `s.codigo_ppr` tal cual. Las 8 órdenes ya generadas con el valor
+    corrupto en producción se corrigieron con un backfill puntual,
+    reconstruyendo el valor correcto desde `siaf_compras_items.codigo_ppr`
+    de la misma consolidación (ese campo, escrito por `guardarPprSeleccion`,
+    nunca tuvo el bug — es la fuente de verdad que usó el backfill).
+  - **El selector "PPR / Presentación" (modal Generar Orden de Compra /
+    Generar SIAF-04) era muy angosto y no mostraba el número de PPR para
+    insumos "S/C"** — `etiquetaDeOpcion` (duplicada en `OrdenesClient.tsx` y
+    `Siaf04Client.tsx`) solo anteponía el código cuando `tieneCodigoReal`;
+    ahora antepone siempre `PPR {codigo_ppr}` (el PPR real de Base de Datos
+    Central existe también para insumos sin código real). Modales
+    ensanchados (`sm:max-w-3xl` → `sm:max-w-5xl` en Órdenes con la columna
+    PPR al 50% vía `table-fixed`; `max-w-lg` → `max-w-2xl` en SIAF-04).
+  - **El carrito/historial de Solicitar Insumos (colaborador) y la bandeja
+    "Revisar y Aprobar" de Almacén/DAB-75 (encargado) solo mostraban
+    `nombre` corto** — `requisicionBodegaItems` solo guarda un snapshot de
+    `codigo`/`nombre`, no `descripcion_igss`. Se agregó un `leftJoin` con
+    `almacenInsumos` (vía `insumo_id`) en `solicitar-insumos/actions.ts`
+    (`getMiSolicitudActiva`/`getMisSolicitudes`) y en `almacen/dab-75/
+    actions.ts` (`getSolicitudesAlmacen`/`getRequisiciones`), mostrando la
+    descripción completa como segunda línea gris cuando difiere del nombre
+    (mismo patrón que `CatalogoAlmacenClient.tsx`). El recibo DAB-75
+    impreso (`ImprimirDab75Client.tsx`) y el archivo compacto
+    (`ArchivoClient.tsx`) no se tocaron — no fueron parte del reporte.
+- **La leyenda "productos homologados... SIGES" del A-01 SIAF ya no es
+  mutuamente excluyente con el "Código PpR:" — ahora se imprimen juntos
+  siempre** (`textoNota` en `ImprimirClient.tsx`, reemplaza el ternario que
+  dependía de `mostrarSubproducto`/renglón 182). Antes solo una hoja con
+  algún insumo de renglón 182 mostraba la leyenda (y nunca el PpR); el resto
+  mostraba el PpR (y nunca la leyenda) — el cliente pidió (2026-09-02) que
+  la leyenda salga siempre, tenga o no código IGSS real el insumo, y que el
+  Código PpR se siga imprimiendo a continuación cuando el insumo lo tenga
+  resuelto (con código real vía `codigoPprLookupMap`, o sin código real vía
+  `codigoPprSinCodigoLookupMap` — ambos ya se resolvían desde antes, el
+  cambio es solo de cuándo se muestran). `mostrarSubproducto` se queda igual
+  para lo que sí seguía siendo suyo (mostrar el sub-producto junto a la
+  descripción) — solo se le quitó el control sobre esta leyenda.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

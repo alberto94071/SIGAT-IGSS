@@ -19,6 +19,23 @@ export async function getInsumosParaHistorial(): Promise<InsumoParaHistorial[]> 
     .orderBy(almacenInsumos.nombre);
 }
 
+// Items con la descripción completa del insumo (nombre + características)
+// vía almacenInsumos.descripcion_igss — requisicionBodegaItems solo guarda un
+// snapshot de codigo/nombre corto, insuficiente para que el encargado
+// distinga presentaciones al revisar/aprobar (mismo fix que el lado
+// colaborador, ver solicitar-insumos/actions.ts; reportado por el cliente
+// 2026-09-02).
+async function itemsConDescripcion(requisicionId: number) {
+  return db.select({
+    id: requisicionBodegaItems.id, codigo: requisicionBodegaItems.codigo, nombre: requisicionBodegaItems.nombre,
+    cantidad_solicitada: requisicionBodegaItems.cantidad_solicitada, insumo_id: requisicionBodegaItems.insumo_id,
+    descripcion_igss: almacenInsumos.descripcion_igss,
+  }).from(requisicionBodegaItems)
+    .leftJoin(almacenInsumos, eq(almacenInsumos.id, requisicionBodegaItems.insumo_id))
+    .where(eq(requisicionBodegaItems.requisicion_id, requisicionId))
+    .orderBy(requisicionBodegaItems.orden);
+}
+
 // Para Almacén/Archivo → DAB-75: solo lo ya resuelto (Aprobado o
 // Rechazado) — una solicitud "Pendiente" todavía vive en la bandeja de
 // almacen/dab-75, no en el archivo. Los "Borrador" son carritos del
@@ -31,9 +48,7 @@ export async function getRequisiciones() {
     .orderBy(sql`id DESC`);
   return Promise.all(rows.map(async r => ({
     ...r,
-    items: await db.select().from(requisicionBodegaItems)
-      .where(eq(requisicionBodegaItems.requisicion_id, r.id))
-      .orderBy(requisicionBodegaItems.orden),
+    items: await itemsConDescripcion(r.id),
   })));
 }
 
@@ -60,9 +75,7 @@ export async function getSolicitudesAlmacen() {
     .orderBy(sql`id DESC`);
   return Promise.all(rows.map(async r => ({
     ...r,
-    items: await db.select().from(requisicionBodegaItems)
-      .where(eq(requisicionBodegaItems.requisicion_id, r.id))
-      .orderBy(requisicionBodegaItems.orden),
+    items: await itemsConDescripcion(r.id),
   })));
 }
 

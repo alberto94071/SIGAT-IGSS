@@ -46,7 +46,9 @@ export default async function ImprimirDab60FondoRotativoPage({ params }: Props) 
 
   const cfg = config[0];
   const renglonesUnicos = [...new Set(renglones.map(r => r.renglon).filter((r): r is number => r != null))];
-  const descripcion = [...new Set(renglones.map(r => r.nombre.trim()).filter(Boolean))].join("; ");
+  // Mismo fix que la ruta Normal: usar descripcion_igss (con características),
+  // no solo el nombre corto del insumo.
+  const descripcion = [...new Set(renglones.map(r => (r.descripcion_igss || r.nombre).trim()).filter(Boolean))].join("; ");
   const fecha = con.a04_fecha ?? con.fecha;
   const numeroA04 = con.numero_a04 != null && con.anio_a04 != null ? `${con.numero_a04}/${con.anio_a04}` : "—";
 

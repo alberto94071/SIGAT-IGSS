@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ShoppingCart, Trash2, Send, Printer, FileText, AlertTriangle, Loader2 } from "lucide-react";
 import { actualizarItemBorrador, eliminarItemBorrador, enviarSolicitud } from "../actions";
 
-type Item = { id: number; codigo: string; nombre: string; cantidad_solicitada: number };
+type Item = { id: number; codigo: string; nombre: string; cantidad_solicitada: number; descripcion_igss: string | null };
 type Borrador = { id: number; items: Item[] };
 type Solicitud = {
   id: number; no_pedido: string | null; fecha_emision: string | null; estado: string;
@@ -77,7 +77,12 @@ export default function MiSolicitudClient({ borrador: borradorInicial, solicitud
               <tbody className="divide-y divide-gray-100">
                 {borrador.items.map(it => (
                   <tr key={it.id}>
-                    <td className="px-3 py-2 text-gray-900">{it.nombre}</td>
+                    <td className="px-3 py-2 text-gray-900">
+                      <p>{it.nombre}</p>
+                      {it.descripcion_igss && it.descripcion_igss !== it.nombre && (
+                        <p className="text-xs text-gray-400 mt-0.5">{it.descripcion_igss}</p>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-right">
                       <input type="number" min={0} step="0.01" className="input w-24 py-1 text-xs text-right"
                         value={it.cantidad_solicitada}

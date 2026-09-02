@@ -48,8 +48,12 @@ function tieneCodigoReal(o: PprOpcion): boolean {
 function codigoDeOpcion(o: PprOpcion): string {
   return tieneCodigoReal(o) ? `${o.codigo ?? o.codigo_igss}-${o.codigo_ppr}` : `S/C-${o.id}`;
 }
+// El cliente pidió (2026-09-02) que el número de PPR se vea siempre en el
+// selector, no solo para insumos con código real — antes, un insumo "S/C"
+// con varias presentaciones (ej. "Impresora térmica") no mostraba ningún
+// número para distinguirlas, solo la descripción larga.
 function etiquetaDeOpcion(o: PprOpcion): string {
-  const prefijo = tieneCodigoReal(o) ? `${codigoDeOpcion(o)} — ` : "";
+  const prefijo = o.codigo_ppr ? `PPR ${o.codigo_ppr} — ` : "";
   const desc = o.descripcion_igss || o.nombre;
   return `${prefijo}${desc}${o.caracteristicas ? ` (${o.caracteristicas})` : ""}${o.presentacion ? ` · ${o.presentacion}` : ""}${o.unidad_medida ? ` · ${o.unidad_medida}` : ""}`;
 }
@@ -332,7 +336,7 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-3xl max-h-[92vh] overflow-y-auto">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-5xl max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
           <h2 className="font-semibold text-gray-900">Generar Orden de Compra — {correlativo(c)}</h2>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X className="w-4 h-4" /></button>
@@ -352,13 +356,13 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
             <div className="pt-1">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Insumos, PPR y Precios</p>
               <div className="overflow-hidden rounded-lg border border-gray-100 text-xs">
-                <table className="w-full text-left">
+                <table className="w-full text-left table-fixed">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-3 py-2 font-medium text-gray-600">Código IGSS</th>
-                      <th className="px-3 py-2 font-medium text-gray-600">Insumo</th>
-                      <th className="px-3 py-2 font-medium text-gray-600">PPR / Presentación</th>
-                      <th className="px-3 py-2 font-medium text-gray-600 text-right">Precio</th>
+                      <th className="px-3 py-2 font-medium text-gray-600 w-[12%]">Código IGSS</th>
+                      <th className="px-3 py-2 font-medium text-gray-600 w-[23%]">Insumo</th>
+                      <th className="px-3 py-2 font-medium text-gray-600 w-[50%]">PPR / Presentación</th>
+                      <th className="px-3 py-2 font-medium text-gray-600 text-right w-[15%]">Precio</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">

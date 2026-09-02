@@ -34,8 +34,11 @@ function tieneCodigoReal(o: PprOpcion): boolean {
 function codigoDeOpcion(o: PprOpcion): string {
   return tieneCodigoReal(o) ? `${o.codigo ?? o.codigo_igss}-${o.codigo_ppr}` : `S/C-${o.id}`;
 }
+// El cliente pidió (2026-09-02) que el número de PPR se vea siempre en el
+// selector, no solo para insumos con código real (ver mismo cambio en
+// OrdenesClient.tsx).
 function etiquetaDeOpcion(o: PprOpcion): string {
-  const prefijo = tieneCodigoReal(o) ? `${codigoDeOpcion(o)} — ` : "";
+  const prefijo = o.codigo_ppr ? `PPR ${o.codigo_ppr} — ` : "";
   const desc = o.descripcion_igss || o.nombre;
   return `${prefijo}${desc}${o.caracteristicas ? ` (${o.caracteristicas})` : ""}${o.presentacion ? ` · ${o.presentacion}` : ""}${o.unidad_medida ? ` · ${o.unidad_medida}` : ""}`;
 }
@@ -246,7 +249,7 @@ function GenerarSiafModal({ consolidacion: c, onClose, onDone }: {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
           <div>
             <h2 className="font-semibold text-gray-900 flex items-center gap-2">

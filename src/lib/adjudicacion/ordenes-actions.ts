@@ -134,10 +134,14 @@ export async function generarOrdenDeCompra(consolidacionId: number, data: {
     if (total_cantidad === 0 || totalCálculo == null) return { error: "No se pudo calcular el precio unitario: faltan cantidad o total adjudicados" };
     costoUnitario = totalCálculo / total_cantidad;
 
-    // Código IGSS completo (código + PPR) por cada renglón, para mostrarlo en
-    // la lista de órdenes generadas.
+    // Código IGSS completo por cada renglón, para mostrarlo en la lista de
+    // órdenes generadas. s.codigo_ppr YA es la clave compuesta completa que
+    // arma codigoDeOpcion() en el cliente ("código-ppr" o "S/C-{id}") — no
+    // volver a prependear codigo_igss acá, eso duplicaba el prefijo (ej.
+    // "S/C-S/C-206310" en vez de "S/C-206310", reportado por el cliente
+    // 2026-09-02).
     const codigoIgssCompleto = [...new Set(
-      data.seleccionPpr.filter(s => s.codigo_ppr).map(s => `${s.codigo_igss}-${s.codigo_ppr}`)
+      data.seleccionPpr.filter(s => s.codigo_ppr).map(s => s.codigo_ppr)
     )].join(", ") || null;
 
     const [nuevaOrden] = await db.insert(ordenesCompra).values({
