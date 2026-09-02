@@ -891,6 +891,26 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     "Pendiente": el botón desaparece y se muestra un aviso en su lugar. El
     tile "Solicitar Viáticos" del launcher del colaborador
     (`MODULES_COLABORADOR`) pasó de "Próximamente" a activo.
+  - **Fase C**: la pestaña "Registro de Comisión" de `viaticos/` (antes un
+    stub `EnDesarrollo`) se reconvirtió en la bandeja real del encargado —
+    ya no es donde el colaborador registra su comisión (eso es
+    `solicitar-viaticos/`, Fase D), es donde el encargado **habilita**
+    (`habilitarSolicitud` en `registro-comision/actions.ts`, gateado por
+    `tab_viaticos_comision`). El "lookup automático por IBM" que pidió el
+    cliente no es una búsqueda manual — como la solicitud ya nace ligada al
+    `colaborador_id` de quien la pidió (Fase B), el modal de Habilitar
+    simplemente muestra sus datos (IBM/puesto/NIT/salario/grupo/categoría)
+    ya resueltos por `INNER JOIN` con `usuarios`, sin que el encargado tenga
+    que escribir ni buscar nada. Al habilitar se captura No. de Formulario +
+    No./fecha de Nombramiento, se calcula `fecha_limite` con
+    `sumarDiasHabiles(fecha_nombramiento, 10)`, y se copia el snapshot de
+    `persona_*` — verificado en vivo de punta a punta: nombramiento jueves
+    30/07 → `fecha_limite` 2026-08-13 (coincide con la prueba unitaria de la
+    Fase A), y el colaborador ve el nombramiento y la fecha límite
+    reflejados en su propio "Mis Viáticos" sin recargar nada más. La
+    sub-lista "Pendientes de revisión final" (`estado = "Enviado"`) ya está
+    armada pero por diseño queda vacía hasta la Fase D — nada llega a
+    "Enviado" todavía porque Registro de Comisión (colaborador) no existe.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
