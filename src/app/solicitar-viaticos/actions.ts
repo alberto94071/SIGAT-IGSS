@@ -192,3 +192,29 @@ export async function enviarViatico(solicitudId: number): Promise<{ ok: true } |
   await db.update(viaticoSolicitudes).set({ estado: "Enviado" }).where(eq(viaticoSolicitudes.id, solicitudId));
   return { ok: true };
 }
+
+// Informe de Comisión / Justificación de Estancia — documentos narrativos
+// libres aparte de los 3 formularios oficiales, editables por el
+// colaborador con un editor simple (textarea) una vez que su viático quedó
+// Aprobado (recién ahí tiene sentido reportar lo actuado).
+export async function guardarInforme(solicitudId: number, texto: string): Promise<{ ok: true } | { error: string }> {
+  const me = await getMeColaborador();
+  if (!me) return { error: "No autorizado" };
+  const sol = await getSolicitudDelColaborador(solicitudId, me.id);
+  if (!sol) return { error: "No se encontró la solicitud" };
+  if (sol.estado !== "Aprobado") return { error: "Solo se puede llenar el informe de un viático ya aprobado" };
+
+  await db.update(viaticoSolicitudes).set({ informe_comision: texto }).where(eq(viaticoSolicitudes.id, solicitudId));
+  return { ok: true };
+}
+
+export async function guardarJustificacion(solicitudId: number, texto: string): Promise<{ ok: true } | { error: string }> {
+  const me = await getMeColaborador();
+  if (!me) return { error: "No autorizado" };
+  const sol = await getSolicitudDelColaborador(solicitudId, me.id);
+  if (!sol) return { error: "No se encontró la solicitud" };
+  if (sol.estado !== "Aprobado") return { error: "Solo se puede llenar la justificación de un viático ya aprobado" };
+
+  await db.update(viaticoSolicitudes).set({ justificacion_estancia: texto }).where(eq(viaticoSolicitudes.id, solicitudId));
+  return { ok: true };
+}

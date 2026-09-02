@@ -1,10 +1,9 @@
-import EnDesarrollo from "@/components/EnDesarrollo";
+import { requireTabAccess } from "@/lib/modulo-access";
+import { getSolicitudesArchivo } from "../registro-comision/actions";
+import EntregaFormularioClient from "./EntregaFormularioClient";
 
-export default function EntregaFormularioPage() {
-  return (
-    <EnDesarrollo
-      title="Entrega de Formulario"
-      description="Próximamente: archivo de viáticos aprobados con impresión de V-A/V-C/V-L."
-    />
-  );
+export default async function EntregaFormularioPage() {
+  await requireTabAccess("mod_viaticos", "tab_viaticos_entrega");
+  const solicitudes = await getSolicitudesArchivo();
+  return <EntregaFormularioClient solicitudes={solicitudes} />;
 }

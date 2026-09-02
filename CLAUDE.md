@@ -89,11 +89,12 @@ mergeado), actualizá este archivo antes de dar el trabajo por cerrado:
 | `almacen/` | DAB-60 (Normal y Fondo Rotativo), DAB-75 (bandeja de aprobación de solicitudes de colaboradores, FEFO por lote al aprobar), Catálogo (stock con alertas y reportes Excel con gráfico nativo) |
 | `fondo-rotativo/`, `caja-chica/`, `dashboard/` (pagos/fri/bancos/vales) | Pago de Fondo Rotativo: Pagos → Bancos/Liquidación → Caja Chica → FRI → Reintegro DAF |
 | `pasajes/` | Tarifario, Solicitud de Pasaje (SPS-75), DPD-23, Póliza |
-| `viaticos/` | Solicitar → Habilitar → Registro de Comisión → Aprobar → V-A/V-C/V-L (en construcción por fases, ver "Trampas") |
+| `viaticos/` | Encargado: habilitar solicitudes (Registro de Comisión) y aprobar/rechazar + archivo con reimpresión V-A/V-C/V-L (Entrega de Formulario) |
 | `base-datos/` | Catálogos maestros: Insumos, Tarifario de Pasajes, Proveedores, Afiliados |
 | `administracion/` | Usuarios, Colaboradores, permisos, Configuración General, Firmantes |
 | `developer/` | Herramientas de superadmin (backup/reset) |
 | `solicitar-insumos/` | Autoservicio de insumos para el rol "colaborador": Catálogo (con "Agregar a solicitud") y Mis Solicitudes (carrito/borrador + historial) |
+| `solicitar-viaticos/` | Autoservicio de viáticos para el rol "colaborador": pedir viático, Registro de Comisión (hasta 5), impresión V-A/V-C/V-L + editor de Informe/Justificación una vez Aprobado |
 
 ## Permisos por pestaña (`src/lib/permisos.ts`)
 
@@ -940,6 +941,66 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     queda de solo lectura para el colaborador (sin botón Agregar) y
     aparece correctamente en la bandeja "Pendientes de revisión final" del
     encargado (Fase C).
+  - **Fase E (cierra el módulo)**: `aprobarSolicitud`/`rechazarSolicitud`
+    (`viaticos/registro-comision/actions.ts`) — al aprobar se captura
+    "Otros gastos derivados" (comprobantes/planilla, ej. pasaje) y recién
+    ahí el V-L queda oficial para imprimir. **`ImprimirViaticoClient.tsx`
+    de una implementación manual anterior (con las 31 casillas del V-L ya
+    calibradas en pulgadas) se reaprovechó case por caso** — se leyó su
+    código antes de borrarlo en la Fase A y se reconstruyó como
+    `entrega-formulario/[id]/imprimir/vl/ImprimirVLClient.tsx` adaptado a
+    sumar/multiplicar sobre varias comisiones en vez de una liquidación
+    plana; no hubo que re-medir el papel desde cero. V-A
+    (`imprimir/va/ImprimirVAClient.tsx`) es estático ("NO UTILIZADO", sin
+    dato ninguno). V-C (`imprimir/vc/ImprimirVCClient.tsx`) solo casillas
+    1-7, posiciones calibradas a ojo contra el PDF de referencia (612x792pt
+    = 8.5x11in) — mismo caveat que el resto de formularios pre-impresos:
+    sin confirmar contra el talonario físico real todavía.
+  - **Mismas 3 rutas de impresión existen dos veces** — una vez bajo
+    `viaticos/entrega-formulario/[id]/imprimir/` (encargado, gate por
+    `tab_viaticos_entrega`, cualquier solicitud `Aprobado`) y otra bajo
+    `solicitar-viaticos/[id]/imprimir/` (colaborador, gate por dueño +
+    `Aprobado`) — la segunda importa los Client de la primera (mismo patrón
+    ya usado para DAB-75/Solicitar Insumos: nunca se duplica el
+    componente, solo el `page.tsx` con su propio gate). `getSolicitudParaImprimir`
+    (única fuente de datos para ambas) solo exige sesión, no un permiso
+    puntual — cada `page.tsx` hace su propio chequeo de dueño+estado.
+  - **Trampa real encontrada**: una función pura (`nombramientosUnicos`,
+    dedup de nombramientos entre comisiones) exportada desde un archivo
+    `"use client"` (`ImprimirVCClient.tsx`) no se puede invocar desde un
+    Server Component aunque no use nada de React — Next.js la trata como
+    parte del límite de cliente. Revienta en runtime ("Attempted to call
+    ... from the server"), no en `tsc --noEmit` (typecheck no lo detecta).
+    Se movió a un archivo plano aparte (`nombramientos-utils.ts`, sin
+    `"use client"`) que ambos `page.tsx` (encargado y colaborador) importan
+    — si aparece este mismo error con otra función, mismo fix: sacarla del
+    archivo Client a un módulo plano.
+  - **"Nombre y cargo de quien firmó el nombramiento"** en el V-L usa el
+    firmante de la **primera** comisión que tenga uno — si las comisiones
+    de una misma solicitud llegan a tener firmantes distintos entre sí (no
+    pasó en las pruebas, el cliente solo describió el caso de un firmante
+    único por trámite), solo se imprime ese primero; no se pidió al cliente
+    confirmar el caso general porque no hay ejemplo real de eso todavía.
+  - **Informe de Comisión / Justificación de Estancia**: editor de texto
+    libre simple (`NarrativoEditor` en `DetalleViaticoClient.tsx`,
+    `guardarInforme`/`guardarJustificacion` en `solicitar-viaticos/actions.ts`,
+    solo editable una vez `Aprobado`) + impresión con membrete propio
+    (`ImprimirNarrativoClient.tsx`, componente compartido en
+    `src/components/` porque a diferencia de V-A/V-C/V-L no hay talonario
+    físico detrás — dibuja su propia hoja en vez de superponerse a un
+    papel pre-impreso). Verificado en vivo: se guarda, persiste, e imprime
+    con los datos del comisionado ya llenos.
+  - **Verificado en vivo de punta a punta reproduciendo el ejemplo real
+    completo del cliente** (mismo colaborador, misma comisión que en la
+    Fase D, aprobado con Otros Gastos = Q230 igual que el pasaje del
+    ejemplo real): el V-L impreso salió **exactamente igual** al PDF real
+    que mandó el cliente — POR Q 530.00, "Quinientos treinta quetzales con
+    00/100", SUMAN LOS GASTOS DE VIÁTICO Q300.00, OTROS GASTOS Q230.00,
+    TOTAL Q530.00 (dos veces, campos 11 y 15), mismo desglose de
+    45/60/45/150 por servicio, misma partida presupuestaria, mismo
+    nombramiento. También se probó el rechazo (con motivo) y que el
+    archivo de Entrega de Formulario solo ofrece reimprimir a las
+    solicitudes `Aprobado`, nunca a las `Rechazado`.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

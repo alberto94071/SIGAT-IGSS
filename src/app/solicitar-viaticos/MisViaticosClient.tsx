@@ -95,7 +95,7 @@ export default function MisViaticosClient({ solicitudes }: { solicitudes: Solici
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      {(s.estado === "Habilitado" || s.estado === "Enviado") ? (
+                      {["Habilitado", "Enviado", "Aprobado", "Rechazado"].includes(s.estado) ? (
                         <Link href={`/solicitar-viaticos/${s.id}`}
                           className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
                           {s.estado === "Habilitado" ? "Registrar comisión" : "Ver"} <ArrowRight className="w-3 h-3" />
