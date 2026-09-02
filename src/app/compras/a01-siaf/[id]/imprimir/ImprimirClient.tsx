@@ -178,17 +178,17 @@ function tieneCodigoIgssReal(codigoIgss: string | null): boolean {
 }
 
 // La leyenda de "productos homologados... SIGES" y el "Código PpR:" son
-// mutuamente excluyentes (el cliente lo confirmó 2026-09-02 tras una
-// primera versión que los mostraba juntos) — antes la leyenda dependía de
-// que la hoja tuviera algún insumo de renglón 182; ahora depende de si el
-// insumo tiene código IGSS real: sin código real → leyenda; con código
-// real → Código PpR (como antes). Si la hoja mezcla insumos con y sin
-// código real, gana la leyenda (mismo criterio que ya usaba el renglón 182:
-// basta un insumo que la necesite para que se imprima).
+// mutuamente excluyentes (el cliente lo confirmó 2026-09-02) — la
+// condición es al revés de lo que parece intuitivo: CON código IGSS real
+// → leyenda (el insumo con código propio es el que se declara homologado
+// con el catálogo SIGES/PpR); SIN código real → Código PpR (se imprime el
+// PpR resuelto por nombre, ver codigoPprSinCodigoLookupMap). Si la hoja
+// mezcla insumos con y sin código real, gana la leyenda — basta un insumo
+// que la necesite para que se imprima.
 function textoNota(items: Item[]): string {
   const leyenda = "Los productos de los listados institucionales, se encuentran homologados con el catálogo general de insumos del SIGES, Presupuesto por Resultados (PpR)";
-  const algunoSinCodigoReal = items.some(i => !tieneCodigoIgssReal(i.codigo_igss));
-  return algunoSinCodigoReal ? leyenda : textoCodigosPpr(items);
+  const algunoConCodigoReal = items.some(i => tieneCodigoIgssReal(i.codigo_igss));
+  return algunoConCodigoReal ? leyenda : textoCodigosPpr(items);
 }
 
 export default function ImprimirClient({
