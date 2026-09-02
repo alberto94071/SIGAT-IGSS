@@ -911,6 +911,35 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     sub-lista "Pendientes de revisión final" (`estado = "Enviado"`) ya está
     armada pero por diseño queda vacía hasta la Fase D — nada llega a
     "Enviado" todavía porque Registro de Comisión (colaborador) no existe.
+  - **Fase D**: `solicitar-viaticos/[id]/` — el colaborador registra hasta
+    5 comisiones sobre una solicitud ya `Habilitado` (`agregarComision` en
+    `actions.ts`, gate por dueño + estado). El "No se calcula
+    automáticamente qué comidas corresponden por horario" de las
+    decisiones confirmadas se ve acá: 4 inputs numéricos (Desayuno/
+    Almuerzo/Cena/Hospedaje) a precio fijo, sin ninguna inferencia por
+    hora — el colaborador decide cuántos pide. `dias_calculados` (días de
+    calendario entre salida y entrada de la unidad, inclusive) sí se
+    calcula solo, en el servidor, al guardar. El selector de "quien firmó
+    el nombramiento" sale de `getUsuariosParaFirmante()` (todos los
+    usuarios activos, no solo colaboradores) — si el elegido no tiene
+    `puesto_nominal` cargado (ej. el superadmin de pruebas, "USUARIO
+    MASTER"), aparece un campo de texto aparte para escribir su cargo esa
+    vez, sin guardarlo de vuelta al usuario. **El bloqueo por vencimiento
+    de los 10 días hábiles ya funciona de verdad** — `agregarComision` y
+    `enviarViatico` comparan `fechaGuatemala()` contra
+    `viatico_solicitudes.fecha_limite` y devuelven error si ya pasó (se
+    descubrió esto en vivo por accidente: sembrar una solicitud de prueba
+    con las fechas de julio del ejemplo del cliente la dejó ya vencida
+    porque "hoy" en este entorno es septiembre — hubo que resembrar con
+    `fecha_nombramiento` reciente para poder probar el resto del flujo).
+    Verificado en vivo de punta a punta reproduciendo el ejemplo real del
+    cliente exacto (salida unidad 30/07 14:00, llegada lugar 31/07 08:00,
+    salida lugar 31/07 14:00, entrada unidad 31/07 21:00, 1 de cada
+    servicio): `dias_calculados` dio 2 y el subtotal Q300.00, coincidiendo
+    con el V-L real que mandó — al enviar, la solicitud pasa a "Enviado",
+    queda de solo lectura para el colaborador (sin botón Agregar) y
+    aparece correctamente en la bandeja "Pendientes de revisión final" del
+    encargado (Fase C).
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
