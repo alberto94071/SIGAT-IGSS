@@ -79,17 +79,30 @@ export default function ImprimirActaClient({
 
       <p style={{ fontWeight: "bold", fontSize: "9.5pt", margin: "0 0 8px 0" }}>{nombreUnidad}</p>
 
-      <p style={{ fontSize: "9pt", textAlign: "justify", lineHeight: 1.4, margin: "0 0 8px 0" }}>
-        EL INFRASCRITO, ENCARGADO DEL FONDO ROTATIVO DE LA {nombreUnidad.toUpperCase()}, CERTIFICA: HABER TENIDO A
-        LA VISTA LAS HOJAS MOVIBLES AUTORIZADAS POR LA CONTRALORÍA GENERAL DE CUENTAS DE {dep.toUpperCase()} CON
-        REGISTRO NUMERO ELE GUION DOCE GUION CIENTO SESENTA Y SEIS GUION DOS MIL VEINTICINCO (L-12-166-2025) DE
-        FECHA TREINTA Y UNO DE MARZO DE DOS MIL VEINTICINCO (31-03-2025), EN EL QUE A FOLIO NUMERO SEIS (6) SE
-        ENCUENTRA EL ACTA NUMERO {actaDeletreada} ({acta.no_acta}), QUE LITERALMENTE DICE: {"- ".repeat(20)}
-      </p>
+      {esCompraDirecta ? (
+        // El modelo del cliente para Compra Directa (2026-09-03) no lleva el
+        // preámbulo "EL INFRASCRITO... CERTIFICA... HABER TENIDO A LA VISTA
+        // LAS HOJAS MOVIBLES..." — arranca directo con el encabezado "ACTA
+        // No. X" alineado a la izquierda (no centrado como en el Acta
+        // genérica) y de ahí sigue el cuerpo.
+        <p style={{ fontWeight: "bold", fontSize: "10.5pt", margin: "0 0 8px 0" }}>
+          ACTA No. {acta.no_acta}
+        </p>
+      ) : (
+        <>
+          <p style={{ fontSize: "9pt", textAlign: "justify", lineHeight: 1.4, margin: "0 0 8px 0" }}>
+            EL INFRASCRITO, ENCARGADO DEL FONDO ROTATIVO DE LA {nombreUnidad.toUpperCase()}, CERTIFICA: HABER TENIDO A
+            LA VISTA LAS HOJAS MOVIBLES AUTORIZADAS POR LA CONTRALORÍA GENERAL DE CUENTAS DE {dep.toUpperCase()} CON
+            REGISTRO NUMERO ELE GUION DOCE GUION CIENTO SESENTA Y SEIS GUION DOS MIL VEINTICINCO (L-12-166-2025) DE
+            FECHA TREINTA Y UNO DE MARZO DE DOS MIL VEINTICINCO (31-03-2025), EN EL QUE A FOLIO NUMERO SEIS (6) SE
+            ENCUENTRA EL ACTA NUMERO {actaDeletreada} ({acta.no_acta}), QUE LITERALMENTE DICE: {"- ".repeat(20)}
+          </p>
 
-      <p style={{ fontWeight: "bold", fontSize: "10.5pt", textAlign: "center", margin: "0 0 8px 0" }}>
-        ACTA No. {acta.no_acta}
-      </p>
+          <p style={{ fontWeight: "bold", fontSize: "10.5pt", textAlign: "center", margin: "0 0 8px 0" }}>
+            ACTA No. {acta.no_acta}
+          </p>
+        </>
+      )}
 
       {esCompraDirecta ? (
         <p style={{ fontSize: "9pt", textAlign: "justify", lineHeight: 1.4 }}>
@@ -184,10 +197,15 @@ export default function ImprimirActaClient({
 
   const cierre = (
     <>
-      <p style={{ fontSize: "9pt", textAlign: "justify", lineHeight: 1.4, marginTop: "14px" }}>
-        Y para remitir a donde corresponda, se extiende la presente copia Certificada, haciendo constar que fue
-        debidamente confrontada con su original el día: {hoyTexto}.
-      </p>
+      {/* El modelo del cliente para Compra Directa (2026-09-03) no lleva
+          este párrafo de "copia Certificada" — el CUARTO ya cierra el acta
+          por sí solo, y de ahí pasa directo a las firmas. */}
+      {!esCompraDirecta && (
+        <p style={{ fontSize: "9pt", textAlign: "justify", lineHeight: 1.4, marginTop: "14px" }}>
+          Y para remitir a donde corresponda, se extiende la presente copia Certificada, haciendo constar que fue
+          debidamente confrontada con su original el día: {hoyTexto}.
+        </p>
+      )}
 
       {esCompraDirecta ? (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px", marginTop: "48px", fontSize: "9pt", textAlign: "center" }}>
