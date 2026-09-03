@@ -37,6 +37,15 @@ interface Props {
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const FONT = "Arial, Helvetica, sans-serif";
 
+// Mismo criterio que codigoParaImprimir/tieneCodigoIgssReal del A-01 SIAF
+// (ImprimirClient.tsx): ni vacío/"S/C", ni un rango puramente numérico
+// (placeholder de importación masiva de Base de Datos Central) cuenta como
+// código IGSS real.
+function tieneCodigoIgssReal(codigoIgss: string | null): boolean {
+  if (!codigoIgss || codigoIgss === "S/C") return false;
+  return !/^\d+\s*-\s*\d+\s*$/.test(codigoIgss);
+}
+
 const HOJA_W_MM = 215.9;
 const HOJA_H_MM = 279.4;
 const ROW_H_MM = 5.5;
@@ -328,6 +337,13 @@ function ColumnaLinea({
     if (e.key === "Enter") { e.preventDefault(); (e.currentTarget as HTMLElement).blur(); }
   }, []);
 
+  // El código IGSS + PpR de una misma celda vienen como "código\nppr" (ver
+  // columna Código en el componente principal) — dos líneas apretadas
+  // dentro de la misma altura de fila, en letra más chica, para no romper
+  // la alineación con las demás columnas de esa fila (que siguen usando la
+  // misma altura de siempre).
+  const multilinea = texto.includes("\n");
+
   return (
     <div
       ref={ref} contentEditable={editable} suppressContentEditableWarning
@@ -335,7 +351,11 @@ function ColumnaLinea({
       style={{
         height: `${heightMm}mm`, width: sized ? `${widthMm}mm` : undefined,
         overflow: sized ? "hidden" : undefined,
-        fontSize: "9pt", whiteSpace: sized ? "normal" : "nowrap", fontFamily: FONT, color: "#000",
+        fontSize: multilinea ? "6.5pt" : "9pt", lineHeight: multilinea ? 1.05 : undefined,
+        whiteSpace: sized ? "normal" : (multilinea ? "pre-line" : "nowrap"),
+        fontFamily: FONT, color: "#000",
+        display: multilinea ? "flex" : undefined, flexDirection: multilinea ? "column" : undefined,
+        justifyContent: multilinea ? "center" : undefined,
         textAlign: align, cursor: editable ? "text" : undefined,
       }}
     >
@@ -457,15 +477,21 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
 
   const cantidades       = renglones.map(r => r.cantidad.toLocaleString("es-GT"));
   const unidades         = renglones.map(r => r.unidad_medida ?? "");
-  // El cliente pidió que la columna "Código" lleve solo el número de PpR
-  // (no el código IGSS ni ningún otro texto) — confirmado 2026-08-24/25. Esto
-  // hizo redundante la columna "Código IGSS-PPR" (col_codigo_ppr) que
-  // existía aparte para mostrar ambos combinados — se eliminó del papel,
-  // porque quedaba superpuesta sobre esta misma columna. `r.codigo_ppr` ya
-  // llega resuelto a PpR puro desde page.tsx (pprPuroParaImprimir) — el
-  // valor crudo de siaf_compras_items.codigo_ppr trae la clave completa de
-  // selección ("código-ppr" o "S/C-{id}"), no el PpR solo.
-  const codigos          = renglones.map(r => r.codigo_ppr ?? "");
+  // El cliente pidió (2026-08-24/25) que la columna "Código" lleve solo el
+  // número de PpR — pero luego pidió (2026-09-03) que cuando el insumo SÍ
+  // tenga código IGSS real, la columna muestre el código IGSS arriba y el
+  // PpR abajo (dos líneas dentro de la misma celda, separadas por "\n" —
+  // ver ColumnaLinea). Sin código real, se queda igual: solo PpR.
+  // `r.codigo_ppr` ya llega resuelto a PpR puro desde page.tsx
+  // (pprPuroParaImprimir) — el valor crudo de siaf_compras_items.codigo_ppr
+  // trae la clave completa de selección ("código-ppr" o "S/C-{id}"), no el
+  // PpR solo.
+  const codigos = renglones.map(r => {
+    const real = tieneCodigoIgssReal(r.codigo_igss);
+    if (real && r.codigo_ppr) return `${r.codigo_igss}\n${r.codigo_ppr}`;
+    if (real) return r.codigo_igss ?? "";
+    return r.codigo_ppr ?? "";
+  });
   // El formulario DAB-60 lleva costo unitario y valor total SIN IVA (el
   // bruto con IVA incluido es el que se maneja en A-04/consolidación). El
   // total se recalcula como cantidad × costo unitario neto (no se usa
