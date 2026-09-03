@@ -1059,6 +1059,21 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   columna Código. `mostrarSubproducto` se queda igual para lo que sí seguía
   siendo suyo (mostrar el sub-producto junto a la descripción) — nunca tuvo
   que ver con esta leyenda desde que dejó de depender de renglón 182.
+- **La columna "CODIGO" del DAB-60 vuelve a mostrar el código IGSS, pero
+  solo cuando es real — y ahora en dos líneas, no en una sola combinada**
+  (pedido del cliente 2026-09-03, sobre la regla de 2026-08-25 que dejó esa
+  columna con únicamente el PpR). Con código IGSS real: código arriba,
+  PpR abajo, separados por `"\n"` dentro del mismo string (`ColumnaLinea`
+  en `ImprimirDab60Client.tsx` detecta el `"\n"` y cambia a letra más chica
+  — 6.5pt en vez de 9pt — con `whiteSpace: "pre-line"`, para que las dos
+  líneas quepan dentro de la misma altura de fila que usan las demás
+  columnas de esa fila, cantidad/unidad/etc. — no se tocó esa altura para
+  no desalinear la tabla). Sin código real (S/C, o un rango numérico
+  placeholder que ya se trataba como "sin código" en el A-01 SIAF — mismo
+  criterio duplicado acá en `tieneCodigoIgssReal`): se queda igual que
+  antes, solo el PpR en una línea. Aplica a las dos rutas de impresión
+  (Normal y Fondo Rotativo) porque ambas comparten el mismo
+  `ImprimirDab60Client`.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
