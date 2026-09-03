@@ -476,12 +476,20 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   personas (`COMISION_COMPRA_DIRECTA`, hardcodeada igual que los otros 2
   firmantes fijos del Acta genérica), cita legal específica de Compra Directa
   (Decreto 57-92 art. 43 inciso b + Acuerdo 22-2025 Gerencia IGSS) en vez del
-  texto genérico, y 3 firmas de cierre en vez de 2. El preámbulo "EL
+  texto genérico, y 3 firmas de cierre en vez de 2. **El preámbulo "EL
   INFRASCRITO... CERTIFICA... HABER TENIDO A LA VISTA..." y el cierre "copia
-  Certificada" **se mantienen iguales para ambos** (decisión explícita del
-  cliente — no se separaron en un modo "para hoja membretada" y otro "para
-  certificación", eso queda pendiente de que el cliente confirme si hace
-  falta). El "No. de Acta" de este tipo es correlativo **automático**
+  Certificada" NO aplican a Compra Directa** (el cliente mandó un modelo real
+  — `MODELO_DE_ACTA.pdf`, 2026-09-03 — que confirmó que ninguno de los dos
+  va ahí: el acta arranca directo en "ACTA No. X" alineado a la izquierda
+  — no centrado como en la genérica — y el CUARTO cierra el acta por sí
+  solo, sin ningún párrafo de "copia Certificada" después). Para el resto
+  de tipos de Acta sí se mantienen ambos, sin cambios. **Pendiente**: el
+  modelo real dice "...se da por finalizada la presente...treinta y cinco
+  minutos después de su inicio..." — un dato de duración que hoy no se
+  captura (`actas_adjudicacion` solo tiene `hora` de inicio, no de fin ni
+  duración) — falta que el cliente confirme cómo quiere capturar/calcular
+  ese minutaje antes de agregarlo al texto. El "No. de Acta" de este tipo
+  es correlativo **automático**
   ("N/año", arranca en 1 cada año, sin piso configurable —
   `getNextActaCompraDirectaNumero` en `actas-adjudicacion-actions.ts`), a
   diferencia de los demás tipos que lo siguen escribiendo a mano en `GenerarActaModal`
