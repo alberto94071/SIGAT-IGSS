@@ -4,13 +4,14 @@ import { fechaGuatemala } from "@/lib/date-utils";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
-import { deletrearCodigo, fechaEnLetras, horaEnLetras } from "@/lib/adjudicacion/deletreo";
+import { deletrearCodigo, fechaEnLetras, horaEnLetras, minutosEntre, minutosEnLetras } from "@/lib/adjudicacion/deletreo";
 import PrintPages from "@/components/print-pages/PrintPages";
 import SelectorFirmante, { type Firmante } from "@/components/SelectorFirmante";
 import { marcarActaPrevisualizada } from "@/lib/adjudicacion/actas-adjudicacion-actions";
 
 type Acta = {
   id: number; no_formulario: string; no_acta: string; lugar: string; fecha: string; hora: string;
+  hora_fin: string | null;
   previsualizada: boolean;
 };
 type Consolidacion = {
@@ -67,6 +68,10 @@ export default function ImprimirActaClient({
   const horaTexto = horaEnLetras(acta.hora);
   const actaDeletreada = deletrearCodigo(acta.no_acta);
   const hoyTexto = fechaEnLetras(fechaGuatemala());
+  // "N minutos después de su inicio" en el CUARTO de Compra Directa — solo
+  // si el acta tiene hora_fin (actas de Compra Directa generadas antes de
+  // este campo, 2026-09-04, no lo tienen y se quedan sin esa frase).
+  const duracionTexto = acta.hora_fin ? minutosEnLetras(minutosEntre(acta.hora, acta.hora_fin)) : null;
 
   // Cuerpo principal (encabezado, párrafo legal, tabla de oferentes, TERCERO)
   // y cierre (párrafo final + firmas + pie) — si todo junto no cabe en una
@@ -180,7 +185,7 @@ export default function ImprimirActaClient({
             normativa interna del Instituto. La adjudicación se otorga en base al criterio del precio y por
             cumplimiento en las bases, tanto como en las especificaciones técnicas solicitadas, y por convenir
             a los intereses del Instituto. <strong>CUARTO:</strong> No habiendo más que hacer constar, se da
-            por finalizada la presente en el mismo lugar y fecha de su inicio, la que, leída en cada uno de
+            por finalizada la presente en el mismo lugar y fecha de su inicio{duracionTexto ? ` ${duracionTexto} después de su inicio` : ""}, la que, leída en cada uno de
             sus puntos, la aceptamos, ratificamos y firmamos de conformidad las personas que en ella
             intervenimos. Damos fe.
           </>

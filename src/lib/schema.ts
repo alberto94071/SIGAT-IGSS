@@ -443,6 +443,11 @@ export const actasAdjudicacion = pgTable("actas_adjudicacion", {
   lugar:            text("lugar").notNull(),
   fecha:            text("fecha").notNull(),
   hora:             text("hora").notNull(),
+  // Solo se captura para Compra Directa — el cliente pidió (2026-09-04) que
+  // el CUARTO del acta diga "...N minutos después de su inicio", calculado
+  // como hora_fin - hora. Nullable porque las actas de otros tipos, y las de
+  // Compra Directa generadas antes de este campo, nunca lo tienen.
+  hora_fin:         text("hora_fin"),
   estado:           text("estado").notNull().default("Generada"),
   previsualizada:   boolean("previsualizada").notNull().default(false),
   motivo_rechazo:   text("motivo_rechazo"),

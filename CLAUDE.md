@@ -488,7 +488,16 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   minutos después de su inicio..." — un dato de duración que hoy no se
   captura (`actas_adjudicacion` solo tiene `hora` de inicio, no de fin ni
   duración) — falta que el cliente confirme cómo quiere capturar/calcular
-  ese minutaje antes de agregarlo al texto. El "No. de Acta" de este tipo
+  ese minutaje antes de agregarlo al texto. **Resuelto (2026-09-04)**: se
+  agregó `actas_adjudicacion.hora_fin` (nullable, solo se pide/guarda para
+  Compra Directa) — `GenerarActaModal` (`ActaClient.tsx`) pide "Hora de
+  finalización" además de la hora de inicio ya existente, y
+  `ImprimirActaClient.tsx` calcula los minutos con `minutosEntre`/
+  `minutosEnLetras` (nuevas en `deletreo.ts`) e inserta "{N en letras}
+  minutos después de su inicio" en el CUARTO — verificado con un caso real
+  (18:43 → 19:18 = "treinta y cinco minutos", igual al modelo). Actas de
+  Compra Directa ya generadas antes de este campo (`hora_fin` null) se
+  quedan sin esa frase, no truena. El "No. de Acta" de este tipo
   es correlativo **automático**
   ("N/año", arranca en 1 cada año, sin piso configurable —
   `getNextActaCompraDirectaNumero` en `actas-adjudicacion-actions.ts`), a
