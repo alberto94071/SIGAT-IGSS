@@ -195,6 +195,7 @@ function GenerarActaModal({ consolidacion: c, onClose, onCreado }: {
   const [lugar, setLugar] = useState("");
   const [fecha, setFecha] = useState(now.toISOString().slice(0, 10));
   const [hora, setHora] = useState(now.toTimeString().slice(0, 5));
+  const [horaFin, setHoraFin] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -204,8 +205,12 @@ function GenerarActaModal({ consolidacion: c, onClose, onCreado }: {
       if (!noActa.trim()) return setError("El No. de Acta es obligatorio");
     }
     if (!lugar.trim()) return setError("El lugar es obligatorio");
+    if (esCompraDirecta && !horaFin.trim()) return setError("La hora de finalización es obligatoria");
     setSaving(true); setError("");
-    const res = await generarActa(c.id, { no_formulario: noFormulario.trim(), no_acta: noActa.trim(), lugar: lugar.trim(), fecha, hora });
+    const res = await generarActa(c.id, {
+      no_formulario: noFormulario.trim(), no_acta: noActa.trim(), lugar: lugar.trim(), fecha, hora,
+      hora_fin: esCompraDirecta ? horaFin : undefined,
+    });
     setSaving(false);
     if ("error" in res) return setError(res.error);
     onCreado(res.acta as unknown as Acta);
@@ -250,10 +255,19 @@ function GenerarActaModal({ consolidacion: c, onClose, onCreado }: {
               <input type="date" className="input" value={fecha} onChange={e => setFecha(e.target.value)} />
             </div>
             <div>
-              <label className="label">Hora</label>
+              <label className="label">{esCompraDirecta ? "Hora de inicio" : "Hora"}</label>
               <input type="time" className="input" value={hora} onChange={e => setHora(e.target.value)} />
             </div>
           </div>
+          {esCompraDirecta && (
+            <div>
+              <label className="label">Hora de finalización <span className="text-red-500 font-semibold">*</span></label>
+              <input type="time" className="input" value={horaFin} onChange={e => setHoraFin(e.target.value)} />
+              <p className="text-xs text-gray-400 mt-1">
+                Se usa para calcular los minutos que duró la reunión — se imprime en el cierre del acta ("...se da por finalizada la presente...N minutos después de su inicio...").
+              </p>
+            </div>
+          )}
           {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">

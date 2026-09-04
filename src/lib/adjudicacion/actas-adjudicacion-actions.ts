@@ -51,7 +51,7 @@ export async function getActasPendientes() {
 }
 
 export async function generarActa(consolidacionId: number, data: {
-  no_formulario: string; no_acta: string; lugar: string; fecha: string; hora: string;
+  no_formulario: string; no_acta: string; lugar: string; fecha: string; hora: string; hora_fin?: string;
 }): Promise<{ acta: typeof actasAdjudicacion.$inferSelect } | { error: string }> {
   try {
     const check = await requireJunta();
@@ -74,6 +74,9 @@ export async function generarActa(consolidacionId: number, data: {
     if (!data.lugar.trim()) return { error: "El lugar es obligatorio" };
     if (!data.fecha.trim()) return { error: "La fecha es obligatoria" };
     if (!data.hora.trim()) return { error: "La hora es obligatoria" };
+    // hora_fin solo aplica a Compra Directa — el CUARTO del acta necesita
+    // "N minutos después de su inicio" (pedido del cliente 2026-09-04).
+    if (esCompraDirecta && !data.hora_fin?.trim()) return { error: "La hora de finalización es obligatoria" };
 
     // Si ya existe un acta de Compra Directa para esta misma consolidación
     // (p. ej. una rechazada que se está corrigiendo), se reutiliza su mismo
@@ -97,6 +100,7 @@ export async function generarActa(consolidacionId: number, data: {
       lugar: data.lugar.trim(),
       fecha: data.fecha,
       hora: data.hora,
+      hora_fin: esCompraDirecta ? (data.hora_fin?.trim() || null) : null,
       generado_por: check.uid,
     }).returning();
 

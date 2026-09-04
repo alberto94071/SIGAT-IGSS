@@ -117,3 +117,20 @@ export function horaEnLetras(hhmm: string): string {
   const minutos = numeroALetras(min);
   return `${horas} hora${h === 1 ? "" : "s"} con ${minutos} minuto${min === 1 ? "" : "s"}`;
 }
+
+// "08:00", "08:35" → 35 — minutos transcurridos entre dos horas "HH:MM" del
+// mismo día (para el cierre del Acta de Compra Directa: "...N minutos
+// después de su inicio"). Si hora_fin es menor que hora (cruza medianoche,
+// caso raro para una reunión), se asume que pasó al día siguiente.
+export function minutosEntre(hora: string, horaFin: string): number {
+  const [h1, m1] = hora.split(":").map(Number);
+  const [h2, m2] = horaFin.split(":").map(Number);
+  const diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+  return diff >= 0 ? diff : diff + 24 * 60;
+}
+
+// 35 → "treinta y cinco minutos"; 1 → "un minuto"
+export function minutosEnLetras(min: number): string {
+  const palabra = min === 1 ? "un" : numeroALetras(min);
+  return `${palabra} minuto${min === 1 ? "" : "s"}`;
+}
