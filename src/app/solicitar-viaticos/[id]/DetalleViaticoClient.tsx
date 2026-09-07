@@ -182,6 +182,10 @@ export default function DetalleViaticoClient({ solicitud: init, firmantes, preci
                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors">
                 <Printer className="w-3.5 h-3.5" /> Viático Liquidación (V-L)
               </Link>
+              <Link href={`/solicitar-viaticos/${solicitud.id}/imprimir/planilla`}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+                <Printer className="w-3.5 h-3.5" /> Planilla de Viáticos
+              </Link>
             </div>
           </div>
 

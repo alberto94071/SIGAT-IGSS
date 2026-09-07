@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/lib/db";
-import { viaticoSolicitudes, viaticoComisiones, usuarios } from "@/lib/schema";
+import { viaticoSolicitudes, viaticoComisiones, viaticoGastos, usuarios } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { requireTabAccessAction } from "@/lib/modulo-access";
@@ -114,7 +114,11 @@ export async function getSolicitudesArchivo() {
 }
 
 export type DatosAprobar = {
-  otros_gastos: number;
+  // Gastos itemizados (Planilla de Viáticos) que respaldan "Otros Gastos
+  // Derivados" — uno por solicitud (ej. pasaje de ida y vuelta), no por
+  // comisión (decisión del cliente 2026-09-07). otros_gastos en
+  // viatico_solicitudes se sigue guardando como la suma de estos.
+  gastos: { fecha: string; descripcion: string; valor: number }[];
   recibido_va_no: string; recibido_va_monto: number | null;
   reintegro: number | null; complemento: number | null;
 };
@@ -132,6 +136,9 @@ export async function aprobarSolicitud(id: number, datos: DatosAprobar): Promise
   if (!sol) return { error: "No se encontró la solicitud" };
   if (sol.estado !== "Enviado") return { error: "Esta solicitud no está pendiente de revisión" };
 
+  const gastosValidos = datos.gastos.filter(g => g.descripcion.trim() || g.valor > 0);
+  const otrosGastos = gastosValidos.reduce((sum, g) => sum + (Number(g.valor) || 0), 0);
+
   // El Informe de Comisión y la Justificación de Estancia se pre-llenan al
   // aprobar (2026-09-07, ver generarInformeComision/generarJustificacionEstancia
   // arriba) — antes quedaban en blanco y el colaborador los escribía desde
@@ -148,7 +155,7 @@ export async function aprobarSolicitud(id: number, datos: DatosAprobar): Promise
     estado: "Aprobado",
     aprobado_por: check.uid,
     aprobado_en: fechaHoraGuatemala(),
-    otros_gastos: datos.otros_gastos,
+    otros_gastos: otrosGastos,
     recibido_va_no: datos.recibido_va_no.trim() || null,
     recibido_va_monto: datos.recibido_va_monto,
     reintegro: datos.reintegro,
@@ -156,6 +163,14 @@ export async function aprobarSolicitud(id: number, datos: DatosAprobar): Promise
     informe_comision: generarInformeComision(comisiones, sol.numero_formulario),
     justificacion_estancia: generarJustificacionEstancia(comisiones, sol.numero_formulario),
   }).where(eq(viaticoSolicitudes.id, id));
+
+  await db.delete(viaticoGastos).where(eq(viaticoGastos.solicitud_id, id));
+  if (gastosValidos.length > 0) {
+    await db.insert(viaticoGastos).values(gastosValidos.map((g, i) => ({
+      solicitud_id: id, fecha: g.fecha || null, descripcion: g.descripcion.trim() || null,
+      valor: Number(g.valor) || 0, orden: i + 1,
+    })));
+  }
 
   return { ok: true };
 }
@@ -260,5 +275,8 @@ export async function getSolicitudParaImprimir(id: number) {
     };
   });
 
-  return { ...sol, comisiones };
+  const gastos = await db.select().from(viaticoGastos)
+    .where(eq(viaticoGastos.solicitud_id, id)).orderBy(viaticoGastos.orden);
+
+  return { ...sol, comisiones, gastos };
 }

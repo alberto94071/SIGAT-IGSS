@@ -1038,19 +1038,39 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     "Nombramiento No. 76/2026" hardcodeado tal cual salía en el modelo, que
     el colaborador debe ajustar a mano si su caso puntual usa un
     nombramiento del día anterior distinto.
-  - **Resuelto (2026-09-07): "No sale la planilla de pasajes"** — el
-    modelo real (`MODELO_VIATICO.pdf`) mostró que se refiere a la
-    **"PLANILLA DE VIATICOS"**, un documento aparte (no una tabla dentro de
-    otro formulario) que respalda "Otros Gastos Derivados" (campo 10 del
-    V-L) con una tabla FECHA/DESCRIPCIÓN/VALOR (ej. "Pasaje de Ida y Vuelta
-    de Tejutla a Guatemala — Q230.00") más un párrafo fijo de OBSERVACIONES
-    citando el Acuerdo 1192 art. 8 sobre comprobación sin boletos. **Falta
-    construir** — requiere decidir la granularidad de datos (¿un solo
-    gasto o varios por solicitud/comisión? hoy `otros_gastos` es un solo
-    número en `viatico_solicitudes`) antes de agregar una tabla nueva y el
-    documento impreso; no se tocó en esta ronda por la misma razón que las
-    demás correcciones de redacción — mejor confirmar el diseño de datos
-    que adivinar y tener que deshacer una tabla nueva.
+  - **Resuelto (2026-09-07): "No sale la planilla de pasajes" — se
+    construyó la "Planilla de Viáticos"** (documento aparte, no una tabla
+    dentro de otro formulario), que respalda "Otros Gastos Derivados"
+    (campo 10 del V-L). Granularidad de datos: el usuario eligió "varios
+    ítems por solicitud" (no por comisión) — tabla nueva `viatico_gastos`
+    (`fecha`, `descripcion`, `valor`, `orden`, FK a `viatico_solicitudes`
+    con `onDelete: cascade`). Se captura en el mismo modal "Revisar y
+    Aprobar" del encargado (`RevisarModal` en `RegistroComisionClient.tsx`)
+    donde antes había un solo input numérico "Otros gastos derivados" — ese
+    input se reemplazó por una lista agregar/quitar de renglones
+    fecha/descripción/valor. `aprobarSolicitud` (`registro-comision/
+    actions.ts`) persiste cada renglón en `viatico_gastos` y sigue
+    guardando `viatico_solicitudes.otros_gastos` como la **suma** de esos
+    renglones — el V-L (que lee `otros_gastos` directo) no tuvo que
+    tocarse, sigue funcionando igual (verificado en vivo: renglón de
+    Q230 → V-L imprime "OTROS GASTOS Q230.00" sin cambios). El documento
+    impreso (`ImprimirPlanillaClient.tsx`, mismo patrón dual-ruta que V-A/
+    V-C/V-L — encargado en `viaticos/entrega-formulario/[id]/imprimir/
+    planilla/`, colaborador en `solicitar-viaticos/[id]/imprimir/planilla/`
+    importando el mismo Client) es generado de cero (sin talonario físico
+    detrás, mismo criterio que Informe de Comisión/Justificación de
+    Estancia), con la tabla FECHA/DESCRIPCIÓN/VALOR, "Son:" con
+    `montoEnLetras` (`deletreo.ts`), y un párrafo fijo de OBSERVACIONES
+    (Acuerdo 1192 de Junta Directiva art. 8, Resolución 1007-SPS/2025)
+    transcrito del modelo real. Los datos de viaje (lugar/fecha/horario de
+    salida y entrada) que encabezan el documento son los de la **primera**
+    comisión de la solicitud — mismo criterio ya usado para el firmante del
+    V-L/Informe, porque el gasto se captura una sola vez por solicitud, no
+    por comisión. Verificado en vivo de punta a punta con una solicitud de
+    prueba desechable: agregar un renglón de gasto en el modal, aprobar,
+    confirmar que `viatico_gastos` y `otros_gastos` quedaron correctos en
+    la base, e imprimir la Planilla con el layout coincidiendo con el
+    modelo real — limpiado después.
   - **Resuelto (2026-09-07): V-A/V-C/V-L pasaron de `OverlayPrint`/
     `OverlayField` (solo ajuste global de mm) al mismo sistema de "Ver
     posiciones" por campo, arrastrable y persistente, que ya usan Vale de

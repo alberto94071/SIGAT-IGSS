@@ -1167,6 +1167,20 @@ export const viaticoComisiones = pgTable("viatico_comisiones", {
   cantidad_hospedaje: integer("cantidad_hospedaje").notNull().default(0),
 });
 
+// Gastos itemizados de la "Planilla de Viáticos" (ej. pasajes) que respaldan
+// "Otros Gastos Derivados" (campo 10 del V-L) — uno por solicitud, no por
+// comisión (decisión del cliente 2026-09-07). viaticoSolicitudes.otros_gastos
+// se sigue guardando como la suma de estos renglones, para no tocar el V-L
+// ya impreso que lee ese campo directo.
+export const viaticoGastos = pgTable("viatico_gastos", {
+  id:            serial("id").primaryKey(),
+  solicitud_id:  integer("solicitud_id").notNull().references(() => viaticoSolicitudes.id, { onDelete: "cascade" }),
+  fecha:         text("fecha"),
+  descripcion:   text("descripcion"),
+  valor:         doublePrecision("valor").notNull().default(0),
+  orden:         integer("orden").notNull().default(1),
+});
+
 // ─── Pago de Pasajes (Caja Chica/Solicitud Pasaje) ───────────────────────────
 // Portado del libro de Excel "PASAJES_TEJUTLA" usado hasta ahora: base de
 // afiliados + tarifario por ruta (datos de referencia, importados una vez) y
