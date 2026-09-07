@@ -25,6 +25,14 @@ export type PosGuardada = { top: number; left: number; width?: number; height?: 
 const FONDOS: Record<string, string> = {
   vale: "vale-fondo.jpg",
   cheque: "cheque-fondo.jpg",
+  // Viáticos (V-A/V-C/V-L) — el cliente pidió (2026-09-07) el mismo sistema
+  // de posiciones arrastrables que ya tiene el DAB-60. Las imágenes de fondo
+  // son del modelo real lleno que mandó el cliente (MODELO_VIATICO.pdf,
+  // páginas 1-3), no un talonario en blanco — sirve igual para calibrar,
+  // porque solo se usa como referencia semitransparente en pantalla.
+  viatico_va: "viatico-va-fondo.jpg",
+  viatico_vc: "viatico-vc-fondo.jpg",
+  viatico_vl: "viatico-vl-fondo.jpg",
 };
 
 export async function getPosicionesImpresion(documento: string): Promise<Record<string, PosGuardada>> {

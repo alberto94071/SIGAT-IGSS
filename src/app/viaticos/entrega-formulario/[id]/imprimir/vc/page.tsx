@@ -3,6 +3,7 @@ import { requireTabAccess } from "@/lib/modulo-access";
 import { db } from "@/lib/db";
 import { configuracion } from "@/lib/schema";
 import { getSolicitudParaImprimir } from "../../../../registro-comision/actions";
+import { getPosicionesImpresion } from "@/lib/impresion-posiciones-actions";
 import ImprimirVCClient from "./ImprimirVCClient";
 import { nombramientosUnicos } from "./nombramientos-utils";
 
@@ -14,7 +15,10 @@ export default async function ImprimirVCPage({ params }: { params: Promise<{ id:
   if (!solicitud) notFound();
   if (solicitud.estado !== "Aprobado") notFound();
 
-  const [config] = await db.select().from(configuracion).limit(1);
+  const [config, posicionesGuardadas] = await Promise.all([
+    db.select().from(configuracion).limit(1).then(r => r[0]),
+    getPosicionesImpresion("viatico_vc"),
+  ]);
 
   return (
     <ImprimirVCClient
@@ -25,6 +29,7 @@ export default async function ImprimirVCPage({ params }: { params: Promise<{ id:
       personaNoEmpleado={solicitud.persona_no_empleado}
       dependencia={config?.nombre_dependencia_medica ?? ""}
       nombramientos={nombramientosUnicos(solicitud.comisiones)}
+      posicionesGuardadas={posicionesGuardadas}
     />
   );
 }

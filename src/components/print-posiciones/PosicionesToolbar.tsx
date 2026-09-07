@@ -3,19 +3,23 @@ import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft, Eye, EyeOff, Save, RotateCcw } from "lucide-react";
 
 export function PosicionesToolbar({
-  titulo, verPosiciones, onToggleVer, onRestablecer, onGuardar, guardando, guardado,
+  titulo, verPosiciones, onToggleVer, onRestablecer, onGuardar, guardando, guardado, extraToolbar,
 }: {
   titulo: string; verPosiciones: boolean; onToggleVer: () => void;
   onRestablecer: () => void; onGuardar: () => void; guardando: boolean; guardado: boolean;
+  // Controles adicionales (ej. selector de firmante) entre el título y el
+  // resto de la barra — mismo hueco que ya tenía OverlayPrint.
+  extraToolbar?: React.ReactNode;
 }) {
   const router = useRouter();
   return (
-    <div className="no-print fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-4 shadow-sm">
+    <div className="no-print fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 px-6 py-3 flex flex-wrap items-center gap-4 shadow-sm">
       <button onClick={() => router.back()} className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900">
         <ArrowLeft className="w-4 h-4" /> Volver
       </button>
       <span className="text-gray-300">|</span>
       <span className="text-sm font-semibold text-gray-700">{titulo}</span>
+      {extraToolbar}
       {verPosiciones && (
         <span className="text-xs text-gray-400">
           Arrastrá el punto azul para mover, el verde para cambiar tamaño, y hacé clic sobre el texto para editarlo.
