@@ -1181,6 +1181,45 @@ export const viaticoGastos = pgTable("viatico_gastos", {
   orden:         integer("orden").notNull().default(1),
 });
 
+// Fase F (2026-09-08): un V-L Aprobado se vuelve un pago más de Fondo
+// Rotativo — un renglón por solicitud, creado automáticamente al aprobar
+// (ver aprobarSolicitud en viaticos/registro-comision/actions.ts). A
+// diferencia de fondoRotativoPagos (compras), los viáticos SIEMPRE se tratan
+// como grupo 100 (son un gasto de personal, no una compra de bienes/
+// servicios de terceros): nunca pasan por Almacén/DAB-60 ni por Fondo
+// Rotativo/Bancos ni por Caja Chica — la forma de pago (cheque o efectivo)
+// se captura completa en Fondo Rotativo/Pagos y el registro va directo a
+// "Pendiente FRI". Por eso este subconjunto de columnas es más chico que
+// fondoRotativoPagos: sin consolidacion_id/no_factura/serie_factura (no hay
+// compra ni factura de proveedor detrás), sin campos de DAB-60, sin vale_id/
+// numero_vale/fecha_liquidacion_caja_chica (nunca pasa por Caja Chica), sin
+// monto_cheque/monto_letras/concepto_voucher de Voucher (esos solo existen
+// para completarVoucherBancos, que los viáticos nunca alcanzan).
+export const viaticoPagos = pgTable("viatico_pagos", {
+  id:                   serial("id").primaryKey(),
+  viatico_solicitud_id: integer("viatico_solicitud_id").notNull().unique()
+                          .references(() => viaticoSolicitudes.id),
+  // Snapshot del total del V-L (campo 15) al momento de aprobar — no se
+  // recalcula después, mismo criterio que otros_gastos en viaticoSolicitudes.
+  total:                doublePrecision("total").notNull(),
+  forma_pago:           text("forma_pago"),
+  numero_cheque:        text("numero_cheque"),
+  fecha_emision_cheque: text("fecha_emision_cheque"),
+  destinatario_nombre:  text("destinatario_nombre"),
+  tipo_documento_pago:  text("tipo_documento_pago"),
+  nit_beneficiario:     text("nit_beneficiario"),
+  // 'Pendiente forma de pago' → (cheque o efectivo, siempre) 'Pendiente FRI'
+  // → 'En FRI' → 'Reintegrado'.
+  estado:               text("estado").notNull().default("Pendiente forma de pago"),
+  fri_id:               integer("fri_id").references(() => friFondoRotativo.id),
+  creado_por:           integer("creado_por").references(() => usuarios.id),
+  created_at:           text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+  // Libro Bancos/Conciliación (ver getLibroBancosCompleto) — un viático
+  // pagado por cheque sí sale del mismo fondo, así que también se concilia.
+  conciliado:           boolean("conciliado").notNull().default(false),
+  fecha_conciliacion:   text("fecha_conciliacion"),
+});
+
 // ─── Pago de Pasajes (Caja Chica/Solicitud Pasaje) ───────────────────────────
 // Portado del libro de Excel "PASAJES_TEJUTLA" usado hasta ahora: base de
 // afiliados + tarifario por ruta (datos de referencia, importados una vez) y

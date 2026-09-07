@@ -25,7 +25,7 @@ export default function LibroBancosClient({ movimientos }: { movimientos: Movimi
     m.descripcion.toLowerCase().includes(q) ||
     (m.beneficiario ?? "").toLowerCase().includes(q) ||
     (m.numero_cheque ?? "").toLowerCase().includes(q) ||
-    `${m.numero_a04 ?? ""}/${m.anio_a04 ?? ""}`.includes(q) ||
+    m.referencia.toLowerCase().includes(q) ||
     m.fecha.includes(q)
   ), [movimientos, q]);
 
@@ -70,7 +70,7 @@ export default function LibroBancosClient({ movimientos }: { movimientos: Movimi
                 <th className="px-4 py-3 text-left whitespace-nowrap">Tipo</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">No. Cheque</th>
                 <th className="px-4 py-3 text-left">Beneficiario / Concepto</th>
-                <th className="px-4 py-3 text-left whitespace-nowrap">A-04</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">Referencia</th>
                 <th className="px-4 py-3 text-right whitespace-nowrap">Debe</th>
                 <th className="px-4 py-3 text-right whitespace-nowrap">Haber</th>
                 <th className="px-4 py-3 text-right whitespace-nowrap">Saldo</th>
@@ -88,9 +88,7 @@ export default function LibroBancosClient({ movimientos }: { movimientos: Movimi
                     <p className="font-medium text-gray-900">{m.beneficiario ?? "—"}</p>
                     <p className="text-xs text-gray-400">{m.descripcion}</p>
                   </td>
-                  <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">
-                    {m.numero_a04 != null ? `${m.numero_a04}/${m.anio_a04}` : "—"}
-                  </td>
+                  <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{m.referencia}</td>
                   <td className="px-4 py-3 text-right font-mono text-red-700 whitespace-nowrap">{m.debe > 0 ? Q(m.debe) : "—"}</td>
                   <td className="px-4 py-3 text-right font-mono text-green-700 whitespace-nowrap">{m.haber > 0 ? Q(m.haber) : "—"}</td>
                   <td className="px-4 py-3 text-right font-mono font-bold text-gray-900 whitespace-nowrap">{Q(m.saldo)}</td>

@@ -1,12 +1,13 @@
 "use server";
 import { db } from "@/lib/db";
-import { fondoRotativoPagos, consolidaciones, valesCajaChica, friFondoRotativo, presupuestoRenglones, configuracion } from "@/lib/schema";
+import { fondoRotativoPagos, consolidaciones, valesCajaChica, friFondoRotativo, presupuestoRenglones, configuracion, viaticoPagos } from "@/lib/schema";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
 import { esGrupo100 } from "@/lib/programacion-constants";
 import { trazabilidadPorConsolidaciones, type TrazabilidadConsolidacion } from "./trazabilidad-utils";
 import { netoDeIva } from "@/lib/iva-utils";
+import { conDetalleViatico } from "@/lib/viatico-pagos-actions";
 
 // true si TODOS los renglones de la consolidación de este pago son 100-199 —
 // esos van a Pago/FRI en vez de Bancos/Caja Chica-Vale.
@@ -164,6 +165,13 @@ export type MovimientoBanco = {
   descripcion: string; beneficiario: string | null; numero_cheque: string | null;
   debe: number; haber: number; saldo: number;
   numero_a04: number | null; anio_a04: number | null; pagoId: number | null;
+  // Un cheque puede venir de una compra (fondoRotativoPagos, columna "A-04")
+  // o de un viático (viaticoPagos, Fase F 2026-09-08 — columna "V-L") — pagoId
+  // apunta a la tabla que indica origen, así que marcarConciliado/
+  // desmarcarConciliado (o sus equivalentes de viatico-pagos-actions.ts) hay
+  // que llamarlos según corresponda.
+  origen: "compra" | "viatico";
+  referencia: string;
 };
 
 // ─── Libro Conciliación ─────────────────────────────────────────────────────
@@ -179,16 +187,33 @@ export type MovimientoConciliacion = MovimientoBanco & { conciliado: boolean; fe
 export async function getLibroConciliacion(): Promise<MovimientoConciliacion[]> {
   const movimientos = (await getLibroBancosCompleto()).filter(m => m.tipo === "Cheque" && m.pagoId != null);
   if (movimientos.length === 0) return [];
-  const chequeIds = movimientos.map(m => m.pagoId as number);
-  const rows = await db.select({
-    id: fondoRotativoPagos.id, conciliado: fondoRotativoPagos.conciliado, fecha_conciliacion: fondoRotativoPagos.fecha_conciliacion,
-  }).from(fondoRotativoPagos).where(inArray(fondoRotativoPagos.id, chequeIds));
-  const map = new Map(rows.map(r => [r.id, r]));
-  return movimientos.map(m => ({
-    ...m,
-    conciliado: map.get(m.pagoId as number)?.conciliado ?? false,
-    fecha_conciliacion: map.get(m.pagoId as number)?.fecha_conciliacion ?? null,
-  }));
+  const compraIds = movimientos.filter(m => m.origen === "compra").map(m => m.pagoId as number);
+  const viaticoIds = movimientos.filter(m => m.origen === "viatico").map(m => m.pagoId as number);
+  const [compraRows, viaticoRows] = await Promise.all([
+    compraIds.length > 0
+      ? db.select({ id: fondoRotativoPagos.id, conciliado: fondoRotativoPagos.conciliado, fecha_conciliacion: fondoRotativoPagos.fecha_conciliacion })
+          .from(fondoRotativoPagos).where(inArray(fondoRotativoPagos.id, compraIds))
+      : Promise.resolve([]),
+    viaticoIds.length > 0
+      ? db.select({ id: viaticoPagos.id, conciliado: viaticoPagos.conciliado, fecha_conciliacion: viaticoPagos.fecha_conciliacion })
+          .from(viaticoPagos).where(inArray(viaticoPagos.id, viaticoIds))
+      : Promise.resolve([]),
+  ]);
+  // Prefijado por origen porque compra/viatico son tablas distintas con IDs
+  // propios — sin esto, un pago id=5 de una compra y un viático id=5 se
+  // pisarían entre sí en el mapa.
+  const map = new Map([
+    ...compraRows.map(r => [`compra:${r.id}`, r] as const),
+    ...viaticoRows.map(r => [`viatico:${r.id}`, r] as const),
+  ]);
+  return movimientos.map(m => {
+    const clave = `${m.origen}:${m.pagoId}` as `compra:${number}` | `viatico:${number}`;
+    return {
+      ...m,
+      conciliado: map.get(clave)?.conciliado ?? false,
+      fecha_conciliacion: map.get(clave)?.fecha_conciliacion ?? null,
+    };
+  });
 }
 
 export async function marcarConciliado(pagoId: number, fecha: string): Promise<{ ok: true } | { error: string }> {
@@ -217,17 +242,19 @@ export async function desmarcarConciliado(pagoId: number): Promise<{ ok: true } 
 }
 
 export async function getLibroBancosCompleto(): Promise<MovimientoBanco[]> {
-  const [config, chequesRows, reintegros] = await Promise.all([
+  const [config, chequesRows, viaticoChequesRows, reintegros] = await Promise.all([
     db.select({ monto_fondo_rotativo: configuracion.monto_fondo_rotativo }).from(configuracion).limit(1),
     db.select().from(fondoRotativoPagos).where(isNotNull(fondoRotativoPagos.numero_cheque)),
+    db.select().from(viaticoPagos).where(isNotNull(viaticoPagos.numero_cheque)),
     db.select().from(friFondoRotativo).where(isNotNull(friFondoRotativo.fecha_reintegro)),
   ]);
-  const cheques = await conDetalle(chequesRows);
+  const [cheques, viaticoCheques] = await Promise.all([conDetalle(chequesRows), conDetalleViatico(viaticoChequesRows)]);
 
   type Evento = {
     fecha: string; orden: number; tipo: "Cheque" | "Reintegro FRI";
     descripcion: string; beneficiario: string | null; numero_cheque: string | null; monto: number;
     numero_a04: number | null; anio_a04: number | null; pagoId: number | null;
+    origen: "compra" | "viatico"; referencia: string;
   };
   const eventos: Evento[] = [
     ...cheques.map((p): Evento => ({
@@ -236,11 +263,21 @@ export async function getLibroBancosCompleto(): Promise<MovimientoBanco[]> {
       beneficiario: p.destinatario_nombre, numero_cheque: p.numero_cheque,
       monto: p.monto_cheque ?? p.total ?? 0,
       numero_a04: p.numero_a04, anio_a04: p.anio_a04, pagoId: p.id,
+      origen: "compra", referencia: p.numero_a04 != null ? `A-04 ${p.numero_a04}/${p.anio_a04}` : "—",
+    })),
+    ...viaticoCheques.map((v): Evento => ({
+      fecha: v.fecha_emision_cheque ?? "", orden: v.id, tipo: "Cheque",
+      descripcion: `Viático V-L ${v.numero_formulario ?? "—"}`,
+      beneficiario: v.destinatario_nombre, numero_cheque: v.numero_cheque,
+      monto: v.total,
+      numero_a04: null, anio_a04: null, pagoId: v.id,
+      origen: "viatico", referencia: `V-L ${v.numero_formulario ?? "—"}`,
     })),
     ...reintegros.map((f): Evento => ({
       fecha: f.fecha_reintegro ?? "", orden: -f.id, tipo: "Reintegro FRI",
       descripcion: `Reintegro FRI ${f.numero}/${f.anio}`, beneficiario: null, numero_cheque: null,
       monto: f.total, numero_a04: null, anio_a04: null, pagoId: null,
+      origen: "compra", referencia: "—",
     })),
   ];
   eventos.sort((a, b) => a.fecha === b.fecha ? a.orden - b.orden : a.fecha.localeCompare(b.fecha));
@@ -253,6 +290,7 @@ export async function getLibroBancosCompleto(): Promise<MovimientoBanco[]> {
       beneficiario: e.beneficiario, numero_cheque: e.numero_cheque,
       debe: e.tipo === "Cheque" ? e.monto : 0, haber: e.tipo === "Reintegro FRI" ? e.monto : 0,
       saldo, numero_a04: e.numero_a04, anio_a04: e.anio_a04, pagoId: e.pagoId,
+      origen: e.origen, referencia: e.referencia,
     };
   });
 }

@@ -2,21 +2,24 @@
 import { fechaGuatemala } from "@/lib/date-utils";
 
 import { useState } from "react";
-import { Wallet, Loader2, CheckCircle2, X, Banknote, Coins, Undo2, ArrowRight } from "lucide-react";
+import { Wallet, Loader2, CheckCircle2, X, Banknote, Coins, Undo2, ArrowRight, MapPin } from "lucide-react";
 import { registrarFormaPagoCheque, registrarFormaPagoEfectivo, elegirChequeDirecto, devolverPagoASiaf04, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import { registrarFormaPagoChequeViatico, registrarFormaPagoEfectivoViatico, type PagoViatico } from "@/lib/viatico-pagos-actions";
 import ExpandableRow from "@/components/ExpandableRow";
 import TrazabilidadPanel from "@/components/TrazabilidadPanel";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-interface Props { pagos: PagoFondoRotativo[]; }
+interface Props { pagos: PagoFondoRotativo[]; viaticos: PagoViatico[]; }
 
-export default function PagosClient({ pagos: init }: Props) {
+export default function PagosClient({ pagos: init, viaticos: initViaticos }: Props) {
   const [pagos, setPagos] = useState(init);
   const [modalFor, setModalFor] = useState<PagoFondoRotativo | null>(null);
   const [devolviendo, setDevolviendo] = useState<number | null>(null);
   const [rowError, setRowError] = useState<Record<number, string>>({});
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [viaticos, setViaticos] = useState(initViaticos);
+  const [modalViaticoFor, setModalViaticoFor] = useState<PagoViatico | null>(null);
 
   async function handleDevolver(p: PagoFondoRotativo) {
     if (!confirm(`¿Devolver el A-04 SIAF ${p.numero_a04 ?? ""}/${p.anio_a04 ?? ""} a Fondo Rotativo/SIAF-04? Se borrarán los datos de factura ingresados y tendrás que volver a generarlo.`)) return;
@@ -27,80 +30,119 @@ export default function PagosClient({ pagos: init }: Props) {
     setPagos(prev => prev.filter(x => x.id !== p.id));
   }
 
-  if (pagos.length === 0) {
+  if (pagos.length === 0 && viaticos.length === 0) {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 text-center max-w-lg mx-auto mt-10">
         <CheckCircle2 className="w-10 h-10 text-green-400 mx-auto mb-3" />
         <h2 className="text-lg font-semibold text-gray-900 mb-1">Sin pagos pendientes</h2>
-        <p className="text-sm text-gray-500">No hay SIAF-04 esperando forma de pago.</p>
+        <p className="text-sm text-gray-500">No hay SIAF-04 ni viáticos esperando forma de pago.</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       <div>
         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
           <Wallet className="w-5 h-5" /> Fondo Rotativo — Pagos
         </h1>
-        <p className="text-sm text-gray-500 mt-0.5">{pagos.length} pago(s) esperando forma de pago</p>
+        <p className="text-sm text-gray-500 mt-0.5">{pagos.length + viaticos.length} pago(s) esperando forma de pago</p>
       </div>
 
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="table-header">
-                <th className="px-4 py-3 w-8"></th>
-                <th className="px-4 py-3 text-left whitespace-nowrap">No. A-04 SIAF</th>
-                <th className="px-4 py-3 text-left">Destinatario</th>
-                <th className="px-4 py-3 text-left whitespace-nowrap">Factura</th>
-                <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
-                <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {pagos.map(p => (
-                <ExpandableRow key={p.id} colSpan={6}
-                  expanded={expandedId === p.id}
-                  onToggle={() => setExpandedId(prev => prev === p.id ? null : p.id)}
-                  rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
-                  detail={<TrazabilidadPanel
-                    titulo={`Detalle de A-04 SIAF ${p.numero_a04 != null ? `${p.numero_a04}/${p.anio_a04}` : ""}`}
-                    cadena={[{ label: "FRI", value: p.fri_numero != null ? `${p.fri_numero}/${p.fri_anio}` : null }]}
-                    traz={p.traz}
-                  />}>
-                  <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
-                    {p.numero_a04 != null ? `${p.numero_a04}/${p.anio_a04}` : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-gray-700">{p.destinatario_nombre ?? "—"}</td>
-                  <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
-                    {p.serie_factura}-{p.no_factura} · {p.fecha_emision_factura}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
-                    {p.total != null ? Q(p.total) : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                    <div className="flex flex-col items-end gap-1">
-                      <div className="flex justify-end gap-1.5">
-                        <button onClick={() => handleDevolver(p)} disabled={devolviendo === p.id}
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors">
-                          {devolviendo === p.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Undo2 className="w-3 h-3" />} Devolver
-                        </button>
-                        <button onClick={() => setModalFor(p)}
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors">
+      {pagos.length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="table-header">
+                  <th className="px-4 py-3 w-8"></th>
+                  <th className="px-4 py-3 text-left whitespace-nowrap">No. A-04 SIAF</th>
+                  <th className="px-4 py-3 text-left">Destinatario</th>
+                  <th className="px-4 py-3 text-left whitespace-nowrap">Factura</th>
+                  <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
+                  <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {pagos.map(p => (
+                  <ExpandableRow key={p.id} colSpan={6}
+                    expanded={expandedId === p.id}
+                    onToggle={() => setExpandedId(prev => prev === p.id ? null : p.id)}
+                    rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
+                    detail={<TrazabilidadPanel
+                      titulo={`Detalle de A-04 SIAF ${p.numero_a04 != null ? `${p.numero_a04}/${p.anio_a04}` : ""}`}
+                      cadena={[{ label: "FRI", value: p.fri_numero != null ? `${p.fri_numero}/${p.fri_anio}` : null }]}
+                      traz={p.traz}
+                    />}>
+                    <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
+                      {p.numero_a04 != null ? `${p.numero_a04}/${p.anio_a04}` : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700">{p.destinatario_nombre ?? "—"}</td>
+                    <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+                      {p.serie_factura}-{p.no_factura} · {p.fecha_emision_factura}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">
+                      {p.total != null ? Q(p.total) : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="flex justify-end gap-1.5">
+                          <button onClick={() => handleDevolver(p)} disabled={devolviendo === p.id}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors">
+                            {devolviendo === p.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Undo2 className="w-3 h-3" />} Devolver
+                          </button>
+                          <button onClick={() => setModalFor(p)}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors">
+                            <Wallet className="w-3 h-3" /> Agregar forma de pago
+                          </button>
+                        </div>
+                        {rowError[p.id] && <p className="text-[10px] text-red-600 max-w-[200px] text-right">{rowError[p.id]}</p>}
+                      </div>
+                    </td>
+                  </ExpandableRow>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {viaticos.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+            <MapPin className="w-3.5 h-3.5" /> Viáticos
+          </h2>
+          <div className="card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="table-header">
+                    <th className="px-4 py-3 text-left whitespace-nowrap">No. Formulario V-L</th>
+                    <th className="px-4 py-3 text-left">Colaborador</th>
+                    <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
+                    <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {viaticos.map(v => (
+                    <tr key={v.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">{v.numero_formulario ?? "—"}</td>
+                      <td className="px-4 py-3 text-gray-700">{v.persona_nombre ?? "—"}</td>
+                      <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">{Q(v.total)}</td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <button onClick={() => setModalViaticoFor(v)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors ml-auto">
                           <Wallet className="w-3 h-3" /> Agregar forma de pago
                         </button>
-                      </div>
-                      {rowError[p.id] && <p className="text-[10px] text-red-600 max-w-[200px] text-right">{rowError[p.id]}</p>}
-                    </div>
-                  </td>
-                </ExpandableRow>
-              ))}
-            </tbody>
-          </table>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {modalFor && (
         <FormaPagoModal
@@ -109,6 +151,126 @@ export default function PagosClient({ pagos: init }: Props) {
           onDone={() => { setPagos(p => p.filter(x => x.id !== modalFor.id)); setModalFor(null); }}
         />
       )}
+
+      {modalViaticoFor && (
+        <FormaPagoViaticoModal
+          pago={modalViaticoFor}
+          onClose={() => setModalViaticoFor(null)}
+          onDone={() => { setViaticos(v => v.filter(x => x.id !== modalViaticoFor.id)); setModalViaticoFor(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Los viáticos siempre se tratan como grupo 100 (ver viatico-pagos-actions.ts)
+// — a diferencia de FormaPagoModal (compras), acá Cheque SIEMPRE pide los
+// datos completos ahí mismo (nunca hay un paso intermedio en Bancos) y
+// Efectivo va directo a Pendiente FRI (nunca pasa por Caja Chica/Vale).
+function FormaPagoViaticoModal({ pago, onClose, onDone }: {
+  pago: PagoViatico; onClose: () => void; onDone: () => void;
+}) {
+  const [forma, setForma] = useState<"cheque" | "efectivo" | null>(null);
+  const [numeroCheque, setNumeroCheque] = useState("");
+  const [fechaEmisionCheque, setFechaEmisionCheque] = useState(fechaGuatemala());
+  const [tipoDocumentoPago, setTipoDocumentoPago] = useState<"Factura" | "Vale" | "Formulario" | "">("Formulario");
+  const [nitBeneficiario, setNitBeneficiario] = useState(pago.nit_beneficiario ?? "");
+  const [nombreBeneficiario, setNombreBeneficiario] = useState(pago.destinatario_nombre ?? pago.persona_nombre ?? "");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleConfirmar() {
+    setLoading(true); setError("");
+    const res = forma === "cheque"
+      ? await registrarFormaPagoChequeViatico(pago.id, {
+          numero_cheque: numeroCheque.trim(), fecha_emision_cheque: fechaEmisionCheque,
+          tipo_documento_pago: tipoDocumentoPago as "Factura" | "Vale" | "Formulario",
+          nit_beneficiario: nitBeneficiario.trim(), destinatario_nombre: nombreBeneficiario.trim(),
+        })
+      : await registrarFormaPagoEfectivoViatico(pago.id);
+    setLoading(false);
+    if ("error" in res) { setError(res.error); return; }
+    onDone();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+            <Wallet className="w-4 h-4 text-brand-600" /> Forma de pago — Viático {pago.numero_formulario ?? ""}
+          </h2>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          {forma === null && (
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setForma("cheque")}
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-gray-200 hover:border-brand-300 text-sm font-medium text-gray-700">
+                <Banknote className="w-5 h-5" /> Cheque
+              </button>
+              <button onClick={() => setForma("efectivo")}
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-gray-200 hover:border-brand-300 text-sm font-medium text-gray-700">
+                <Coins className="w-5 h-5" /> Efectivo
+              </button>
+            </div>
+          )}
+
+          {forma === "cheque" && (
+            <div className="space-y-3">
+              <div>
+                <label className="label">No. de cheque</label>
+                <input className="input font-mono" value={numeroCheque} onChange={e => setNumeroCheque(e.target.value)} autoFocus />
+              </div>
+              <div>
+                <label className="label">Fecha de emisión</label>
+                <input type="date" className="input" value={fechaEmisionCheque} onChange={e => setFechaEmisionCheque(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Tipo de documento</label>
+                <select className="input" value={tipoDocumentoPago} onChange={e => setTipoDocumentoPago(e.target.value as "Factura" | "Vale" | "Formulario")}>
+                  <option value="Formulario">Formulario</option>
+                  <option value="Factura">Factura</option>
+                  <option value="Vale">Vale</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">NIT del beneficiario</label>
+                <input className="input font-mono" value={nitBeneficiario} onChange={e => setNitBeneficiario(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Nombre del beneficiario</label>
+                <input className="input" value={nombreBeneficiario} onChange={e => setNombreBeneficiario(e.target.value)} />
+              </div>
+            </div>
+          )}
+
+          {forma === "efectivo" && (
+            <div className="flex items-start gap-3 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5">
+              <ArrowRight className="w-4 h-4 text-brand-600 shrink-0 mt-0.5" />
+              <p>Este viático se enviará directo a <strong>Fondo Rotativo/Pago-FRI</strong>.</p>
+            </div>
+          )}
+
+          {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
+        </div>
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+          {forma !== null && <button onClick={() => setForma(null)} className="btn-secondary">Atrás</button>}
+          <button onClick={onClose} className="btn-secondary">Cancelar</button>
+          {forma === "cheque" && (
+            <button onClick={handleConfirmar}
+              disabled={loading || !numeroCheque.trim() || !fechaEmisionCheque || !tipoDocumentoPago || !nitBeneficiario.trim() || !nombreBeneficiario.trim()}
+              className="btn-primary disabled:opacity-50">
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />} Confirmar pago
+            </button>
+          )}
+          {forma === "efectivo" && (
+            <button onClick={handleConfirmar} disabled={loading} className="btn-primary disabled:opacity-50">
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />} Confirmar pago
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

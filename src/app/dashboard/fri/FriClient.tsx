@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Wallet, Printer, ChevronDown, ChevronRight, Loader2, AlertTriangle, CheckCircle2, X } from "lucide-react";
 import { conformarFri, marcarFriReintegrado, enviarFriADaf, marcarFriRechazado, getFriConDetalle, type Fri, type PolizaFri, type FriItemInput } from "@/lib/fri-actions";
 import type { PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import type { PagoViatico } from "@/lib/viatico-pagos-actions";
 import type { TrazabilidadConsolidacion } from "@/lib/adjudicacion/trazabilidad-utils";
 import ExpandableRow from "@/components/ExpandableRow";
 import TrazabilidadPanel from "@/components/TrazabilidadPanel";
@@ -30,19 +31,28 @@ function polizaARow(p: PolizaFri): Row {
     total: p.total, traz: null,
   };
 }
+function viaticoARow(v: PagoViatico): Row {
+  return {
+    key: `viatico:${v.id}`, item: { tipo: "viatico", id: v.id }, origen: "Viáticos",
+    referencia: `V-L ${v.numero_formulario ?? "—"}`,
+    detalle: `${v.persona_nombre ?? "—"} · ${v.forma_pago === "cheque" ? `Cheque ${v.numero_cheque ?? ""}` : "Efectivo"}`,
+    total: v.total, traz: null,
+  };
+}
 
 export default function FriClient({
-  pendientesPagos: initPagos, pendientesPolizas: initPolizas, fris: initFris,
-}: { pendientesPagos: PagoFondoRotativo[]; pendientesPolizas: PolizaFri[]; fris: Fri[] }) {
+  pendientesPagos: initPagos, pendientesPolizas: initPolizas, pendientesViaticos: initViaticos, fris: initFris,
+}: { pendientesPagos: PagoFondoRotativo[]; pendientesPolizas: PolizaFri[]; pendientesViaticos: PagoViatico[]; fris: Fri[] }) {
   const [pendientesPagos, setPendientesPagos] = useState(initPagos);
   const [pendientesPolizas, setPendientesPolizas] = useState(initPolizas);
+  const [pendientesViaticos, setPendientesViaticos] = useState(initViaticos);
   const [fris, setFris] = useState(initFris);
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
   const [conformando, setConformando] = useState(false);
   const [errorConformar, setErrorConformar] = useState("");
   const [expandido, setExpandido] = useState<number | null>(null);
   const [expandidoPendiente, setExpandidoPendiente] = useState<string | null>(null);
-  const [detalle, setDetalle] = useState<Record<number, { pagos: PagoFondoRotativo[]; polizas: PolizaFri[] }>>({});
+  const [detalle, setDetalle] = useState<Record<number, { pagos: PagoFondoRotativo[]; polizas: PolizaFri[]; viaticos: PagoViatico[] }>>({});
   const [reintegrarFor, setReintegrarFor] = useState<Fri | null>(null);
   const [enviarFor, setEnviarFor] = useState<Fri | null>(null);
   const [rowError, setRowError] = useState<Record<number, string>>({});
@@ -56,7 +66,7 @@ export default function FriClient({
     setFris(prev => prev.map(x => x.id === f.id ? { ...x, estado: "Rechazado" } : x));
   }
 
-  const filas: Row[] = [...pendientesPagos.map(pagoARow), ...pendientesPolizas.map(polizaARow)];
+  const filas: Row[] = [...pendientesPagos.map(pagoARow), ...pendientesPolizas.map(polizaARow), ...pendientesViaticos.map(viaticoARow)];
 
   function toggle(key: string) {
     setSeleccion(prev => {
@@ -71,7 +81,7 @@ export default function FriClient({
     setExpandido(id);
     if (!detalle[id]) {
       const res = await getFriConDetalle(id);
-      if (res) setDetalle(prev => ({ ...prev, [id]: { pagos: res.pagos, polizas: res.polizas } }));
+      if (res) setDetalle(prev => ({ ...prev, [id]: { pagos: res.pagos, polizas: res.polizas, viaticos: res.viaticos } }));
     }
   }
 
@@ -86,8 +96,10 @@ export default function FriClient({
     setFris(prev => [res.fri, ...prev]);
     const pagoIds = new Set(items.filter(i => i.tipo === "pago").map(i => i.id));
     const polizaIds = new Set(items.filter(i => i.tipo === "poliza").map(i => i.id));
+    const viaticoIds = new Set(items.filter(i => i.tipo === "viatico").map(i => i.id));
     setPendientesPagos(prev => prev.filter(p => !pagoIds.has(p.id)));
     setPendientesPolizas(prev => prev.filter(p => !polizaIds.has(p.id)));
+    setPendientesViaticos(prev => prev.filter(p => !viaticoIds.has(p.id)));
     setSeleccion(new Set());
   }
 
@@ -100,9 +112,9 @@ export default function FriClient({
           <Wallet className="w-5 h-5" /> Pago/FRI
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Gastos ya realizados (renglones 100-199 pagados por cheque/vale, y pólizas de pasajes) — agrúpalos en un
-          FRI para reportar en qué se gastó y pedir el reintegro a Fondo Rotativo. Conformar un FRI no cambia el
-          camino normal de liquidación de las pólizas.
+          Gastos ya realizados (renglones 100-199 pagados por cheque/vale, pólizas de pasajes, y viáticos aprobados
+          con forma de pago elegida) — agrúpalos en un FRI para reportar en qué se gastó y pedir el reintegro a
+          Fondo Rotativo. Conformar un FRI no cambia el camino normal de liquidación de las pólizas.
         </p>
       </div>
 
@@ -243,7 +255,7 @@ export default function FriClient({
                                 </tr>
                               </thead>
                               <tbody>
-                                {[...detalle[f.id].pagos.map(pagoARow), ...detalle[f.id].polizas.map(polizaARow)].map(r => (
+                                {[...detalle[f.id].pagos.map(pagoARow), ...detalle[f.id].polizas.map(polizaARow), ...detalle[f.id].viaticos.map(viaticoARow)].map(r => (
                                   <tr key={r.key} className="border-t border-gray-200">
                                     <td className="py-1.5">{r.origen}</td>
                                     <td className="py-1.5 font-mono">{r.referencia}</td>

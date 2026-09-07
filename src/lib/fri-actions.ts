@@ -1,9 +1,10 @@
 "use server";
 import { db } from "@/lib/db";
-import { fondoRotativoPagos, friFondoRotativo, consolidaciones, configuracion, polizas } from "@/lib/schema";
+import { fondoRotativoPagos, friFondoRotativo, consolidaciones, configuracion, polizas, viaticoPagos } from "@/lib/schema";
 import { eq, inArray, sql, desc, and, isNull, isNotNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { conDetalle, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import { conDetalleViatico, type PagoViatico } from "@/lib/viatico-pagos-actions";
 import { gruposRenglonDeConsolidacion } from "@/lib/adjudicacion/renglon-utils";
 import { netoDeIva } from "@/lib/iva-utils";
 
@@ -26,6 +27,14 @@ export async function getPagosPendientesFri(): Promise<PagoFondoRotativo[]> {
   return conDetalle(rows);
 }
 
+// Viáticos Aprobados con forma de pago ya elegida (ver viatico-pagos-actions.ts,
+// Fase F 2026-09-08) — se tratan siempre como grupo 100, así que llegan acá
+// directo desde Fondo Rotativo/Pagos, sin pasar por Bancos ni Caja Chica.
+export async function getViaticosPendientesFri(): Promise<PagoViatico[]> {
+  const rows = await db.select().from(viaticoPagos).where(eq(viaticoPagos.estado, "Pendiente FRI"));
+  return conDetalleViatico(rows);
+}
+
 // Pólizas de pasajes ya pagadas (con vale asignado) que todavía no se han
 // reportado en ningún FRI. Su ciclo de liquidación (Caja Chica) sigue
 // exactamente igual — el FRI solo las agrupa para pedir el reintegro.
@@ -40,15 +49,16 @@ export async function getFrisConformados(): Promise<Fri[]> {
   return db.select().from(friFondoRotativo).orderBy(desc(friFondoRotativo.anio), desc(friFondoRotativo.numero));
 }
 
-export async function getFriConDetalle(friId: number): Promise<{ fri: Fri; pagos: PagoFondoRotativo[]; polizas: PolizaFri[] } | null> {
+export async function getFriConDetalle(friId: number): Promise<{ fri: Fri; pagos: PagoFondoRotativo[]; polizas: PolizaFri[]; viaticos: PagoViatico[] } | null> {
   const [fri] = await db.select().from(friFondoRotativo).where(eq(friFondoRotativo.id, friId)).limit(1);
   if (!fri) return null;
-  const [pagoRows, polizaRows] = await Promise.all([
+  const [pagoRows, polizaRows, viaticoRows] = await Promise.all([
     db.select().from(fondoRotativoPagos).where(eq(fondoRotativoPagos.fri_id, friId)),
     db.select({ id: polizas.id, numero: polizas.numero, fecha: polizas.fecha, total: polizas.total, estado: polizas.estado })
       .from(polizas).where(eq(polizas.fri_id, friId)),
+    db.select().from(viaticoPagos).where(eq(viaticoPagos.fri_id, friId)),
   ]);
-  return { fri, pagos: await conDetalle(pagoRows), polizas: polizaRows };
+  return { fri, pagos: await conDetalle(pagoRows), polizas: polizaRows, viaticos: await conDetalleViatico(viaticoRows) };
 }
 
 export type FriDocumento = { referencia: string; detalle: string; monto: number };
@@ -61,7 +71,7 @@ export type FriGrupoRenglon = { renglon: string; documentos: FriDocumento[]; sub
 // Las pólizas de pasajes no tienen un renglón individual en el sistema —
 // bajo el mismo criterio con que se comprometen (no se les descuenta IVA
 // aparte), se agrupan bajo el rótulo fijo "Pasajes".
-export async function agruparFriPorRenglon(pagos: PagoFondoRotativo[], polizasFri: PolizaFri[]): Promise<FriGrupoRenglon[]> {
+export async function agruparFriPorRenglon(pagos: PagoFondoRotativo[], polizasFri: PolizaFri[], viaticosFri: PagoViatico[] = []): Promise<FriGrupoRenglon[]> {
   const grupos = new Map<string, FriGrupoRenglon>();
   const agregar = (renglon: string, doc: FriDocumento) => {
     if (!grupos.has(renglon)) grupos.set(renglon, { renglon, documentos: [], subtotal: 0 });
@@ -85,6 +95,13 @@ export async function agruparFriPorRenglon(pagos: PagoFondoRotativo[], polizasFr
   for (const pz of polizasFri) {
     agregar("Pasajes", { referencia: `Póliza ${pz.numero}`, detalle: `Cuadro de Caja del ${pz.fecha}`, monto: pz.total });
   }
+  for (const v of viaticosFri) {
+    agregar("Viáticos", {
+      referencia: `V-L ${v.numero_formulario ?? "—"}`,
+      detalle: `${v.persona_nombre ?? "—"} · ${v.forma_pago === "cheque" ? `Cheque ${v.numero_cheque ?? ""}` : "Efectivo"}`,
+      monto: v.total,
+    });
+  }
 
   return [...grupos.values()].sort((a, b) => a.renglon.localeCompare(b.renglon, "es", { numeric: true }));
 }
@@ -96,13 +113,14 @@ export async function getFriPorNumero(numero: number, anio: number) {
   return getFriConDetalle(fri.id);
 }
 
-export type FriItemInput = { tipo: "pago" | "poliza"; id: number };
+export type FriItemInput = { tipo: "pago" | "poliza" | "viatico"; id: number };
 
 // Agrupa varios pagos "Pendiente FRI" (renglones 100-199 ya pagados por
-// cheque o vale) y/o pólizas de pasajes ya pagadas, bajo un correlativo
-// nuevo — el FRI que se imprime y se lleva físicamente a Fondo Rotativo
-// para reportar en qué se gastó y pedir el reintegro. No es un mecanismo de
-// pago: agrupar una póliza aquí no cambia su propio ciclo de liquidación.
+// cheque o vale), pólizas de pasajes ya pagadas, y/o viáticos ya aprobados
+// con forma de pago elegida, bajo un correlativo nuevo — el FRI que se
+// imprime y se lleva físicamente a Fondo Rotativo para reportar en qué se
+// gastó y pedir el reintegro. No es un mecanismo de pago: agrupar una
+// póliza/viático aquí no cambia su propio ciclo previo.
 export async function conformarFri(items: FriItemInput[]): Promise<{ ok: true; fri: Fri } | { error: string }> {
   try {
     const check = await requireEdit();
@@ -111,10 +129,12 @@ export async function conformarFri(items: FriItemInput[]): Promise<{ ok: true; f
 
     const pagoIds = items.filter(i => i.tipo === "pago").map(i => i.id);
     const polizaIds = items.filter(i => i.tipo === "poliza").map(i => i.id);
+    const viaticoIds = items.filter(i => i.tipo === "viatico").map(i => i.id);
 
-    const [pagos, polizasSel] = await Promise.all([
+    const [pagos, polizasSel, viaticosSel] = await Promise.all([
       pagoIds.length > 0 ? db.select().from(fondoRotativoPagos).where(inArray(fondoRotativoPagos.id, pagoIds)) : Promise.resolve([]),
       polizaIds.length > 0 ? db.select().from(polizas).where(inArray(polizas.id, polizaIds)) : Promise.resolve([]),
+      viaticoIds.length > 0 ? db.select().from(viaticoPagos).where(inArray(viaticoPagos.id, viaticoIds)) : Promise.resolve([]),
     ]);
     if (pagos.length !== pagoIds.length) return { error: "Alguno de los pagos seleccionados no existe" };
     if (pagos.some(p => p.estado !== "Pendiente FRI" || p.fri_id != null))
@@ -122,6 +142,9 @@ export async function conformarFri(items: FriItemInput[]): Promise<{ ok: true; f
     if (polizasSel.length !== polizaIds.length) return { error: "Alguna de las pólizas seleccionadas no existe" };
     if (polizasSel.some(p => p.vale_id == null || p.fri_id != null))
       return { error: "Alguna de las pólizas seleccionadas ya no está disponible para conformar un FRI" };
+    if (viaticosSel.length !== viaticoIds.length) return { error: "Alguno de los viáticos seleccionados no existe" };
+    if (viaticosSel.some(v => v.estado !== "Pendiente FRI" || v.fri_id != null))
+      return { error: "Alguno de los viáticos seleccionados ya no está disponible para conformar un FRI" };
 
     const cons = pagos.length > 0
       ? await db.select({ id: consolidaciones.id, total: consolidaciones.total })
@@ -130,7 +153,8 @@ export async function conformarFri(items: FriItemInput[]): Promise<{ ok: true; f
     const totalMap = new Map(cons.map(c => [c.id, c.total ?? 0]));
     const totalPagos = pagos.reduce((s, p) => s + (totalMap.get(p.consolidacion_id) ?? 0), 0);
     const totalPolizas = polizasSel.reduce((s, p) => s + p.total, 0);
-    const total = totalPagos + totalPolizas;
+    const totalViaticos = viaticosSel.reduce((s, v) => s + v.total, 0);
+    const total = totalPagos + totalPolizas + totalViaticos;
 
     const anio = new Date().getFullYear();
     const res = await db.execute(sql`SELECT COALESCE(MAX(numero), 0) + 1 AS next FROM fri_fondo_rotativo WHERE anio = ${anio}`);
@@ -148,6 +172,10 @@ export async function conformarFri(items: FriItemInput[]): Promise<{ ok: true; f
       // Solo se marca fri_id — el estado de la póliza (Enviada a Liquidar /
       // Liquidada) sigue su propio camino en Caja Chica, sin tocarlo.
       await db.update(polizas).set({ fri_id: fri.id }).where(inArray(polizas.id, polizaIds));
+    }
+    if (viaticoIds.length > 0) {
+      await db.update(viaticoPagos).set({ fri_id: fri.id, estado: "En FRI" })
+        .where(inArray(viaticoPagos.id, viaticoIds));
     }
 
     return { ok: true, fri };
@@ -202,9 +230,9 @@ export async function marcarFriRechazado(friId: number): Promise<{ ok: true } | 
 // Cuando en la vida real Fondo Rotativo deposita el reintegro de este FRI, se
 // marca aquí — acredita el total al saldo disponible del Fondo Rotativo
 // (configuracion.efectivo_caja), para que Caja Chica pueda volver a sacar
-// vales con ese dinero. Los pagos de gastos varios quedan archivados como
-// "Reintegrado"; las pólizas de pasajes NO se tocan — su liquidación en Caja
-// Chica sigue siendo un proceso aparte.
+// vales con ese dinero. Los pagos de gastos varios y los viáticos quedan
+// archivados como "Reintegrado"; las pólizas de pasajes NO se tocan — su
+// liquidación en Caja Chica sigue siendo un proceso aparte.
 export async function marcarFriReintegrado(friId: number, fechaReintegro: string): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireEdit();
@@ -220,6 +248,7 @@ export async function marcarFriReintegrado(friId: number, fechaReintegro: string
     }).where(eq(friFondoRotativo.id, friId));
 
     await db.update(fondoRotativoPagos).set({ estado: "Reintegrado" }).where(eq(fondoRotativoPagos.fri_id, friId));
+    await db.update(viaticoPagos).set({ estado: "Reintegrado" }).where(eq(viaticoPagos.fri_id, friId));
 
     await db.update(configuracion).set({
       efectivo_caja: sql`COALESCE(${configuracion.efectivo_caja}, 0) + ${fri.total}`,
