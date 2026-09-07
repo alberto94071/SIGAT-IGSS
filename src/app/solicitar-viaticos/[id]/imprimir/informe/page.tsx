@@ -3,7 +3,7 @@ import { requireColaborador } from "@/lib/modulo-access";
 import { db } from "@/lib/db";
 import { configuracion } from "@/lib/schema";
 import { fechaGuatemala } from "@/lib/date-utils";
-import { getSolicitud } from "../../../actions";
+import { getSolicitud, getFirmantePrincipal } from "../../../actions";
 import ImprimirNarrativoClient from "@/components/ImprimirNarrativoClient";
 
 export default async function ImprimirInformePage({ params }: { params: Promise<{ id: string }> }) {
@@ -14,14 +14,17 @@ export default async function ImprimirInformePage({ params }: { params: Promise<
   if (!solicitud) notFound();
   if (solicitud.colaborador_id !== Number(session.user.id) || solicitud.estado !== "Aprobado") notFound();
 
-  const [config] = await db.select().from(configuracion).limit(1);
+  const [config, firmante] = await Promise.all([
+    db.select().from(configuracion).limit(1).then(r => r[0]),
+    getFirmantePrincipal(solicitud.id),
+  ]);
 
   return (
     <ImprimirNarrativoClient
       titulo={`Informe de Comisión, según Formulario No. ${solicitud.numero_formulario ?? ""}`}
       nombreUnidad={config?.nombre_dependencia_medica ?? ""}
-      destinatarioNombre={config?.nombre_director ?? ""}
-      destinatarioCargo="Director Departamental"
+      destinatarioNombre={firmante?.nombre ?? config?.nombre_director ?? ""}
+      destinatarioCargo={firmante?.cargo ?? "Director Departamental"}
       personaNombre={solicitud.persona_nombre}
       personaCargo={solicitud.persona_cargo}
       personaNoEmpleado={solicitud.persona_no_empleado}

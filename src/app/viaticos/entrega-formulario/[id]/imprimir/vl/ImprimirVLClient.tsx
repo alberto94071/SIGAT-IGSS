@@ -7,7 +7,7 @@ import { montoEnLetras } from "@/lib/adjudicacion/deletreo";
 
 type Comision = {
   id: number; orden: number; lugar: string | null; departamento: string | null;
-  descripcion_comision: string | null; dias_calculados: number | null;
+  tipo_comision: string | null; descripcion_comision: string | null; dias_calculados: number | null;
   nombramiento_numero: string | null; fecha_nombramiento: string | null;
   firmante_nombre: string | null; firmante_cargo: string | null;
   cantidad_desayuno: number; cantidad_almuerzo: number; cantidad_cena: number; cantidad_hospedaje: number;
@@ -66,7 +66,12 @@ export default function ImprimirVLClient({
   const tieneAnticipo = !!s.recibido_va_no;
   const total15 = total11 - (s.reintegro ?? 0) + (s.complemento ?? 0);
 
-  const tipoComisionLineas = dedupeAdyacente(s.comisiones.map(c => c.descripcion_comision ?? ""));
+  // El numeral 4 "TIPO DE COMISIÓN" imprime el campo corto tipo_comision, no
+  // la descripción larga — el cliente lo confirmó explícitamente 2026-09-07
+  // (antes se interpretó al revés, ver nota en CLAUDE.md). descripcion_comision
+  // va en el Informe de Comisión, no acá. Cae a descripcion_comision solo si
+  // tipo_comision viene vacío (es un campo opcional del formulario).
+  const tipoComisionLineas = dedupeAdyacente(s.comisiones.map(c => c.tipo_comision || c.descripcion_comision || ""));
   const lugarLineas = dedupeAdyacente(s.comisiones.map(c => [c.lugar, c.departamento].filter(Boolean).join(", ")));
   const nombramientosTexto = unicos(s.comisiones.map(c => c.nombramiento_numero)).join(", ");
   const fechasNombramientoTexto = unicos(s.comisiones.map(c => c.fecha_nombramiento)).map(fechaCorta).join(", ");
