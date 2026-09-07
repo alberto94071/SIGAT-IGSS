@@ -61,6 +61,10 @@ export default function EntregaFormularioClient({ solicitudes }: { solicitudes: 
                           className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
                           <Printer className="w-3 h-3" /> V-L
                         </Link>
+                        <Link href={`/viaticos/entrega-formulario/${s.id}/imprimir/planilla`}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+                          <Printer className="w-3 h-3" /> Planilla
+                        </Link>
                       </div>
                     ) : <span className="text-xs text-gray-400">—</span>}
                   </td>

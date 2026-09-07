@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { MapPin, X, Loader2, AlertTriangle, ClipboardCheck, Check, Ban } from "lucide-react";
+import { MapPin, X, Loader2, AlertTriangle, ClipboardCheck, Check, Ban, Plus, Trash2 } from "lucide-react";
 import { fechaGuatemala } from "@/lib/date-utils";
 import {
   habilitarSolicitud, type DatosHabilitar,
@@ -217,11 +217,14 @@ function HabilitarModal({ solicitud: p, onClose, onHabilitada }: {
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2 })}`;
 
+type GastoRow = { fecha: string; descripcion: string; valor: string };
+const gastoVacio = (): GastoRow => ({ fecha: fechaGuatemala(), descripcion: "", valor: "" });
+
 function RevisarModal({ solicitudId, onClose, onResuelta }: {
   solicitudId: number; onClose: () => void; onResuelta: (id: number) => void;
 }) {
   const [sol, setSol] = useState<SolicitudCompleta | null>(null);
-  const [otrosGastos, setOtrosGastos] = useState("0");
+  const [gastos, setGastos] = useState<GastoRow[]>([]);
   const [motivo, setMotivo] = useState("");
   const [mostrandoRechazo, setMostrandoRechazo] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -231,10 +234,17 @@ function RevisarModal({ solicitudId, onClose, onResuelta }: {
     getSolicitudCompleta(solicitudId).then(data => setSol(data as SolicitudCompleta | null));
   }, [solicitudId]);
 
+  function agregarGasto() { setGastos(prev => [...prev, gastoVacio()]); }
+  function quitarGasto(i: number) { setGastos(prev => prev.filter((_, idx) => idx !== i)); }
+  function actualizarGasto(i: number, campo: keyof GastoRow, valor: string) {
+    setGastos(prev => prev.map((g, idx) => idx === i ? { ...g, [campo]: valor } : g));
+  }
+  const totalGastos = gastos.reduce((sum, g) => sum + (Number(g.valor) || 0), 0);
+
   async function handleAprobar() {
     setSaving(true); setError("");
     const datos: DatosAprobar = {
-      otros_gastos: Number(otrosGastos) || 0,
+      gastos: gastos.map(g => ({ fecha: g.fecha, descripcion: g.descripcion, valor: Number(g.valor) || 0 })),
       recibido_va_no: "", recibido_va_monto: null, reintegro: null, complemento: null,
     };
     const res = await aprobarSolicitud(solicitudId, datos);
@@ -286,8 +296,35 @@ function RevisarModal({ solicitudId, onClose, onResuelta }: {
 
             {!mostrandoRechazo ? (
               <div>
-                <label className="label">Otros gastos derivados (comprobantes/planilla)</label>
-                <input type="number" min={0} step="0.01" className="input" value={otrosGastos} onChange={e => setOtrosGastos(e.target.value)} />
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="label mb-0">Otros gastos derivados (Planilla de Viáticos)</label>
+                  <button type="button" onClick={agregarGasto}
+                    className="flex items-center gap-1 text-xs font-semibold text-brand-700 hover:text-brand-800">
+                    <Plus className="w-3.5 h-3.5" /> Agregar gasto
+                  </button>
+                </div>
+                {gastos.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">Sin gastos adicionales (ej. pasajes) — dejalo así si no aplica.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {gastos.map((g, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <input type="date" className="input flex-none w-36" value={g.fecha}
+                          onChange={e => actualizarGasto(i, "fecha", e.target.value)} />
+                        <input type="text" placeholder="Descripción (ej. Pasaje de ida y vuelta a Guatemala)"
+                          className="input flex-1" value={g.descripcion}
+                          onChange={e => actualizarGasto(i, "descripcion", e.target.value)} />
+                        <input type="number" min={0} step="0.01" placeholder="Valor" className="input flex-none w-28"
+                          value={g.valor} onChange={e => actualizarGasto(i, "valor", e.target.value)} />
+                        <button type="button" onClick={() => quitarGasto(i)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg shrink-0">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <p className="text-right text-sm font-semibold text-gray-700">Total: {Q(totalGastos)}</p>
+                  </div>
+                )}
               </div>
             ) : (
               <div>
