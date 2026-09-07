@@ -1013,23 +1013,44 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     (`solicitar-viaticos/actions.ts`, mismo criterio de "primera comisión
     con firmante" que ya usa el V-L) resuelve nombre + cargo; cae al
     `nombre_director`/"Director Departamental" de Configuración solo si
-    ninguna comisión tiene firmante todavía. **Pendiente, necesita el PDF
-    real del cliente para no adivinar la redacción exacta** (mandó
-    `MODELO VIATICO.pdf`, 6 páginas, por WhatsApp pero no se adjuntó a la
-    sesión todavía): el texto de Informe/Justificación debería armarse
-    auto-concatenando `descripcion_comision` + `nombramiento_numero` +
-    `fecha_nombramiento` + hora de llegada/salida del lugar de cada
-    comisión, en vez de que el colaborador lo escriba libre — y la
-    Justificación de Estancia tendría un párrafo fijo (boilerplate) que
-    hoy no existe, con solo el primer párrafo variable por comisión. Sin
-    el modelo real no se sabe la redacción exacta a reproducir — no
-    implementar a ciegas, ya pasó una ronda de "adivinar mal y corregir"
-    con la leyenda del A-01 SIAF y con el preámbulo del Acta.
-  - **Pendiente sin confirmar, reportado 2026-09-07**: "No sale la
-    planilla de pasajes" — no está claro sin el modelo si el cliente
-    espera una tabla/planilla de pasajes en algún formulario nuevo, o si
-    se refiere a que "Otros gastos derivados" (captado por el encargado al
-    aprobar, ver Fase E arriba) debería desglosarse en algo más específico.
+    ninguna comisión tiene firmante todavía. **Resuelto (2026-09-07), el
+    cliente mandó el PDF real (`MODELO_VIATICO.pdf`) con un Informe de
+    Comisión y una Justificación de Estancia reales llenos**: ambos ahora
+    se auto-generan al **aprobar** (`aprobarSolicitud`,
+    `generarInformeComision`/`generarJustificacionEstancia` en
+    `viaticos/registro-comision/actions.ts`), una sola vez, guardando el
+    resultado directo en `informe_comision`/`justificacion_estancia` — el
+    colaborador los sigue pudiendo editar después desde el `NarrativoEditor`,
+    esto solo cambia el punto de partida (antes quedaban en blanco). El
+    Informe concatena, por cada comisión: "La Comisión realizada en fecha
+    {fecha_llegada_lugar} descrito en el Formulario V-L No. {numero_
+    formulario}, de conformidad con el Nombramiento de Comisión No.
+    {nombramiento_numero}, en relación a; {tipo_comision} en {lugar},
+    {departamento}, en horario de {hora_llegada_lugar} a {hora_salida_lugar}
+    horas, {descripcion_comision}, posteriormente retorné..." (cierre fijo
+    igual siempre) — plantilla extraída literal del modelo real, verificada
+    en vivo con un caso de prueba y coincide casi palabra por palabra. La
+    Justificación de Estancia usa la misma concatenación en el primer
+    párrafo (redacción propia, "Fui comisionado(a) para...") seguida de
+    **texto fijo verbatim** (`JUSTIFICACION_ESTANCIA_FIJA`, sobre la
+    distancia Tejutla-Guatemala y la comisión del día anterior) que el
+    cliente confirmó explícitamente que no cambia — incluye un
+    "Nombramiento No. 76/2026" hardcodeado tal cual salía en el modelo, que
+    el colaborador debe ajustar a mano si su caso puntual usa un
+    nombramiento del día anterior distinto.
+  - **Resuelto (2026-09-07): "No sale la planilla de pasajes"** — el
+    modelo real (`MODELO_VIATICO.pdf`) mostró que se refiere a la
+    **"PLANILLA DE VIATICOS"**, un documento aparte (no una tabla dentro de
+    otro formulario) que respalda "Otros Gastos Derivados" (campo 10 del
+    V-L) con una tabla FECHA/DESCRIPCIÓN/VALOR (ej. "Pasaje de Ida y Vuelta
+    de Tejutla a Guatemala — Q230.00") más un párrafo fijo de OBSERVACIONES
+    citando el Acuerdo 1192 art. 8 sobre comprobación sin boletos. **Falta
+    construir** — requiere decidir la granularidad de datos (¿un solo
+    gasto o varios por solicitud/comisión? hoy `otros_gastos` es un solo
+    número en `viatico_solicitudes`) antes de agregar una tabla nueva y el
+    documento impreso; no se tocó en esta ronda por la misma razón que las
+    demás correcciones de redacción — mejor confirmar el diseño de datos
+    que adivinar y tener que deshacer una tabla nueva.
   - **Resuelto (2026-09-07): V-A/V-C/V-L pasaron de `OverlayPrint`/
     `OverlayField` (solo ajuste global de mm) al mismo sistema de "Ver
     posiciones" por campo, arrastrable y persistente, que ya usan Vale de
