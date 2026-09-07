@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { configuracion, catalogoFirmantes } from "@/lib/schema";
 import { eq, asc } from "drizzle-orm";
 import { getSolicitudParaImprimir } from "@/app/viaticos/registro-comision/actions";
+import { getPosicionesImpresion } from "@/lib/impresion-posiciones-actions";
 import ImprimirVLClient from "@/app/viaticos/entrega-formulario/[id]/imprimir/vl/ImprimirVLClient";
 
 export default async function ImprimirMiVLPage({ params }: { params: Promise<{ id: string }> }) {
@@ -14,9 +15,10 @@ export default async function ImprimirMiVLPage({ params }: { params: Promise<{ i
   if (!solicitud) notFound();
   if (solicitud.colaborador_id !== Number(session.user.id) || solicitud.estado !== "Aprobado") notFound();
 
-  const [config, firmantes] = await Promise.all([
+  const [config, firmantes, posicionesGuardadas] = await Promise.all([
     db.select().from(configuracion).limit(1).then(r => r[0]),
     db.select().from(catalogoFirmantes).where(eq(catalogoFirmantes.activo, true)).orderBy(asc(catalogoFirmantes.nombre)),
+    getPosicionesImpresion("viatico_vl"),
   ]);
 
   return (
@@ -31,6 +33,7 @@ export default async function ImprimirMiVLPage({ params }: { params: Promise<{ i
         cena: config?.viatico_precio_cena ?? 45, hospedaje: config?.viatico_precio_hospedaje ?? 150,
       }}
       firmantes={firmantes as any}
+      posicionesGuardadas={posicionesGuardadas}
     />
   );
 }

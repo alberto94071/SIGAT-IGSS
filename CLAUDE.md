@@ -1030,16 +1030,30 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     espera una tabla/planilla de pasajes en algún formulario nuevo, o si
     se refiere a que "Otros gastos derivados" (captado por el encargado al
     aprobar, ver Fase E arriba) debería desglosarse en algo más específico.
-  - **Pedido pendiente de alcance, reportado 2026-09-07**: que el sistema
-    de "Ver posiciones" del DAB-60 (ajuste de posición/tamaño por campo,
-    persistente, ver `ImprimirDab60Client.tsx`) se generalice a **todos**
-    los formularios que imprimen sobre papel pre-impreso (V-A/V-C/V-L de
-    Viáticos, y potencialmente Pasajes) — hoy esos usan `OverlayPrint`/
-    `OverlayField` (`src/components/overlay-print/`), que solo tiene un
-    ajuste global de milímetros (horizontal/vertical para toda la hoja),
-    no posición por campo individual. Es una generalización real de un
-    sistema completo, no un fix puntual — falta confirmar prioridad/alcance
-    exacto antes de construirlo.
+  - **Resuelto (2026-09-07): V-A/V-C/V-L pasaron de `OverlayPrint`/
+    `OverlayField` (solo ajuste global de mm) al mismo sistema de "Ver
+    posiciones" por campo, arrastrable y persistente, que ya usan Vale de
+    Caja Chica y Cheque** — no hubo que construirlo desde cero: ya existía
+    genérico (`src/components/print-posiciones/CampoPosicionable.tsx` +
+    `PosicionesToolbar.tsx`, con persistencia en la tabla también genérica
+    `posiciones_impresion` vía `impresion-posiciones-actions.ts`,
+    documento = `"viatico_va"`/`"viatico_vc"`/`"viatico_vl"`), extraído del
+    DAB-60 en una ronda anterior para justo este propósito. Los `top`/
+    `left`/`width` en pulgadas de las versiones viejas se convirtieron a mm
+    (`* 25.4`, visible inline en `POS_DEFAULT` de cada Client para no perder
+    la trazabilidad del calibrado original). `PosicionesToolbar` ganó un
+    `extraToolbar` opcional (mismo hueco que ya tenía `OverlayPrint`) para
+    que el V-L siga mostrando el `SelectorFirmante` del Vo.Bo. Las imágenes
+    de fondo (`private/viatico-v{a,c,l}-fondo.jpg`) son del modelo real
+    LLENO que mandó el cliente (`MODELO_VIATICO.pdf`), no un talonario en
+    blanco — sirve igual como referencia semitransparente en pantalla, pero
+    por eso puede no alinear pixel-perfecto con esa imagen puntual (son
+    calibrados contra el papel real, no contra esta captura). Verificado en
+    vivo: arrastrar un campo + "Guardar posiciones" persiste en
+    `posiciones_impresion` y sobrevive a recargar la página.
+  - **Pendiente, no confirmado todavía**: extender este mismo sistema a
+    Pasajes (SPS-75/DPD-23/Póliza) — el cliente solo pidió Viáticos hasta
+    ahora.
   - **Verificado en vivo de punta a punta reproduciendo el ejemplo real
     completo del cliente** (mismo colaborador, misma comisión que en la
     Fase D, aprobado con Otros Gastos = Q230 igual que el pasaje del

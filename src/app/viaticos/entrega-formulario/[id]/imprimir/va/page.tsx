@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireTabAccess } from "@/lib/modulo-access";
 import { getSolicitudParaImprimir } from "../../../../registro-comision/actions";
+import { getPosicionesImpresion } from "@/lib/impresion-posiciones-actions";
 import ImprimirVAClient from "./ImprimirVAClient";
 
 export default async function ImprimirVAPage({ params }: { params: Promise<{ id: string }> }) {
@@ -11,5 +12,7 @@ export default async function ImprimirVAPage({ params }: { params: Promise<{ id:
   if (!solicitud) notFound();
   if (solicitud.estado !== "Aprobado") notFound();
 
-  return <ImprimirVAClient numeroFormulario={solicitud.numero_formulario} />;
+  const posicionesGuardadas = await getPosicionesImpresion("viatico_va");
+
+  return <ImprimirVAClient numeroFormulario={solicitud.numero_formulario} posicionesGuardadas={posicionesGuardadas} />;
 }

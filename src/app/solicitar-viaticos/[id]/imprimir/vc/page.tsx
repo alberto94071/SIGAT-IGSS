@@ -3,6 +3,7 @@ import { requireColaborador } from "@/lib/modulo-access";
 import { db } from "@/lib/db";
 import { configuracion } from "@/lib/schema";
 import { getSolicitudParaImprimir } from "@/app/viaticos/registro-comision/actions";
+import { getPosicionesImpresion } from "@/lib/impresion-posiciones-actions";
 import ImprimirVCClient from "@/app/viaticos/entrega-formulario/[id]/imprimir/vc/ImprimirVCClient";
 import { nombramientosUnicos } from "@/app/viaticos/entrega-formulario/[id]/imprimir/vc/nombramientos-utils";
 
@@ -14,7 +15,10 @@ export default async function ImprimirMiVCPage({ params }: { params: Promise<{ i
   if (!solicitud) notFound();
   if (solicitud.colaborador_id !== Number(session.user.id) || solicitud.estado !== "Aprobado") notFound();
 
-  const [config] = await db.select().from(configuracion).limit(1);
+  const [config, posicionesGuardadas] = await Promise.all([
+    db.select().from(configuracion).limit(1).then(r => r[0]),
+    getPosicionesImpresion("viatico_vc"),
+  ]);
 
   return (
     <ImprimirVCClient
@@ -25,6 +29,7 @@ export default async function ImprimirMiVCPage({ params }: { params: Promise<{ i
       personaNoEmpleado={solicitud.persona_no_empleado}
       dependencia={config?.nombre_dependencia_medica ?? ""}
       nombramientos={nombramientosUnicos(solicitud.comisiones)}
+      posicionesGuardadas={posicionesGuardadas}
     />
   );
 }
