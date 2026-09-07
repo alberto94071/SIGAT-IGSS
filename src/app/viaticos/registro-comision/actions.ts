@@ -9,6 +9,58 @@ import { fechaHoraGuatemala } from "@/lib/date-utils";
 
 const TAB = "tab_viaticos_comision" as const;
 
+function fechaCorta(iso: string | null): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+type ComisionParaNarrativo = {
+  lugar: string | null; departamento: string | null; tipo_comision: string | null; descripcion_comision: string | null;
+  fecha_llegada_lugar: string | null; hora_llegada_lugar: string | null; hora_salida_lugar: string | null;
+  nombramiento_numero: string | null;
+};
+
+// Plantilla exacta extraída de un Informe de Comisión real que mandó el
+// cliente (MODELO_VIATICO.pdf, 2026-09-07): una oración por comisión,
+// concatenando descripcion_comision con nombramiento/fecha/horas de llegada
+// y salida del lugar, más el mismo cierre fijo en todos los casos. Se
+// genera una sola vez al aprobar (no en cada carga de la página) — el
+// colaborador la puede editar después desde el textarea, este es solo el
+// punto de partida en vez de dejarlo en blanco.
+function generarInformeComision(comisiones: ComisionParaNarrativo[], numeroFormulario: string | null): string {
+  return comisiones.map(c => {
+    const lugar = [c.lugar, c.departamento].filter(Boolean).join(", ");
+    return `La Comisión realizada en fecha ${fechaCorta(c.fecha_llegada_lugar)} descrito en el Formulario V-L No. `
+      + `${numeroFormulario ?? ""}, de conformidad con el Nombramiento de Comisión No. ${c.nombramiento_numero ?? ""}, `
+      + `en relación a; ${c.tipo_comision ?? ""} en ${lugar}, en horario de ${c.hora_llegada_lugar ?? ""} a `
+      + `${c.hora_salida_lugar ?? ""} horas, ${c.descripcion_comision ?? ""}, posteriormente retorné a mi lugar de `
+      + `trabajo para informar de lo actuado y reportar que dicha comisión se realizó a entera satisfacción.`;
+  }).join("\n\n");
+}
+
+// El cliente confirmó (2026-09-07) que el primer párrafo de la
+// Justificación de Estancia usa la misma concatenación que el Informe
+// (con redacción propia, "Fui comisionado para..."), y que el resto del
+// documento (párrafos siguientes) es texto fijo que ya debe aparecer por
+// defecto — no cambia de un viático a otro. Texto extraído literal del
+// modelo real; el colaborador lo puede ajustar después si un caso puntual
+// lo necesita (ej. un nombramiento del día anterior distinto a "76/2026").
+const JUSTIFICACION_ESTANCIA_FIJA = `La Unidad Integral de Adscripción, Acreditación de Derechos y Despacho de Medicamentos en el Municipio de Tejutla, está ubicada geográficamente a 45 kilómetros de la Cabecera Departamental de San Marcos y a 295 kilómetros de la Ciudad de Guatemala, con una duración de 8 a 10 horas de camino; no existe transporte público ni se tiene vehículo institucional para viajar el mismo día de la comisión a la ciudad de Guatemala.
+
+Por lo descrito anteriormente fui comisionado(a) un día antes, según consta en Nombramiento No. 76/2026, para transportarme del Municipio de Tejutla a la Ciudad de Guatemala, y estar presente en horario y día indicado de la comisión; cabe mencionar que, por la inseguridad que se vive actualmente y no contar con vehículo institucional, no es posible obtener comprobante, firma o sello institucional que avale la estancia un día antes de la comisión.
+
+Por lo que solicito sus buenos oficios a efecto de aceptar la justificación por la estancia de un día antes a la comisión, según documentos anexos que amparan el cobro del viático en cuestión. Atentamente,`;
+
+function generarJustificacionEstancia(comisiones: ComisionParaNarrativo[], numeroFormulario: string | null): string {
+  const primerosParrafos = comisiones.map(c => {
+    return `Fui comisionado(a) para; ${c.descripcion_comision ?? ""}, según Nombramiento No. ${c.nombramiento_numero ?? ""} `
+      + `(Formulario V-L No. ${numeroFormulario ?? ""}), que se llevó a cabo el ${fechaCorta(c.fecha_llegada_lugar)} en `
+      + `horario de ${c.hora_llegada_lugar ?? ""} a ${c.hora_salida_lugar ?? ""} horas.`;
+  }).join("\n\n");
+  return `${primerosParrafos}\n\n${JUSTIFICACION_ESTANCIA_FIJA}`;
+}
+
 // Bandeja del encargado de Viáticos: solicitudes que un colaborador pidió y
 // todavía no se habilitan (sin nombramiento ni datos de persona todavía).
 export async function getSolicitudesPendientesHabilitar() {
@@ -75,10 +127,22 @@ export async function aprobarSolicitud(id: number, datos: DatosAprobar): Promise
   const check = await requireTabAccessAction("mod_viaticos", TAB);
   if ("error" in check) return check;
 
-  const [sol] = await db.select({ estado: viaticoSolicitudes.estado }).from(viaticoSolicitudes)
-    .where(eq(viaticoSolicitudes.id, id)).limit(1);
+  const [sol] = await db.select({ estado: viaticoSolicitudes.estado, numero_formulario: viaticoSolicitudes.numero_formulario })
+    .from(viaticoSolicitudes).where(eq(viaticoSolicitudes.id, id)).limit(1);
   if (!sol) return { error: "No se encontró la solicitud" };
   if (sol.estado !== "Enviado") return { error: "Esta solicitud no está pendiente de revisión" };
+
+  // El Informe de Comisión y la Justificación de Estancia se pre-llenan al
+  // aprobar (2026-09-07, ver generarInformeComision/generarJustificacionEstancia
+  // arriba) — antes quedaban en blanco y el colaborador los escribía desde
+  // cero. Se generan una sola vez acá; el colaborador los sigue pudiendo
+  // editar después desde el textarea, esto es solo el punto de partida.
+  const comisiones = await db.select({
+    lugar: viaticoComisiones.lugar, departamento: viaticoComisiones.departamento,
+    tipo_comision: viaticoComisiones.tipo_comision, descripcion_comision: viaticoComisiones.descripcion_comision,
+    fecha_llegada_lugar: viaticoComisiones.fecha_llegada_lugar, hora_llegada_lugar: viaticoComisiones.hora_llegada_lugar,
+    hora_salida_lugar: viaticoComisiones.hora_salida_lugar, nombramiento_numero: viaticoComisiones.nombramiento_numero,
+  }).from(viaticoComisiones).where(eq(viaticoComisiones.solicitud_id, id)).orderBy(viaticoComisiones.orden);
 
   await db.update(viaticoSolicitudes).set({
     estado: "Aprobado",
@@ -89,6 +153,8 @@ export async function aprobarSolicitud(id: number, datos: DatosAprobar): Promise
     recibido_va_monto: datos.recibido_va_monto,
     reintegro: datos.reintegro,
     complemento: datos.complemento,
+    informe_comision: generarInformeComision(comisiones, sol.numero_formulario),
+    justificacion_estancia: generarJustificacionEstancia(comisiones, sol.numero_formulario),
   }).where(eq(viaticoSolicitudes.id, id));
 
   return { ok: true };
