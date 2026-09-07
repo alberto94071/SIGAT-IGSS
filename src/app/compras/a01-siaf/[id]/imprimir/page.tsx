@@ -6,14 +6,14 @@ import { eq, asc, inArray } from "drizzle-orm";
 import { renglonLookupMap, codigoPprLookupMap, codigoPprSinCodigoLookupMap, normalizaNombre, SIN_CODIGO } from "@/lib/adjudicacion/renglon-utils";
 import ImprimirClient from "./ImprimirClient";
 
-interface Props { params: Promise<{ id: string }>; searchParams: Promise<{ firmantes?: string }> }
+interface Props { params: Promise<{ id: string }>; searchParams: Promise<{ firmantes?: string; fecha?: string }> }
 
 export default async function ImprimirPage({ params, searchParams }: Props) {
   const session = await auth();
   if (!session) redirect("/login");
 
   const { id } = await params;
-  const { firmantes: firmantesParam } = await searchParams;
+  const { firmantes: firmantesParam, fecha: fechaParam } = await searchParams;
 
   const [solicitud, config, todosFirmantes] = await Promise.all([
     db.select().from(siafCompras).where(eq(siafCompras.id, Number(id))).limit(1),
@@ -66,6 +66,10 @@ export default async function ImprimirPage({ params, searchParams }: Props) {
   const sol = solicitud[0] as any;
   // Justificación: usa la propia de la solicitud, si no tiene usa la del config
   const justificacion = sol.observaciones || config[0]?.justificacion_siaf || "";
+  // Fecha a imprimir: la elige el usuario al abrir "Imprimir" (modal en
+  // SiafClient.tsx) — no se guarda, solo cambia lo que sale en el papel; la
+  // fecha real de la solicitud (correlativo/año) no se toca.
+  if (fechaParam) sol.fecha = fechaParam;
 
   return (
     <ImprimirClient

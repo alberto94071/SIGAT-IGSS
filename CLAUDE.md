@@ -1179,6 +1179,44 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   antes, solo el PpR en una línea. Aplica a las dos rutas de impresión
   (Normal y Fondo Rotativo) porque ambas comparten el mismo
   `ImprimirDab60Client`.
+- **A-01 SIAF: la fecha que sale impresa ya no es siempre `solicitud.fecha`**
+  (pedido del cliente 2026-09-08) — el modal "Imprimir A-01 SIAF"
+  (`SiafClient.tsx`) ahora pide primero una "Fecha a imprimir" (precargada
+  con la fecha real de la solicitud) antes de los firmantes, y la manda como
+  query param (`?fecha=...&firmantes=...`) a la ruta de impresión.
+  `imprimir/page.tsx` sobreescribe `sol.fecha` con ese valor antes de
+  pasarlo a `ImprimirClient.tsx` — **no toca la fecha real guardada** (la
+  que usa el correlativo por año), solo lo que sale en el papel. Si no se
+  manda `fecha` (ej. quien construya otra ruta a `/imprimir` sin pasar por
+  el modal), se imprime la fecha real de siempre.
+- **Devengado de órdenes que nunca pasan por Almacén (grupo 100-199, o
+  renglones 261/266/295) no capturaba No./Serie/Fecha de factura en
+  ningún lado** (reportado por el cliente 2026-09-08) — esos 3 campos
+  (`no_factura`/`serie_factura`/`fecha_emision` en `ordenesCompra`) normalmente
+  se llenan en el modal "Generar DAB-60" (`Dab60Client.tsx`), pero estas
+  órdenes usan `requiereDab60(renglon) === false` (`programacion-constants.ts`)
+  y van directo de Compromiso a "En Devengado", saltándose ese paso por
+  completo — los campos quedaban `null` para siempre. Fix: `DevengarModal`
+  (`DevengadoClient.tsx`) calcula `sinAlmacen = !renglones.some(requiereDab60)`
+  sobre `orden.renglones` (ya venía en el tipo `Orden`) y, cuando es `true`,
+  agrega 3 campos más (No./Serie/Fecha de Factura) al formulario de
+  "Devengar OC-XXX", obligatorios solo en ese caso.
+  `registrarDevengado` (`devengado-actions.ts`) **no confía en el flag del
+  cliente** — vuelve a calcular `sinAlmacen` en el servidor con
+  `gruposRenglonDeConsolidacion` antes de exigir/guardar esos 3 campos,
+  mismo patrón de no confiar en lo que vio el cliente que ya se usa en
+  `aprobarCompromiso`/DAB-75.
+- **La Planilla de Viáticos (ver arriba) le faltaba el logo del IGSS en el
+  encabezado** — llevaba solo el texto "Instituto Guatemalteco de Seguridad
+  Social" sin el escudo. Fix: se agregó `<img src="/LOGO_SIAF01.svg">`
+  (el mismo asset — a pesar del nombre del archivo, es el escudo genérico
+  del IGSS, no algo específico del A-01 SIAF — que ya usa el DPD-23 para su
+  membrete) al `.pl-header` de `ImprimirPlanillaClient.tsx`. Por separado:
+  si una Planilla impresa muestra "Sin gastos registrados"/Q0.00 para un
+  viático real, no es un bug — es una solicitud que se **aprobó antes**
+  de que existiera la captura de gastos itemizados (ver el punto de arriba,
+  2026-09-07); no hay backfill retroactivo, mismo criterio que el resto del
+  sistema con features nuevas sobre datos viejos.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

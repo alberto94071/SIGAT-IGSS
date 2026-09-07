@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { FileCheck, Loader2, X, Send, CheckCircle, XCircle, Undo2, Search } from "lucide-react";
 import { registrarDevengado, aprobarDevengado, rechazarDevengado, actualizarEstadoDevengado, type EstadoDevengado } from "@/lib/adjudicacion/devengado-actions";
 import { regresarACompromiso, regresarADab60, regresarOrdenAAdjudicacion } from "@/lib/adjudicacion/compromiso-actions";
+import { requiereDab60 } from "@/lib/programacion-constants";
 import { fechaGuatemala } from "@/lib/date-utils";
 import RenglonBadges from "@/components/RenglonBadges";
 import ExpandableRow from "@/components/ExpandableRow";
@@ -317,12 +318,23 @@ export default function DevengadoClient({ ordenes: init, solicitadas: initSolici
 function DevengarModal({ orden: o, onClose, onDone }: { orden: Orden; onClose: () => void; onDone: (orden: Orden) => void }) {
   const [noDevengado, setNoDevengado] = useState("");
   const [fechaEnvioDaf, setFechaEnvioDaf] = useState(fechaGuatemala());
+  const [noFactura, setNoFactura] = useState("");
+  const [serieFactura, setSerieFactura] = useState("");
+  const [fechaEmision, setFechaEmision] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // Órdenes de grupo 100 (100-199) o renglones 261/266/295 nunca pasan por
+  // Almacén/DAB-60 — ahí es donde normalmente se captura la factura, así que
+  // para estas se pide acá en vez de perderse (pedido del cliente 2026-09-08).
+  const sinAlmacen = !o.renglones.some(r => requiereDab60(r.renglon));
+
   async function guardar() {
     setSaving(true); setError("");
-    const res = await registrarDevengado(o.id, { no_devengado: noDevengado, fecha_envio_daf: fechaEnvioDaf });
+    const res = await registrarDevengado(o.id, {
+      no_devengado: noDevengado, fecha_envio_daf: fechaEnvioDaf,
+      ...(sinAlmacen ? { no_factura: noFactura, serie_factura: serieFactura, fecha_emision: fechaEmision } : {}),
+    });
     setSaving(false);
     if ("error" in res) { setError(res.error); return; }
     onDone({ ...o, no_devengado: noDevengado, fecha_envio_daf: fechaEnvioDaf });
@@ -349,6 +361,29 @@ function DevengarModal({ orden: o, onClose, onDone }: { orden: Orden; onClose: (
           <input type="date" value={fechaEnvioDaf} onChange={e => setFechaEnvioDaf(e.target.value)}
             className="input w-full rounded-lg" />
         </div>
+
+        {sinAlmacen && (
+          <div className="space-y-3 border-t border-gray-100 pt-3">
+            <p className="text-xs text-gray-500">Esta orden no pasa por Almacén — ingresá los datos de la factura acá.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm text-gray-600 font-medium block mb-1">No. de Factura</label>
+                <input type="text" value={noFactura} onChange={e => setNoFactura(e.target.value)}
+                  className="input w-full rounded-lg" />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 font-medium block mb-1">Serie de Factura</label>
+                <input type="text" value={serieFactura} onChange={e => setSerieFactura(e.target.value)}
+                  className="input w-full rounded-lg" />
+              </div>
+            </div>
+            <div>
+              <label className="text-sm text-gray-600 font-medium block mb-1">Fecha de emisión</label>
+              <input type="date" value={fechaEmision} onChange={e => setFechaEmision(e.target.value)}
+                className="input w-full rounded-lg" />
+            </div>
+          </div>
+        )}
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 

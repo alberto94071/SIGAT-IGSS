@@ -7,6 +7,7 @@ import { requireModuloAccessAction } from "@/lib/modulo-access";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
 import { trazabilidadPorConsolidaciones } from "./trazabilidad-utils";
 import { netoDeIva } from "@/lib/iva-utils";
+import { requiereDab60 } from "@/lib/programacion-constants";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -48,7 +49,15 @@ export async function getOrdenesEnviadasADaf() {
   })));
 }
 
-export type DevengarInput = { no_devengado: string; fecha_envio_daf: string };
+export type DevengarInput = {
+  no_devengado: string; fecha_envio_daf: string;
+  // Solo obligatorios cuando la orden nunca pasó por Almacén/DAB-60 (grupo
+  // 100-199, o renglones 261/266/295) — en ese caso no_factura/serie_factura/
+  // fecha_emision nunca se capturan en ningún otro paso (el DAB-60, donde se
+  // capturan normalmente, se salta para estos casos). El cliente pidió
+  // (2026-09-08) que se pidan acá para no perderlos.
+  no_factura?: string; serie_factura?: string; fecha_emision?: string;
+};
 
 /**
  * Registra el No. de Devengado + fecha de envío a la DAF y deja la orden
@@ -66,13 +75,30 @@ export async function registrarDevengado(ordenId: number, input: DevengarInput):
     if (!no_devengado) return { error: "Ingresa el No. de Devengado" };
     if (!fecha_envio_daf) return { error: "Ingresa la fecha de envío a la DAF" };
 
-    const [orden] = await db.select({ estado: ordenesCompra.estado }).from(ordenesCompra)
-      .where(eq(ordenesCompra.id, ordenId)).limit(1);
+    const [orden] = await db.select({ estado: ordenesCompra.estado, consolidacion_id: ordenesCompra.consolidacion_id })
+      .from(ordenesCompra).where(eq(ordenesCompra.id, ordenId)).limit(1);
     if (!orden) return { error: "No se encontró la orden" };
     if (orden.estado !== "En Devengado") return { error: "Esta orden ya fue devengada" };
 
+    // No confiar en si el cliente mandó los campos de factura — se recalcula
+    // acá si esta orden de verdad se saltó Almacén, para no depender de que
+    // el modal haya evaluado bien la condición.
+    const renglones = await gruposRenglonDeConsolidacion(orden.consolidacion_id);
+    const sinAlmacen = !renglones.some(r => requiereDab60(r.renglon as number));
+
+    let no_factura: string | null = null, serie_factura: string | null = null, fecha_emision: string | null = null;
+    if (sinAlmacen) {
+      no_factura = (input.no_factura ?? "").trim();
+      serie_factura = (input.serie_factura ?? "").trim();
+      fecha_emision = (input.fecha_emision ?? "").trim();
+      if (!no_factura || !serie_factura || !fecha_emision) {
+        return { error: "Esta orden no pasó por Almacén — ingresa No., serie y fecha de la factura" };
+      }
+    }
+
     await db.update(ordenesCompra).set({
       estado: "Devengado Solicitado", no_devengado, fecha_envio_daf,
+      ...(sinAlmacen ? { no_factura, serie_factura, fecha_emision } : {}),
     }).where(eq(ordenesCompra.id, ordenId));
 
     return { ok: true };

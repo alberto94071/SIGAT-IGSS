@@ -78,6 +78,7 @@ export default function ImprimirPlanillaClient({
       <div id="pl-wrapper">
         <div id="pl-page">
           <div className="pl-header">
+            <img src="/LOGO_SIAF01.svg" alt="IGSS" className="pl-header-logo" />
             <div className="pl-header-texto">
               <p className="pl-header-titulo">Instituto Guatemalteco de Seguridad Social</p>
               <p className="pl-header-sub">{nombreUnidad}</p>
@@ -156,8 +157,10 @@ export default function ImprimirPlanillaClient({
           width: 8.5in; min-height: 11in; background: white; box-shadow: 0 4px 32px rgba(0,0,0,0.22);
           box-sizing: border-box; padding: 0.7in; flex-shrink: 0; font-size: 9.5pt; color: #111827;
         }
-        .pl-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+        .pl-header { display: flex; align-items: flex-start; gap: 12px;
           border-bottom: 2px solid #111827; padding-bottom: 8px; margin-bottom: 14px; }
+        .pl-header-logo { height: 46px; width: auto; flex-shrink: 0; }
+        .pl-header-texto { flex: 1; }
         .pl-header-titulo { font-weight: 700; font-size: 11pt; margin: 0; }
         .pl-header-sub { margin: 2px 0 0; font-size: 8.5pt; max-width: 4.6in; }
         .pl-header-direccion { font-size: 7.5pt; text-align: right; color: #4b5563; white-space: pre-line; }
