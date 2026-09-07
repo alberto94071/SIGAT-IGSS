@@ -829,8 +829,8 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   cuenta, el encargado de Viáticos lo **habilita** (nombramiento inicial +
   vencimiento de 10 días hábiles), el colaborador **registra hasta 5
   comisiones** con sus propios datos y servicios, y el encargado **aprueba**
-  antes de que quede oficial. Eventualmente (fase futura, no construida
-  todavía) el V-L aprobado se vuelve un pago más de Fondo Rotativo.
+  antes de que quede oficial. El V-L aprobado se vuelve un pago más de Fondo
+  Rotativo (Fase F, ver más abajo).
   - **Fase A (esquema)**: `viatico_liquidaciones` (sin datos
     reales en producción) se reemplazó por `viatico_solicitudes` +
     `viatico_comisiones` — ver `src/lib/schema.ts`. `usuarios` ganó
@@ -1106,6 +1106,71 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     nombramiento. También se probó el rechazo (con motivo) y que el
     archivo de Entrega de Formulario solo ofrece reimprimir a las
     solicitudes `Aprobado`, nunca a las `Rechazado`.
+  - **Fase F (2026-09-08, decisión del usuario: "Construir la Fase F
+    completa ahora"): un V-L Aprobado se vuelve un pago más de Fondo
+    Rotativo.** Tabla nueva `viatico_pagos` — subconjunto chico de
+    `fondoRotativoPagos` (compras), porque **los viáticos SIEMPRE se tratan
+    como grupo 100**: son un gasto de personal, no una compra de bienes/
+    servicios de terceros, así que nunca pasan por Almacén/DAB-60, nunca
+    por Fondo Rotativo/Bancos (el cheque se completa entero en Pagos, igual
+    que ya hacía `es_grupo_100` para compras) y nunca por Caja Chica/Vale
+    (Efectivo va directo a "Pendiente FRI", sin asignar vale). Se crea
+    automáticamente al aprobar (`aprobarSolicitud`,
+    `viaticos/registro-comision/actions.ts`), con `total` = snapshot del
+    campo 15 del V-L (mismo cálculo que `ImprimirVLClient.tsx`, recalculado
+    server-side con los precios de `configuracion.viatico_precio_*`).
+    `src/lib/viatico-pagos-actions.ts` es el equivalente de
+    `fondo-rotativo-pagos-actions.ts` pero para esta tabla — deliberadamente
+    más simple (sin `reflejarEnEjecucion`/`revertirEjecucion`: los viáticos
+    nunca tocan `presupuesto_renglones`, confirmado que ningún otro archivo
+    del módulo lo hace).
+    - **Fondo Rotativo/Pagos** ahora tiene una sección aparte "Viáticos"
+      debajo de la tabla de compras (`PagosClient.tsx`) — se dejaron
+      **dos tablas separadas en vez de forzar una sola**, para no arriesgar
+      la lógica ya probada de compras (que sí distingue `es_grupo_100` caso
+      por caso) con una unión de tipos heterogénea; el modal de viático
+      (`FormaPagoViaticoModal`) es más simple porque SIEMPRE se comporta
+      como grupo 100 (no hay rama condicional).
+    - **Pago/FRI** (`fri-actions.ts`) ya tenía el patrón correcto para
+      mezclar orígenes heterogéneos en un mismo FRI (`FriItemInput.tipo:
+      "pago" | "poliza"`, para compras + pólizas de pasajes) — se agregó
+      `"viatico"` como tercer tipo. `conformarFri`/`getFriConDetalle`/
+      `marcarFriReintegrado`/`agruparFriPorRenglon` (impresión) ahora
+      también leen/escriben `viatico_pagos`, agrupados bajo el rótulo fijo
+      "Viáticos" en el FRI impreso (mismo criterio que "Pasajes" para
+      pólizas). `FriClient.tsx` solo necesitó un tercer `xARow()` mapper —
+      el resto (selección, conformar, detalle expandible) ya era genérico
+      por `Row.item.tipo`.
+    - **Libro Bancos / Libro Conciliación** también se extendieron: un
+      viático pagado por cheque sí sale del mismo fondo, así que
+      `getLibroBancosCompleto` mezcla `viatico_pagos` (por `numero_cheque`)
+      con `fondoRotativoPagos` en la misma línea de tiempo con saldo
+      corriente. La columna "A-04" de ambos libros pasó a "Referencia"
+      (`MovimientoBanco.referencia`, ya formateada según origen —
+      `"A-04 N/año"` o `"V-L N"`) porque un viático no tiene A-04.
+      **Trampa evitada**: `pagoId` en `MovimientoBanco` apunta a IDs de dos
+      tablas distintas (`fondoRotativoPagos`/`viaticoPagos`, cada una con su
+      propia secuencia) — el campo nuevo `origen: "compra" | "viatico"` es
+      obligatorio para desambiguar antes de llamar
+      `marcarConciliado`/`marcarConciliadoViatico` (o el equivalente de
+      lectura), si no un pago id=5 de compra y un viático id=5 se pisarían
+      en el mapa de conciliación.
+    - **No se tocó** Caja Chica/Vales, Fondo Rotativo/Bancos ni Fondo
+      Rotativo/Archivo — los viáticos nunca llegan a los dos primeros (por
+      diseño, ver arriba) y el tercero (`getArchivoFondoRotativo`) se dejó
+      fuera de esta ronda por alcance, no por que no aplique.
+    - Verificado en vivo de punta a punta con dos solicitudes de prueba
+      desechables: (1) ruta Cheque — aprobar → Fondo Rotativo/Pagos
+      (Cheque, datos completos) → Pago/FRI (conformar) → Enviar a DAF →
+      Marcar Reintegrado → el FRI impreso muestra el grupo "Viáticos" con
+      el V-L y el monto correctos → Libro Bancos muestra el cheque Y el
+      Reintegro FRI en la misma línea de tiempo con saldo corriente
+      correcto (resta al emitir, suma al reintegrar) → Libro Conciliación
+      concilia el cheque del viático correctamente; (2) ruta Efectivo —
+      aprobar → Fondo Rotativo/Pagos (Efectivo) → aparece directo en
+      Pago/FRI sin pasar por Caja Chica, confirmando que nunca asigna vale.
+      Datos de prueba y el incremento de `configuracion.efectivo_caja` que
+      dejó el reintegro se revirtieron al terminar.
 - **Lote de bugs de "descripción PPR" reportados por el cliente 2026-09-02
   (WhatsApp con capturas de pantalla), todos con la misma raíz: varios
   lugares usaban `nombre` (corto) en vez de `descripcion_igss` (con

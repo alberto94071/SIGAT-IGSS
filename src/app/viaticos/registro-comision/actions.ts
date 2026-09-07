@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/lib/db";
-import { viaticoSolicitudes, viaticoComisiones, viaticoGastos, usuarios } from "@/lib/schema";
+import { viaticoSolicitudes, viaticoComisiones, viaticoGastos, viaticoPagos, usuarios, configuracion } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { requireTabAccessAction } from "@/lib/modulo-access";
@@ -131,13 +131,32 @@ export async function aprobarSolicitud(id: number, datos: DatosAprobar): Promise
   const check = await requireTabAccessAction("mod_viaticos", TAB);
   if ("error" in check) return check;
 
-  const [sol] = await db.select({ estado: viaticoSolicitudes.estado, numero_formulario: viaticoSolicitudes.numero_formulario })
-    .from(viaticoSolicitudes).where(eq(viaticoSolicitudes.id, id)).limit(1);
+  const [sol] = await db.select({
+    estado: viaticoSolicitudes.estado, numero_formulario: viaticoSolicitudes.numero_formulario,
+    persona_nombre: viaticoSolicitudes.persona_nombre,
+  }).from(viaticoSolicitudes).where(eq(viaticoSolicitudes.id, id)).limit(1);
   if (!sol) return { error: "No se encontró la solicitud" };
   if (sol.estado !== "Enviado") return { error: "Esta solicitud no está pendiente de revisión" };
 
   const gastosValidos = datos.gastos.filter(g => g.descripcion.trim() || g.valor > 0);
   const otrosGastos = gastosValidos.reduce((sum, g) => sum + (Number(g.valor) || 0), 0);
+
+  // Total del V-L (campo 15), mismo cálculo que ImprimirVLClient.tsx — se
+  // recalcula acá (server-side) para guardar el snapshot que alimenta Fondo
+  // Rotativo/Pagos (ver viatico-pagos-actions.ts, Fase F 2026-09-08).
+  const [config] = await db.select({
+    desayuno: configuracion.viatico_precio_desayuno, almuerzo: configuracion.viatico_precio_almuerzo,
+    cena: configuracion.viatico_precio_cena, hospedaje: configuracion.viatico_precio_hospedaje,
+  }).from(configuracion).limit(1);
+  const serviciosComisiones = await db.select({
+    cantidad_desayuno: viaticoComisiones.cantidad_desayuno, cantidad_almuerzo: viaticoComisiones.cantidad_almuerzo,
+    cantidad_cena: viaticoComisiones.cantidad_cena, cantidad_hospedaje: viaticoComisiones.cantidad_hospedaje,
+  }).from(viaticoComisiones).where(eq(viaticoComisiones.solicitud_id, id));
+  const sumaGastos = serviciosComisiones.reduce((sum, c) =>
+    sum + c.cantidad_desayuno * (config?.desayuno ?? 45) + c.cantidad_almuerzo * (config?.almuerzo ?? 60)
+        + c.cantidad_cena * (config?.cena ?? 45) + c.cantidad_hospedaje * (config?.hospedaje ?? 150), 0);
+  const total11 = sumaGastos + otrosGastos;
+  const totalVl = total11 - (datos.reintegro ?? 0) + (datos.complemento ?? 0);
 
   // El Informe de Comisión y la Justificación de Estancia se pre-llenan al
   // aprobar (2026-09-07, ver generarInformeComision/generarJustificacionEstancia
@@ -171,6 +190,13 @@ export async function aprobarSolicitud(id: number, datos: DatosAprobar): Promise
       valor: Number(g.valor) || 0, orden: i + 1,
     })));
   }
+
+  // Fase F (2026-09-08): un V-L Aprobado se vuelve un pago más de Fondo
+  // Rotativo — se crea acá mismo, una sola vez (esta solicitud nunca vuelve
+  // a pasar por "Enviado" → "Aprobado" dos veces). Ver viatico-pagos-actions.ts.
+  await db.insert(viaticoPagos).values({
+    viatico_solicitud_id: id, total: totalVl, destinatario_nombre: sol.persona_nombre, creado_por: check.uid,
+  });
 
   return { ok: true };
 }

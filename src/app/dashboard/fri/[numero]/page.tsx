@@ -26,7 +26,7 @@ export default async function FriImprimirPage({ params, searchParams }: Props) {
 
   const [config, grupos, firmantes] = await Promise.all([
     db.select().from(configuracion).limit(1).then(r => r[0]),
-    agruparFriPorRenglon(res.pagos, res.polizas),
+    agruparFriPorRenglon(res.pagos, res.polizas, res.viaticos),
     db.select().from(catalogoFirmantes).where(eq(catalogoFirmantes.activo, true)).orderBy(asc(catalogoFirmantes.nombre)),
   ]);
 

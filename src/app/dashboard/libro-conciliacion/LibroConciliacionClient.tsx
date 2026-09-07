@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { Scale, Search, CheckCircle2, Undo2, Loader2 } from "lucide-react";
 import { marcarConciliado, desmarcarConciliado, type MovimientoConciliacion } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import { marcarConciliadoViatico, desmarcarConciliadoViatico } from "@/lib/viatico-pagos-actions";
 import { fechaGuatemala } from "@/lib/date-utils";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -16,7 +17,7 @@ export default function LibroConciliacionClient({ movimientos: init }: { movimie
   const filtrados = useMemo(() => !q ? movimientos : movimientos.filter(m =>
     (m.beneficiario ?? "").toLowerCase().includes(q) ||
     (m.numero_cheque ?? "").toLowerCase().includes(q) ||
-    `${m.numero_a04 ?? ""}/${m.anio_a04 ?? ""}`.includes(q) ||
+    m.referencia.toLowerCase().includes(q) ||
     m.fecha.includes(q)
   ), [movimientos, q]);
 
@@ -26,7 +27,9 @@ export default function LibroConciliacionClient({ movimientos: init }: { movimie
   async function conciliar(m: MovimientoConciliacion) {
     const fecha = fechaPorFila[m.id] || fechaGuatemala();
     setAcciones(prev => ({ ...prev, [m.id]: { cargando: true, error: null } }));
-    const res = await marcarConciliado(m.pagoId as number, fecha);
+    const res = m.origen === "viatico"
+      ? await marcarConciliadoViatico(m.pagoId as number, fecha)
+      : await marcarConciliado(m.pagoId as number, fecha);
     if ("error" in res) {
       setAcciones(prev => ({ ...prev, [m.id]: { cargando: false, error: res.error } }));
       return;
@@ -37,7 +40,9 @@ export default function LibroConciliacionClient({ movimientos: init }: { movimie
 
   async function desconciliar(m: MovimientoConciliacion) {
     setAcciones(prev => ({ ...prev, [m.id]: { cargando: true, error: null } }));
-    const res = await desmarcarConciliado(m.pagoId as number);
+    const res = m.origen === "viatico"
+      ? await desmarcarConciliadoViatico(m.pagoId as number)
+      : await desmarcarConciliado(m.pagoId as number);
     if ("error" in res) {
       setAcciones(prev => ({ ...prev, [m.id]: { cargando: false, error: res.error } }));
       return;
@@ -72,7 +77,7 @@ export default function LibroConciliacionClient({ movimientos: init }: { movimie
                 <th className="px-4 py-3 text-left whitespace-nowrap">Fecha emisión</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">No. Cheque</th>
                 <th className="px-4 py-3 text-left">Beneficiario</th>
-                <th className="px-4 py-3 text-left whitespace-nowrap">A-04</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">Referencia</th>
                 <th className="px-4 py-3 text-right whitespace-nowrap">Monto</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Conciliación</th>
               </tr>
@@ -88,9 +93,7 @@ export default function LibroConciliacionClient({ movimientos: init }: { movimie
                       <p className="font-medium text-gray-900">{m.beneficiario ?? "—"}</p>
                       <p className="text-xs text-gray-400">{m.descripcion}</p>
                     </td>
-                    <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">
-                      {m.numero_a04 != null ? `${m.numero_a04}/${m.anio_a04}` : "—"}
-                    </td>
+                    <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{m.referencia}</td>
                     <td className="px-4 py-3 text-right font-mono font-bold text-gray-900 whitespace-nowrap">{Q(m.debe)}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {m.conciliado ? (
