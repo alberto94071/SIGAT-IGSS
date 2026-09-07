@@ -74,6 +74,7 @@ export default function SiafClient({
   // Modal imprimir
   const [printModal,   setPrintModal]   = useState(false);
   const [printSolId,   setPrintSolId]   = useState<number | null>(null);
+  const [printFecha,   setPrintFecha]   = useState(fechaGuatemala());
   const [selFirmante1, setSelFirmante1] = useState<Firmante | null>(null);
   const [selFirmante2, setSelFirmante2] = useState<Firmante | null>(null);
 
@@ -308,13 +309,16 @@ export default function SiafClient({
   }
 
   function openPrint(id: number) {
-    setPrintSolId(id); setSelFirmante1(null); setSelFirmante2(null); setPrintModal(true);
+    const sol = solicitudes.find(s => s.id === id);
+    setPrintSolId(id); setSelFirmante1(null); setSelFirmante2(null);
+    setPrintFecha(sol?.fecha || fechaGuatemala());
+    setPrintModal(true);
   }
 
   function goToPrint() {
     if (!printSolId) return;
     const params = [selFirmante1?.id, selFirmante2?.id].filter(Boolean).join(",");
-    router.push(`/compras/a01-siaf/${printSolId}/imprimir?firmantes=${params}`);
+    router.push(`/compras/a01-siaf/${printSolId}/imprimir?firmantes=${params}&fecha=${printFecha}`);
     setPrintModal(false);
   }
 
@@ -685,6 +689,10 @@ export default function SiafClient({
               </button>
             </div>
             <div className="px-5 py-4 space-y-4">
+              <div>
+                <label className="label">Fecha a imprimir</label>
+                <input type="date" className="input" value={printFecha} onChange={e => setPrintFecha(e.target.value)} />
+              </div>
               {[
                 { label: "Firmante 1 (izquierda)", val: selFirmante1, set: setSelFirmante1 },
                 { label: "Firmante 2 (derecha)",   val: selFirmante2, set: setSelFirmante2 },
