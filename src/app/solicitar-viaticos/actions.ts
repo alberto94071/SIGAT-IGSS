@@ -60,6 +60,29 @@ export async function getSolicitud(id: number) {
   return { ...sol, comisiones };
 }
 
+// El Informe de Comisión va dirigido a quien firmó el nombramiento, no a un
+// nombre fijo de Configuración (el cliente lo corrigió 2026-09-07 — antes
+// imprimía siempre config.nombre_director). Mismo criterio que ya usa el V-L
+// para el caso de varias comisiones con firmantes distintos: se usa el de la
+// primera comisión que tenga uno.
+export async function getFirmantePrincipal(solicitudId: number): Promise<{ nombre: string; cargo: string } | null> {
+  const comisiones = await db.select({
+    firmante_usuario_id: viaticoComisiones.firmante_usuario_id,
+    firmante_cargo_manual: viaticoComisiones.firmante_cargo_manual,
+  }).from(viaticoComisiones)
+    .where(eq(viaticoComisiones.solicitud_id, solicitudId))
+    .orderBy(viaticoComisiones.orden);
+
+  const primera = comisiones.find(c => c.firmante_usuario_id != null);
+  if (!primera?.firmante_usuario_id) return null;
+
+  const [usuario] = await db.select({ nombre: usuarios.nombre, puesto_nominal: usuarios.puesto_nominal })
+    .from(usuarios).where(eq(usuarios.id, primera.firmante_usuario_id)).limit(1);
+  if (!usuario) return null;
+
+  return { nombre: usuario.nombre, cargo: usuario.puesto_nominal ?? primera.firmante_cargo_manual ?? "" };
+}
+
 // Selector de "quien firmó el nombramiento" — todos los usuarios activos,
 // no solo colaboradores (un Director no necesariamente tiene ese rol).
 export async function getUsuariosParaFirmante() {

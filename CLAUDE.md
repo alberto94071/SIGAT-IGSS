@@ -859,13 +859,13 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     `catalogoFirmantes` — `firmante_usuario_id` + `firmante_cargo_manual`
     (este último solo se usa si el usuario elegido no tiene
     `puesto_nominal` cargado). Pendiente de construir (Fase D).
-  - **Interpretación del modelo lleno real, no del mensaje de WhatsApp del
-    cliente (que se contradice a sí mismo en el orden de los campos)**: la
-    columna "TIPO DE COMISIÓN" del V-L imprime la Descripción de la
-    Comisión (texto largo, ej. "Capacitación presencial de Registros
-    Médicos"), no el campo corto "Tipo de Comisión" — se guardan ambos
-    (`tipo_comision` corto y `descripcion_comision` largo) porque el
-    cliente pidió los dos, pero solo el segundo se imprime ahí. "Días de
+  - **Corregido 2026-09-07 (el cliente confirmó explícitamente lo
+    contrario de la interpretación original)**: la columna "TIPO DE
+    COMISIÓN" del V-L imprime el campo corto `tipo_comision` (ej. "Entrega
+    de expedientes de pago"), no `descripcion_comision` (el texto largo,
+    que en cambio alimenta el Informe de Comisión — ver más abajo). Cae a
+    `descripcion_comision` solo si `tipo_comision` viene vacío (es
+    opcional en el formulario). "Días de
     comisión" = días de calendario entre `fecha_salida_unidad` y
     `fecha_entrada_unidad` (inclusive) por comisión — confirmado
     reconstruyendo el ejemplo real del cliente (salida 30/07 14:00, entrada
@@ -1006,7 +1006,40 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     `src/components/` porque a diferencia de V-A/V-C/V-L no hay talonario
     físico detrás — dibuja su propia hoja en vez de superponerse a un
     papel pre-impreso). Verificado en vivo: se guarda, persiste, e imprime
-    con los datos del comisionado ya llenos.
+    con los datos del comisionado ya llenos. **Corregido 2026-09-07**: el
+    destinatario ("Licenciado(a): ...") ya no es un nombre fijo de
+    Configuración (`config.nombre_director`) — el Informe de Comisión debe
+    ir dirigido a quien firmó el nombramiento. `getFirmantePrincipal`
+    (`solicitar-viaticos/actions.ts`, mismo criterio de "primera comisión
+    con firmante" que ya usa el V-L) resuelve nombre + cargo; cae al
+    `nombre_director`/"Director Departamental" de Configuración solo si
+    ninguna comisión tiene firmante todavía. **Pendiente, necesita el PDF
+    real del cliente para no adivinar la redacción exacta** (mandó
+    `MODELO VIATICO.pdf`, 6 páginas, por WhatsApp pero no se adjuntó a la
+    sesión todavía): el texto de Informe/Justificación debería armarse
+    auto-concatenando `descripcion_comision` + `nombramiento_numero` +
+    `fecha_nombramiento` + hora de llegada/salida del lugar de cada
+    comisión, en vez de que el colaborador lo escriba libre — y la
+    Justificación de Estancia tendría un párrafo fijo (boilerplate) que
+    hoy no existe, con solo el primer párrafo variable por comisión. Sin
+    el modelo real no se sabe la redacción exacta a reproducir — no
+    implementar a ciegas, ya pasó una ronda de "adivinar mal y corregir"
+    con la leyenda del A-01 SIAF y con el preámbulo del Acta.
+  - **Pendiente sin confirmar, reportado 2026-09-07**: "No sale la
+    planilla de pasajes" — no está claro sin el modelo si el cliente
+    espera una tabla/planilla de pasajes en algún formulario nuevo, o si
+    se refiere a que "Otros gastos derivados" (captado por el encargado al
+    aprobar, ver Fase E arriba) debería desglosarse en algo más específico.
+  - **Pedido pendiente de alcance, reportado 2026-09-07**: que el sistema
+    de "Ver posiciones" del DAB-60 (ajuste de posición/tamaño por campo,
+    persistente, ver `ImprimirDab60Client.tsx`) se generalice a **todos**
+    los formularios que imprimen sobre papel pre-impreso (V-A/V-C/V-L de
+    Viáticos, y potencialmente Pasajes) — hoy esos usan `OverlayPrint`/
+    `OverlayField` (`src/components/overlay-print/`), que solo tiene un
+    ajuste global de milímetros (horizontal/vertical para toda la hoja),
+    no posición por campo individual. Es una generalización real de un
+    sistema completo, no un fix puntual — falta confirmar prioridad/alcance
+    exacto antes de construirlo.
   - **Verificado en vivo de punta a punta reproduciendo el ejemplo real
     completo del cliente** (mismo colaborador, misma comisión que en la
     Fase D, aprobado con Otros Gastos = Q230 igual que el pasaje del
