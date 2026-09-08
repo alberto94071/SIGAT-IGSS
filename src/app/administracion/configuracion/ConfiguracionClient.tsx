@@ -14,6 +14,7 @@ type Config = {
   direccion_unidad?: string; justificacion_siaf?: string;
   banco_nombre?: string; cuenta_numero?: string; cuenta_nombre?: string;
   siaf_compras_numero_inicial?: number; siaf_compras_numero_inicial_anio?: number;
+  viatico_exigir_fecha_limite?: boolean;
 };
 type Firmante = { id: number; nombre: string; cargo: string; unidad: string | null; activo: boolean };
 
@@ -37,7 +38,7 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
   const [fUnidad,      setFUnidad]      = useState("");
   const [fSaving,      setFSaving]      = useState(false);
 
-  function set(k: keyof Config, v: string | number) {
+  function set(k: keyof Config, v: string | number | boolean) {
     setForm(prev => ({ ...prev, [k]: v }));
     setSaved(false);
   }
@@ -184,6 +185,23 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
           <Field label="Año de ese correlativo" k="siaf_compras_numero_inicial_anio" type="number"
             helper="Solo cuenta para este año; el que viene arranca en 1 de nuevo." />
         </div>
+      </section>
+
+      {/* Viáticos */}
+      <section className="card p-5 space-y-4">
+        <h2 className="font-semibold text-gray-700 text-sm uppercase tracking-wide">Viáticos</h2>
+        <label className="flex items-start gap-2.5 cursor-pointer">
+          <input type="checkbox" className="mt-0.5 w-4 h-4 accent-brand-600"
+            checked={form.viatico_exigir_fecha_limite ?? true}
+            onChange={e => set("viatico_exigir_fecha_limite", e.target.checked)} />
+          <span className="text-sm text-gray-700">
+            Exigir el plazo de 10 días hábiles para registrar/enviar comisiones
+            <span className="block text-xs text-gray-400 mt-0.5">
+              Desmarcá esto solo temporalmente (ej. para poner al día viáticos atrasados) — el colaborador podrá
+              registrar y enviar comisiones aunque ya venció el plazo. Volvé a marcarlo cuando terminen de ponerse al día.
+            </span>
+          </span>
+        </label>
       </section>
 
       {/* Firmantes — solo superadmin */}

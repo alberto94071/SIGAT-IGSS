@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/lib/db";
-import { viaticoSolicitudes, viaticoComisiones, usuarios, configuracion } from "@/lib/schema";
+import { viaticoSolicitudes, viaticoComisiones, configuracion, catalogoFirmantes } from "@/lib/schema";
 import { auth } from "@/lib/auth";
 import { and, eq, sql } from "drizzle-orm";
 import { fechaGuatemala } from "@/lib/date-utils";
@@ -42,6 +42,15 @@ export async function solicitarViatico(): Promise<{ ok: true } | { error: string
 
 const MAX_COMISIONES = 5;
 
+// Interruptor temporal (pedido del cliente 2026-09-08, Administración →
+// Configuración): mientras ponen al día viáticos atrasados de antes de que
+// el módulo existiera, el plazo de 10 días hábiles se puede desactivar acá
+// — no hace falta tocar código para reactivarlo después.
+async function exigeFechaLimite(): Promise<boolean> {
+  const [cfg] = await db.select({ v: configuracion.viatico_exigir_fecha_limite }).from(configuracion).limit(1);
+  return cfg?.v ?? true;
+}
+
 async function getSolicitudDelColaborador(id: number, colaboradorId: number) {
   const [sol] = await db.select().from(viaticoSolicitudes)
     .where(and(eq(viaticoSolicitudes.id, id), eq(viaticoSolicitudes.colaborador_id, colaboradorId)))
@@ -66,30 +75,29 @@ export async function getSolicitud(id: number) {
 // para el caso de varias comisiones con firmantes distintos: se usa el de la
 // primera comisión que tenga uno.
 export async function getFirmantePrincipal(solicitudId: number): Promise<{ nombre: string; cargo: string } | null> {
-  const comisiones = await db.select({
-    firmante_usuario_id: viaticoComisiones.firmante_usuario_id,
-    firmante_cargo_manual: viaticoComisiones.firmante_cargo_manual,
-  }).from(viaticoComisiones)
+  const comisiones = await db.select({ firmante_catalogo_id: viaticoComisiones.firmante_catalogo_id })
+    .from(viaticoComisiones)
     .where(eq(viaticoComisiones.solicitud_id, solicitudId))
     .orderBy(viaticoComisiones.orden);
 
-  const primera = comisiones.find(c => c.firmante_usuario_id != null);
-  if (!primera?.firmante_usuario_id) return null;
+  const primera = comisiones.find(c => c.firmante_catalogo_id != null);
+  if (!primera?.firmante_catalogo_id) return null;
 
-  const [usuario] = await db.select({ nombre: usuarios.nombre, puesto_nominal: usuarios.puesto_nominal })
-    .from(usuarios).where(eq(usuarios.id, primera.firmante_usuario_id)).limit(1);
-  if (!usuario) return null;
-
-  return { nombre: usuario.nombre, cargo: usuario.puesto_nominal ?? primera.firmante_cargo_manual ?? "" };
+  const [firmante] = await db.select({ nombre: catalogoFirmantes.nombre, cargo: catalogoFirmantes.cargo })
+    .from(catalogoFirmantes).where(eq(catalogoFirmantes.id, primera.firmante_catalogo_id)).limit(1);
+  return firmante ?? null;
 }
 
-// Selector de "quien firmó el nombramiento" — todos los usuarios activos,
-// no solo colaboradores (un Director no necesariamente tiene ese rol).
-export async function getUsuariosParaFirmante() {
+// Selector de "quien firmó el nombramiento" — mismo catálogo de firmantes
+// que ya usa el A-01 SIAF (Configuración → Firmantes), pedido explícito del
+// cliente 2026-09-08: "estos firmantes que se jalen de quienes firman los
+// SIAF". Antes salía de usuarios (todos los roles activos) — revirtió esa
+// decisión.
+export async function getFirmantesCatalogo() {
   const me = await getMeColaborador();
   if (!me) return [];
-  return db.select({ id: usuarios.id, nombre: usuarios.nombre, puesto_nominal: usuarios.puesto_nominal })
-    .from(usuarios).where(eq(usuarios.activo, true)).orderBy(usuarios.nombre);
+  return db.select({ id: catalogoFirmantes.id, nombre: catalogoFirmantes.nombre, cargo: catalogoFirmantes.cargo })
+    .from(catalogoFirmantes).where(eq(catalogoFirmantes.activo, true)).orderBy(catalogoFirmantes.nombre);
 }
 
 export async function getPreciosServicios() {
@@ -107,7 +115,7 @@ export type DatosComision = {
   fecha_salida_lugar: string; hora_salida_lugar: string;
   fecha_entrada_unidad: string; hora_entrada_unidad: string;
   nombramiento_numero: string; fecha_nombramiento: string;
-  firmante_usuario_id: number | null; firmante_cargo_manual: string;
+  firmante_catalogo_id: number | null;
   cantidad_desayuno: number; cantidad_almuerzo: number; cantidad_cena: number; cantidad_hospedaje: number;
 };
 
@@ -131,7 +139,7 @@ function validarDatosComision(d: DatosComision): string | null {
   if (d.fecha_entrada_unidad < d.fecha_salida_unidad) return "La entrada a la unidad no puede ser antes de la salida";
   if (!d.nombramiento_numero.trim()) return "El No. de nombramiento de esta comisión es obligatorio";
   if (!d.fecha_nombramiento) return "La fecha de nombramiento de esta comisión es obligatoria";
-  if (!d.firmante_usuario_id) return "Elegí quién firmó el nombramiento";
+  if (!d.firmante_catalogo_id) return "Elegí quién firmó el nombramiento";
   if ([d.cantidad_desayuno, d.cantidad_almuerzo, d.cantidad_cena, d.cantidad_hospedaje].every(c => !(c > 0))) {
     return "Agregá al menos un servicio (desayuno, almuerzo, cena u hospedaje)";
   }
@@ -145,7 +153,7 @@ export async function agregarComision(solicitudId: number, datos: DatosComision)
   const sol = await getSolicitudDelColaborador(solicitudId, me.id);
   if (!sol) return { error: "No se encontró la solicitud" };
   if (sol.estado !== "Habilitado") return { error: "Esta solicitud no está habilitada para registrar comisiones" };
-  if (sol.fecha_limite && fechaGuatemala() > sol.fecha_limite) {
+  if (await exigeFechaLimite() && sol.fecha_limite && fechaGuatemala() > sol.fecha_limite) {
     return { error: `Ya venció el plazo de 10 días hábiles (límite: ${sol.fecha_limite}) — ya no se puede registrar ni enviar este viático.` };
   }
 
@@ -156,12 +164,9 @@ export async function agregarComision(solicitudId: number, datos: DatosComision)
     .where(eq(viaticoComisiones.solicitud_id, solicitudId));
   if (total >= MAX_COMISIONES) return { error: `Ya alcanzaste el máximo de ${MAX_COMISIONES} comisiones por formulario` };
 
-  const [firmante] = await db.select({ puesto_nominal: usuarios.puesto_nominal }).from(usuarios)
-    .where(eq(usuarios.id, datos.firmante_usuario_id!)).limit(1);
+  const [firmante] = await db.select({ id: catalogoFirmantes.id }).from(catalogoFirmantes)
+    .where(eq(catalogoFirmantes.id, datos.firmante_catalogo_id!)).limit(1);
   if (!firmante) return { error: "El firmante elegido no existe" };
-  if (!firmante.puesto_nominal && !datos.firmante_cargo_manual.trim()) {
-    return { error: "Ese usuario no tiene un cargo cargado — escribí su cargo a mano" };
-  }
 
   await db.insert(viaticoComisiones).values({
     solicitud_id: solicitudId, orden: total + 1,
@@ -173,8 +178,7 @@ export async function agregarComision(solicitudId: number, datos: DatosComision)
     fecha_entrada_unidad: datos.fecha_entrada_unidad, hora_entrada_unidad: datos.hora_entrada_unidad,
     dias_calculados: diasCalendarioInclusive(datos.fecha_salida_unidad, datos.fecha_entrada_unidad),
     nombramiento_numero: datos.nombramiento_numero.trim(), fecha_nombramiento: datos.fecha_nombramiento,
-    firmante_usuario_id: datos.firmante_usuario_id,
-    firmante_cargo_manual: firmante.puesto_nominal ? null : datos.firmante_cargo_manual.trim(),
+    firmante_catalogo_id: datos.firmante_catalogo_id,
     cantidad_desayuno: datos.cantidad_desayuno, cantidad_almuerzo: datos.cantidad_almuerzo,
     cantidad_cena: datos.cantidad_cena, cantidad_hospedaje: datos.cantidad_hospedaje,
   });
@@ -204,7 +208,7 @@ export async function enviarViatico(solicitudId: number): Promise<{ ok: true } |
   const sol = await getSolicitudDelColaborador(solicitudId, me.id);
   if (!sol) return { error: "No se encontró la solicitud" };
   if (sol.estado !== "Habilitado") return { error: "Esta solicitud no está lista para enviarse" };
-  if (sol.fecha_limite && fechaGuatemala() > sol.fecha_limite) {
+  if (await exigeFechaLimite() && sol.fecha_limite && fechaGuatemala() > sol.fecha_limite) {
     return { error: `Ya venció el plazo de 10 días hábiles (límite: ${sol.fecha_limite}) — ya no se puede enviar este viático.` };
   }
 

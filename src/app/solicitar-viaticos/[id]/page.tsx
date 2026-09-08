@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireColaborador } from "@/lib/modulo-access";
-import { getSolicitud, getUsuariosParaFirmante, getPreciosServicios } from "../actions";
+import { getSolicitud, getFirmantesCatalogo, getPreciosServicios } from "../actions";
 import DetalleViaticoClient from "./DetalleViaticoClient";
 
 export default async function DetalleViaticoPage({ params }: { params: Promise<{ id: string }> }) {
@@ -11,6 +11,6 @@ export default async function DetalleViaticoPage({ params }: { params: Promise<{
   if (!solicitud) notFound();
   if (!["Habilitado", "Enviado", "Aprobado", "Rechazado"].includes(solicitud.estado)) notFound();
 
-  const [firmantes, precios] = await Promise.all([getUsuariosParaFirmante(), getPreciosServicios()]);
+  const [firmantes, precios] = await Promise.all([getFirmantesCatalogo(), getPreciosServicios()]);
   return <DetalleViaticoClient solicitud={solicitud} firmantes={firmantes} precios={precios} />;
 }
