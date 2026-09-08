@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/lib/db";
-import { viaticoSolicitudes, viaticoComisiones, configuracion, catalogoFirmantes } from "@/lib/schema";
+import { viaticoSolicitudes, viaticoComisiones, viaticoGastos, configuracion, catalogoFirmantes } from "@/lib/schema";
 import { auth } from "@/lib/auth";
 import { and, eq, sql } from "drizzle-orm";
 import { fechaGuatemala } from "@/lib/date-utils";
@@ -63,10 +63,11 @@ export async function getSolicitud(id: number) {
   if (!me) return null;
   const sol = await getSolicitudDelColaborador(id, me.id);
   if (!sol) return null;
-  const comisiones = await db.select().from(viaticoComisiones)
-    .where(eq(viaticoComisiones.solicitud_id, id))
-    .orderBy(viaticoComisiones.orden);
-  return { ...sol, comisiones };
+  const [comisiones, gastos] = await Promise.all([
+    db.select().from(viaticoComisiones).where(eq(viaticoComisiones.solicitud_id, id)).orderBy(viaticoComisiones.orden),
+    db.select().from(viaticoGastos).where(eq(viaticoGastos.solicitud_id, id)).orderBy(viaticoGastos.orden),
+  ]);
+  return { ...sol, comisiones, gastos };
 }
 
 // El Informe de Comisión va dirigido a quien firmó el nombramiento, no a un
@@ -196,6 +197,51 @@ export async function eliminarComision(comisionId: number): Promise<{ ok: true }
   if (!row || row.sol.colaborador_id !== me.id || row.sol.estado !== "Habilitado") return { error: "No encontrada" };
 
   await db.delete(viaticoComisiones).where(eq(viaticoComisiones.id, comisionId));
+  return { ok: true };
+}
+
+// "Otros gastos" (ej. pasaje) — el cliente pidió 2026-09-08 que el mismo
+// colaborador que solicitó el viático pueda ingresar el costo del pasaje a
+// mano, no solo el encargado al aprobar (ver viatico_gastos, Planilla de
+// Viáticos). Mismo criterio de ventana editable que las comisiones: solo
+// mientras la solicitud sigue "Habilitado". El encargado sigue pudiendo
+// agregar/editar/quitar renglones en su modal "Revisar y Aprobar" antes de
+// aprobar (ver RevisarModal en RegistroComisionClient.tsx) — esto no le
+// quita esa posibilidad, solo le da un punto de partida ya cargado.
+export type DatosGasto = { fecha: string; descripcion: string; valor: number };
+
+export async function agregarGasto(solicitudId: number, datos: DatosGasto): Promise<{ ok: true } | { error: string }> {
+  const me = await getMeColaborador();
+  if (!me) return { error: "No autorizado" };
+
+  const sol = await getSolicitudDelColaborador(solicitudId, me.id);
+  if (!sol) return { error: "No se encontró la solicitud" };
+  if (sol.estado !== "Habilitado") return { error: "Esta solicitud no está habilitada para registrar gastos" };
+
+  if (!datos.descripcion.trim()) return { error: "La descripción del gasto es obligatoria" };
+  if (!(datos.valor > 0)) return { error: "Ingresá un valor mayor a cero" };
+
+  const [{ total }] = await db.select({ total: sql<number>`count(*)` }).from(viaticoGastos)
+    .where(eq(viaticoGastos.solicitud_id, solicitudId));
+
+  await db.insert(viaticoGastos).values({
+    solicitud_id: solicitudId, orden: total + 1,
+    fecha: datos.fecha || null, descripcion: datos.descripcion.trim(), valor: datos.valor,
+  });
+
+  return { ok: true };
+}
+
+export async function eliminarGasto(gastoId: number): Promise<{ ok: true } | { error: string }> {
+  const me = await getMeColaborador();
+  if (!me) return { error: "No autorizado" };
+
+  const [row] = await db.select({ gasto: viaticoGastos, sol: viaticoSolicitudes }).from(viaticoGastos)
+    .innerJoin(viaticoSolicitudes, eq(viaticoSolicitudes.id, viaticoGastos.solicitud_id))
+    .where(eq(viaticoGastos.id, gastoId)).limit(1);
+  if (!row || row.sol.colaborador_id !== me.id || row.sol.estado !== "Habilitado") return { error: "No encontrado" };
+
+  await db.delete(viaticoGastos).where(eq(viaticoGastos.id, gastoId));
   return { ok: true };
 }
 

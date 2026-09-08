@@ -1083,6 +1083,30 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     confirmar que `viatico_gastos` y `otros_gastos` quedaron correctos en
     la base, e imprimir la Planilla con el layout coincidiendo con el
     modelo real — limpiado después.
+  - **Extendido (2026-09-08): el colaborador que pidió el viático también
+    puede cargar sus propios renglones de "otros gastos" (ej. el costo del
+    pasaje), no solo el encargado al aprobar** — pedido explícito del
+    cliente ("hay que dejar que el que solicitó el viático, ingrese
+    manualmente el costo del pasaje"). Dos acciones nuevas en
+    `solicitar-viaticos/actions.ts` (`agregarGasto`/`eliminarGasto`), mismo
+    patrón de gate que `agregarComision`/`eliminarComision` (dueño +
+    `estado === "Habilitado"` — la ventana se cierra al enviar, igual que
+    las comisiones). Nueva sección "Otros gastos" en
+    `DetalleViaticoClient.tsx` (tabla de renglones + fecha/descripción/
+    valor para agregar uno nuevo), visible siempre que haya al menos un
+    gasto o la solicitud siga editable. **`getSolicitudCompleta`
+    (`registro-comision/actions.ts`) ahora también trae `gastos`, así que
+    el `RevisarModal` del encargado arranca con lo que el colaborador ya
+    cargó en vez de una lista vacía** — el encargado sigue pudiendo
+    agregar/editar/quitar renglones antes de aprobar (`aprobarSolicitud`
+    sigue haciendo delete+reinsert completo de `viatico_gastos` a partir de
+    lo que ve en el modal, así que cualquier ajuste del encargado manda).
+    Verificado en vivo de punta a punta con datos desechables: colaborador
+    agrega "Pasaje Tejutla - Guatemala ida y vuelta" Q230 desde
+    `solicitar-viaticos/[id]` → el `RevisarModal` del encargado lo muestra
+    precargado → aprobar sin tocarlo → `viatico_solicitudes.otros_gastos =
+    230` y `viatico_pagos.total = 335` (Q105 de servicios + Q230 de
+    pasaje), ambos correctos — limpiado después.
   - **Resuelto (2026-09-07): V-A/V-C/V-L pasaron de `OverlayPrint`/
     `OverlayField` (solo ajuste global de mm) al mismo sistema de "Ver
     posiciones" por campo, arrastrable y persistente, que ya usan Vale de
