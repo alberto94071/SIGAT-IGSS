@@ -853,12 +853,24 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     un cambio futuro en `configuracion.viatico_precio_*` no altera
     retroactivamente un viático ya registrado.
   - **"Nombre y cargo de quien firmó el nombramiento"** (se repite por
-    comisión, se imprime en el V-L) sale de un selector sobre `usuarios`
-    (todos los roles activos, no solo colaboradores — ej. un Director no
-    necesariamente tiene rol colaborador), no de texto libre ni del catálogo
-    `catalogoFirmantes` — `firmante_usuario_id` + `firmante_cargo_manual`
-    (este último solo se usa si el usuario elegido no tiene
-    `puesto_nominal` cargado). Pendiente de construir (Fase D).
+    comisión, se imprime en el V-L) sale de un selector sobre
+    `catalogoFirmantes` — **regla revertida 2026-09-08**: originalmente era
+    un selector sobre `usuarios` (todos los roles activos) con
+    `firmante_usuario_id` + `firmante_cargo_manual` de respaldo; el cliente
+    pidió explícitamente "estos firmantes que se jalen de quienes firman
+    los SIAF" — el mismo catálogo que ya firma el A-01 SIAF
+    (Configuración → Firmantes), no una lista aparte de usuarios del
+    sistema. `viatico_comisiones.firmante_catalogo_id` (FK a
+    `catalogoFirmantes.id`) reemplazó a `firmante_usuario_id`/
+    `firmante_cargo_manual` — como `catalogoFirmantes.nombre`/`cargo` son
+    `NOT NULL`, ya no hace falta el cargo manual de respaldo (siempre hay
+    cargo). Las 2 filas reales que existían se re-mapearon a mano contra el
+    firmante equivalente del catálogo antes de dejar de usar las columnas
+    viejas — **las columnas `firmante_usuario_id`/`firmante_cargo_manual`
+    siguen existiendo en la tabla pero ya no las usa el código** (el
+    classifier de este entorno bloqueó el `DROP COLUMN` por destructivo;
+    quedaron huérfanas, no rompen nada, se pueden limpiar en otra ronda si
+    hace falta).
   - **Corregido 2026-09-07 (el cliente confirmó explícitamente lo
     contrario de la interpretación original)**: la columna "TIPO DE
     COMISIÓN" del V-L imprime el campo corto `tipo_comision` (ej. "Entrega
@@ -1282,6 +1294,19 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   de que existiera la captura de gastos itemizados (ver el punto de arriba,
   2026-09-07); no hay backfill retroactivo, mismo criterio que el resto del
   sistema con features nuevas sobre datos viejos.
+- **El plazo de 10 días hábiles para registrar/enviar comisiones de Viáticos
+  tiene un interruptor temporal** (`configuracion.viatico_exigir_fecha_limite`,
+  boolean, default `true`) — Administración → Configuración → sección
+  "Viáticos". Pedido del cliente 2026-09-08: mientras ponen al día viáticos
+  atrasados de antes de que el módulo existiera, lo desactivaron (queda en
+  `false` en producción ahora mismo) para poder registrar/enviar comisiones
+  con `fecha_limite` ya vencida — `agregarComision`/`enviarViatico`
+  (`solicitar-viaticos/actions.ts`) solo revisan `fecha_limite` cuando el
+  interruptor está en `true` (`exigeFechaLimite()`). **Hay que volver a
+  marcarlo cuando terminen de ponerse al día** — nadie lo va a recordar
+  solo, así que si en una sesión futura aparece un reporte de "el sistema
+  deja enviar un viático vencido" sin que el cliente lo haya pedido, lo
+  primero es revisar este toggle antes de asumir que es un bug nuevo.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

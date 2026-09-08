@@ -8,7 +8,7 @@ import {
   guardarInforme, guardarJustificacion,
 } from "../actions";
 
-type Firmante = { id: number; nombre: string; puesto_nominal: string | null };
+type Firmante = { id: number; nombre: string; cargo: string };
 type Precios = { desayuno: number; almuerzo: number; cena: number; hospedaje: number };
 type Comision = {
   id: number; orden: number; lugar: string | null; departamento: string | null;
@@ -19,7 +19,7 @@ type Comision = {
   fecha_entrada_unidad: string | null; hora_entrada_unidad: string | null;
   dias_calculados: number | null;
   nombramiento_numero: string | null; fecha_nombramiento: string | null;
-  firmante_usuario_id: number | null; firmante_cargo_manual: string | null;
+  firmante_catalogo_id: number | null;
   cantidad_desayuno: number; cantidad_almuerzo: number; cantidad_cena: number; cantidad_hospedaje: number;
 };
 type Solicitud = {
@@ -252,8 +252,7 @@ function ComisionForm({ solicitudId, esPrimera, nombramientoSolicitud, anterior,
   const [horaEntradaUnidad, setHoraEntradaUnidad] = useState("");
   const [nombramientoNumero, setNombramientoNumero] = useState(esPrimera ? (nombramientoSolicitud.numero ?? "") : "");
   const [fechaNombramiento, setFechaNombramiento] = useState(esPrimera ? (nombramientoSolicitud.fecha ?? "") : "");
-  const [firmanteId, setFirmanteId] = useState<number | null>(anterior?.firmante_usuario_id ?? null);
-  const [cargoManual, setCargoManual] = useState("");
+  const [firmanteId, setFirmanteId] = useState<number | null>(anterior?.firmante_catalogo_id ?? null);
   const [cantDesayuno, setCantDesayuno] = useState(0);
   const [cantAlmuerzo, setCantAlmuerzo] = useState(0);
   const [cantCena, setCantCena] = useState(0);
@@ -261,8 +260,6 @@ function ComisionForm({ solicitudId, esPrimera, nombramientoSolicitud, anterior,
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const firmanteElegido = firmantes.find(f => f.id === firmanteId) ?? null;
-  const necesitaCargoManual = !!firmanteElegido && !firmanteElegido.puesto_nominal;
   const dias = diasPreview(fechaSalidaUnidad, fechaEntradaUnidad);
   const costo = cantDesayuno * precios.desayuno + cantAlmuerzo * precios.almuerzo + cantCena * precios.cena + cantHospedaje * precios.hospedaje;
 
@@ -275,7 +272,7 @@ function ComisionForm({ solicitudId, esPrimera, nombramientoSolicitud, anterior,
       fecha_salida_lugar: fechaSalidaLugar, hora_salida_lugar: horaSalidaLugar,
       fecha_entrada_unidad: fechaEntradaUnidad, hora_entrada_unidad: horaEntradaUnidad,
       nombramiento_numero: nombramientoNumero, fecha_nombramiento: fechaNombramiento,
-      firmante_usuario_id: firmanteId, firmante_cargo_manual: cargoManual,
+      firmante_catalogo_id: firmanteId,
       cantidad_desayuno: cantDesayuno, cantidad_almuerzo: cantAlmuerzo, cantidad_cena: cantCena, cantidad_hospedaje: cantHospedaje,
     };
     const res = await agregarComision(solicitudId, datos);
@@ -291,7 +288,7 @@ function ComisionForm({ solicitudId, esPrimera, nombramientoSolicitud, anterior,
       fecha_salida_lugar: fechaSalidaLugar, hora_salida_lugar: horaSalidaLugar,
       fecha_entrada_unidad: fechaEntradaUnidad, hora_entrada_unidad: horaEntradaUnidad,
       dias_calculados: dias, nombramiento_numero: nombramientoNumero, fecha_nombramiento: fechaNombramiento,
-      firmante_usuario_id: firmanteId, firmante_cargo_manual: cargoManual,
+      firmante_catalogo_id: firmanteId,
       cantidad_desayuno: cantDesayuno, cantidad_almuerzo: cantAlmuerzo, cantidad_cena: cantCena, cantidad_hospedaje: cantHospedaje,
     });
   }
@@ -339,15 +336,9 @@ function ComisionForm({ solicitudId, esPrimera, nombramientoSolicitud, anterior,
             <label className="label">Quién firmó el nombramiento</label>
             <select className="input" value={firmanteId ?? ""} onChange={e => setFirmanteId(e.target.value ? Number(e.target.value) : null)}>
               <option value="">— Elegí —</option>
-              {firmantes.map(f => <option key={f.id} value={f.id}>{f.nombre}{f.puesto_nominal ? ` — ${f.puesto_nominal}` : ""}</option>)}
+              {firmantes.map(f => <option key={f.id} value={f.id}>{f.nombre} — {f.cargo}</option>)}
             </select>
           </div>
-          {necesitaCargoManual && (
-            <div>
-              <label className="label">Cargo de {firmanteElegido?.nombre} (no está cargado en el sistema)</label>
-              <input className="input" value={cargoManual} onChange={e => setCargoManual(e.target.value)} />
-            </div>
-          )}
 
           <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider pt-1">Servicios (precio fijo)</p>
           <div className="grid grid-cols-2 gap-3">

@@ -33,6 +33,7 @@ export async function guardarConfiguracion(data: any) {
           cuenta_nombre:        data.cuenta_nombre,
           siaf_compras_numero_inicial:      Number(data.siaf_compras_numero_inicial) || 0,
           siaf_compras_numero_inicial_anio: Number(data.siaf_compras_numero_inicial_anio) || 0,
+          viatico_exigir_fecha_limite:      Boolean(data.viatico_exigir_fecha_limite),
           updated_at:           fechaHoraGuatemala(),
         })
         .where(eq(configuracion.id, existing.id));

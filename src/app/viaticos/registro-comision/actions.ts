@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/lib/db";
-import { viaticoSolicitudes, viaticoComisiones, viaticoGastos, viaticoPagos, usuarios, configuracion } from "@/lib/schema";
+import { viaticoSolicitudes, viaticoComisiones, viaticoGastos, viaticoPagos, usuarios, configuracion, catalogoFirmantes } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { requireTabAccessAction } from "@/lib/modulo-access";
@@ -272,8 +272,9 @@ export async function habilitarSolicitud(id: number, datos: DatosHabilitar): Pro
 // viaticos/, encargado vía viaticos/entrega-formulario/) hace su propio
 // chequeo de dueño+estado antes de renderizar, mismo patrón que
 // getRequisicion en almacen/dab-75/actions.ts. Resuelve el firmante de cada
-// comisión (nombre + puesto_nominal) contra usuarios, para no tener que
-// hacerlo de nuevo en cada componente de impresión.
+// comisión (nombre + cargo) contra catalogoFirmantes (2026-09-08, mismo
+// catálogo que ya firma los A-01 SIAF), para no tener que hacerlo de nuevo
+// en cada componente de impresión.
 export async function getSolicitudParaImprimir(id: number) {
   const session = await auth();
   if (!session) return null;
@@ -284,20 +285,20 @@ export async function getSolicitudParaImprimir(id: number) {
   const comisionesRaw = await db.select().from(viaticoComisiones)
     .where(eq(viaticoComisiones.solicitud_id, id)).orderBy(viaticoComisiones.orden);
 
-  const firmanteIds = [...new Set(comisionesRaw.map(c => c.firmante_usuario_id).filter((x): x is number => x != null))];
-  const firmantesMap = new Map<number, { nombre: string; puesto_nominal: string | null }>();
+  const firmanteIds = [...new Set(comisionesRaw.map(c => c.firmante_catalogo_id).filter((x): x is number => x != null))];
+  const firmantesMap = new Map<number, { nombre: string; cargo: string }>();
   if (firmanteIds.length > 0) {
-    const filas = await db.select({ id: usuarios.id, nombre: usuarios.nombre, puesto_nominal: usuarios.puesto_nominal })
-      .from(usuarios).where(sql`${usuarios.id} IN (${sql.join(firmanteIds, sql`, `)})`);
+    const filas = await db.select({ id: catalogoFirmantes.id, nombre: catalogoFirmantes.nombre, cargo: catalogoFirmantes.cargo })
+      .from(catalogoFirmantes).where(sql`${catalogoFirmantes.id} IN (${sql.join(firmanteIds, sql`, `)})`);
     for (const f of filas) firmantesMap.set(f.id, f);
   }
 
   const comisiones = comisionesRaw.map(c => {
-    const firmante = c.firmante_usuario_id != null ? firmantesMap.get(c.firmante_usuario_id) : null;
+    const firmante = c.firmante_catalogo_id != null ? firmantesMap.get(c.firmante_catalogo_id) : null;
     return {
       ...c,
       firmante_nombre: firmante?.nombre ?? null,
-      firmante_cargo: firmante?.puesto_nominal ?? c.firmante_cargo_manual,
+      firmante_cargo: firmante?.cargo ?? null,
     };
   });
 

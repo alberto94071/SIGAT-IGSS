@@ -75,6 +75,12 @@ export const configuracion = pgTable("configuracion", {
   // por ahora un solo valor para toda la unidad, no varía por empleado.
   viatico_partida_presupuestaria: text("viatico_partida_presupuestaria").notNull()
     .default("2026-1140-0068-407-11-01-000-07-000-011-1201-31"),
+  // Interruptor temporal (pedido del cliente 2026-09-08): mientras están
+  // poniendo al día viáticos atrasados de antes de que el módulo existiera,
+  // el plazo de 10 días hábiles (agregarComision/enviarViatico) bloquea
+  // registrarlos. En false, esas dos acciones no revisan fecha_limite —
+  // volver a poner en true reactiva el bloqueo sin tocar código.
+  viatico_exigir_fecha_limite: boolean("viatico_exigir_fecha_limite").notNull().default(true),
   updated_at:           text("updated_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
@@ -1153,10 +1159,12 @@ export const viaticoComisiones = pgTable("viatico_comisiones", {
   nombramiento_numero: text("nombramiento_numero"),
   fecha_nombramiento:  text("fecha_nombramiento"),
   // "Nombre y cargo de quien firmó el nombramiento" — selector sobre
-  // usuarios (todos los roles, no solo colaboradores). firmante_cargo_manual
-  // solo se usa si el usuario elegido no tiene puesto_nominal cargado.
-  firmante_usuario_id:   integer("firmante_usuario_id").references(() => usuarios.id),
-  firmante_cargo_manual: text("firmante_cargo_manual"),
+  // catalogoFirmantes (2026-09-08, revirtió la regla anterior: antes era un
+  // selector sobre usuarios con cargo manual de respaldo; el cliente pidió
+  // que salga de la misma lista de firmantes que ya firma los A-01 SIAF).
+  // catalogoFirmantes.nombre/cargo son NOT NULL, así que no hace falta un
+  // cargo manual de respaldo como antes.
+  firmante_catalogo_id: integer("firmante_catalogo_id").references(() => catalogoFirmantes.id),
   // Servicios elegidos por el colaborador para ESTA comisión, a precio fijo
   // (no se calcula automáticamente por horario) — cantidad, no monto, para
   // que un cambio futuro en configuracion.viatico_precio_* no altere
