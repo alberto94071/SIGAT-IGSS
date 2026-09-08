@@ -5,8 +5,10 @@ import Link from "next/link";
 import { MapPin, Plus, Trash2, Send, X, Loader2, AlertTriangle, Clock, Printer, CheckCircle2, XCircle, Save } from "lucide-react";
 import {
   agregarComision, eliminarComision, enviarViatico, type DatosComision,
+  agregarGasto, eliminarGasto, type DatosGasto,
   guardarInforme, guardarJustificacion,
 } from "../actions";
+import { fechaGuatemala } from "@/lib/date-utils";
 
 type Firmante = { id: number; nombre: string; cargo: string };
 type Precios = { desayuno: number; almuerzo: number; cena: number; hospedaje: number };
@@ -22,11 +24,12 @@ type Comision = {
   firmante_catalogo_id: number | null;
   cantidad_desayuno: number; cantidad_almuerzo: number; cantidad_cena: number; cantidad_hospedaje: number;
 };
+type Gasto = { id: number; fecha: string | null; descripcion: string | null; valor: number };
 type Solicitud = {
   id: number; estado: string; numero_formulario: string | null;
   nombramiento_numero: string | null; fecha_nombramiento: string | null; fecha_limite: string | null;
   motivo_rechazo: string | null; informe_comision: string | null; justificacion_estancia: string | null;
-  comisiones: Comision[];
+  comisiones: Comision[]; gastos: Gasto[];
 };
 
 const MAX_COMISIONES = 5;
@@ -44,6 +47,10 @@ export default function DetalleViaticoClient({ solicitud: init, firmantes, preci
   const [mostrarForm, setMostrarForm] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState("");
+  const [gastoFecha, setGastoFecha] = useState(fechaGuatemala());
+  const [gastoDescripcion, setGastoDescripcion] = useState("");
+  const [gastoValor, setGastoValor] = useState("");
+  const [guardandoGasto, setGuardandoGasto] = useState(false);
 
   const puedeEditar = solicitud.estado === "Habilitado";
   const totalGeneral = solicitud.comisiones.reduce((s, c) => s + costoComision(c, precios), 0);
@@ -66,6 +73,26 @@ export default function DetalleViaticoClient({ solicitud: init, firmantes, preci
     const res = await enviarViatico(solicitud.id);
     setEnviando(false);
     if ("error" in res) return setError(res.error);
+    router.refresh();
+  }
+
+  async function handleAgregarGasto() {
+    setGuardandoGasto(true); setError("");
+    const datos: DatosGasto = { fecha: gastoFecha, descripcion: gastoDescripcion, valor: Number(gastoValor) || 0 };
+    const res = await agregarGasto(solicitud.id, datos);
+    setGuardandoGasto(false);
+    if ("error" in res) return setError(res.error);
+    // El id/orden reales los recalcula el servidor — se refresca la página
+    // completa (router.refresh) pero acá se agrega un temporal para la
+    // vista optimista, mismo patrón que onAgregada() con comisiones.
+    setSolicitud(prev => ({ ...prev, gastos: [...prev.gastos, { id: -Date.now(), fecha: gastoFecha, descripcion: gastoDescripcion, valor: datos.valor }] }));
+    setGastoDescripcion(""); setGastoValor("");
+    router.refresh();
+  }
+
+  async function handleEliminarGasto(id: number) {
+    await eliminarGasto(id);
+    setSolicitud(prev => ({ ...prev, gastos: prev.gastos.filter(g => g.id !== id) }));
     router.refresh();
   }
 
@@ -146,6 +173,58 @@ export default function DetalleViaticoClient({ solicitud: init, firmantes, preci
           <span className="text-gray-500">{diasTotal} día(s) en total</span>
           <span className="font-bold text-gray-900 text-base">Total: Q{totalGeneral.toLocaleString("es-GT", { minimumFractionDigits: 2 })}</span>
         </div>
+      )}
+
+      {(solicitud.gastos.length > 0 || puedeEditar) && (
+      <div className="card p-4 space-y-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Otros gastos (ej. costo del pasaje)</p>
+          <p className="text-xs text-gray-500 mt-0.5">Ingresá acá el costo del pasaje u otros gastos que respalden tu viático.</p>
+        </div>
+
+        {solicitud.gastos.length > 0 && (
+          <div className="space-y-1.5">
+            {solicitud.gastos.map(g => (
+              <div key={g.id} className="flex items-center justify-between gap-3 text-sm bg-gray-50 rounded-lg px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-gray-900 truncate">{g.descripcion}</p>
+                  {g.fecha && <p className="text-xs text-gray-400">{g.fecha}</p>}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="font-semibold text-gray-900">Q{Number(g.valor).toLocaleString("es-GT", { minimumFractionDigits: 2 })}</span>
+                  {puedeEditar && (
+                    <button onClick={() => handleEliminarGasto(g.id)} className="p-1 text-gray-400 hover:text-red-600 rounded-lg hover:bg-gray-100">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {puedeEditar && (
+          <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr_auto_auto] gap-2 items-end pt-1 border-t border-gray-100">
+            <div>
+              <label className="label">Fecha</label>
+              <input type="date" className="input" value={gastoFecha} onChange={e => setGastoFecha(e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Descripción</label>
+              <input className="input" placeholder="Ej. Pasaje Tejutla — Guatemala"
+                value={gastoDescripcion} onChange={e => setGastoDescripcion(e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Valor (Q)</label>
+              <input type="number" min={0} step="0.01" className="input w-28" value={gastoValor} onChange={e => setGastoValor(e.target.value)} />
+            </div>
+            <button onClick={handleAgregarGasto} disabled={guardandoGasto || !gastoDescripcion.trim() || !(Number(gastoValor) > 0)}
+              className="flex items-center gap-1.5 px-3 py-2.5 text-sm font-semibold rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50 transition-colors">
+              {guardandoGasto ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Agregar
+            </button>
+          </div>
+        )}
+      </div>
       )}
 
       {puedeEditar && (

@@ -21,7 +21,10 @@ type Comision = {
   nombramiento_numero: string | null; fecha_nombramiento: string | null;
   cantidad_desayuno: number; cantidad_almuerzo: number; cantidad_cena: number; cantidad_hospedaje: number;
 };
-type SolicitudCompleta = { id: number; numero_formulario: string | null; persona_nombre: string | null; comisiones: Comision[] };
+type GastoDb = { fecha: string | null; descripcion: string | null; valor: number };
+type SolicitudCompleta = {
+  id: number; numero_formulario: string | null; persona_nombre: string | null; comisiones: Comision[]; gastos: GastoDb[];
+};
 
 export default function RegistroComisionClient({ pendientes: init, enviadas, canEdit }: {
   pendientes: Pendiente[]; enviadas: Enviada[]; canEdit: boolean;
@@ -231,7 +234,15 @@ function RevisarModal({ solicitudId, onClose, onResuelta }: {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    getSolicitudCompleta(solicitudId).then(data => setSol(data as SolicitudCompleta | null));
+    getSolicitudCompleta(solicitudId).then(data => {
+      const s = data as SolicitudCompleta | null;
+      setSol(s);
+      if (s && s.gastos.length > 0) {
+        setGastos(s.gastos.map(g => ({
+          fecha: g.fecha ?? fechaGuatemala(), descripcion: g.descripcion ?? "", valor: String(g.valor ?? ""),
+        })));
+      }
+    });
   }, [solicitudId]);
 
   function agregarGasto() { setGastos(prev => [...prev, gastoVacio()]); }

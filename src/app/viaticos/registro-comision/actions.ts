@@ -96,7 +96,9 @@ export async function getSolicitudCompleta(id: number) {
   if (!sol) return null;
   const comisiones = await db.select().from(viaticoComisiones)
     .where(eq(viaticoComisiones.solicitud_id, id)).orderBy(viaticoComisiones.orden);
-  return { ...sol, comisiones };
+  const gastos = await db.select().from(viaticoGastos)
+    .where(eq(viaticoGastos.solicitud_id, id)).orderBy(viaticoGastos.orden);
+  return { ...sol, comisiones, gastos };
 }
 
 // Archivo: solicitudes ya resueltas (Aprobado o Rechazado) — pantalla
