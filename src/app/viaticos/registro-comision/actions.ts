@@ -101,18 +101,84 @@ export async function getSolicitudCompleta(id: number) {
   return { ...sol, comisiones, gastos };
 }
 
-// Archivo: solicitudes ya resueltas (Aprobado o Rechazado) — pantalla
-// "Entrega de Formulario", para reimprimir V-A/V-C/V-L.
+// Archivo: solicitudes ya resueltas (Aprobado, Rechazado, o el formulario se
+// marcó Anulado/Extraviado) — pantalla "Entrega de Formulario", para
+// reimprimir V-A/V-C/V-L (solo Aprobado tiene algo que reimprimir) o para
+// consultar por qué un formulario no llegó a usarse.
 export async function getSolicitudesArchivo() {
   const rows = await db.select({
     id: viaticoSolicitudes.id, numero_formulario: viaticoSolicitudes.numero_formulario,
     persona_nombre: viaticoSolicitudes.persona_nombre, estado: viaticoSolicitudes.estado,
     aprobado_en: viaticoSolicitudes.aprobado_en, rechazado_en: viaticoSolicitudes.rechazado_en,
     motivo_rechazo: viaticoSolicitudes.motivo_rechazo,
+    formulario_motivo: viaticoSolicitudes.formulario_motivo, formulario_marcado_en: viaticoSolicitudes.formulario_marcado_en,
   }).from(viaticoSolicitudes)
-    .where(sql`${viaticoSolicitudes.estado} IN ('Aprobado', 'Rechazado')`)
+    .where(sql`${viaticoSolicitudes.estado} IN ('Aprobado', 'Rechazado', 'Anulado', 'Extraviado')`)
     .orderBy(sql`${viaticoSolicitudes.id} DESC`);
   return rows;
+}
+
+// Formularios ya asignados (Habilitado/Enviado, ya tienen numero_formulario)
+// que todavía no llegan a Aprobado — bandeja para marcarlos Anulado/
+// Extraviado si el colaborador perdió o malogró la hoja física (pedido del
+// cliente 2026-09-09, para poder justificar en el Libro de Viáticos qué
+// pasó con cada No. de Formulario del talonario, no solo los que sí se
+// pagaron).
+export async function getSolicitudesEnTramite() {
+  const rows = await db.select({
+    id: viaticoSolicitudes.id, numero_formulario: viaticoSolicitudes.numero_formulario,
+    persona_nombre: viaticoSolicitudes.persona_nombre, estado: viaticoSolicitudes.estado,
+    nombramiento_numero: viaticoSolicitudes.nombramiento_numero, fecha_nombramiento: viaticoSolicitudes.fecha_nombramiento,
+  }).from(viaticoSolicitudes)
+    .where(sql`${viaticoSolicitudes.estado} IN ('Habilitado', 'Enviado')`)
+    .orderBy(sql`${viaticoSolicitudes.id} ASC`);
+  return rows;
+}
+
+async function marcarFormulario(id: number, estadoNuevo: "Anulado" | "Extraviado", motivo: string): Promise<{ ok: true } | { error: string }> {
+  const check = await requireTabAccessAction("mod_viaticos", TAB);
+  if ("error" in check) return check;
+
+  const [sol] = await db.select({ estado: viaticoSolicitudes.estado }).from(viaticoSolicitudes)
+    .where(eq(viaticoSolicitudes.id, id)).limit(1);
+  if (!sol) return { error: "No se encontró la solicitud" };
+  if (!["Habilitado", "Enviado"].includes(sol.estado)) return { error: "Este formulario ya no se puede marcar — no está en trámite" };
+
+  await db.update(viaticoSolicitudes).set({
+    estado: estadoNuevo,
+    formulario_motivo: motivo.trim() || null,
+    formulario_marcado_por: check.uid,
+    formulario_marcado_en: fechaHoraGuatemala(),
+  }).where(eq(viaticoSolicitudes.id, id));
+
+  return { ok: true };
+}
+
+export async function marcarFormularioAnulado(id: number, motivo: string) {
+  return marcarFormulario(id, "Anulado", motivo);
+}
+
+export async function marcarFormularioExtraviado(id: number, motivo: string) {
+  return marcarFormulario(id, "Extraviado", motivo);
+}
+
+// Por si el encargado se equivocó marcando Anulado/Extraviado — regresa el
+// formulario a "Habilitado" para que el colaborador siga su trámite normal.
+export async function revertirMarcaFormulario(id: number): Promise<{ ok: true } | { error: string }> {
+  const check = await requireTabAccessAction("mod_viaticos", TAB);
+  if ("error" in check) return check;
+
+  const [sol] = await db.select({ estado: viaticoSolicitudes.estado }).from(viaticoSolicitudes)
+    .where(eq(viaticoSolicitudes.id, id)).limit(1);
+  if (!sol) return { error: "No se encontró la solicitud" };
+  if (!["Anulado", "Extraviado"].includes(sol.estado)) return { error: "Este formulario no está marcado como Anulado/Extraviado" };
+
+  await db.update(viaticoSolicitudes).set({
+    estado: "Habilitado",
+    formulario_motivo: null, formulario_marcado_por: null, formulario_marcado_en: null,
+  }).where(eq(viaticoSolicitudes.id, id));
+
+  return { ok: true };
 }
 
 export type DatosAprobar = {

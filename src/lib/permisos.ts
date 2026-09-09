@@ -93,6 +93,7 @@ export interface Permisos {
   // Viáticos
   tab_viaticos_entrega:         boolean;
   tab_viaticos_comision:        boolean;
+  tab_viaticos_libros:          boolean;
 
   // Base de Datos
   tab_basedatos_insumos:        boolean;
@@ -143,7 +144,7 @@ const TABS_DEFAULT_ABIERTAS = {
 
   tab_pasajes_solicitud: true, tab_pasajes_tarifario: true, tab_pasajes_dpd23: true, tab_pasajes_poliza: true,
 
-  tab_viaticos_entrega: true, tab_viaticos_comision: true,
+  tab_viaticos_entrega: true, tab_viaticos_comision: true, tab_viaticos_libros: true,
 
   tab_basedatos_insumos: true, tab_basedatos_tarifario: true, tab_basedatos_proveedores: true, tab_basedatos_afiliados: true,
 

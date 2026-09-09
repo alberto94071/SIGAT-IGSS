@@ -28,7 +28,8 @@ type Gasto = { id: number; fecha: string | null; descripcion: string | null; val
 type Solicitud = {
   id: number; estado: string; numero_formulario: string | null;
   nombramiento_numero: string | null; fecha_nombramiento: string | null; fecha_limite: string | null;
-  motivo_rechazo: string | null; informe_comision: string | null; justificacion_estancia: string | null;
+  motivo_rechazo: string | null; formulario_motivo: string | null;
+  informe_comision: string | null; justificacion_estancia: string | null;
   comisiones: Comision[]; gastos: Gasto[];
 };
 
@@ -132,6 +133,14 @@ export default function DetalleViaticoClient({ solicitud: init, firmantes, preci
         <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
           <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
           Este viático fue rechazado{solicitud.motivo_rechazo ? `: ${solicitud.motivo_rechazo}` : "."}
+        </div>
+      )}
+
+      {(solicitud.estado === "Anulado" || solicitud.estado === "Extraviado") && (
+        <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+          <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          El encargado marcó este formulario como <strong>{solicitud.estado}</strong>
+          {solicitud.formulario_motivo ? `: ${solicitud.formulario_motivo}` : "."} Podés pedir un viático nuevo desde Mis Viáticos.
         </div>
       )}
 

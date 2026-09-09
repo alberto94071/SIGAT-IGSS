@@ -99,6 +99,7 @@ const TABS_POR_MODULO: Partial<Record<keyof Permisos, { key: keyof Permisos; lab
   mod_viaticos: [
     { key: "tab_viaticos_entrega",  label: "Entrega de Formulario" },
     { key: "tab_viaticos_comision", label: "Registro de Comisión" },
+    { key: "tab_viaticos_libros",   label: "Libros" },
   ],
   mod_base_datos: [
     { key: "tab_basedatos_insumos",     label: "Insumos" },

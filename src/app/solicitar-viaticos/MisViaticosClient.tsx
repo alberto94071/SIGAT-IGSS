@@ -17,6 +17,8 @@ const ESTADO_STYLE: Record<string, string> = {
   "Enviado":    "bg-blue-100 text-blue-700",
   "Aprobado":   "bg-green-100 text-green-700",
   "Rechazado":  "bg-red-100 text-red-700",
+  "Anulado":    "bg-amber-100 text-amber-700",
+  "Extraviado": "bg-red-100 text-red-700",
 };
 
 const ESTA_ACTIVA = (estado: string) => ["Pendiente", "Habilitado", "Enviado"].includes(estado);
@@ -95,7 +97,7 @@ export default function MisViaticosClient({ solicitudes }: { solicitudes: Solici
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      {["Habilitado", "Enviado", "Aprobado", "Rechazado"].includes(s.estado) ? (
+                      {["Habilitado", "Enviado", "Aprobado", "Rechazado", "Anulado", "Extraviado"].includes(s.estado) ? (
                         <Link href={`/solicitar-viaticos/${s.id}`}
                           className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
                           {s.estado === "Habilitado" ? "Registrar comisión" : "Ver"} <ArrowRight className="w-3 h-3" />

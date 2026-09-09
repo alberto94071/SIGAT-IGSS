@@ -89,7 +89,7 @@ mergeado), actualizá este archivo antes de dar el trabajo por cerrado:
 | `almacen/` | DAB-60 (Normal y Fondo Rotativo), DAB-75 (bandeja de aprobación de solicitudes de colaboradores, FEFO por lote al aprobar), Catálogo (stock con alertas y reportes Excel con gráfico nativo) |
 | `fondo-rotativo/`, `caja-chica/`, `dashboard/` (pagos/fri/bancos/vales) | Pago de Fondo Rotativo: Pagos → Bancos/Liquidación → Caja Chica → FRI → Reintegro DAF |
 | `pasajes/` | Tarifario, Solicitud de Pasaje (SPS-75), DPD-23, Póliza |
-| `viaticos/` | Encargado: habilitar solicitudes (Registro de Comisión) y aprobar/rechazar + archivo con reimpresión V-A/V-C/V-L (Entrega de Formulario) |
+| `viaticos/` | Encargado: habilitar solicitudes y marcar formularios Anulado/Extraviado (Registro de Comisión) y aprobar/rechazar + archivo con reimpresión V-A/V-C/V-L (Entrega de Formulario) + Libro de Control de Formularios por mes para la DAF (Libros) |
 | `base-datos/` | Catálogos maestros: Insumos, Tarifario de Pasajes, Proveedores, Afiliados |
 | `administracion/` | Usuarios, Colaboradores, permisos, Configuración General, Firmantes |
 | `developer/` | Herramientas de superadmin (backup/reset) |
@@ -1331,6 +1331,64 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   solo, así que si en una sesión futura aparece un reporte de "el sistema
   deja enviar un viático vencido" sin que el cliente lo haya pedido, lo
   primero es revisar este toggle antes de asumir que es un bug nuevo.
+- **Viáticos ganó una tercera pestaña "Libros" (2026-09-09)**: el Libro de
+  Control, Existencia, Uso y Entrega de Formularios de Viáticos que se manda
+  a la DAF — formato exacto que mandó el cliente (foto de un talonario
+  físico real), generado de cero por mes (`viaticos/libros/imprimir/[mes]`,
+  mismo patrón de `PrintPages` landscape que `Libro Caja Chica`). Piezas:
+  - **"Anulado"/"Extraviado" son dos estados nuevos de `viatico_solicitudes`**
+    (junto a Pendiente/Habilitado/Enviado/Aprobado/Rechazado) — el encargado
+    los marca desde Registro de Comisión → nueva sección "Formularios en
+    trámite" (solicitudes Habilitado/Enviado, que ya tienen `numero_formulario`
+    asignado), con un motivo opcional (`formulario_motivo`/
+    `formulario_marcado_por`/`formulario_marcado_en`, columnas nuevas). Sirve
+    para que el encargado pueda justificar ante la DAF qué pasó con cada
+    No. de Formulario del talonario físico que le mandaron, no solo los que
+    sí se pagaron — el cliente lo pidió explícitamente en estos términos:
+    "el encargado puede justificar que le dio una [hoja] a tal persona, pero
+    ya sea que éste la perdió, la averió, o se confundió llenándola". Se
+    puede revertir a Habilitado desde Entrega de Formulario (por si el
+    encargado se equivocó marcando) — `revertirMarcaFormulario`
+    (`registro-comision/actions.ts`). El colaborador ve un aviso propio en
+    `solicitar-viaticos/[id]` explicando qué pasó y que puede pedir un
+    viático nuevo.
+  - **"Recepción de formularios"** (cuando Tesorería/Guatecompras manda un
+    lote nuevo de talonarios en blanco) es captura manual aparte, tabla
+    nueva `viatico_libro_recepciones` (fecha/cantidad/detalle, sin ligar a
+    ninguna solicitud ni a un mes puntual — la fecha decide sola a qué Libro
+    mensual pertenece al generarlo). Se administra desde Libros mismo.
+  - **La existencia inicial de cada mes se pide a mano al generar el Libro**
+    (decisión explícita del usuario, no se calcula ni se persiste sola
+    encadenando el saldo final del mes anterior) — igual el "No. de Folio"
+    (opcional, también texto libre por generación). `getLibroViaticos(mes)`
+    (`viaticos/libros/actions.ts`) junta, para el mes pedido: solicitudes
+    Aprobado (fila "Utilizado", con `fecha` = `aprobado_en`) o Anulado/
+    Extraviado (`fecha` = `formulario_marcado_en`), más las recepciones de
+    ese mes — el "Valor Viáticos Q." de cada fila Aprobado sale de
+    `viatico_pagos.total` (el mismo snapshot del V-L, Fase F). Existencia
+    corrida, Del/Al (= `numero_formulario`, un solo número por fila — este
+    sistema no maneja rangos de varios formularios en una sola fila, a
+    diferencia del talonario físico donde un comisionado puede recibir
+    varias hojas de una vez) y el bloque "Resumen" (saldo inicial +
+    recibidos - utilizados - anulados - extraviados = saldo final) se
+    calculan en el cliente de impresión (`ImprimirLibroViaticosClient.tsx`),
+    no en el servidor. Las firmas de cierre ("Nombre completo" / Encargado
+    de Viáticos, Máxima Autoridad) quedan en blanco para firma física, igual
+    que en el talonario de referencia — no salen de `catalogoFirmantes`.
+  - Nuevo permiso `tab_viaticos_libros` (default `true` para los 4 roles,
+    mismo criterio que el resto de pestañas "de ver/usar" — ver
+    `TABS_DEFAULT_ABIERTAS`), agregado a `TABS_POR_MODULO.mod_viaticos` en
+    `UsuariosClient.tsx` y al nav de `viaticos/layout.tsx`.
+  - Verificado en vivo de punta a punta con datos desechables: marcar un
+    formulario Habilitado como Anulado (con motivo) → desaparece de "en
+    trámite", aparece en Entrega de Formulario con el motivo y botón
+    Revertir, y el colaborador ve el aviso en su detalle → agregar una
+    Recepción de 50 formularios → generar el Libro de septiembre 2026 con
+    existencia inicial 10: la fila de Anulado restó 1, la de Recepción sumó
+    50, una solicitud Aprobado real de producción (Q0.00, aprobada ese
+    mismo mes) y otra de prueba (Q420.00) salieron como "Utilizado" con su
+    Valor correcto, Totales y Resumen cuadraron (10 + 50 - 2 - 1 - 0 = 57) —
+    limpiado después.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
