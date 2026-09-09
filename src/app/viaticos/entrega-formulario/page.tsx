@@ -3,7 +3,8 @@ import { getSolicitudesArchivo } from "../registro-comision/actions";
 import EntregaFormularioClient from "./EntregaFormularioClient";
 
 export default async function EntregaFormularioPage() {
-  await requireTabAccess("mod_viaticos", "tab_viaticos_entrega");
+  const { rol } = await requireTabAccess("mod_viaticos", "tab_viaticos_entrega");
+  const canEdit = rol !== "consulta";
   const solicitudes = await getSolicitudesArchivo();
-  return <EntregaFormularioClient solicitudes={solicitudes} />;
+  return <EntregaFormularioClient solicitudes={solicitudes} canEdit={canEdit} />;
 }

@@ -1,18 +1,36 @@
 "use client";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { FileText, Printer } from "lucide-react";
+import { FileText, Printer, Undo2 } from "lucide-react";
+import { revertirMarcaFormulario } from "../registro-comision/actions";
 
 type Solicitud = {
   id: number; numero_formulario: string | null; persona_nombre: string | null; estado: string;
   aprobado_en: string | null; rechazado_en: string | null; motivo_rechazo: string | null;
+  formulario_motivo: string | null; formulario_marcado_en: string | null;
 };
 
 const ESTADO_STYLE: Record<string, string> = {
-  "Aprobado":  "bg-green-100 text-green-700",
-  "Rechazado": "bg-red-100 text-red-700",
+  "Aprobado":   "bg-green-100 text-green-700",
+  "Rechazado":  "bg-red-100 text-red-700",
+  "Anulado":    "bg-amber-100 text-amber-700",
+  "Extraviado": "bg-red-100 text-red-700",
 };
 
-export default function EntregaFormularioClient({ solicitudes }: { solicitudes: Solicitud[] }) {
+export default function EntregaFormularioClient({ solicitudes, canEdit }: { solicitudes: Solicitud[]; canEdit: boolean }) {
+  const router = useRouter();
+  const [lista, setLista] = useState(solicitudes);
+  const [error, setError] = useState("");
+
+  async function handleRevertir(id: number) {
+    setError("");
+    const res = await revertirMarcaFormulario(id);
+    if ("error" in res) return setError(res.error);
+    setLista(prev => prev.filter(s => s.id !== id));
+    router.refresh();
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -21,6 +39,12 @@ export default function EntregaFormularioClient({ solicitudes }: { solicitudes: 
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">Archivo de viáticos ya resueltos — reimprimí V-A/V-C/V-L de los aprobados.</p>
       </div>
+
+      {error && (
+        <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          {error}
+        </div>
+      )}
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
@@ -34,7 +58,7 @@ export default function EntregaFormularioClient({ solicitudes }: { solicitudes: 
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {solicitudes.map(s => (
+              {lista.map(s => (
                 <tr key={s.id} className="hover:bg-gray-50 align-top">
                   <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">{s.numero_formulario ?? "—"}</td>
                   <td className="px-4 py-3 text-gray-700">{s.persona_nombre ?? "—"}</td>
@@ -45,9 +69,12 @@ export default function EntregaFormularioClient({ solicitudes }: { solicitudes: 
                     {s.estado === "Rechazado" && s.motivo_rechazo && (
                       <p className="text-xs text-gray-400 mt-0.5 max-w-xs">{s.motivo_rechazo}</p>
                     )}
+                    {(s.estado === "Anulado" || s.estado === "Extraviado") && s.formulario_motivo && (
+                      <p className="text-xs text-gray-400 mt-0.5 max-w-xs">{s.formulario_motivo}</p>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    {s.estado === "Aprobado" ? (
+                    {s.estado === "Aprobado" && (
                       <div className="flex items-center justify-end gap-1.5">
                         <Link href={`/viaticos/entrega-formulario/${s.id}/imprimir/va`}
                           className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
@@ -66,13 +93,20 @@ export default function EntregaFormularioClient({ solicitudes }: { solicitudes: 
                           <Printer className="w-3 h-3" /> Planilla
                         </Link>
                       </div>
-                    ) : <span className="text-xs text-gray-400">—</span>}
+                    )}
+                    {(s.estado === "Anulado" || s.estado === "Extraviado") && canEdit && (
+                      <button onClick={() => handleRevertir(s.id)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+                        <Undo2 className="w-3 h-3" /> Revertir
+                      </button>
+                    )}
+                    {s.estado === "Rechazado" && <span className="text-xs text-gray-400">—</span>}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {solicitudes.length === 0 && (
+          {lista.length === 0 && (
             <div className="text-center py-16 text-gray-400">
               <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
               <p className="text-sm">Nada por acá todavía.</p>

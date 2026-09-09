@@ -1123,6 +1123,14 @@ export const viaticoSolicitudes = pgTable("viatico_solicitudes", {
   rechazado_en:      text("rechazado_en"),
   aprobado_por:      integer("aprobado_por").references(() => usuarios.id),
   aprobado_en:       text("aprobado_en"),
+  // "Anulado"/"Extraviado" (2026-09-09) — el encargado puede marcar así un
+  // formulario ya asignado (Habilitado/Enviado) que el colaborador perdió o
+  // malogró llenando, para poder justificar en el Libro de Viáticos
+  // (viaticos/libros) qué pasó con cada No. de Formulario del talonario
+  // físico, no solo los que sí se pagaron.
+  formulario_motivo:      text("formulario_motivo"),
+  formulario_marcado_por: integer("formulario_marcado_por").references(() => usuarios.id),
+  formulario_marcado_en:  text("formulario_marcado_en"),
   // Encargado de Viáticos que habilitó la solicitud (no confundir con
   // colaborador_id, que es quien la pidió).
   creado_por:        integer("creado_por").references(() => usuarios.id),
@@ -1226,6 +1234,21 @@ export const viaticoPagos = pgTable("viatico_pagos", {
   // pagado por cheque sí sale del mismo fondo, así que también se concilia.
   conciliado:           boolean("conciliado").notNull().default(false),
   fecha_conciliacion:   text("fecha_conciliacion"),
+});
+
+// Libro de Control, Existencia, Uso y Entrega de Formularios de Viáticos
+// (viaticos/libros, 2026-09-09) — captura manual de cuándo Tesorería les
+// manda un lote nuevo de talonarios V-A/V-C/V-L en blanco. No está ligado a
+// un mes puntual (la fecha decide a qué Libro mensual pertenece al
+// generarlo) ni a una solicitud — es un movimiento aparte del talonario
+// físico completo, no de un formulario individual.
+export const viaticoLibroRecepciones = pgTable("viatico_libro_recepciones", {
+  id:          serial("id").primaryKey(),
+  fecha:       text("fecha").notNull(),
+  cantidad:    integer("cantidad").notNull(),
+  detalle:     text("detalle"),
+  creado_por:  integer("creado_por").references(() => usuarios.id),
+  created_at:  text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
 // ─── Pago de Pasajes (Caja Chica/Solicitud Pasaje) ───────────────────────────

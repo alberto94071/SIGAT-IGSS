@@ -3,8 +3,9 @@ import { requireModuloAccess } from "@/lib/modulo-access";
 import DashboardShell from "@/components/DashboardShell";
 
 const VIATICOS_NAV = [
-  { href: "/viaticos/entrega-formulario", label: "Entrega de Formulario", icon: "FileText", permiso: "tab_viaticos_entrega"  },
-  { href: "/viaticos/registro-comision",  label: "Registro de Comisión", icon: "MapPin",    permiso: "tab_viaticos_comision" },
+  { href: "/viaticos/entrega-formulario", label: "Entrega de Formulario", icon: "FileText",  permiso: "tab_viaticos_entrega"  },
+  { href: "/viaticos/registro-comision",  label: "Registro de Comisión",  icon: "MapPin",     permiso: "tab_viaticos_comision" },
+  { href: "/viaticos/libros",             label: "Libros",                icon: "BookOpen",   permiso: "tab_viaticos_libros"   },
 ] as const;
 
 export default async function ViaticosLayout({ children }: { children: React.ReactNode }) {
