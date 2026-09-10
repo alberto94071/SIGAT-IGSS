@@ -431,11 +431,16 @@ export async function completarVoucherBancos(id: number, data: {
   }
 }
 
-// Por si se ingresaron mal los datos del SIAF-04 (factura, serie, fecha):
-// deshace lo que hizo generarSiaf04 y regresa la consolidación a Fondo
-// Rotativo/SIAF-04 para volver a generarlo. La Hoja de Ruta ya se actualiza
-// sola porque sus pasos de SIAF-04 y Pago dependen de que numero_a04 y este
-// registro de pago existan — al limpiarlos, esos pasos dejan de mostrarse.
+// Por si se ingresaron mal los datos del SIAF-04 (factura, serie, fecha) o
+// el PPR/presentación elegido: deshace lo que hizo generarSiaf04 y regresa la
+// consolidación a Fondo Rotativo/SIAF-04 para volver a generarlo. Aplica
+// tanto si ya se generó el DAB-60 (grupo 200/300, "Pendiente DAB-60") como si
+// no (grupo 100, "Pendiente forma de pago") — en ningún caso se llegó a
+// reflejarEnEjecucion todavía (eso solo pasa al elegir forma de pago), así
+// que no hay nada de presupuesto que deshacer acá. La Hoja de Ruta ya se
+// actualiza sola porque sus pasos de SIAF-04 y Pago dependen de que
+// numero_a04 y este registro de pago existan — al limpiarlos, esos pasos
+// dejan de mostrarse.
 export async function devolverPagoASiaf04(id: number): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireCompras();
@@ -443,7 +448,8 @@ export async function devolverPagoASiaf04(id: number): Promise<{ ok: true } | { 
 
     const [pago] = await db.select().from(fondoRotativoPagos).where(eq(fondoRotativoPagos.id, id)).limit(1);
     if (!pago) return { error: "No se encontró el registro" };
-    if (pago.estado !== "Pendiente forma de pago") return { error: "Este registro ya no está pendiente de forma de pago" };
+    if (pago.estado !== "Pendiente forma de pago" && pago.estado !== "Pendiente DAB-60")
+      return { error: "Este registro ya avanzó más allá de SIAF-04/DAB-60 — ya no se puede devolver desde acá" };
 
     await db.update(consolidaciones).set({
       numero_a04: null, anio_a04: null, a04_fecha: null,

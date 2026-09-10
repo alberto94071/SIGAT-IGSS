@@ -1437,6 +1437,61 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     prueba) y la Descripción completa de la presentación PPR elegida
     ("AGUA CLASE: PURIFICADA BOTELLA PET/20 ONZA, MARCA REGISTRADA...") en
     vez del simple "AGUA" — limpiado después.
+- **"Devolver" en Fondo Rotativo/DAB-60 — no existía ninguna forma de
+  regresar un Regularizado atascado en "Pendiente DAB-60"** (reportado por
+  el cliente 2026-09-10 con un caso real: A-04 SIAF 1/2026, "Distribuidora
+  Jalapeña, S.A.", "hice un expediente malo... ya está esperando DAB-60").
+  `devolverPagoASiaf04` solo aceptaba `"Pendiente forma de pago"` y
+  `regresarAAdjudicacion` (`siaf04-actions.ts`) solo aceptaba
+  `numero_a04 == null` (antes de generar el SIAF-04) — ninguna cubría el
+  estado real donde se atoró el caso del cliente. Fix, dos botones nuevos en
+  Almacén/DAB-60 → "Fondo Rotativo pendientes de ingresar a Almacén" (mismo
+  ícono `Undo2`/`RotateCcw` + `confirm()` que ya usaban Siaf04Client/
+  PagosClient):
+  - **Liviana** (`RotateCcw`, `devolverPagoASiaf04` extendida a aceptar
+    también `"Pendiente DAB-60"`): borra factura/PPR y regresa a Fondo
+    Rotativo/SIAF-04 para volver a generarlo — Adjudicación/Acta/proveedor
+    quedan intactos. Ya existía para `"Pendiente forma de pago"`
+    (Fondo Rotativo/Pagos), solo le faltaba el otro estado.
+  - **Completa** (`Undo2`, `regresarAAdjudicacion` extendida): además borra
+    el Acta (ya "Aprobada" a esas alturas — `aprobarActa` es lo que manda a
+    "Enviado a Fondo Rotativo"), libera `oferente_ganador_id`/`oferentes`/
+    cotización de servicio, y regresa la consolidación a "Pendiente
+    adjudicación" — mismo patrón que `regresarOrdenAAdjudicacion` (vía
+    Normal). **Hallazgo de paso, ya corregido acá:** la versión vieja de
+    `regresarAAdjudicacion` (para `numero_a04 == null`) tenía este mismo
+    gap sin detectar — no borraba el Acta ni soltaba `oferente_ganador_id`
+    antes de borrar `oferentes`, lo que habría reventado por la FK
+    `consolidaciones_oferente_ganador_id_oferentes_id_fk` la primera vez que
+    alguien la usara en un caso real (nunca se había ejercido en producción
+    con ese estado exacto). Si el DAB-60 ya se generó (Almacén ya tocado),
+    primero deshace el ingreso con `revertirIngresoAlmacen` — bloqueada con
+    `LoteYaDespachadoEnTransaccion` si ya se despachó parte del lote por un
+    DAB-75. Si ya se eligió forma de pago (cheque/efectivo), se rechaza —
+    hay que devolver primero desde Fondo Rotativo/Pagos o Bancos, porque
+    ahí sí ya se movió presupuesto real.
+  - **Hallazgo confirmado leyendo el código, importante para cualquier
+    reversión futura de este tramo**: para Regularizado, `pre_compromiso`
+    se reserva desde la aprobación del A-01 SIAF y queda intacto — sin
+    ningún movimiento de `presupuesto_renglones` — durante toda la cadena
+    Consolidación → Adjudicación/Acta → SIAF-04 → DAB-60. Solo se convierte
+    a `devengado_regularizado` en Fondo Rotativo/Pagos, dentro de
+    `reflejarEnEjecucion` (`fondo-rotativo-pagos-actions.ts`), al elegir
+    forma de pago. Por eso ninguna de las dos devoluciones de arriba toca
+    presupuesto — no hace falta mientras no se haya llegado a ese paso.
+  - Verificado en vivo de punta a punta con una consolidación de prueba
+    completa sembrada por SQL (Acta Aprobada, oferente ganador, SIAF-04
+    generado con A-04 9901/2026, pago en "Pendiente DAB-60"): la liviana
+    regresó a "Enviado a Fondo Rotativo"/`numero_a04 = null` dejando Acta y
+    oferente intactos (confirmado en la lista de SIAF-04 pendientes); la
+    completa regresó todo a "Pendiente adjudicación" con Acta/oferentes
+    borrados, `acta_aprobada = false`, `oferente_ganador_id = null` — sin
+    violar la FK esta vez — y `historial_devoluciones` con la nota
+    correspondiente — limpiado después.
+  - **Pendiente, no se tocó todavía**: el pedido más grande del cliente de
+    tener un botón de "regresar un paso" en TODOS los pasos del sistema
+    (no solo este tramo puntual) — ver conversación 2026-09-10, quedó
+    pendiente de que el cliente priorice qué módulos siguen.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
