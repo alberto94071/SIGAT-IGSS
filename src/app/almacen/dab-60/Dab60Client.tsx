@@ -2,9 +2,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Archive, X, Loader2, Send, CheckCircle, Pencil, Printer, Wallet } from "lucide-react";
+import { Archive, X, Loader2, Send, CheckCircle, Pencil, Printer, Wallet, Undo2, RotateCcw } from "lucide-react";
 import { generarDab60, aprobarDab60, generarDab60FondoRotativo, type Dab60Data, type Dab60DataFr } from "@/lib/adjudicacion/dab60-actions";
-import type { PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import { regresarAAdjudicacion } from "@/lib/adjudicacion/siaf04-actions";
+import { devolverPagoASiaf04, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 import RenglonBadges from "@/components/RenglonBadges";
 import ExpandableRow from "@/components/ExpandableRow";
 import TrazabilidadPanel from "@/components/TrazabilidadPanel";
@@ -50,6 +51,31 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
   const [expandedOrden, setExpandedOrden] = useState<number | null>(null);
   const [expandedPendiente, setExpandedPendiente] = useState<number | null>(null);
   const [expandedFr, setExpandedFr] = useState<number | null>(null);
+  const [devolviendoFr, setDevolviendoFr] = useState<number | null>(null);
+  const [rowErrorFr, setRowErrorFr] = useState<Record<number, string>>({});
+
+  // Devolución "liviana": solo deshace lo que armó generarSiaf04 (factura,
+  // PPR/presentación elegida) y regresa a Fondo Rotativo/SIAF-04 para volver
+  // a generarlo — la Adjudicación/Acta/proveedor quedan intactos.
+  async function handleDevolverSiaf04(p: PagoFondoRotativo) {
+    if (!confirm(`¿Devolver el A-04 SIAF ${p.numero_a04 ?? ""}/${p.anio_a04 ?? ""} a Fondo Rotativo/SIAF-04? Se borran los datos de factura y PPR ingresados — la Adjudicación (proveedor, precios, Acta) no se toca.`)) return;
+    setDevolviendoFr(p.id); setRowErrorFr(prev => ({ ...prev, [p.id]: "" }));
+    const res = await devolverPagoASiaf04(p.id);
+    setDevolviendoFr(null);
+    if ("error" in res) { setRowErrorFr(prev => ({ ...prev, [p.id]: res.error })); return; }
+    setPagosFondoRotativo(prev => prev.filter(x => x.id !== p.id));
+  }
+
+  // Devolución completa: deshace también la Adjudicación (Acta, oferentes,
+  // proveedor, precios), regresando la consolidación a "Pendiente adjudicación".
+  async function handleDevolverFr(p: PagoFondoRotativo) {
+    if (!confirm(`¿Devolver esta compra a Compras/Adjudicación para volver a ingresar los datos? Se pierde lo capturado en Adjudicación/Regularizado (Acta, cotización, proveedor, precios) y el SIAF-04 generado.`)) return;
+    setDevolviendoFr(p.id); setRowErrorFr(prev => ({ ...prev, [p.id]: "" }));
+    const res = await regresarAAdjudicacion(p.consolidacion_id);
+    setDevolviendoFr(null);
+    if ("error" in res) { setRowErrorFr(prev => ({ ...prev, [p.id]: res.error })); return; }
+    setPagosFondoRotativo(prev => prev.filter(x => x.id !== p.id));
+  }
 
   async function handleAprobar(id: number) {
     setAcciones(prev => ({ ...prev, [id]: { cargando: true, error: null } }));
@@ -259,10 +285,23 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
                     {p.total != null ? Q(p.total) : "—"}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => setDabFrFor(p)}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors ml-auto">
-                      <Archive className="w-3 h-3" /> Generar DAB-60
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button onClick={() => handleDevolverSiaf04(p)} disabled={devolviendoFr === p.id}
+                        title="Devolver a SIAF-04 (solo factura/PPR)"
+                        className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">
+                        {devolviendoFr === p.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                      </button>
+                      <button onClick={() => handleDevolverFr(p)} disabled={devolviendoFr === p.id}
+                        title="Devolver a Compras/Adjudicación (todo)"
+                        className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">
+                        {devolviendoFr === p.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                      </button>
+                      <button onClick={() => setDabFrFor(p)}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors">
+                        <Archive className="w-3 h-3" /> Generar DAB-60
+                      </button>
+                    </div>
+                    {rowErrorFr[p.id] && <p className="text-red-600 text-xs mt-1 max-w-[200px] text-right ml-auto">{rowErrorFr[p.id]}</p>}
                   </td>
                 </ExpandableRow>
               ))}
