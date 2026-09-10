@@ -138,6 +138,29 @@ export async function buscarProveedoresAuto(q: string) {
   ).limit(8);
 }
 
+// Dirección/teléfono del proveedor, para autocompletar el A-04 cuando se
+// elige una cotización (anual o de servicio) en vez de buscar el proveedor a
+// mano por NIT — las cotizaciones solo guardan proveedor_id/proveedor_nit,
+// no dirección ni teléfono, así que hay que resolverlos contra el catálogo
+// de Proveedores (reportado por el cliente 2026-09-09: "no jala la
+// dirección automáticamente del proveedor... y el número de teléfono").
+// Busca primero por id (más preciso); si no hay o no matchea, cae al NIT.
+export async function getDatosProveedor(proveedorId: number | null, nit: string | null): Promise<{ direccion: string | null; telefono: string | null } | null> {
+  const session = await auth();
+  if (!session) return null;
+  if (proveedorId != null) {
+    const [p] = await db.select({ direccion: proveedores.direccion, telefono: proveedores.telefono })
+      .from(proveedores).where(eq(proveedores.id, proveedorId)).limit(1);
+    if (p) return p;
+  }
+  if (nit?.trim()) {
+    const [p] = await db.select({ direccion: proveedores.direccion, telefono: proveedores.telefono })
+      .from(proveedores).where(eq(proveedores.nit, nit.trim())).limit(1);
+    if (p) return p;
+  }
+  return null;
+}
+
 // ─── Anular Consolidación ─────────────────────────────────────────────────────
 
 export async function anularConsolidacion(id: number): Promise<{ ok: true } | { error: string }> {

@@ -1,5 +1,5 @@
 "use server";
-import { fechaGuatemala, fechaHoraGuatemala } from "@/lib/date-utils";
+import { fechaHoraGuatemala } from "@/lib/date-utils";
 
 import { db } from "@/lib/db";
 import { consolidaciones, fondoRotativoPagos, oferentes, cotizacionesServicio } from "@/lib/schema";
@@ -62,10 +62,12 @@ export async function generarSiaf04(consolidacionId: number, data: {
 
     const anioActual = new Date().getFullYear();
     const numeroA04 = await siguienteNumeroA04(anioActual);
-    const hoy = fechaGuatemala();
 
+    // "Fecha:" del A-04 impreso es la fecha de la factura, no la de hoy
+    // (pedido del cliente 2026-09-09) — el correlativo (numeroA04/anioActual)
+    // no se toca, sigue por año calendario real de generación.
     await db.update(consolidaciones).set({
-      numero_a04: numeroA04, anio_a04: anioActual, a04_fecha: hoy,
+      numero_a04: numeroA04, anio_a04: anioActual, a04_fecha: data.fecha_emision,
       a04_dte_numero: noFactura, a04_dte_serie: serie, a04_dte_fecha: data.fecha_emision,
     }).where(eq(consolidaciones.id, consolidacionId));
 

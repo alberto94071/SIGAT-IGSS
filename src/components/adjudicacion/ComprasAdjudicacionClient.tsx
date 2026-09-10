@@ -21,7 +21,7 @@ import {
 } from "@/lib/adjudicacion/compras-actions";
 import { buscarCotizacionAnualPorNumero } from "@/lib/adjudicacion/cotizaciones-actions";
 import { buscarNogPorNumero } from "@/lib/nog-actions";
-import { anularConsolidacion } from "@/lib/adjudicacion/actions";
+import { anularConsolidacion, getDatosProveedor } from "@/lib/adjudicacion/actions";
 import {
   TIPOS, REFERENCIA_LABEL, MAX_OFERENTES, LIMITE_POR_TIPO,
   type TipoCompra, type Consolidacion, type CotizacionServicio, type Oferente, type CotizacionAnual, type NogGrupo,
@@ -404,6 +404,16 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
     setRgPrecios(prev => ({ ...prev, [`${p.codigo_igss}::${p.subproducto}::${p.nombre}`]: String(precio) }));
   }
 
+  // La cotización (anual o de servicio) solo trae proveedor_id/proveedor_nit,
+  // no dirección ni teléfono — hay que resolverlos contra el catálogo de
+  // Proveedores para que no se queden vacíos al elegir la cotización
+  // (reportado por el cliente 2026-09-09).
+  async function prefillDireccionTelefono(proveedorId: number | null, nit: string | null) {
+    const datos = await getDatosProveedor(proveedorId, nit);
+    if (datos?.direccion) setRgDireccion(datos.direccion);
+    if (datos?.telefono) setRgTelefono(datos.telefono);
+  }
+
   async function finalizarEnviar() {
     if (oferentes.length === 0) return setError("Agrega al menos un oferente");
     const label = tipoCompra ? REFERENCIA_LABEL[tipoCompra] : null;
@@ -743,6 +753,7 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                             // que no se guardó nada.
                             setRgNit(cot.proveedor_nit ?? "");
                             setRgNombre(cot.proveedor_nombre);
+                            prefillDireccionTelefono(cot.proveedor_id, cot.proveedor_nit);
                           }
                         }}
                       />
@@ -771,7 +782,10 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
                           <label key={cot.id}
                             className={`flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0 cursor-pointer ${cotizId === cot.id ? "bg-brand-50" : "bg-white"}`}>
                             <input type="radio" name="rg-cotizacion" checked={cotizId === cot.id}
-                              onChange={() => { setCotizId(cot.id); prefillPrecioDesdeCotizacionServicio(cot); }}
+                              onChange={() => {
+                                setCotizId(cot.id); prefillPrecioDesdeCotizacionServicio(cot);
+                                prefillDireccionTelefono(cot.proveedor_id, cot.proveedor_nit);
+                              }}
                               className="w-4 h-4 accent-brand-600" />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-gray-900 truncate">{cot.servicio}</p>
@@ -804,6 +818,10 @@ function WizardModal({ consolidacion: c, onClose, onDone }: {
               <div>
                 <label className="label">Dirección del proveedor</label>
                 <input className="input" value={rgDireccion} onChange={e => setRgDireccion(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Teléfono del proveedor</label>
+                <input className="input" value={rgTelefono} onChange={e => setRgTelefono(e.target.value)} />
               </div>
               <label className="flex items-center gap-1.5 text-xs text-gray-600 whitespace-nowrap">
                 <input type="checkbox" checked={rgExento} onChange={e => setRgExento(e.target.checked)} className="w-3.5 h-3.5 accent-brand-600" />
