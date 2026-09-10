@@ -1389,6 +1389,54 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     mismo mes) y otra de prueba (Q420.00) salieron como "Utilizado" con su
     Valor correcto, Totales y Resumen cuadraron (10 + 50 - 2 - 1 - 0 = 57) —
     limpiado después.
+- **Lote de 3 bugs del A-04 SIAF (Baja Cuantía Regularizado → Fondo
+  Rotativo/SIAF-04) reportados por el cliente 2026-09-09, todos corregidos
+  juntos:**
+  - **La dirección Y el teléfono del proveedor no se autocompletaban al
+    elegir una cotización** (anual o de servicio) en el formulario de
+    Regularizado (`ComprasAdjudicacionClient.tsx`) — solo se autocompletaban
+    al buscar el proveedor a mano por NIT (`NitAutocomplete`), porque las
+    cotizaciones (`cotizaciones_anuales`/`cotizaciones_servicio`) solo
+    guardan `proveedor_id`/`proveedor_nit`, no dirección ni teléfono. Nueva
+    `getDatosProveedor(proveedorId, nit)` (`adjudicacion/actions.ts`)
+    resuelve esos dos campos contra el catálogo de Proveedores (por id,
+    con NIT de respaldo) — se llama al elegir cualquiera de las dos
+    cotizaciones. De paso se descubrió que **el campo "Teléfono del
+    proveedor" ni siquiera tenía un `<input>` visible** en ese formulario
+    (`rgTelefono` existía en estado y se mandaba al servidor, pero no había
+    forma de verlo ni corregirlo) — se agregó, igual que "Dirección del
+    proveedor".
+  - **La "Fecha:" del A-04 impreso era la fecha en que se generaba el
+    SIAF-04, no la fecha de la factura** — `generarSiaf04`
+    (`siaf04-actions.ts`) guardaba `a04_fecha: fechaGuatemala()` (hoy) en
+    vez de `data.fecha_emision` (la fecha de factura que ya se captura en
+    el mismo formulario, junto a No./Serie). Fix: `a04_fecha:
+    data.fecha_emision` — el correlativo (`numeroA04`/`anioActual`) no se
+    tocó, sigue por año calendario real de generación, no por año de la
+    factura.
+  - **Elegir el PPR/presentación al generar el SIAF-04 no cambiaba la
+    Descripción del A-04 impreso cuando la consolidación tiene un solo
+    renglón** (Regularizado) — `ImprimirA04Client.tsx` priorizaba
+    `c.a04_descripcion` (texto que `registrarRegularizado`
+    (`compras-actions.ts`) arma solo, ANTES de que exista PPR, como
+    `c.precios.map(p => p.nombre).join(", ")` — el nombre genérico del
+    insumo, no algo tipeado a mano pese a que antes sí se pedía así) por
+    encima de `renglon?.descripcion_igss` (la que `guardarPprSeleccion` SÍ
+    actualiza correctamente al elegir el PPR — ese mecanismo ya funcionaba
+    bien, confirmado leyendo el código). El caso de varios renglones ya
+    hacía esto bien (prioriza `descripcion_igss` por renglón, ignora
+    `a04_descripcion` por completo) — se igualó el caso de un solo renglón:
+    `renglon?.descripcion_igss || c.a04_descripcion || renglon?.nombre`.
+  - Verificado en vivo de punta a punta con una consolidación de prueba
+    completa (Baja Cuantía Regularizado con cotización de servicio →
+    Junta Adjudicadora/Acta → Fondo Rotativo/SIAF-04, insumo "Agua" con
+    código real y decenas de presentaciones PPR distintas en Base de Datos
+    Central): elegir la cotización llenó dirección y teléfono solos:
+    "Km 250 Ruta a Tacana, San Marcos" / "55501234"; el A-04 impreso mostró
+    "Fecha: 2026-08-15" (la de la factura capturada, no la del día real de
+    prueba) y la Descripción completa de la presentación PPR elegida
+    ("AGUA CLASE: PURIFICADA BOTELLA PET/20 ONZA, MARCA REGISTRADA...") en
+    vez del simple "AGUA" — limpiado después.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

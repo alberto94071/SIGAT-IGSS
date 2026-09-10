@@ -131,7 +131,13 @@ export default function ImprimirA04Client({
           codigoPpr: codigoPprMostrar(renglon?.codigo_ppr, renglon?.codigo_igss),
           renglonNum: renglon?.renglon != null ? String(renglon.renglon) : "—",
           categoria: (renglon?.renglon != null ? NOMBRE_RENGLON.get(renglon.renglon) : null) ?? null,
-          descripcion: (c.a04_descripcion || renglon?.descripcion_igss || renglon?.nombre || "—").toUpperCase(),
+          // descripcion_igss primero: a04_descripcion se deriva sola del
+          // nombre genérico del insumo al registrar Regularizado, ANTES de
+          // que se elija el PPR/presentación (eso pasa después, al generar
+          // el SIAF-04) — si ya hay una presentación elegida, su
+          // descripción específica es la que debe imprimirse, no la
+          // genérica (reportado por el cliente 2026-09-09).
+          descripcion: (renglon?.descripcion_igss || c.a04_descripcion || renglon?.nombre || "—").toUpperCase(),
           unidad: c.a04_unidad_medida ?? renglon?.unidad_medida ?? "—",
           cantidad: cantidadNum?.toLocaleString("es-GT") ?? "—",
           // Precio unitario = total ÷ cantidad (mismo cálculo que el caso de
