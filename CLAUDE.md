@@ -374,11 +374,20 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   también el `descripcion_igss` de la opción elegida, `guardarPprSeleccion`
   lo persiste en `siaf_compras_items.descripcion_igss` (sobreescribe el
   snapshot genérico), y `ImprimirA04Client.tsx` usa
-  `descripcion_igss || nombre`. El "Código PpR" impreso se queda con su
-  formato compuesto actual (`código-ppr`, ej. "36823-2") — el cliente
-  confirmó que NO debe cambiar a solo la columna "Código" (eso es aparte, ya
-  aplicado, en la leyenda "Código PpR:" del A-01 SIAF). Esto solo se aplicó
-  a SIAF-04/A-04 — Órdenes/Orden de Compra queda fuera, no se tocó.
+  `descripcion_igss || nombre`. **"Código PpR" del A-04 imprime solo el PPR
+  puro, no el formato compuesto** (regla revertida 2026-09-11 — antes el
+  cliente había confirmado que debía quedarse compuesto `código-ppr`, ej.
+  "36823-2"; después de ver el A-04 real impreso pidió lo contrario: "el
+  ppr no es ese... solo ese tiene que aparecer", dando como ejemplo el PPR
+  puro "4877 - 28700" sin el código IGSS "93279-" al inicio). Fix:
+  `page.tsx` llama `pprPuroParaImprimir` (mismo helper que ya usa el
+  DAB-60 para esto — ver `pprPuroParaImprimir` en Trampas de arriba) sobre
+  los `codigo_ppr` de los renglones, y pasa el mapa resultante
+  (`pprPuro: Record<string,string>`) como prop nueva a
+  `ImprimirA04Client.tsx`; `codigoPprMostrar` ahora resuelve por ese mapa
+  en vez de imprimir el valor crudo tal cual. Esto solo se aplicó a
+  SIAF-04/A-04 — Órdenes/Orden de Compra queda fuera, no se tocó (esa nunca
+  imprimió el compuesto para empezar).
 - **A-04 impreso de un solo renglón (`ImprimirA04Client.tsx`): "Precio
   Unitario" es `montoBruto ÷ cantidad`, no `montoBruto` directo** — con
   varios renglones esto ya se calculaba bien; el caso de un solo renglón
@@ -425,15 +434,15 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   `OrdenesClient.tsx`/`Siaf04Client.tsx`, ej. `"92890-5477 - 5697"` para
   insumos con código real, o `"S/C-185613"` para insumos sin código real,
   donde el número tras "S/C-" es el `id` de esa fila en Base de Datos
-  Central, NO un PpR). El A-04 SÍ necesita ese formato compuesto tal cual —
-  confirmado por el cliente que no debe cambiar (ver "Código PpR" en
-  `ImprimirA04Client.tsx`). Para el DAB-60, que pidió el PpR puro, se agregó
-  `pprPuroParaImprimir` (`renglon-utils.ts`) — se llama solo desde los dos
-  `page.tsx` de impresión de DAB-60 (Normal y Fondo Rotativo), nunca desde
-  `gruposRenglonDeConsolidacion` en sí, para no afectar al A-04. Separa el
-  prefijo "código-" cuando hay código real, y para "S/C-{id}" resuelve el
-  PpR real contra Base de Datos Central por ese `id` — con precisión total
-  (es exactamente la fila que se eligió), a diferencia de
+  Central, NO un PpR). **El A-04 también imprime el PpR puro, no el
+  compuesto** (regla revertida 2026-09-11, ver detalle más abajo en el
+  bloque de "Código PpR" del A-04) — `pprPuroParaImprimir`
+  (`renglon-utils.ts`, agregada primero para el DAB-60) ahora se llama
+  también desde `imprimir-a04/page.tsx`, no solo desde los dos `page.tsx`
+  de impresión de DAB-60 (Normal y Fondo Rotativo). Separa el prefijo
+  "código-" cuando hay código real, y para "S/C-{id}" resuelve el PpR real
+  contra Base de Datos Central por ese `id` — con precisión total (es
+  exactamente la fila que se eligió), a diferencia de
   `codigoPprSinCodigoLookupMap` (que adivina por nombre porque no tiene un
   id exacto disponible).
 - **"No. O/C:" y sin "/año" es el estándar de cómo se identifica una Orden

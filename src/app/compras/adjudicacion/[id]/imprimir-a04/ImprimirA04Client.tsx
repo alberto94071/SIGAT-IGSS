@@ -30,6 +30,7 @@ type Firmante = { id: number; nombre: string; cargo: string; unidad: string | nu
 interface Props {
   consolidacion: Consolidacion;
   renglones: Renglon[];
+  pprPuro: Record<string, string>;
   nombreUnidad: string; codigoUnidad: string;
   direccionUnidad: string;
   todosFirmantes: Firmante[]; firmantesSeleccionados: Firmante[];
@@ -42,17 +43,21 @@ const TB = "2px solid #000";
 const R = "16px";
 const C = "#000";
 
-// Defensa contra código PPR guardado con un "-null" colgado (dato viejo de
-// antes de que la selección de PPR sin código real usara el id de Base de
-// Datos Central en vez del código_ppr crudo) — mejor mostrar "—" que
-// imprimir literalmente la palabra "null" en un documento oficial. Cuando
-// el insumo no tiene código real (codigo_igss = "S/C") y tampoco se le
-// asignó PPR, la Forma A-04 SIAF real imprime "S-C" en esa columna en vez
-// de dejarla en blanco.
-function codigoPprMostrar(codigoPpr: string | null | undefined, codigoIgss: string | null | undefined): string {
+// "Código PpR" imprime solo el número de PPR puro, sin el código IGSS que
+// codigoDeOpcion antepone al guardar la selección (ej. "4877 - 28700", no
+// "93279-4877 - 28700") — pedido del cliente 2026-09-11, reversa de una
+// decisión anterior que sí lo quería compuesto. pprPuro (resuelto en
+// page.tsx con pprPuroParaImprimir, mismo helper que ya usa el DAB-60) ya
+// trae ese valor puro por cada codigo_ppr crudo guardado. Defensa contra
+// "-null" colgado (dato viejo de antes de que la selección sin código real
+// usara el id de Base de Datos Central) — mejor mostrar "—" que imprimir
+// literalmente "null" en un documento oficial. Cuando el insumo no tiene
+// código real (codigo_igss = "S/C") y tampoco se le asignó PPR, la Forma
+// A-04 SIAF real imprime "S-C" en esa columna en vez de dejarla en blanco.
+function codigoPprMostrar(codigoPpr: string | null | undefined, codigoIgss: string | null | undefined, pprPuro: Record<string, string>): string {
   const s = codigoPpr?.trim();
-  if (s && !/-?null$/i.test(s)) return s;
-  return codigoIgss?.trim() === "S/C" ? "S-C" : "—";
+  if (!s || /-?null$/i.test(s)) return codigoIgss?.trim() === "S/C" ? "S-C" : "—";
+  return pprPuro[s] ?? s;
 }
 
 const METODOS = ["Baja Cuantía", "Compra Directa", "Contrato Abierto", "Casos de Excepción"] as const;
@@ -87,7 +92,7 @@ function V({ children, minWidth = "60px", grow = false }: { children: React.Reac
 }
 
 export default function ImprimirA04Client({
-  consolidacion: c, renglones, nombreUnidad, codigoUnidad,
+  consolidacion: c, renglones, pprPuro, nombreUnidad, codigoUnidad,
   direccionUnidad, todosFirmantes, firmantesSeleccionados: initFirmantes,
 }: Props) {
   const router = useRouter();
@@ -115,7 +120,7 @@ export default function ImprimirA04Client({
         const total = r.total;
         const ivaFila = c.exento_iva ? 0 : montoIva(total);
         return {
-          codigoPpr: codigoPprMostrar(r.codigo_ppr, r.codigo_igss),
+          codigoPpr: codigoPprMostrar(r.codigo_ppr, r.codigo_igss, pprPuro),
           renglonNum: r.renglon != null ? String(r.renglon) : "—",
           categoria: (r.renglon != null ? NOMBRE_RENGLON.get(r.renglon) : null) ?? null,
           descripcion: (r.descripcion_igss || r.nombre).toUpperCase(),
@@ -128,7 +133,7 @@ export default function ImprimirA04Client({
     : (() => {
         const cantidadNum = c.a04_cantidad ?? renglon?.cantidad ?? null;
         return [{
-          codigoPpr: codigoPprMostrar(renglon?.codigo_ppr, renglon?.codigo_igss),
+          codigoPpr: codigoPprMostrar(renglon?.codigo_ppr, renglon?.codigo_igss, pprPuro),
           renglonNum: renglon?.renglon != null ? String(renglon.renglon) : "—",
           categoria: (renglon?.renglon != null ? NOMBRE_RENGLON.get(renglon.renglon) : null) ?? null,
           // descripcion_igss primero: a04_descripcion se deriva sola del
