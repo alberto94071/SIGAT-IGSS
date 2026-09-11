@@ -38,7 +38,6 @@ export default async function ImprimirA04Page({ params, searchParams }: Props) {
       nombreUnidad={config[0]?.nombre_unidad ?? ""}
       codigoUnidad={config[0]?.codigo_unidad ?? ""}
       direccionUnidad={config[0]?.direccion_unidad ?? ""}
-      municipio={config[0]?.municipio ?? ""}
       todosFirmantes={todosFirmantes as any}
       firmantesSeleccionados={firmantesSeleccionados as any}
     />

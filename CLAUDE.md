@@ -1577,6 +1577,67 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     Acta vía `aprobarActa`), y el resto de Programación/Reprogramación
     (`aprobarEntrada`/`aprobarLote`) — quedan para una próxima ronda que el
     cliente priorice.
+- **Lote de 2 bugs del A-04/SIAF-04 reportados por el cliente 2026-09-11
+  (WhatsApp, capturas del A-04 SIAF 1/2026 de Distribuidora Jalapeña —
+  confirmado que el cliente ya usó "Devolver completa" del punto anterior
+  para corregir ese expediente y volvió a registrarlo desde cero, prueba en
+  vivo de que esa función funciona):**
+  - **"Dirección Unidad Ejecutora o centro de Costo" salía duplicada**
+    (ej. "...ZONA 4, TACANA, SAN MARCOS. Tacana, San Marcos") —
+    `ImprimirA04Client.tsx` imprimía `{direccionUnidad}, {municipio}`, pero
+    `configuracion.direccion_unidad` YA incluye el municipio en el texto
+    guardado (`"3ª. CALLE 6ª. AVENIDA, ZONA 4, TACANA, SAN MARCOS."`) —
+    apendizar `configuracion.municipio` aparte siempre lo repetía. Fix:
+    imprimir solo `direccionUnidad` (se quitó el prop `municipio` de todo
+    el componente, ya no se usa ahí).
+  - **`descripcion_igss` de Base de Datos Central casi nunca distingue la
+    presentación real elegida — bug de datos sistémico, no puntual de
+    "Agua".** El cliente reportó que el A-04 imprimía "Botella pet/20 Onza"
+    para un pedido que en la vida real fue "Garrafón de 5 Galones".
+    Investigado contra toda la tabla: **3,032 de 3,332 códigos con más de
+    una presentación (91%) comparten una sola `descripcion_igss` para
+    TODAS sus filas** — ej. las 15 presentaciones distintas de "Agua"
+    (Garrafón 5 Galón, Garrafón 18.9L, Botella pet 20oz, Bolsa 350ml...)
+    tienen las 15 el mismo texto `descripcion_igss` ("Botella pet/20
+    Onza..."), así que no importa cuál PPR se elija en el selector, la
+    columna `descripcion_igss` de esa fila es idéntica y no dice nada
+    específico. En cambio `presentacion`/`unidad_medida` SÍ distinguen cada
+    fila correctamente y están pobladas en el 100% de las ~30,700 filas con
+    código real (`caracteristicas` también, cuando aplica). Fix, solo en
+    `Siaf04Client.tsx` (`descripcionDePresentacion`, nueva): al guardar la
+    descripción de la presentación elegida (lo que después imprime A-04
+    Y DAB-60, ambos vía `siaf_compras_items.descripcion_igss` →
+    `gruposRenglonDeConsolidacion`), arma `"{nombre} {presentacion}
+    {unidad_medida}; {caracteristicas}"` en vez de usar
+    `descripcion_igss` directo — cae a `descripcion_igss`/`nombre` solo si
+    esos tres campos vienen vacíos (defensivo). **No se tocó
+    `OrdenesClient.tsx`** — el cliente ya había confirmado antes (ver punto
+    de "El selector de PPR/presentación... SÍ existe" arriba) que Órdenes
+    queda fuera de este mecanismo, decisión aparte que sigue en pie; la
+    causa raíz de HOY es la misma (`descripcion_igss` poco confiable), pero
+    ampliar el alcance a Órdenes no se pidió esta vez. El mensaje del
+    cliente sobre "el DAB-60 muestra el ppr del insumo que viene en el
+    SIAF, no el que se seleccionó al adjudicar" se investigó y confirmó que
+    NO es un bug aparte de sincronización — `pprPuroParaImprimir` y el
+    DAB-60 de Fondo Rotativo ya leen exactamente el mismo
+    `codigo_ppr`/`descripcion_igss` que guarda `guardarPprSeleccion` en
+    SIAF-04 (nunca hay una fuente distinta) — una vez corregida la
+    descripción guardada, DAB-60 hereda el fix automáticamente al
+    generarse (no hizo falta tocar nada de DAB-60 en sí).
+  - Verificado en vivo con una consolidación de prueba desechable
+    (Regularizado, Agua, mismo código real 93279 que el caso reportado):
+    elegir "PPR 4877 - 28700 — ... · Garrafón · 5 Galón" en el selector y
+    generar el SIAF-04 guardó `descripcion_igss = "Agua Garrafón 5 Galón;
+    Clase: Purificada"` — ya no la genérica de Botella pet — confirmado por
+    consulta directa a la base, limpiado después. **No se tocó el
+    expediente real del cliente** (consolidación id 63, A-04 SIAF 1/2026,
+    Distribuidora Jalapeña — el mismo que el cliente ya había devuelto y
+    vuelto a registrar con "Devolver completa" del punto anterior — sigue
+    en "Pendiente DAB-60" con `codigo_ppr` de Garrafón 18.9L pero
+    `descripcion_igss`/`a04_unidad_medida` sin corresponder) — hay que
+    avisarle que una vez desplegado esto, use "Devolver a SIAF-04" (botón
+    liviano) y regenere el SIAF-04 eligiendo de nuevo el PPR correcto
+    (Garrafón 5 Galón) para que quede con la descripción arreglada.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
