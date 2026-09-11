@@ -1638,6 +1638,32 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     avisarle que una vez desplegado esto, use "Devolver a SIAF-04" (botón
     liviano) y regenere el SIAF-04 eligiendo de nuevo el PPR correcto
     (Garrafón 5 Galón) para que quede con la descripción arreglada.
+- **Seguimiento del bug anterior (2026-09-11): el cliente sí regeneró el
+  SIAF-04 de la consolidación 63 con el PPR correcto (Garrafón 5 Galón) y la
+  descripción salió bien, pero "Unidad de Medida" seguía mal (imprimía
+  "6 Litro" en vez de "5 Galón") — mandó una tercera captura.** Causa
+  distinta a la de arriba, mismo síntoma de fondo: `guardarPprSeleccion`
+  nunca guardaba `unidad_medida` en el snapshot de `siaf_compras_items` (solo
+  `codigo_ppr` y, desde el fix anterior, `descripcion_igss`) — quedaba
+  `null` para siempre, así que la impresión (`gruposRenglonDeConsolidacion`)
+  caía en el respaldo genérico `unidadMedidaLookupMap`, que resuelve por
+  `codigo_igss::nombre` (ambiguo cuando hay varias presentaciones) y no por
+  el PPR puntual elegido — confirmado con SQL directo: para código 93279
+  (Agua, 61 presentaciones distintas) el PPR elegido "4877 - 28700" sí tiene
+  `unidad_medida = "5 Galón"` en Base de Datos Central, pero el respaldo
+  ambiguo devolvía la de otra fila cualquiera ("Envase", "6 Litro"). Mismo
+  fix que ya se había aplicado para `descripcion_igss`: `guardarPprSeleccion`
+  (`renglon-utils.ts`) ahora acepta también `unidad_medida` en la selección y
+  la persiste cuando viene; `Siaf04Client.tsx` manda
+  `opcionElegida?.unidad_medida` al generar el SIAF-04. **No se tocó
+  `OrdenesClient.tsx`** — mismo criterio de alcance que la vez anterior (el
+  cliente nunca pidió extender el selector de PPR de Órdenes a esto).
+  Verificado con un UPDATE de prueba desechable sobre una fila sembrada de
+  `siaf_compras_items` (mismo patrón SQL exacto que ejecuta la función),
+  confirmando que `unidad_medida` queda "5 Galón" — no se tocó la
+  consolidación real 63, que en este momento está de nuevo en "Enviado a
+  Fondo Rotativo" (`numero_a04` null, el cliente ya la devolvió otra vez) —
+  falta avisarle que regenere el SIAF-04 una vez más ya con este fix.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
