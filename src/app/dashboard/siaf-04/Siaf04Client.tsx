@@ -42,6 +42,24 @@ function etiquetaDeOpcion(o: PprOpcion): string {
   const desc = o.descripcion_igss || o.nombre;
   return `${prefijo}${desc}${o.caracteristicas ? ` (${o.caracteristicas})` : ""}${o.presentacion ? ` · ${o.presentacion}` : ""}${o.unidad_medida ? ` · ${o.unidad_medida}` : ""}`;
 }
+// Descripción a GUARDAR para la presentación elegida (distinto de
+// etiquetaDeOpcion, que es solo para el <select>) — reportado por el
+// cliente 2026-09-11: "descripcion_igss" de Base de Datos Central casi
+// nunca varía entre presentaciones de un mismo código (confirmado contra
+// toda la tabla: 3032 de 3332 códigos con varias presentaciones comparten
+// una sola descripcion_igss para todas — ej. "Agua" tiene la misma
+// descripción para Garrafón de 5 Galones, Garrafón de 18.9L y Botella pet
+// de 20oz). presentacion/unidad_medida/caracteristicas sí distinguen cada
+// fila (100% de las filas con código real las tienen), así que la
+// descripción que se guarda (y que después imprime A-04/DAB-60) se arma con
+// esos campos en vez de confiar en descripcion_igss.
+function descripcionDePresentacion(o: PprOpcion): string {
+  const partes = [o.nombre, o.presentacion, o.unidad_medida].filter((p): p is string => !!p?.trim());
+  const base = partes.join(" ");
+  const caracteristicas = o.caracteristicas?.trim().replace(/;\s*$/, "");
+  if (caracteristicas) return `${base}; ${caracteristicas}`;
+  return base || o.descripcion_igss || o.nombre;
+}
 
 interface Props { consolidaciones: Consolidacion[]; }
 
@@ -233,7 +251,7 @@ function GenerarSiafModal({ consolidacion: c, onClose, onDone }: {
       const opcionElegida = opciones.find(o => codigoDeOpcion(o) === elegido);
       seleccionPpr.push({
         codigo_igss: r.codigo_igss!, subproducto: r.subproducto, nombre: r.nombre, codigo_ppr: elegido,
-        descripcion_igss: opcionElegida?.descripcion_igss ?? null,
+        descripcion_igss: opcionElegida ? descripcionDePresentacion(opcionElegida) : null,
       });
     }
 

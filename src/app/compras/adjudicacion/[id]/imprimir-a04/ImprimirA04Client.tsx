@@ -31,7 +31,7 @@ interface Props {
   consolidacion: Consolidacion;
   renglones: Renglon[];
   nombreUnidad: string; codigoUnidad: string;
-  direccionUnidad: string; municipio: string;
+  direccionUnidad: string;
   todosFirmantes: Firmante[]; firmantesSeleccionados: Firmante[];
 }
 
@@ -88,7 +88,7 @@ function V({ children, minWidth = "60px", grow = false }: { children: React.Reac
 
 export default function ImprimirA04Client({
   consolidacion: c, renglones, nombreUnidad, codigoUnidad,
-  direccionUnidad, municipio, todosFirmantes, firmantesSeleccionados: initFirmantes,
+  direccionUnidad, todosFirmantes, firmantesSeleccionados: initFirmantes,
 }: Props) {
   const router = useRouter();
   const correlativoA04 = `${c.numero_a04}-${c.anio_a04}`;
@@ -228,7 +228,7 @@ export default function ImprimirA04Client({
               </p>
               <p style={{ margin: 0, display: "flex", alignItems: "baseline", gap: "4px" }}>
                 <strong style={{ whiteSpace: "nowrap" }}>Dirección Unidad Ejecutora o centro de Costo:</strong>
-                <V grow minWidth="80px">{direccionUnidad}, {municipio}</V>
+                <V grow minWidth="80px">{direccionUnidad}</V>
               </p>
             </div>
             <div style={{ width: "180px", flexShrink: 0, padding: "10px 12px" }}>
