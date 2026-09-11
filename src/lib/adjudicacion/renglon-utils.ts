@@ -110,19 +110,25 @@ export async function getPprsPorItems(items: ItemParaPpr[]): Promise<Record<stri
 // El nombre entra al WHERE por la misma razón que en el resto del código: un
 // codigo_igss "S/C" se reutiliza entre insumos distintos que comparten
 // subproducto — sin el nombre, guardar el PPR de uno pisaba el de otro.
-export async function guardarPprSeleccion(consolidacionId: number, seleccion: { codigo_igss: string; subproducto: string; nombre: string; codigo_ppr: string; descripcion_igss?: string | null }[]): Promise<void> {
+export async function guardarPprSeleccion(consolidacionId: number, seleccion: { codigo_igss: string; subproducto: string; nombre: string; codigo_ppr: string; descripcion_igss?: string | null; unidad_medida?: string | null }[]): Promise<void> {
   if (seleccion.length === 0) return;
   const siafIds = (await db.select({ id: siafCompras.id }).from(siafCompras)
     .where(eq(siafCompras.consolidacion_id, consolidacionId))).map(s => s.id);
   if (siafIds.length === 0) return;
 
   for (const s of seleccion) {
-    // descripcion_igss (si se manda) es la de la presentación elegida, NO la
-    // genérica que ya traía el ítem desde el catálogo/PAC — sobreescribe ese
-    // snapshot para que la impresión (ej. SIAF-04) muestre la descripción de
-    // lo que el usuario realmente eligió, no la del insumo en general.
-    const valores: { codigo_ppr: string; descripcion_igss?: string } = { codigo_ppr: s.codigo_ppr };
+    // descripcion_igss/unidad_medida (si se mandan) son las de la presentación
+    // elegida, NO las genéricas que ya traía el ítem desde el catálogo/PAC —
+    // sobreescriben ese snapshot para que la impresión (ej. SIAF-04) muestre
+    // los datos de lo que el usuario realmente eligió, no los del insumo en
+    // general. Sin esto, unidad_medida se queda null y el respaldo genérico
+    // por codigo_igss::nombre (unidadMedidaLookupMap, en
+    // gruposRenglonDeConsolidacion) puede resolver la unidad de OTRA
+    // presentación del mismo insumo cuando hay varias — no hay forma de saber
+    // cuál eligió el usuario sin este snapshot puntual.
+    const valores: { codigo_ppr: string; descripcion_igss?: string; unidad_medida?: string } = { codigo_ppr: s.codigo_ppr };
     if (s.descripcion_igss) valores.descripcion_igss = s.descripcion_igss;
+    if (s.unidad_medida) valores.unidad_medida = s.unidad_medida;
     await db.update(siafComprasItems).set(valores)
       .where(and(
         inArray(siafComprasItems.solicitud_id, siafIds),
