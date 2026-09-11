@@ -1,13 +1,14 @@
 "use client";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Calculator, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Unlock, Loader2 } from "lucide-react";
-import { liberarNoEjecutado, type PresupuestoGeneralRow } from "@/lib/presupuesto-general-actions";
+import { Calculator, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Unlock, Undo2, Loader2 } from "lucide-react";
+import { liberarNoEjecutado, devolverUltimaLiberacion, type PresupuestoGeneralRow, type LiberacionNoEjecutado } from "@/lib/presupuesto-general-actions";
 
 const SCROLL_PASO = 320;
 
 interface Props {
   data: PresupuestoGeneralRow[];
+  ultimaLiberacion: LiberacionNoEjecutado | null;
 }
 
 const RANGOS = [
@@ -21,13 +22,14 @@ const Q = (n: number | null | undefined) => {
   return `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
-export default function PresupuestoGeneralClient({ data }: Props) {
+export default function PresupuestoGeneralClient({ data, ultimaLiberacion }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState(0);
   const [renglonBuscado, setRenglonBuscado] = useState("");
   const [orden, setOrden] = useState<"asc" | "desc">("asc");
   const [liberando, setLiberando] = useState(false);
   const [mensajeLiberacion, setMensajeLiberacion] = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const [devolviendo, setDevolviendo] = useState(false);
 
   const totalNoEjecutado = useMemo(() => data.reduce((sum, r) => sum + (r.noEjecutado ?? 0), 0), [data]);
 
@@ -43,6 +45,23 @@ export default function PresupuestoGeneralClient({ data }: Props) {
       setMensajeLiberacion({ type: "error", text: res.error });
     } else {
       setMensajeLiberacion({ type: "success", text: `Se liberaron Q${res.total.toLocaleString("es-GT", { minimumFractionDigits: 2 })} de No Ejecutado — ya están de vuelta en Saldo.` });
+      router.refresh();
+    }
+  }
+
+  async function handleDevolverLiberacion() {
+    if (!ultimaLiberacion) return;
+    if (!confirm(
+      `¿Devolver la última liberación (Q${ultimaLiberacion.total.toLocaleString("es-GT", { minimumFractionDigits: 2 })}, del ${ultimaLiberacion.fecha})? Se quita otra vez de Saldo y vuelve a No Ejecutado en cada renglón/sub-producto correspondiente.`
+    )) return;
+    setDevolviendo(true);
+    setMensajeLiberacion(null);
+    const res = await devolverUltimaLiberacion(ultimaLiberacion.id);
+    setDevolviendo(false);
+    if ("error" in res) {
+      setMensajeLiberacion({ type: "error", text: res.error });
+    } else {
+      setMensajeLiberacion({ type: "success", text: "Se devolvió la liberación — el No Ejecutado quedó como antes." });
       router.refresh();
     }
   }
@@ -116,20 +135,33 @@ export default function PresupuestoGeneralClient({ data }: Props) {
           </p>
         </div>
         <div className="text-right">
-          <button
-            onClick={handleLiberar}
-            disabled={liberando || totalNoEjecutado <= 0}
-            title={totalNoEjecutado <= 0 ? "No hay nada acumulado en No Ejecutado" : undefined}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {liberando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlock className="w-4 h-4" />}
-            Liberar No Ejecutado
-          </button>
+          <div className="flex items-center justify-end gap-2">
+            {ultimaLiberacion && !ultimaLiberacion.revertido && (
+              <button
+                onClick={handleDevolverLiberacion}
+                disabled={devolviendo}
+                title={`Devolver la liberación del ${ultimaLiberacion.fecha}`}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50 transition-colors"
+              >
+                {devolviendo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                Devolver última liberación
+              </button>
+            )}
+            <button
+              onClick={handleLiberar}
+              disabled={liberando || totalNoEjecutado <= 0}
+              title={totalNoEjecutado <= 0 ? "No hay nada acumulado en No Ejecutado" : undefined}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {liberando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlock className="w-4 h-4" />}
+              Liberar No Ejecutado
+            </button>
+          </div>
           <p className="text-xs text-gray-500 mt-1">
             Acumulado: Q{totalNoEjecutado.toLocaleString("es-GT", { minimumFractionDigits: 2 })} (todos los renglones)
           </p>
           {mensajeLiberacion && (
-            <p className={`text-xs mt-1 max-w-xs ${mensajeLiberacion.type === "error" ? "text-red-600" : "text-green-700"}`}>
+            <p className={`text-xs mt-1 max-w-xs ml-auto ${mensajeLiberacion.type === "error" ? "text-red-600" : "text-green-700"}`}>
               {mensajeLiberacion.text}
             </p>
           )}

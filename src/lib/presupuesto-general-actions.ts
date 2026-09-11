@@ -1,9 +1,10 @@
 "use server";
 import { db } from "@/lib/db";
-import { presupuestoRenglones, programacionEntradas } from "@/lib/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { presupuestoRenglones, programacionEntradas, liberacionesNoEjecutado, liberacionNoEjecutadoDetalle } from "@/lib/schema";
+import { and, eq, desc, sql } from "drizzle-orm";
 import { PRESUPUESTO_DATA } from "@/lib/presupuesto-general-data";
 import { requireModuloAccessAction } from "@/lib/modulo-access";
+import { fechaGuatemala, fechaHoraGuatemala } from "@/lib/date-utils";
 
 export type PresupuestoGeneralRow = {
   renglon: number;
@@ -115,21 +116,109 @@ export async function getPresupuestoGeneralData(): Promise<PresupuestoGeneralRow
  * mod_presupuesto, y solo cuando así lo autoricen desde el nivel central
  * (revisión de fin de año). No hay forma de liberar parcialmente por
  * renglón todavía — es una decisión que llega para todo el ejercicio a la vez.
+ *
+ * Antes de zerar, guarda un snapshot (liberacionesNoEjecutado +
+ * liberacionNoEjecutadoDetalle) de cuánto tenía cada renglón — sin esto, el
+ * dato se pierde para siempre en cuanto se hace el UPDATE, y no hay forma de
+ * deshacer una liberación hecha por error (ver devolverUltimaLiberacion).
  */
 export async function liberarNoEjecutado(): Promise<{ ok: true; total: number } | { error: string }> {
   const check = await requireModuloAccessAction("mod_presupuesto");
   if ("error" in check) return check;
 
-  const [{ total }] = await db.select({
-    total: sql<number>`COALESCE(SUM(${presupuestoRenglones.no_ejecutado}), 0)`,
-  }).from(presupuestoRenglones).where(eq(presupuestoRenglones.ejercicio_fiscal, 2026));
+  const filas = await db.select({
+    renglon: presupuestoRenglones.renglon,
+    subproducto: presupuestoRenglones.subproducto,
+    no_ejecutado: presupuestoRenglones.no_ejecutado,
+  }).from(presupuestoRenglones).where(and(
+    eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+    sql`${presupuestoRenglones.no_ejecutado} != 0`,
+  ));
 
-  await db.update(presupuestoRenglones)
-    .set({ no_ejecutado: 0 })
-    .where(and(
-      eq(presupuestoRenglones.ejercicio_fiscal, 2026),
-      sql`${presupuestoRenglones.no_ejecutado} != 0`,
-    ));
+  const total = filas.reduce((sum, f) => sum + (f.no_ejecutado ?? 0), 0);
+  if (filas.length === 0) return { ok: true, total: 0 };
 
-  return { ok: true, total: Number(total ?? 0) };
+  await db.transaction(async (tx) => {
+    const [liberacion] = await tx.insert(liberacionesNoEjecutado).values({
+      ejercicio_fiscal: 2026, fecha: fechaGuatemala(), total, creado_por: check.uid,
+    }).returning();
+
+    await tx.insert(liberacionNoEjecutadoDetalle).values(
+      filas.map(f => ({
+        liberacion_id: liberacion.id,
+        renglon: f.renglon as number,
+        subproducto: f.subproducto as string,
+        no_ejecutado_anterior: f.no_ejecutado ?? 0,
+      }))
+    );
+
+    await tx.update(presupuestoRenglones)
+      .set({ no_ejecutado: 0 })
+      .where(and(
+        eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+        sql`${presupuestoRenglones.no_ejecutado} != 0`,
+      ));
+  });
+
+  return { ok: true, total };
+}
+
+export type LiberacionNoEjecutado = {
+  id: number; fecha: string | null; total: number; revertido: boolean; created_at: string | null;
+};
+
+/** Última liberación (revertida o no) — para mostrar el botón "Devolver" solo cuando aplica. */
+export async function getUltimaLiberacion(): Promise<LiberacionNoEjecutado | null> {
+  const [fila] = await db.select({
+    id: liberacionesNoEjecutado.id, fecha: liberacionesNoEjecutado.fecha,
+    total: liberacionesNoEjecutado.total, revertido: liberacionesNoEjecutado.revertido,
+    created_at: liberacionesNoEjecutado.created_at,
+  }).from(liberacionesNoEjecutado)
+    .where(eq(liberacionesNoEjecutado.ejercicio_fiscal, 2026))
+    .orderBy(desc(liberacionesNoEjecutado.id)).limit(1);
+  return fila ?? null;
+}
+
+/**
+ * Deshace la liberación más reciente (la única que se puede devolver — no
+ * tiene sentido revertir una liberación vieja si ya hubo otra más nueva
+ * encima). Suma de vuelta lo que tenía cada renglón en No Ejecutado en ese
+ * momento — funciona sin importar si algún cierre de cuatrimestre agregó más
+ * No Ejecutado después (se suma sobre lo que haya ahora, nunca se
+ * sobreescribe), así que nunca hace falta bloquear por eso.
+ */
+export async function devolverUltimaLiberacion(liberacionId: number): Promise<{ ok: true } | { error: string }> {
+  const check = await requireModuloAccessAction("mod_presupuesto");
+  if ("error" in check) return check;
+
+  const [liberacion] = await db.select().from(liberacionesNoEjecutado)
+    .where(eq(liberacionesNoEjecutado.id, liberacionId)).limit(1);
+  if (!liberacion) return { error: "No se encontró esa liberación" };
+  if (liberacion.revertido) return { error: "Esta liberación ya se había devuelto" };
+
+  const [masReciente] = await db.select({ id: liberacionesNoEjecutado.id })
+    .from(liberacionesNoEjecutado)
+    .where(eq(liberacionesNoEjecutado.ejercicio_fiscal, liberacion.ejercicio_fiscal))
+    .orderBy(desc(liberacionesNoEjecutado.id)).limit(1);
+  if (masReciente?.id !== liberacionId) return { error: "Solo se puede devolver la liberación más reciente" };
+
+  const detalle = await db.select().from(liberacionNoEjecutadoDetalle)
+    .where(eq(liberacionNoEjecutadoDetalle.liberacion_id, liberacionId));
+
+  await db.transaction(async (tx) => {
+    for (const d of detalle) {
+      await tx.update(presupuestoRenglones)
+        .set({ no_ejecutado: sql`COALESCE(${presupuestoRenglones.no_ejecutado}, 0) + ${d.no_ejecutado_anterior}` })
+        .where(and(
+          eq(presupuestoRenglones.ejercicio_fiscal, liberacion.ejercicio_fiscal),
+          eq(presupuestoRenglones.renglon, d.renglon),
+          eq(presupuestoRenglones.subproducto, d.subproducto),
+        ));
+    }
+    await tx.update(liberacionesNoEjecutado).set({
+      revertido: true, revertido_por: check.uid, revertido_en: fechaHoraGuatemala(),
+    }).where(eq(liberacionesNoEjecutado.id, liberacionId));
+  });
+
+  return { ok: true };
 }

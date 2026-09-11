@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Receipt, CheckCircle2, XCircle, Printer, Loader2, AlertTriangle, X } from "lucide-react";
-import { autorizarVale, rechazarVale, asignarChequeVale } from "@/lib/vale-actions";
+import { Receipt, CheckCircle2, XCircle, Printer, Loader2, AlertTriangle, X, Undo2 } from "lucide-react";
+import { autorizarVale, rechazarVale, asignarChequeVale, devolverValeAAutorizado, devolverValeALiquidado } from "@/lib/vale-actions";
 
 type Vale = {
   id: number; numero: number; tipo: string; fecha: string; monto: number; monto_autorizado: number | null;
@@ -16,15 +16,39 @@ const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 
 const TIPO_LABEL: Record<string, string> = { pasajes: "Pago de Pasajes", gastos_varios: "Gastos Varios" };
 
 export default function ValesClient({
-  pendientes: init, autorizados: initA, activos: initAc, saldo, canEdit,
-}: { pendientes: Vale[]; autorizados: Vale[]; activos: Vale[]; saldo: Saldo; canEdit: boolean }) {
+  pendientes: init, autorizados: initA, activos: initAc, liquidados: initL, saldo, canEdit,
+}: { pendientes: Vale[]; autorizados: Vale[]; activos: Vale[]; liquidados: Vale[]; saldo: Saldo; canEdit: boolean }) {
   const [pendientes, setPendientes] = useState(init);
   const [autorizados, setAutorizados] = useState(initA);
   const [activos, setActivos] = useState(initAc);
+  const [liquidados, setLiquidados] = useState(initL);
   const [saldoActual, setSaldoActual] = useState(saldo.saldo_disponible);
   const [autorizando, setAutorizando] = useState<Vale | null>(null);
   const [rechazando, setRechazando] = useState<Vale | null>(null);
   const [asignando, setAsignando] = useState<Vale | null>(null);
+  const [devolviendo, setDevolviendo] = useState<number | null>(null);
+  const [errorDevolver, setErrorDevolver] = useState<Record<number, string>>({});
+
+  async function handleDevolverAutorizado(v: Vale) {
+    if (!confirm(`¿Devolver el vale ${String(v.numero).padStart(7, "0")} a Autorizado? Se acredita de vuelta ${Q(v.monto_autorizado ?? v.monto)} al saldo.`)) return;
+    setDevolviendo(v.id); setErrorDevolver(prev => ({ ...prev, [v.id]: "" }));
+    const res = await devolverValeAAutorizado(v.id);
+    setDevolviendo(null);
+    if ("error" in res) { setErrorDevolver(prev => ({ ...prev, [v.id]: res.error })); return; }
+    setActivos(prev => prev.filter(x => x.id !== v.id));
+    setAutorizados(prev => [{ ...v, estado: "Autorizado", numero_cheque: null, destinatario_cheque: null }, ...prev]);
+    setSaldoActual(prev => prev + (v.monto_autorizado ?? v.monto));
+  }
+
+  async function handleDevolverLiquidado(v: Vale) {
+    if (!confirm(`¿Devolver el vale ${String(v.numero).padStart(7, "0")} a Activo?`)) return;
+    setDevolviendo(v.id); setErrorDevolver(prev => ({ ...prev, [v.id]: "" }));
+    const res = await devolverValeALiquidado(v.id);
+    setDevolviendo(null);
+    if ("error" in res) { setErrorDevolver(prev => ({ ...prev, [v.id]: res.error })); return; }
+    setLiquidados(prev => prev.filter(x => x.id !== v.id));
+    setActivos(prev => [{ ...v, estado: "Activo" }, ...prev]);
+  }
 
   return (
     <div className="space-y-6">
@@ -170,7 +194,15 @@ export default function ValesClient({
                           className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
                           <Printer className="w-3 h-3" /> Voucher
                         </Link>
+                        {canEdit && (
+                          <button onClick={() => handleDevolverAutorizado(v)} disabled={devolviendo === v.id}
+                            title="Devolver a Autorizado"
+                            className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">
+                            {devolviendo === v.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Undo2 className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
                       </div>
+                      {errorDevolver[v.id] && <p className="text-red-600 text-[10px] mt-1 max-w-[180px] text-right ml-auto">{errorDevolver[v.id]}</p>}
                     </td>
                   </tr>
                 ))}
@@ -178,6 +210,48 @@ export default function ValesClient({
             </table>
             {activos.length === 0 && (
               <div className="text-center py-10 text-gray-400 text-sm">No hay vales activos.</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2 className="text-sm font-semibold text-gray-700 mb-2">Vales liquidados recientemente</h2>
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="table-header">
+                  <th className="px-4 py-3 text-left whitespace-nowrap">No. Vale</th>
+                  <th className="px-4 py-3 text-left whitespace-nowrap">Tipo</th>
+                  <th className="px-4 py-3 text-left">A nombre de</th>
+                  <th className="px-4 py-3 text-right whitespace-nowrap">Monto</th>
+                  {canEdit && <th className="px-4 py-3 text-right whitespace-nowrap">Acc.</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {liquidados.map(v => (
+                  <tr key={v.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">{String(v.numero).padStart(7, "0")}</td>
+                    <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">{TIPO_LABEL[v.tipo] ?? v.tipo}</td>
+                    <td className="px-4 py-3 text-gray-700">{v.destinatario_cheque || v.solicitante_nombre}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">{Q(v.monto_autorizado ?? v.monto)}</td>
+                    {canEdit && (
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <button onClick={() => handleDevolverLiquidado(v)} disabled={devolviendo === v.id}
+                          title="Devolver a Activo"
+                          className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50 ml-auto">
+                          {devolviendo === v.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Undo2 className="w-3.5 h-3.5" />}
+                        </button>
+                        {errorDevolver[v.id] && <p className="text-red-600 text-[10px] mt-1 max-w-[180px] text-right ml-auto">{errorDevolver[v.id]}</p>}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {liquidados.length === 0 && (
+              <div className="text-center py-10 text-gray-400 text-sm">No hay vales liquidados recientemente.</div>
             )}
           </div>
         </div>

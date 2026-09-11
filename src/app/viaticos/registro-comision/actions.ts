@@ -269,6 +269,47 @@ export async function aprobarSolicitud(id: number, datos: DatosAprobar): Promise
   return { ok: true };
 }
 
+/**
+ * Devuelve un V-L ya Aprobado a "Enviado" — por si se aprobó una solicitud
+ * equivocada o con datos mal capturados en el modal de revisión. Borra el
+ * viatico_pagos que se creó al aprobar (Fase F) y limpia los campos de
+ * Liquidación/Informe/Justificación que se llenaron en ese mismo paso, para
+ * que el encargado vuelva a revisar desde cero. Solo mientras el pago siga
+ * "Pendiente forma de pago" sin forma_pago elegida — si ya se eligió
+ * cheque/efectivo, ya se movió hacia Fondo Rotativo/Pagos y hay que
+ * devolverlo desde ahí primero (devolverAFormaPagoViatico, una vez llegue a
+ * "Pendiente FRI") antes de poder llegar hasta acá.
+ */
+export async function devolverSolicitudAprobada(id: number): Promise<{ ok: true } | { error: string }> {
+  const check = await requireTabAccessAction("mod_viaticos", TAB);
+  if ("error" in check) return check;
+
+  const [sol] = await db.select({ estado: viaticoSolicitudes.estado }).from(viaticoSolicitudes)
+    .where(eq(viaticoSolicitudes.id, id)).limit(1);
+  if (!sol) return { error: "No se encontró la solicitud" };
+  if (sol.estado !== "Aprobado") return { error: "Esta solicitud no está aprobada" };
+
+  const [pago] = await db.select({ id: viaticoPagos.id, forma_pago: viaticoPagos.forma_pago })
+    .from(viaticoPagos).where(eq(viaticoPagos.viatico_solicitud_id, id)).limit(1);
+  if (pago?.forma_pago != null) {
+    return { error: "Ya se eligió la forma de pago de este viático en Fondo Rotativo/Pagos — devuélvelo primero desde ahí" };
+  }
+
+  await db.transaction(async (tx) => {
+    if (pago) await tx.delete(viaticoPagos).where(eq(viaticoPagos.id, pago.id));
+    await tx.update(viaticoSolicitudes).set({
+      estado: "Enviado",
+      aprobado_por: null, aprobado_en: null,
+      otros_gastos: 0,
+      recibido_va_no: null, recibido_va_monto: null,
+      reintegro: null, complemento: null,
+      informe_comision: null, justificacion_estancia: null,
+    }).where(eq(viaticoSolicitudes.id, id));
+  });
+
+  return { ok: true };
+}
+
 export async function rechazarSolicitud(id: number, motivo: string): Promise<{ ok: true } | { error: string }> {
   const check = await requireTabAccessAction("mod_viaticos", TAB);
   if ("error" in check) return check;

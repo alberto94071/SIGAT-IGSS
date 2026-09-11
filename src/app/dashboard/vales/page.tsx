@@ -14,6 +14,7 @@ export default async function FondoRotativoValesPage() {
 
   const autorizados = todos.filter(v => v.estado === "Autorizado");
   const activos = todos.filter(v => v.estado === "Activo");
+  const liquidados = todos.filter(v => v.estado === "Liquidado").slice(0, 20);
 
-  return <ValesClient pendientes={pendientes} autorizados={autorizados} activos={activos} saldo={saldo} canEdit={canEdit} />;
+  return <ValesClient pendientes={pendientes} autorizados={autorizados} activos={activos} liquidados={liquidados} saldo={saldo} canEdit={canEdit} />;
 }

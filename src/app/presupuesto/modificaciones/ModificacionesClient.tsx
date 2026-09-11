@@ -1,13 +1,13 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, CheckCircle, XCircle, ArrowRightLeft, Printer, ClipboardCheck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CheckCircle, XCircle, ArrowRightLeft, Printer, ClipboardCheck, Undo2 } from "lucide-react";
 import { CUATRIMESTRES, TIPOS_MODIFICACION, type TipoModificacion } from "@/lib/programacion-constants";
 import { type Permisos } from "@/lib/permisos";
 import {
   buscarRenglones, getSubproductosDeRenglon, getSubproductosConDisponible,
-  guardarModificacion, getModificaciones, aprobarModificacion, rechazarModificacion,
-  transferirPresupuesto, getTransferencias, aprobarTransferencia, rechazarTransferencia,
+  guardarModificacion, getModificaciones, aprobarModificacion, rechazarModificacion, devolverModificacion,
+  transferirPresupuesto, getTransferencias, aprobarTransferencia, rechazarTransferencia, devolverTransferencia,
   type SubproductoDisponible, type SubproductoConDisponible,
   type ModificacionRow, type TransferenciaRow,
 } from "@/lib/programacion-actions";
@@ -602,6 +602,8 @@ function AutorizarView({ onVolver }: { onVolver: () => void }) {
 
   const modsPendientes = modificaciones.filter(m => m.estado === "Solicitado");
   const transfPendientes = transferencias.filter(t => t.estado === "Solicitado");
+  const modsAprobadas = modificaciones.filter(m => m.estado === "Aprobado");
+  const transfAprobadas = transferencias.filter(t => t.estado === "Aprobado");
 
   return (
     <div className="space-y-6">
@@ -722,6 +724,119 @@ function AutorizarView({ onVolver }: { onVolver: () => void }) {
                               <XCircle className="w-4 h-4" />
                             </button>
                           </div>
+                          {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[180px]">{a.error}</p>}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <h2 className="text-lg font-bold text-gray-900">Modificaciones aprobadas</h2>
+        <p className="text-sm text-gray-500 -mt-1">
+          Por si se aprobó algo que no debía — "Devolver" la regresa a Solicitado y deshace la suma/resta a Presupuesto. Se bloquea si ese renglón ya comprometió o ejecutó ese dinero.
+        </p>
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Tipo</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Renglón</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Descripción</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Sub-Producto</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-700">Valor</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {modsAprobadas.length === 0 ? (
+                  <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">No hay modificaciones aprobadas.</td></tr>
+                ) : (
+                  modsAprobadas.map(m => {
+                    const key = `m-${m.id}`;
+                    const a = acciones[key];
+                    const tipoLabel = TIPOS_MODIFICACION.find(t => t.id === m.tipo)?.label ?? m.tipo;
+                    return (
+                      <tr key={key} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="px-3 py-2 text-gray-700">{tipoLabel}</td>
+                        <td className="px-3 py-2 font-semibold text-gray-900">{m.renglon}</td>
+                        <td className="px-3 py-2 text-gray-700 max-w-[220px] truncate">{m.descripcion}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-600">{m.subProducto}</td>
+                        <td className="px-3 py-2 text-right text-gray-600">{Q(m.valor)}</td>
+                        <td className="px-3 py-2">
+                          <button
+                            onClick={() => {
+                              if (!confirm(`¿Devolver esta modificación (${tipoLabel}, renglón ${m.renglon}) a Solicitado?`)) return;
+                              ejecutar(key, m.id, devolverModificacion);
+                            }}
+                            disabled={a?.cargando}
+                            title="Devolver a Solicitado"
+                            className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+                          >
+                            {a?.cargando ? <span className="text-xs">…</span> : <Undo2 className="w-4 h-4" />}
+                          </button>
+                          {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[180px]">{a.error}</p>}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <h2 className="text-lg font-bold text-gray-900">Transferencias aprobadas</h2>
+        <p className="text-sm text-gray-500 -mt-1">
+          "Devolver" regresa el monto al origen y lo quita del destino. Se bloquea si el renglón destino ya comprometió o ejecutó ese dinero.
+        </p>
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Fecha</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Origen</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Destino</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-700">Monto</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Motivo</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {transfAprobadas.length === 0 ? (
+                  <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">No hay transferencias aprobadas.</td></tr>
+                ) : (
+                  transfAprobadas.map(t => {
+                    const key = `t-${t.id}`;
+                    const a = acciones[key];
+                    return (
+                      <tr key={key} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{t.fecha}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-700">{t.renglonOrigen} / {t.subProductoOrigen}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-700">{t.renglonDestino} / {t.subProductoDestino}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-gray-900">{Q(t.monto)}</td>
+                        <td className="px-3 py-2 text-gray-600 max-w-[240px] truncate">{t.motivo ?? "—"}</td>
+                        <td className="px-3 py-2">
+                          <button
+                            onClick={() => {
+                              if (!confirm(`¿Devolver esta transferencia de Q${t.monto.toLocaleString("es-GT", { minimumFractionDigits: 2 })} a Solicitado?`)) return;
+                              ejecutar(key, t.id, devolverTransferencia);
+                            }}
+                            disabled={a?.cargando}
+                            title="Devolver a Solicitado"
+                            className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+                          >
+                            {a?.cargando ? <span className="text-xs">…</span> : <Undo2 className="w-4 h-4" />}
+                          </button>
                           {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[180px]">{a.error}</p>}
                         </td>
                       </tr>

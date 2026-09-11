@@ -62,6 +62,37 @@ export async function liquidarPago(id: number, data: {
   }
 }
 
+// Por si se asignó el vale equivocado (o el pago no debía liquidarse
+// todavía) — suelta el vale y regresa el pago a "Enviado a Liquidación",
+// para volver a elegir el vale correcto o corregir algo antes. A diferencia
+// de devolverAFormaPago (fondo-rotativo-pagos-actions.ts), esto NO toca
+// Ejecución: reflejarEnEjecucion se posteó antes, al elegir "Efectivo" en
+// Fondo Rotativo/Pagos (cuando pasó a "Enviado a Liquidación") — liquidarPago
+// solo asigna el vale, no vuelve a postear nada. Solo mientras el pago siga
+// sin agruparse en ningún FRI.
+export async function devolverLiquidacionCajaChica(id: number): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireEdit();
+    if ("error" in check) return check;
+
+    const [pago] = await db.select().from(fondoRotativoPagos).where(eq(fondoRotativoPagos.id, id)).limit(1);
+    if (!pago) return { error: "No se encontró el registro" };
+    if (pago.estado !== "Pendiente FRI" || pago.vale_id == null)
+      return { error: "Este pago no tiene un vale de Caja Chica asignado pendiente de devolver" };
+    if (pago.fri_id != null)
+      return { error: "Este pago ya se agrupó en un FRI — hay que sacarlo de ahí primero (todavía no existe esa opción)" };
+
+    await db.update(fondoRotativoPagos).set({
+      estado: "Enviado a Liquidación",
+      vale_id: null, numero_vale: null, fecha_pago: null, fecha_liquidacion_caja_chica: null,
+    }).where(eq(fondoRotativoPagos.id, id));
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al devolver la liquidación" };
+  }
+}
+
 // Libro de Caja Chica — pagos en efectivo ya pagados por Caja Chica, sin
 // importar si ya avanzaron a Pendiente FRI/En FRI/Reintegrado. Incluye
 // también los pocos registros históricos que quedaron en "Liquidado" de

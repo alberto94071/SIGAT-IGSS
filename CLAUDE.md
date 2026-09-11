@@ -1492,6 +1492,91 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     tener un botón de "regresar un paso" en TODOS los pasos del sistema
     (no solo este tramo puntual) — ver conversación 2026-09-10, quedó
     pendiente de que el cliente priorice qué módulos siguen.
+- **"Devolver" — segunda tanda (2026-09-11): los 6 puntos que mueven dinero
+  real de golpe** (el usuario priorizó esta tanda primero, del mapa de
+  arriba). Cada uno con guard propio para no dejar saldo negativo si el
+  dinero ya se gastó en otra cosa desde entonces:
+  - **Modificaciones/Transferencias** (`programacion-actions.ts`):
+    `devolverModificacion`/`devolverTransferencia`, botón en Presupuesto →
+    Modificaciones → Autorizar → nuevas tablas "Modificaciones/
+    Transferencias aprobadas" debajo de las pendientes. Bloquea con
+    `getDisponible` si el renglón ya comprometió/ejecutó ese presupuesto —
+    no exige la ventana del 15-20 (es corrección, no aprobación nueva).
+  - **V-L de Viáticos aprobado** (`viaticos/registro-comision/actions.ts`):
+    `devolverSolicitudAprobada`, botón en Entrega de Formulario. Borra el
+    `viatico_pagos` creado al aprobar (Fase F) y limpia Liquidación/Informe/
+    Justificación — bloquea si ya se eligió forma de pago en Fondo
+    Rotativo/Pagos.
+  - **Pendiente FRI** (compras grupo 100 y liquidación Caja Chica):
+    `devolverAFormaPago` (`fondo-rotativo-pagos-actions.ts`) extendido para
+    aceptar también `"Pendiente FRI"` con `vale_id` null (llegó directo,
+    grupo 100 — deshace `reflejarEnEjecucion`), y `devolverLiquidacionCajaChica`
+    (`caja-chica-liquidacion-actions.ts`) nueva para `"Pendiente FRI"` con
+    `vale_id` set (deshace solo la asignación del vale de `liquidarPago`,
+    vuelve a "Enviado a Liquidación" — Ejecución ya se posteó antes, en ese
+    paso, no acá). Un solo botón en Pago/FRI (`FriClient.tsx`, columna
+    nueva) decide cuál llamar según `vale_id`; también cubre viáticos
+    reutilizando `devolverAFormaPagoViatico` (ya existía, nunca se había
+    conectado a ningún botón).
+  - **Vales** (`vale-actions.ts`): `devolverValeAAutorizado` (Activo→
+    Autorizado, acredita de vuelta el monto — bloquea si ya se usó el vale
+    en una póliza o un pago) y `devolverValeALiquidado` (Liquidado→Activo,
+    sirve para los dos tipos — pasajes y gastos varios; para pasajes además
+    regresa a "Enviada a Liquidar" las pólizas que esa liquidación había
+    marcado "Liquidada", bloqueando si alguna ya se agrupó en un FRI).
+    Botones en Fondo Rotativo/Vales — se agregó una sección nueva "Vales
+    liquidados recientemente" (antes ese estado no se veía en ningún lado
+    de esa pantalla, `getVales()` ya traía todo, solo faltaba filtrar y
+    pasarlo).
+  - **FRI Reintegrado** (`fri-actions.ts`): `devolverFriDeReintegrado`,
+    botón en Pago/FRI. Quita el total de `configuracion.efectivo_caja` y
+    regresa los pagos/viáticos archivados a "En FRI" — bloquea si ese
+    efectivo ya se gastó en otra cosa (ej. un vale nuevo) desde el
+    reintegro.
+  - **Liberar No Ejecutado** (`presupuesto-general-actions.ts`) — el único
+    de los 6 que necesitó tabla nueva: `liberarNoEjecutado` zeraba
+    `no_ejecutado` de TODOS los renglones de una vez sin guardar cuánto
+    tenía cada uno antes — el dato se perdía para siempre en el momento del
+    `UPDATE`, así que no había NADA que deshacer aunque se quisiera. Se
+    agregaron `liberaciones_no_ejecutado` (cabecera: total, fecha,
+    `revertido`) + `liberacion_no_ejecutado_detalle` (una fila por renglón/
+    sub-producto con su `no_ejecutado_anterior`) — `liberarNoEjecutado`
+    ahora hace snapshot antes de zerar, y `devolverUltimaLiberacion` suma de
+    vuelta lo que había. **Solo se puede devolver la liberación más
+    reciente** (si hay una más nueva encima, no tiene sentido revertir una
+    vieja) — el botón "Devolver última liberación" en Presupuesto General
+    solo aparece cuando la última liberación registrada sigue sin
+    revertir. Suma sobre el `no_ejecutado` actual en vez de sobreescribirlo,
+    así que funciona sin importar si un cierre de cuatrimestre agregó más
+    No Ejecutado después de esa liberación.
+  - Verificado en vivo, los 6, con datos desechables sembrados por SQL
+    directo (más rápido que recrear cada pipeline completo desde cero) y
+    accionados por Playwright vía los botones reales: liberar 500 → botón
+    "Devolver última liberación" → `no_ejecutado` de vuelta en 500;
+    marcar un FRI de prueba Reintegrado → "Devolver de Reintegrado" →
+    `efectivo_caja` de vuelta en su valor original y el pago vuelve a "En
+    FRI"; vale Activo con cheque asignado → "Devolver a Autorizado" →
+    `efectivo_caja` acreditado y cheque limpiado; vale Liquidado con
+    remanente acreditado → "Devolver a Activo" → remanente quitado de
+    `efectivo_caja`; un pago "Pendiente FRI" sin vale (grupo 100 directo) →
+    `pre_compromiso`/`devengado_regularizado` revertidos exactos (dentro de
+    error de punto flotante, ~1e-14); un pago "Pendiente FRI" con vale (vía
+    Caja Chica) → vuelve a "Enviado a Liquidación" sin tocar presupuesto;
+    modificación Ingru aprobada (Q1,000) → "Devolver a Solicitado" →
+    `modificacion_ingru` de vuelta en 0; transferencia aprobada (Q500,
+    renglón 111→243) → "Devolver a Solicitado" → `modificacion_entre_
+    renglones` de vuelta en 0 en ambos renglones; V-L de viático Aprobado →
+    "Devolver a revisión" → `viatico_pagos` borrado y la solicitud vuelve a
+    "Enviado". Todos los datos de prueba (consolidaciones, SIAF, catálogo
+    temporal, vales, FRI, modificaciones, transferencias, solicitud de
+    viático) se limpiaron después de cada verificación.
+  - **Quedan pendientes del mapa original** (no se tocaron esta ronda, el
+    usuario pidió arrancar solo con la tanda de dinero real): Almacén/
+    DAB-75 (descuenta stock sin poder revertir), documentos numerados sin
+    reversión (Órdenes desde "Generada"/"En Compromiso", Póliza, DPD-23,
+    Acta vía `aprobarActa`), y el resto de Programación/Reprogramación
+    (`aprobarEntrada`/`aprobarLote`) — quedan para una próxima ronda que el
+    cliente priorice.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

@@ -747,6 +747,34 @@ export const presupuestoRenglones = pgTable("presupuesto_renglones", {
     .on(table.ejercicio_fiscal, table.renglon, table.subproducto),
 }));
 
+// ─── Liberación de No Ejecutado (2026-09-10) ─────────────────────────────────
+// liberarNoEjecutado (presupuesto-general-actions.ts) zera no_ejecutado de
+// TODOS los renglones de una vez — sin snapshot, el dato de "cuánto tenía
+// cada renglón antes" se pierde para siempre y no hay forma de deshacerlo.
+// Cada corrida de liberarNoEjecutado ahora primero guarda acá el valor de
+// cada renglón que va a zerar, para que devolverUltimaLiberacion
+// (presupuesto-general-actions.ts) pueda sumarlo de vuelta.
+export const liberacionesNoEjecutado = pgTable("liberaciones_no_ejecutado", {
+  id:               serial("id").primaryKey(),
+  ejercicio_fiscal: integer("ejercicio_fiscal").notNull(),
+  fecha:            text("fecha"),
+  total:            doublePrecision("total").notNull(),
+  creado_por:       integer("creado_por").references(() => usuarios.id),
+  created_at:       text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
+  revertido:        boolean("revertido").notNull().default(false),
+  revertido_por:    integer("revertido_por").references(() => usuarios.id),
+  revertido_en:     text("revertido_en"),
+});
+
+export const liberacionNoEjecutadoDetalle = pgTable("liberacion_no_ejecutado_detalle", {
+  id:                    serial("id").primaryKey(),
+  liberacion_id:         integer("liberacion_id").notNull()
+                          .references(() => liberacionesNoEjecutado.id, { onDelete: "cascade" }),
+  renglon:               integer("renglon").notNull(),
+  subproducto:           text("subproducto").notNull(),
+  no_ejecutado_anterior: doublePrecision("no_ejecutado_anterior").notNull(),
+});
+
 // ─── Reprogramación por lote ──────────────────────────────────────────────
 // Agrupa varias filas de programacionEntradas en una sola solicitud, para
 // aprobar/rechazar todas juntas de una sola vez (ver programacion-actions.ts:
