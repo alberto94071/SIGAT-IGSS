@@ -195,6 +195,43 @@ export async function asignarChequeVale(id: number, data: { numero_cheque: strin
   }
 }
 
+// Por si se asignó mal el cheque (número equivocado, o no debía asignarse
+// todavía) — regresa el vale a "Autorizado" y acredita de vuelta el monto
+// que se había descontado de efectivo_caja. Bloquea si ya se sacó algo de
+// este vale (una póliza de pasajes o un pago de Caja Chica ya lo referencia)
+// — deshacerlo dejaría esos gastos referenciando un vale que ya no está
+// "Activo", y getEfectivoEnCaja dejaría de contarlos. Si ya se usó, hay que
+// resolverlo a mano primero (mismo criterio que LoteYaDespachadoEnTransaccion
+// en Almacén).
+export async function devolverValeAAutorizado(id: number): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireEdit();
+    if ("error" in check) return check;
+
+    const [vale] = await db.select().from(valesCajaChica).where(eq(valesCajaChica.id, id)).limit(1);
+    if (!vale) return { error: "No se encontró el vale" };
+    if (vale.estado !== "Activo") return { error: "Este vale no está Activo" };
+
+    const [polizaUsada] = await db.select({ id: polizas.id }).from(polizas).where(eq(polizas.vale_id, id)).limit(1);
+    if (polizaUsada) return { error: "Ya se usó este vale para pagar una póliza de pasajes — no se puede devolver" };
+    const [pagoUsado] = await db.select({ id: fondoRotativoPagos.id }).from(fondoRotativoPagos).where(eq(fondoRotativoPagos.vale_id, id)).limit(1);
+    if (pagoUsado) return { error: "Ya se usó este vale para pagar un gasto en Fondo Rotativo — no se puede devolver" };
+
+    const monto = vale.monto_autorizado ?? vale.monto;
+
+    await db.update(valesCajaChica).set({
+      estado: "Autorizado",
+      numero_cheque: null, destinatario_cheque: null, fecha_emision: null,
+    }).where(eq(valesCajaChica.id, id));
+
+    await db.update(configuracion).set({ efectivo_caja: sql`COALESCE(${configuracion.efectivo_caja}, 0) + ${monto}` });
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al devolver el vale a Autorizado" };
+  }
+}
+
 // ─── Voucher — cheques ya generados ───────────────────────────────────────────
 export async function getVouchers() {
   return db.select().from(valesCajaChica)
@@ -315,5 +352,59 @@ export async function liquidarValeGastosVarios(valeId: number, data: { numero_bo
     return { ok: true };
   } catch {
     return { error: "Error al liquidar el vale" };
+  }
+}
+
+// Por si se liquidó un vale con datos mal capturados (boleta equivocada, o
+// todavía no tocaba liquidarlo) — regresa el vale a "Activo" y, si se había
+// acreditado un remanente, lo quita de vuelta de efectivo_caja (bloquea si
+// ya no hay saldo suficiente, ese dinero ya se gastó en otra cosa). Para
+// vales de pasajes, además regresa a "Enviada a Liquidar" las pólizas que
+// esta liquidación había marcado "Liquidada" — bloquea si alguna ya se
+// agrupó en un FRI (quedaría un renglón del FRI apuntando a una póliza que
+// ya no está Liquidada). Sirve para los dos tipos de vale (pasajes y gastos
+// varios) — la única diferencia entre liquidarValePasajes/
+// liquidarValeGastosVarios es justo ese paso de pólizas.
+export async function devolverValeALiquidado(id: number): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireEdit();
+    if ("error" in check) return check;
+
+    const [vale] = await db.select().from(valesCajaChica).where(eq(valesCajaChica.id, id)).limit(1);
+    if (!vale) return { error: "No se encontró el vale" };
+    if (vale.estado !== "Liquidado") return { error: "Este vale no está Liquidado" };
+
+    let polizasARestaurar: { id: number }[] = [];
+    if (vale.tipo === "pasajes") {
+      const polizasLiquidadas = await db.select({ id: polizas.id, fri_id: polizas.fri_id })
+        .from(polizas).where(and(eq(polizas.vale_id, id), eq(polizas.estado, "Liquidada")));
+      const yaEnFri = polizasLiquidadas.find(p => p.fri_id != null);
+      if (yaEnFri) return { error: "Una de las pólizas de este vale ya se agrupó en un FRI — no se puede devolver" };
+      polizasARestaurar = polizasLiquidadas;
+    }
+
+    if (vale.monto_boleta_deposito != null && vale.monto_boleta_deposito > 0) {
+      const config = await getConfig();
+      const saldo = config?.efectivo_caja ?? 0;
+      if (saldo < vale.monto_boleta_deposito - 0.01) {
+        return { error: `No se puede devolver: el remanente que se acreditó (Q${vale.monto_boleta_deposito.toFixed(2)}) ya se gastó — el saldo actual (Q${saldo.toFixed(2)}) no alcanza para quitarlo` };
+      }
+      await db.update(configuracion).set({ efectivo_caja: sql`${configuracion.efectivo_caja} - ${vale.monto_boleta_deposito}` });
+    }
+
+    await db.update(valesCajaChica).set({
+      estado: "Activo",
+      monto_liquidado: null, fecha_liquidacion: null,
+      numero_boleta_deposito: null, monto_boleta_deposito: null,
+    }).where(eq(valesCajaChica.id, id));
+
+    if (polizasARestaurar.length > 0) {
+      await db.update(polizas).set({ estado: "Enviada a Liquidar" })
+        .where(inArray(polizas.id, polizasARestaurar.map(p => p.id)));
+    }
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al devolver la liquidación del vale" };
   }
 }

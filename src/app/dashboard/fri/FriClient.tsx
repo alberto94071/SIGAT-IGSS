@@ -3,17 +3,23 @@ import { fechaGuatemala } from "@/lib/date-utils";
 
 import { useState } from "react";
 import Link from "next/link";
-import { Wallet, Printer, ChevronDown, ChevronRight, Loader2, AlertTriangle, CheckCircle2, X } from "lucide-react";
-import { conformarFri, marcarFriReintegrado, enviarFriADaf, marcarFriRechazado, getFriConDetalle, type Fri, type PolizaFri, type FriItemInput } from "@/lib/fri-actions";
-import type { PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
-import type { PagoViatico } from "@/lib/viatico-pagos-actions";
+import { Wallet, Printer, ChevronDown, ChevronRight, Loader2, AlertTriangle, CheckCircle2, X, Undo2 } from "lucide-react";
+import { conformarFri, marcarFriReintegrado, enviarFriADaf, marcarFriRechazado, devolverFriDeReintegrado, getFriConDetalle, type Fri, type PolizaFri, type FriItemInput } from "@/lib/fri-actions";
+import { devolverAFormaPago, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import { devolverLiquidacionCajaChica } from "@/lib/caja-chica-liquidacion-actions";
+import { devolverAFormaPagoViatico, type PagoViatico } from "@/lib/viatico-pagos-actions";
 import type { TrazabilidadConsolidacion } from "@/lib/adjudicacion/trazabilidad-utils";
 import ExpandableRow from "@/components/ExpandableRow";
 import TrazabilidadPanel from "@/components/TrazabilidadPanel";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-type Row = { key: string; item: FriItemInput; origen: string; referencia: string; detalle: string; total: number; traz: TrazabilidadConsolidacion | null };
+// devolver: cómo deshacer que este renglón haya llegado a "Pendiente FRI" —
+// null para pólizas (esa reversión es aparte, de Vales, no de este tramo).
+type Row = {
+  key: string; item: FriItemInput; origen: string; referencia: string; detalle: string; total: number;
+  traz: TrazabilidadConsolidacion | null; devolver: (() => Promise<{ ok: true } | { error: string }>) | null;
+};
 
 function pagoARow(p: PagoFondoRotativo): Row {
   return {
@@ -21,6 +27,11 @@ function pagoARow(p: PagoFondoRotativo): Row {
     referencia: p.numero_a04 != null ? `A-04 ${p.numero_a04}/${p.anio_a04}` : "—",
     detalle: `${p.destinatario_nombre ?? "—"} · ${p.forma_pago === "cheque" ? `Cheque ${p.numero_cheque ?? ""}` : `Vale ${p.numero_vale ?? ""}`}`,
     total: p.total ?? 0, traz: p.traz,
+    // Si tiene vale asignado (pagado en efectivo, ya liquidado en Caja
+    // Chica) hay que soltar el vale primero y volver a "Enviado a
+    // Liquidación"; si no, llegó directo (grupo 100) y se regresa de un
+    // salto hasta "Pendiente forma de pago", deshaciendo Ejecución.
+    devolver: () => p.vale_id != null ? devolverLiquidacionCajaChica(p.id) : devolverAFormaPago(p.id),
   };
 }
 function polizaARow(p: PolizaFri): Row {
@@ -28,7 +39,7 @@ function polizaARow(p: PolizaFri): Row {
     key: `poliza:${p.id}`, item: { tipo: "poliza", id: p.id }, origen: "Pasajes",
     referencia: `Póliza ${p.numero}`,
     detalle: `Cuadro de Caja del ${p.fecha} · ${p.estado}`,
-    total: p.total, traz: null,
+    total: p.total, traz: null, devolver: null,
   };
 }
 function viaticoARow(v: PagoViatico): Row {
@@ -37,6 +48,7 @@ function viaticoARow(v: PagoViatico): Row {
     referencia: `V-L ${v.numero_formulario ?? "—"}`,
     detalle: `${v.persona_nombre ?? "—"} · ${v.forma_pago === "cheque" ? `Cheque ${v.numero_cheque ?? ""}` : "Efectivo"}`,
     total: v.total, traz: null,
+    devolver: () => devolverAFormaPagoViatico(v.id),
   };
 }
 
@@ -57,6 +69,8 @@ export default function FriClient({
   const [enviarFor, setEnviarFor] = useState<Fri | null>(null);
   const [rowError, setRowError] = useState<Record<number, string>>({});
   const [rechazando, setRechazando] = useState<number | null>(null);
+  const [devolviendoFila, setDevolviendoFila] = useState<string | null>(null);
+  const [errorFila, setErrorFila] = useState<Record<string, string>>({});
 
   async function handleRechazar(f: Fri) {
     setRechazando(f.id); setRowError(prev => ({ ...prev, [f.id]: "" }));
@@ -64,6 +78,15 @@ export default function FriClient({
     setRechazando(null);
     if ("error" in res) { setRowError(prev => ({ ...prev, [f.id]: res.error })); return; }
     setFris(prev => prev.map(x => x.id === f.id ? { ...x, estado: "Rechazado" } : x));
+  }
+
+  async function handleDevolverReintegrado(f: Fri) {
+    if (!confirm(`¿Devolver el FRI ${f.numero}/${f.anio} de Reintegrado? Se quita ${Q(f.total)} del saldo del Fondo Rotativo y vuelve a "Enviado".`)) return;
+    setRechazando(f.id); setRowError(prev => ({ ...prev, [f.id]: "" }));
+    const res = await devolverFriDeReintegrado(f.id);
+    setRechazando(null);
+    if ("error" in res) { setRowError(prev => ({ ...prev, [f.id]: res.error })); return; }
+    setFris(prev => prev.map(x => x.id === f.id ? { ...x, estado: "Enviado", fecha_reintegro: null } : x));
   }
 
   const filas: Row[] = [...pendientesPagos.map(pagoARow), ...pendientesPolizas.map(polizaARow), ...pendientesViaticos.map(viaticoARow)];
@@ -105,6 +128,18 @@ export default function FriClient({
 
   const totalSeleccion = filas.filter(f => seleccion.has(f.key)).reduce((s, f) => s + f.total, 0);
 
+  async function handleDevolverFila(f: Row) {
+    if (!f.devolver) return;
+    if (!confirm(`¿Devolver "${f.referencia}"? Se quita de esta bandeja y regresa al paso anterior.`)) return;
+    setDevolviendoFila(f.key); setErrorFila(prev => ({ ...prev, [f.key]: "" }));
+    const res = await f.devolver();
+    setDevolviendoFila(null);
+    if ("error" in res) { setErrorFila(prev => ({ ...prev, [f.key]: res.error })); return; }
+    setSeleccion(prev => { const next = new Set(prev); next.delete(f.key); return next; });
+    if (f.item.tipo === "pago") setPendientesPagos(prev => prev.filter(p => p.id !== f.item.id));
+    if (f.item.tipo === "viatico") setPendientesViaticos(prev => prev.filter(v => v.id !== f.item.id));
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -144,11 +179,12 @@ export default function FriClient({
                   <th className="px-4 py-3 text-left whitespace-nowrap">Referencia</th>
                   <th className="px-4 py-3 text-left">Detalle</th>
                   <th className="px-4 py-3 text-right whitespace-nowrap">Total</th>
+                  <th className="px-4 py-3 w-8"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filas.map(f => (
-                  <ExpandableRow key={f.key} colSpan={6}
+                  <ExpandableRow key={f.key} colSpan={7}
                     expanded={expandidoPendiente === f.key}
                     onToggle={() => setExpandidoPendiente(p => p === f.key ? null : f.key)}
                     rowClassName={`hover:bg-gray-50 cursor-pointer transition-colors ${seleccion.has(f.key) ? "bg-brand-50" : ""}`}
@@ -160,6 +196,18 @@ export default function FriClient({
                     <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">{f.referencia}</td>
                     <td className="px-4 py-3 text-xs text-gray-600">{f.detalle}</td>
                     <td className="px-4 py-3 text-right font-mono font-bold text-green-700 whitespace-nowrap">{Q(f.total)}</td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                      {f.devolver && (
+                        <>
+                          <button onClick={() => handleDevolverFila(f)} disabled={devolviendoFila === f.key}
+                            title="Devolver a la forma de pago"
+                            className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">
+                            {devolviendoFila === f.key ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                          </button>
+                          {errorFila[f.key] && <p className="text-red-600 text-[10px] mt-1 max-w-[160px] text-right ml-auto">{errorFila[f.key]}</p>}
+                        </>
+                      )}
+                    </td>
                   </ExpandableRow>
                 ))}
               </tbody>
@@ -230,6 +278,13 @@ export default function FriClient({
                                 <CheckCircle2 className="w-3 h-3" /> Marcar Reintegrado
                               </button>
                             </>
+                          )}
+                          {f.estado === "Reintegrado" && (
+                            <button onClick={() => handleDevolverReintegrado(f)} disabled={rechazando === f.id}
+                              title="Devolver de Reintegrado"
+                              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">
+                              {rechazando === f.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                            </button>
                           )}
                           <Link href={`/dashboard/fri/${f.numero}?anio=${f.anio}`}
                             className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">

@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth";
 import { requireModuloAccessAction, requireTabAccessAction } from "@/lib/modulo-access";
 import { PRESUPUESTO_DATA } from "@/lib/presupuesto-general-data";
 import { GRUPOS, grupoDeRenglon, TIPOS_MODIFICACION, type TipoModificacion } from "@/lib/programacion-constants";
-import { getSaldoRenglon, EJERCICIO_FISCAL } from "@/lib/presupuesto-disponible";
+import { getSaldoRenglon, getDisponible, EJERCICIO_FISCAL } from "@/lib/presupuesto-disponible";
 import {
   ventanaProgramacionAbierta, mesCreacionProgramacionLabel, fechaAprobacionAutomatica,
   ventanaAprobacionReprogramacionAbierta, ventanaAprobacionModificacionAbierta,
@@ -633,6 +633,47 @@ export async function rechazarModificacion(id: number): Promise<{ ok: true } | {
   return { ok: true };
 }
 
+/**
+ * Devuelve una modificación Ingru/Ampliación ya Aprobada a "Solicitado" —
+ * deshace exactamente el signo que sumó aprobarModificacion. No exige la
+ * ventana del 15 al 20 (es una corrección, no una aprobación nueva). Bloquea
+ * si el renglón ya comprometió/ejecutó ese presupuesto (Pre-Compromiso,
+ * Compromiso, Devengado) — quitarle la modificación lo dejaría con
+ * Disponible negativo, contando algo real que ya se gastó.
+ */
+export async function devolverModificacion(id: number): Promise<{ ok: true } | { error: string }> {
+  const check = await requireTabAccessAction("mod_presupuesto", "tab_presupuesto_autorizar_modificaciones");
+  if ("error" in check) return check;
+
+  const [fila] = await db.select().from(modificacionesPresupuestarias)
+    .where(eq(modificacionesPresupuestarias.id, id)).limit(1);
+  if (!fila) return { error: "No existe esa modificación" };
+  if (fila.estado !== "Aprobado") return { error: "Esta modificación no está aprobada" };
+
+  const tipoInfo = TIPOS_MODIFICACION.find(t => t.id === fila.tipo);
+  if (!tipoInfo) return { error: "Tipo de modificación inválido" };
+
+  const { disponible } = await getDisponible(fila.renglon, fila.subproducto);
+  if (disponible - fila.valor < -0.01) {
+    return { error: `No se puede devolver: el renglón ${fila.renglon} / ${fila.subproducto} ya comprometió o ejecutó ese presupuesto — quitarlo dejaría el Disponible en negativo` };
+  }
+
+  await db.update(presupuestoRenglones)
+    .set({ [tipoInfo.campo]: sql`COALESCE(${presupuestoRenglones[tipoInfo.campo]}, 0) - ${fila.valor}` })
+    .where(and(
+      eq(presupuestoRenglones.ejercicio_fiscal, EJERCICIO),
+      eq(presupuestoRenglones.renglon, fila.renglon),
+      eq(presupuestoRenglones.subproducto, fila.subproducto),
+    ));
+
+  await db.update(modificacionesPresupuestarias).set({
+    estado: "Solicitado",
+    updated_at: sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`,
+  }).where(eq(modificacionesPresupuestarias.id, id));
+
+  return { ok: true };
+}
+
 export type ModificacionRow = {
   id: number;
   renglon: number;
@@ -806,6 +847,37 @@ export async function rechazarTransferencia(id: number): Promise<{ ok: true } | 
     estado: "Rechazado",
     updated_at: sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`,
   }).where(eq(reprogramaciones.id, id));
+
+  return { ok: true };
+}
+
+/**
+ * Devuelve una transferencia ya Aprobada a "Solicitado" — inverso exacto de
+ * aprobarTransferencia (resta lo que se sumó al destino, suma de vuelta al
+ * origen). No exige la ventana del 15 al 20. Bloquea si el renglón destino
+ * ya comprometió/ejecutó ese presupuesto (quitárselo lo dejaría negativo).
+ */
+export async function devolverTransferencia(id: number): Promise<{ ok: true } | { error: string }> {
+  const check = await requireTabAccessAction("mod_presupuesto", "tab_presupuesto_autorizar_modificaciones");
+  if ("error" in check) return check;
+
+  const [fila] = await db.select().from(reprogramaciones).where(eq(reprogramaciones.id, id)).limit(1);
+  if (!fila) return { error: "No existe esa transferencia" };
+  if (fila.estado !== "Aprobado") return { error: "Esta transferencia no está aprobada" };
+
+  const { disponible } = await getDisponible(fila.renglon_destino, fila.subproducto_destino);
+  if (disponible - fila.monto < -0.01) {
+    return { error: `No se puede devolver: el renglón destino ${fila.renglon_destino} / ${fila.subproducto_destino} ya comprometió o ejecutó ese presupuesto — quitárselo dejaría el Disponible en negativo` };
+  }
+
+  await db.transaction(async (tx) => {
+    await sumarModificacionEntreRenglones(tx, fila.renglon_origen, fila.subproducto_origen, fila.monto);
+    await sumarModificacionEntreRenglones(tx, fila.renglon_destino, fila.subproducto_destino, -fila.monto);
+    await tx.update(reprogramaciones).set({
+      estado: "Solicitado",
+      updated_at: sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`,
+    }).where(eq(reprogramaciones.id, id));
+  });
 
   return { ok: true };
 }

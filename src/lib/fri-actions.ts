@@ -259,3 +259,38 @@ export async function marcarFriReintegrado(friId: number, fechaReintegro: string
     return { error: "Error al marcar el FRI como reintegrado" };
   }
 }
+
+// Por si se marcó Reintegrado un FRI que en realidad no se había depositado
+// todavía (fecha equivocada, o se confundió de FRI) — regresa a "Enviado",
+// desarchiva los pagos/viáticos que traía (vuelven a "En FRI") y quita del
+// saldo del Fondo Rotativo lo que se había acreditado. Bloquea si ese
+// efectivo ya se gastó en otra cosa desde entonces (ej. se autorizó un vale
+// nuevo con ese dinero) — ahí no se puede devolver sin dejar el saldo
+// negativo, hay que resolverlo a mano primero.
+export async function devolverFriDeReintegrado(friId: number): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireEdit();
+    if ("error" in check) return check;
+
+    const [fri] = await db.select().from(friFondoRotativo).where(eq(friFondoRotativo.id, friId)).limit(1);
+    if (!fri) return { error: "No se encontró el FRI" };
+    if (fri.estado !== "Reintegrado") return { error: "Este FRI no está Reintegrado" };
+
+    const [config] = await db.select({ efectivo_caja: configuracion.efectivo_caja }).from(configuracion).limit(1);
+    const saldo = config?.efectivo_caja ?? 0;
+    if (saldo < fri.total - 0.01) {
+      return { error: `No se puede devolver: el reintegro (Q${fri.total.toFixed(2)}) ya se gastó — el saldo actual (Q${saldo.toFixed(2)}) no alcanza para quitarlo` };
+    }
+
+    await db.update(friFondoRotativo).set({ estado: "Enviado", fecha_reintegro: null }).where(eq(friFondoRotativo.id, friId));
+    await db.update(fondoRotativoPagos).set({ estado: "En FRI" }).where(eq(fondoRotativoPagos.fri_id, friId));
+    await db.update(viaticoPagos).set({ estado: "En FRI" }).where(eq(viaticoPagos.fri_id, friId));
+    await db.update(configuracion).set({
+      efectivo_caja: sql`COALESCE(${configuracion.efectivo_caja}, 0) - ${fri.total}`,
+    });
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al devolver el FRI de Reintegrado" };
+  }
+}
