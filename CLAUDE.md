@@ -1619,12 +1619,10 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     `gruposRenglonDeConsolidacion`), arma `"{nombre} {presentacion}
     {unidad_medida}; {caracteristicas}"` en vez de usar
     `descripcion_igss` directo — cae a `descripcion_igss`/`nombre` solo si
-    esos tres campos vienen vacíos (defensivo). **No se tocó
-    `OrdenesClient.tsx`** — el cliente ya había confirmado antes (ver punto
-    de "El selector de PPR/presentación... SÍ existe" arriba) que Órdenes
-    queda fuera de este mecanismo, decisión aparte que sigue en pie; la
-    causa raíz de HOY es la misma (`descripcion_igss` poco confiable), pero
-    ampliar el alcance a Órdenes no se pidió esta vez. El mensaje del
+    esos tres campos vienen vacíos (defensivo). **`OrdenesClient.tsx` se
+    dejó fuera esta ronda** (el cliente pidió extenderlo a Órdenes el
+    2026-09-12 — ver ese punto más abajo, "Mismo mecanismo de PPR/
+    descripción/unidad extendido a Órdenes"). El mensaje del
     cliente sobre "el DAB-60 muestra el ppr del insumo que viene en el
     SIAF, no el que se seleccionó al adjudicar" se investigó y confirmó que
     NO es un bug aparte de sincronización — `pprPuroParaImprimir` y el
@@ -1664,15 +1662,41 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   fix que ya se había aplicado para `descripcion_igss`: `guardarPprSeleccion`
   (`renglon-utils.ts`) ahora acepta también `unidad_medida` en la selección y
   la persiste cuando viene; `Siaf04Client.tsx` manda
-  `opcionElegida?.unidad_medida` al generar el SIAF-04. **No se tocó
-  `OrdenesClient.tsx`** — mismo criterio de alcance que la vez anterior (el
-  cliente nunca pidió extender el selector de PPR de Órdenes a esto).
+  `opcionElegida?.unidad_medida` al generar el SIAF-04. `OrdenesClient.tsx`
+  se dejó fuera esta ronda — extendido al día siguiente, ver "Mismo
+  mecanismo de PPR/descripción/unidad extendido a Órdenes" más abajo.
   Verificado con un UPDATE de prueba desechable sobre una fila sembrada de
   `siaf_compras_items` (mismo patrón SQL exacto que ejecuta la función),
   confirmando que `unidad_medida` queda "5 Galón" — no se tocó la
   consolidación real 63, que en este momento está de nuevo en "Enviado a
   Fondo Rotativo" (`numero_a04` null, el cliente ya la devolvió otra vez) —
   falta avisarle que regenere el SIAF-04 una vez más ya con este fix.
+- **Mismo mecanismo de PPR/descripción/unidad extendido a Órdenes
+  (2026-09-12)** — el cliente pidió explícitamente "la misma lógica que
+  usas para que los datos del PPR y descripción salgan en el recibo de
+  almacén [DAB-60 vía SIAF-04/Fondo Rotativo], úsala para que en Órdenes
+  salga el PPR y descripción que se elige" — revirtiendo el alcance
+  limitado de los dos puntos anteriores (que dejaban `OrdenesClient.tsx`
+  fuera a propósito, porque no se había pedido). Antes, `generarOrdenDeCompra`
+  (`ordenes-actions.ts`) ya llamaba `guardarPprSeleccion` con el PPR
+  elegido, pero **nunca mandaba `descripcion_igss`/`unidad_medida`** —
+  `OrdenesClient.tsx`'s `seleccionPpr` solo tenía `codigo_igss`/
+  `subproducto`/`nombre`/`codigo_ppr`. Como el DAB-60 (Normal, vía Órdenes)
+  lee exactamente los mismos campos de `siaf_compras_items` que el DAB-60
+  de Fondo Rotativo (`gruposRenglonDeConsolidacion`, sin ninguna fuente
+  distinta — confirmado en la investigación del punto anterior), el DAB-60
+  Normal se quedaba con la descripción/unidad genéricas del PAC en vez de
+  la de la presentación puntual elegida. Fix: `OrdenesClient.tsx` ganó su
+  propia copia de `descripcionDePresentacion` (idéntica a la de
+  `Siaf04Client.tsx` — no se puede compartir, ambos archivos son
+  `"use client"` y ya duplican `codigoDeOpcion`/`etiquetaDeOpcion` por la
+  misma razón) y su `seleccionPpr.push` ahora manda
+  `descripcion_igss`/`unidad_medida` igual que SIAF-04; `guardarPprSeleccion`/
+  `generarOrdenDeCompra` ya aceptaban esos campos como opcionales desde los
+  dos fixes anteriores, no hizo falta tocarlos. No se tocó nada de
+  impresión (`dab-60/[id]/imprimir/page.tsx` ya arma la descripción con
+  `descripcion_igss || nombre` desde antes) — el fix es puramente en el
+  punto de guardado, igual que en SIAF-04.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

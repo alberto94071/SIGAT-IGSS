@@ -57,6 +57,22 @@ function etiquetaDeOpcion(o: PprOpcion): string {
   const desc = o.descripcion_igss || o.nombre;
   return `${prefijo}${desc}${o.caracteristicas ? ` (${o.caracteristicas})` : ""}${o.presentacion ? ` · ${o.presentacion}` : ""}${o.unidad_medida ? ` · ${o.unidad_medida}` : ""}`;
 }
+// Descripción a GUARDAR para la presentación elegida (distinto de
+// etiquetaDeOpcion, que es solo para el <select>) — mismo fix ya aplicado
+// en Siaf04Client.tsx (2026-09-11): descripcion_igss de Base de Datos
+// Central casi nunca varía entre presentaciones de un mismo código, así
+// que se arma con nombre + presentación + unidad de medida +
+// características en vez de confiar en descripcion_igss directo. Extendido
+// acá (2026-09-12) a petición del cliente, para que el DAB-60 vía Órdenes
+// (Normal) muestre la misma presentación elegida que ya muestra el DAB-60
+// vía SIAF-04 (Fondo Rotativo) y el A-04.
+function descripcionDePresentacion(o: PprOpcion): string {
+  const partes = [o.nombre, o.presentacion, o.unidad_medida].filter((p): p is string => !!p?.trim());
+  const base = partes.join(" ");
+  const caracteristicas = o.caracteristicas?.trim().replace(/;\s*$/, "");
+  if (caracteristicas) return `${base}; ${caracteristicas}`;
+  return base || o.descripcion_igss || o.nombre;
+}
 
 const TIPO_COLOR: Record<string, string> = {
   "Compra Directa":    "bg-blue-100 text-blue-700",
@@ -291,13 +307,18 @@ function GenerarOrdenModal({ consolidacion: c, onClose, onGenerada }: {
     if (!numeroOrden.trim()) return setError("El número de orden de compra es obligatorio");
     if (!fechaNotificacion) return setError("La fecha de notificación al proveedor es obligatoria");
 
-    const seleccionPpr: { codigo_igss: string; subproducto: string; nombre: string; codigo_ppr: string }[] = [];
+    const seleccionPpr: { codigo_igss: string; subproducto: string; nombre: string; codigo_ppr: string; descripcion_igss: string | null; unidad_medida: string | null }[] = [];
     for (const r of c.renglones) {
       const opciones = pprsPorCodigo[clavePprDeItem(r)];
       if (!opciones?.length) continue;
       const elegido = seleccion[keyDe(r)];
       if (!elegido) return setError(`Selecciona el PPR/presentación de "${r.nombre}"`);
-      seleccionPpr.push({ codigo_igss: r.codigo_igss!, subproducto: r.subproducto, nombre: r.nombre, codigo_ppr: elegido });
+      const opcionElegida = opciones.find(o => codigoDeOpcion(o) === elegido);
+      seleccionPpr.push({
+        codigo_igss: r.codigo_igss!, subproducto: r.subproducto, nombre: r.nombre, codigo_ppr: elegido,
+        descripcion_igss: opcionElegida ? descripcionDePresentacion(opcionElegida) : null,
+        unidad_medida: opcionElegida?.unidad_medida ?? null,
+      });
     }
 
     setSaving(true); setError("");
