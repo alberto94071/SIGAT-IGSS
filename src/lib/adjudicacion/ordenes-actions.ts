@@ -74,7 +74,7 @@ export async function getOrdenesEnProceso() {
 // (cruzado con las cotizaciones) entre la cantidad total, para no pedirle al
 // usuario un dato que el sistema ya conoce.
 export async function generarOrdenDeCompra(consolidacionId: number, data: {
-  seleccionPpr: { codigo_igss: string; subproducto: string; nombre: string; codigo_ppr: string }[];
+  seleccionPpr: { codigo_igss: string; subproducto: string; nombre: string; codigo_ppr: string; descripcion_igss?: string | null; unidad_medida?: string | null }[];
   numero_orden: string; fecha_notificacion: string;
 }): Promise<{ ok: true, ordenId: number } | { error: string }> {
   try {
