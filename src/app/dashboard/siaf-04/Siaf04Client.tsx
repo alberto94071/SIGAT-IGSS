@@ -49,16 +49,26 @@ function etiquetaDeOpcion(o: PprOpcion): string {
 // toda la tabla: 3032 de 3332 códigos con varias presentaciones comparten
 // una sola descripcion_igss para todas — ej. "Agua" tiene la misma
 // descripción para Garrafón de 5 Galones, Garrafón de 18.9L y Botella pet
-// de 20oz). presentacion/unidad_medida/caracteristicas sí distinguen cada
-// fila (100% de las filas con código real las tienen), así que la
-// descripción que se guarda (y que después imprime A-04/DAB-60) se arma con
-// esos campos en vez de confiar en descripcion_igss.
+// de 20oz), así que se arma con `nombre` (columna "Descripción PpR" en
+// Base de Datos → Insumos) en vez de confiar en descripcion_igss.
+// **Corregido 2026-09-13**: la descripción NO debe llevar
+// presentación/unidad de medida mezcladas — el cliente marcó con capturas
+// que eso es lo que distingue cada presentación, y por diseño va aparte,
+// en la Unidad de Medida (ver unidadMedidaDePresentacion) — mezclarlo acá
+// duplicaba la información entre las dos columnas del A-04 impreso.
 function descripcionDePresentacion(o: PprOpcion): string {
-  const partes = [o.nombre, o.presentacion, o.unidad_medida].filter((p): p is string => !!p?.trim());
-  const base = partes.join(" ");
   const caracteristicas = o.caracteristicas?.trim().replace(/;\s*$/, "");
-  if (caracteristicas) return `${base}; ${caracteristicas}`;
-  return base || o.descripcion_igss || o.nombre;
+  if (caracteristicas) return `${o.nombre}; ${caracteristicas}`;
+  return o.nombre || o.descripcion_igss || "";
+}
+// Unidad de Medida a GUARDAR para la presentación elegida — el cliente
+// pidió explícitamente (2026-09-13, con capturas de "Presentación" +
+// "U. Medida" circuladas juntas en Base de Datos → Insumos) que sea la
+// unión de esos dos campos (ej. "Garrafón 5 Galón"), no solo unidad_medida
+// sola (que antes se guardaba aparte y perdía la presentación).
+function unidadMedidaDePresentacion(o: PprOpcion): string | null {
+  const partes = [o.presentacion, o.unidad_medida].filter((p): p is string => !!p?.trim());
+  return partes.length > 0 ? partes.join(" ") : (o.unidad_medida ?? null);
 }
 
 interface Props { consolidaciones: Consolidacion[]; }
@@ -253,7 +263,7 @@ function GenerarSiafModal({ consolidacion: c, onClose, onDone }: {
       seleccionPpr.push({
         codigo_igss: r.codigo_igss!, subproducto: r.subproducto, nombre: r.nombre, codigo_ppr: elegido,
         descripcion_igss: opcionElegida ? descripcionDePresentacion(opcionElegida) : null,
-        unidad_medida: opcionElegida?.unidad_medida ?? null,
+        unidad_medida: opcionElegida ? unidadMedidaDePresentacion(opcionElegida) : null,
       });
     }
 
