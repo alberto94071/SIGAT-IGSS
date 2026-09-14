@@ -1616,10 +1616,13 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     `Siaf04Client.tsx` (`descripcionDePresentacion`, nueva): al guardar la
     descripción de la presentación elegida (lo que después imprime A-04
     Y DAB-60, ambos vía `siaf_compras_items.descripcion_igss` →
-    `gruposRenglonDeConsolidacion`), arma `"{nombre} {presentacion}
-    {unidad_medida}; {caracteristicas}"` en vez de usar
-    `descripcion_igss` directo — cae a `descripcion_igss`/`nombre` solo si
-    esos tres campos vienen vacíos (defensivo). **No se tocó
+    `gruposRenglonDeConsolidacion`), arma `"{nombre}; {caracteristicas}"`
+    en vez de usar `descripcion_igss` directo — **corregido 2026-09-13, ver
+    el punto de abajo "Descripción vs. Unidad de Medida del SIAF-04: piezas
+    separadas, no mezcladas"** (la primera versión de este fix metía
+    `presentacion`/`unidad_medida` dentro de la descripción; el cliente
+    aclaró con capturas que esos dos van aparte, en la Unidad de Medida).
+    **No se tocó
     `OrdenesClient.tsx`** — se intentó extender ahí también el 2026-09-12 y
     el cliente pidió explícitamente revertirlo (ver ese punto más abajo,
     "`OrdenesClient.tsx` (Normal) sigue sin este mecanismo, a propósito").
@@ -1635,9 +1638,11 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   - Verificado en vivo con una consolidación de prueba desechable
     (Regularizado, Agua, mismo código real 93279 que el caso reportado):
     elegir "PPR 4877 - 28700 — ... · Garrafón · 5 Galón" en el selector y
-    generar el SIAF-04 guardó `descripcion_igss = "Agua Garrafón 5 Galón;
-    Clase: Purificada"` — ya no la genérica de Botella pet — confirmado por
-    consulta directa a la base, limpiado después. **No se tocó el
+    generar el SIAF-04 guardó `descripcion_igss` con la descripción de
+    presentación en vez de la genérica de Botella pet — confirmado por
+    consulta directa a la base, limpiado después (el texto exacto guardado
+    en esa primera versión ya no aplica, ver la corrección del 2026-09-13
+    más abajo). **No se tocó el
     expediente real del cliente** (consolidación id 63, A-04 SIAF 1/2026,
     Distribuidora Jalapeña — el mismo que el cliente ya había devuelto y
     vuelto a registrar con "Devolver completa" del punto anterior — sigue
@@ -1662,8 +1667,11 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   ambiguo devolvía la de otra fila cualquiera ("Envase", "6 Litro"). Mismo
   fix que ya se había aplicado para `descripcion_igss`: `guardarPprSeleccion`
   (`renglon-utils.ts`) ahora acepta también `unidad_medida` en la selección y
-  la persiste cuando viene; `Siaf04Client.tsx` manda
-  `opcionElegida?.unidad_medida` al generar el SIAF-04. **No se tocó
+  la persiste cuando viene — el valor exacto que manda `Siaf04Client.tsx` se
+  corrigió otra vez al día siguiente, ver el punto de abajo "Descripción vs.
+  Unidad de Medida del SIAF-04: piezas separadas, no mezcladas" (esta
+  primera versión mandaba solo `unidad_medida` sola, sin `presentacion`).
+  **No se tocó
   `OrdenesClient.tsx`** — mismo criterio de alcance (ver más abajo,
   "`OrdenesClient.tsx` (Normal) sigue sin este mecanismo, a propósito", el
   cliente confirmó explícitamente que este mecanismo es solo para
@@ -1674,6 +1682,34 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   consolidación real 63, que en este momento está de nuevo en "Enviado a
   Fondo Rotativo" (`numero_a04` null, el cliente ya la devolvió otra vez) —
   falta avisarle que regenere el SIAF-04 una vez más ya con este fix.
+- **Descripción vs. Unidad de Medida del SIAF-04: piezas separadas, no
+  mezcladas (corregido 2026-09-13, reversa parcial de los dos puntos de
+  arriba).** El cliente mandó capturas de Base de Datos → Insumos con la
+  columna "Descripción PpR" (= `nombre`) + "Característica PpR"
+  (= `caracteristicas`) circuladas juntas, y por separado "Presentación"
+  (= `presentacion`) + "U. Medida" (= `unidad_medida`) circuladas juntas,
+  con las instrucciones explícitas: "en la descripción tiene que ser la
+  descripción (texto) del PpR que se eligió" (nombre + características,
+  SIN presentación/unidad) y "la unión de presentación y u. medida debe
+  aparecer en la unidad de medida del SIAF-04" (presentación + unidad,
+  juntas). La primera versión del fix (puntos de arriba, 2026-09-11)
+  metía `presentacion`/`unidad_medida` dentro de la Descripción y dejaba
+  la Unidad de Medida con solo `unidad_medida` sola — mezclaba justo lo
+  que el cliente pidió mantener separado. Fix, ambos en
+  `Siaf04Client.tsx`: `descripcionDePresentacion(o)` ahora arma
+  `"{nombre}; {caracteristicas}"` (ej. "Agua; Clase: Purificada"), y
+  `unidadMedidaDePresentacion(o)` (nueva) arma
+  `"{presentacion} {unidad_medida}"` (ej. "Garrafón 5 Galón") — se manda
+  como el `unidad_medida` del `seleccionPpr.push`, reemplazando el
+  `opcionElegida?.unidad_medida` suelto de la versión anterior. No hizo
+  falta tocar `guardarPprSeleccion` (`renglon-utils.ts`) ni la impresión
+  (A-04/DAB-60 Fondo Rotativo) — ambos ya leían `descripcion_igss`/
+  `unidad_medida` del snapshot tal cual se guarda, así que heredan el fix
+  solo con cambiar qué se manda al guardar. Verificado el cálculo con el
+  mismo caso real (Agua, PPR "4877 - 28700", presentación Garrafón/5
+  Galón, características "Clase: Purificada;"): produce exactamente
+  "Agua; Clase: Purificada" y "Garrafón 5 Galón", coincidiendo con las
+  capturas del cliente.
 - **`OrdenesClient.tsx` (Normal) sigue sin este mecanismo, a propósito —
   se intentó extenderlo y se revirtió el mismo día (2026-09-12).** El
   cliente escribió "la misma lógica que usas para que los datos del PPR y
