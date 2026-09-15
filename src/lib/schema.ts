@@ -281,6 +281,12 @@ export const fondoRotativoPagos = pgTable("fondo_rotativo_pagos", {
   //                          → (renglón 100-199, cheque o efectivo) 'Pendiente FRI' → 'En FRI' → 'Reintegrado'
   estado:                text("estado").notNull().default("Pendiente forma de pago"),
   fri_id:                integer("fri_id").references(() => friFondoRotativo.id),
+  // Número de referencia interno (alfanumérico), obligatorio al confirmar la
+  // forma de pago — EXCEPTO cuando todos los renglones de la consolidación
+  // son 133 ("Viáticos en el Interior") o 135 ("Otros Viáticos y Gastos
+  // Conexos"), que por diseño nunca lo llevan. Ver exentoDeNpg en
+  // fondo-rotativo-pagos-actions.ts.
+  npg:                   text("npg"),
   creado_por:            integer("creado_por").references(() => usuarios.id),
   created_at:            text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
   // Libro Conciliación (Fondo Rotativo) — marca si este cheque ya se cotejó

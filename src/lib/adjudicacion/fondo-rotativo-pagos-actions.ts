@@ -16,6 +16,17 @@ async function esPagoGrupo100(consolidacionId: number): Promise<boolean> {
   return renglones.length > 0 && renglones.every(r => esGrupo100(r.renglon));
 }
 
+// NPG (número de referencia interno, alfanumérico) es obligatorio al
+// confirmar la forma de pago — EXCEPTO cuando TODOS los renglones de la
+// consolidación son 133 ("Viáticos en el Interior") o 135 ("Otros Viáticos y
+// Gastos Conexos"), que por diseño nunca lo llevan (pedido explícito del
+// cliente 2026-09-16). Mismo criterio "every" que esPagoGrupo100 arriba, para
+// que una compra que mezcle esos renglones con otros SÍ siga pidiendo NPG.
+async function exentoDeNpg(consolidacionId: number): Promise<boolean> {
+  const renglones = await gruposRenglonDeConsolidacion(consolidacionId);
+  return renglones.length > 0 && renglones.every(r => r.renglon === 133 || r.renglon === 135);
+}
+
 // Fondo Rotativo no pasa por aprobación de Presupuesto (confirmado por el
 // cliente) — se refleja en Ejecución/Regularizado con lo que el propio
 // Fondo Rotativo ya decidió y ejecutó: en el momento en que se registra la
@@ -99,6 +110,10 @@ export type PagoFondoRotativo = {
   // datos completos de cheque ahí mismo (grupo 100, va directo a Pendiente
   // FRI) o los deja para completar en Fondo Rotativo/Bancos (grupo 200/300).
   es_grupo_100: boolean;
+  // true si NO hace falta pedir/mostrar NPG (renglones 133/135) — ver
+  // exentoDeNpg arriba.
+  npg_exento: boolean;
+  npg: string | null;
   traz: TrazabilidadConsolidacion | null;
 };
 
@@ -131,6 +146,7 @@ export async function conDetalle(rows: (typeof fondoRotativoPagos.$inferSelect)[
       vale_solicitante_nombre: vale?.solicitante_nombre ?? null,
       fri_numero: fri?.numero ?? null, fri_anio: fri?.anio ?? null,
       es_grupo_100: await esPagoGrupo100(r.consolidacion_id),
+      npg_exento: await exentoDeNpg(r.consolidacion_id),
       traz: trazMap.get(r.consolidacion_id) ?? null,
     };
   }));
@@ -318,6 +334,7 @@ export type TipoDocumentoPago = "Factura" | "Vale" | "Formulario";
 export async function registrarFormaPagoCheque(id: number, data: {
   numero_cheque: string; fecha_emision_cheque: string;
   tipo_documento_pago: TipoDocumentoPago; nit_beneficiario: string; destinatario_nombre: string;
+  npg?: string;
 }): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireCompras();
@@ -333,6 +350,8 @@ export async function registrarFormaPagoCheque(id: number, data: {
     if (pago.estado !== "Pendiente forma de pago") return { error: "Este registro ya tiene forma de pago asignada" };
 
     const esGrupo100 = await esPagoGrupo100(pago.consolidacion_id);
+    const exentoNpg = await exentoDeNpg(pago.consolidacion_id);
+    if (!exentoNpg && !data.npg?.trim()) return { error: "El NPG es obligatorio" };
 
     await db.transaction(async (tx) => {
       await tx.update(fondoRotativoPagos).set({
@@ -342,6 +361,7 @@ export async function registrarFormaPagoCheque(id: number, data: {
         tipo_documento_pago: data.tipo_documento_pago,
         nit_beneficiario: data.nit_beneficiario.trim(),
         destinatario_nombre: data.destinatario_nombre.trim(),
+        npg: exentoNpg ? null : data.npg!.trim(),
         estado: esGrupo100 ? "Pendiente FRI" : "Enviado a Bancos",
       }).where(eq(fondoRotativoPagos.id, id));
 
@@ -361,7 +381,7 @@ export async function registrarFormaPagoCheque(id: number, data: {
 // es donde también se imprime. Los pagos de grupo 100 siguen usando
 // registrarFormaPagoCheque de una vez (van directo a Pendiente FRI, no pasan
 // por Bancos).
-export async function elegirChequeDirecto(id: number): Promise<{ ok: true } | { error: string }> {
+export async function elegirChequeDirecto(id: number, npg?: string): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireCompras();
     if ("error" in check) return check;
@@ -373,9 +393,13 @@ export async function elegirChequeDirecto(id: number): Promise<{ ok: true } | { 
     const esGrupo100 = await esPagoGrupo100(pago.consolidacion_id);
     if (esGrupo100) return { error: "Este pago es de renglón 100-199 — usa el formulario completo (va a Pago/FRI)" };
 
+    const exentoNpg = await exentoDeNpg(pago.consolidacion_id);
+    if (!exentoNpg && !npg?.trim()) return { error: "El NPG es obligatorio" };
+
     await db.transaction(async (tx) => {
       await tx.update(fondoRotativoPagos).set({
         forma_pago: "cheque",
+        npg: exentoNpg ? null : npg!.trim(),
         estado: "Enviado a Bancos",
       }).where(eq(fondoRotativoPagos.id, id));
 
@@ -515,7 +539,7 @@ export async function devolverAFormaPago(id: number): Promise<{ ok: true } | { e
 // aquí. Es en Caja Chica/Pagos donde se elige el vale de "gastos varios"
 // activo y se confirma el pago (o se espera si todavía no hay vale/efectivo
 // disponible) — ver liquidarPago en caja-chica-liquidacion-actions.ts.
-export async function registrarFormaPagoEfectivo(id: number): Promise<{ ok: true } | { error: string }> {
+export async function registrarFormaPagoEfectivo(id: number, npg?: string): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireCompras();
     if ("error" in check) return check;
@@ -525,10 +549,13 @@ export async function registrarFormaPagoEfectivo(id: number): Promise<{ ok: true
     if (pago.estado !== "Pendiente forma de pago") return { error: "Este registro ya tiene forma de pago asignada" };
 
     const esGrupo100 = await esPagoGrupo100(pago.consolidacion_id);
+    const exentoNpg = await exentoDeNpg(pago.consolidacion_id);
+    if (!exentoNpg && !npg?.trim()) return { error: "El NPG es obligatorio" };
 
     await db.transaction(async (tx) => {
       await tx.update(fondoRotativoPagos).set({
         forma_pago: "efectivo",
+        npg: exentoNpg ? null : npg!.trim(),
         estado: esGrupo100 ? "Pendiente FRI" : "Enviado a Liquidación",
       }).where(eq(fondoRotativoPagos.id, id));
 

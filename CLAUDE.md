@@ -219,6 +219,46 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   `"Enviado a Liquidación"` — limpiado después (sin tocar
   `presupuesto_renglones` real, el subproducto de prueba no calzaba con
   ninguna fila real).
+- **NPG (2026-09-16): número de referencia de control interno, alfanumérico,
+  obligatorio al confirmar la forma de pago en Fondo Rotativo/Pagos — EXCEPTO
+  cuando todos los renglones de la consolidación son 133 ("Viáticos en el
+  Interior") o 135 ("Otros Viáticos y Gastos Conexos")**, pedido explícito
+  del cliente ("los únicos que no llevan NPG... son los renglones 133 y
+  135"). `fondoRotativoPagos.npg` (nullable), `exentoDeNpg(consolidacionId)`
+  en `fondo-rotativo-pagos-actions.ts` — mismo patrón "every" que
+  `esPagoGrupo100` (si una compra mezcla 133/135 con otro renglón, sigue
+  pidiendo NPG). Se pide en `FormaPagoModal` (`PagosClient.tsx`,
+  `dashboard/pagos/`) al elegir Cheque o Efectivo, en las 3 rutas de
+  confirmación (`registrarFormaPagoCheque` — grupo 100, formulario completo;
+  `elegirChequeDirecto` — no grupo 100, va directo a Bancos; y
+  `registrarFormaPagoEfectivo`), todas ahora aceptan `npg` opcional y lo
+  exigen server-side salvo exención (no confía en que el cliente oculte el
+  campo — mismo criterio de no confiar en el flag del cliente que el resto
+  del sistema). **Los pagos de Viáticos (`FormaPagoViaticoModal`,
+  `viaticoPagos`) nunca lo piden** — no se les agregó columna `npg` porque
+  conceptualmente SIEMPRE son renglón 133/135 (siempre exentos), así que
+  preguntar ahí sería inútil por diseño; no hay tabla `viatico_pagos.npg`.
+  **Se muestra en el "menú abatible" (detalle expandible) de cada paso
+  siguiente del pipeline** — Fondo Rotativo/Pagos (`PagosClient.tsx`),
+  Fondo Rotativo/Bancos (`BancosClient.tsx`), Caja Chica/Pagos
+  (`PagosCajaChicaClient.tsx`), Caja Chica/Liquidación
+  (`LiquidacionClient.tsx`, vía `npg: fondoRotativoPagos.npg` agregado a
+  `getUsoValeGastosVarios` en `vale-actions.ts`), y Pago/FRI
+  (`FriClient.tsx`, tanto en la lista de pendientes como en el detalle de
+  un FRI ya conformado — `Row.npg`, poblado solo en `pagoARow`, `null` en
+  `polizaARow`/`viaticoARow` porque pólizas y viáticos nunca llevan NPG) —
+  todos vía el mismo `cadena` de `TrazabilidadPanel`, que ya omite el chip
+  solo si el valor es `null`, así que un pago exento (133/135) simplemente
+  no muestra el chip en ningún lado, sin código condicional aparte.
+  Verificado en vivo con 3 pagos de prueba desechables sembrados por SQL:
+  renglón 231 (no exento) por Efectivo → el botón queda deshabilitado hasta
+  llenar NPG, y una vez lleno transiciona a "Enviado a Liquidación" con el
+  NPG guardado y visible en Caja Chica/Pagos; renglón 231 por Cheque (ruta
+  `elegirChequeDirecto`, sin formulario) → mismo comportamiento, visible en
+  Bancos; renglón 133 por Cheque (grupo 100, formulario completo) → el
+  campo NPG ni siquiera aparece, el botón no se bloquea por eso, y el pago
+  llega a Pago/FRI sin ningún chip "NPG:" — limpiado todo después, sin
+  tocar `presupuesto_renglones` real.
 - **Se puede "Devolver" la forma de pago elegida (Efectivo ↔ Cheque) desde
   Caja Chica/Pagos o Bancos** — por si el usuario se equivocó (eligió
   Efectivo sin tener efectivo, o Cheque cuando debía ser Efectivo).

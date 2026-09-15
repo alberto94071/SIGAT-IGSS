@@ -64,6 +64,7 @@ export default function BancosClient({ pagos: init }: Props) {
                     titulo={`Detalle de A-04 SIAF ${p.numero_a04 != null ? `${p.numero_a04}/${p.anio_a04}` : ""}`}
                     cadena={[
                       { label: "No. Cheque", value: p.numero_cheque },
+                      { label: "NPG", value: p.npg },
                       { label: "FRI", value: p.fri_numero != null ? `${p.fri_numero}/${p.fri_anio}` : null },
                     ]}
                     traz={p.traz}

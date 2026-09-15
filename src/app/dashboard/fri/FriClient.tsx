@@ -18,6 +18,7 @@ const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 
 // null para pólizas (esa reversión es aparte, de Vales, no de este tramo).
 type Row = {
   key: string; item: FriItemInput; origen: string; referencia: string; detalle: string; total: number;
+  npg: string | null;
   traz: TrazabilidadConsolidacion | null; devolver: (() => Promise<{ ok: true } | { error: string }>) | null;
 };
 
@@ -26,7 +27,7 @@ function pagoARow(p: PagoFondoRotativo): Row {
     key: `pago:${p.id}`, item: { tipo: "pago", id: p.id }, origen: "Gastos Varios",
     referencia: p.numero_a04 != null ? `A-04 ${p.numero_a04}/${p.anio_a04}` : "—",
     detalle: `${p.destinatario_nombre ?? "—"} · ${p.forma_pago === "cheque" ? `Cheque ${p.numero_cheque ?? ""}` : `Vale ${p.numero_vale ?? ""}`}`,
-    total: p.total ?? 0, traz: p.traz,
+    total: p.total ?? 0, npg: p.npg, traz: p.traz,
     // Si tiene vale asignado (pagado en efectivo, ya liquidado en Caja
     // Chica) hay que soltar el vale primero y volver a "Enviado a
     // Liquidación"; si no, llegó directo (grupo 100) y se regresa de un
@@ -39,12 +40,13 @@ function polizaARow(p: PolizaFri): Row {
     key: `poliza:${p.id}`, item: { tipo: "poliza", id: p.id }, origen: "Pasajes",
     referencia: `Póliza ${p.numero}`,
     detalle: `Cuadro de Caja del ${p.fecha} · ${p.estado}`,
-    total: p.total, traz: null, devolver: null,
+    total: p.total, npg: null, traz: null, devolver: null,
   };
 }
 function viaticoARow(v: PagoViatico): Row {
   return {
     key: `viatico:${v.id}`, item: { tipo: "viatico", id: v.id }, origen: "Viáticos",
+    npg: null,
     referencia: `V-L ${v.numero_formulario ?? "—"}`,
     detalle: `${v.persona_nombre ?? "—"} · ${v.forma_pago === "cheque" ? `Cheque ${v.numero_cheque ?? ""}` : "Efectivo"}`,
     total: v.total, traz: null,
@@ -188,7 +190,8 @@ export default function FriClient({
                     expanded={expandidoPendiente === f.key}
                     onToggle={() => setExpandidoPendiente(p => p === f.key ? null : f.key)}
                     rowClassName={`hover:bg-gray-50 cursor-pointer transition-colors ${seleccion.has(f.key) ? "bg-brand-50" : ""}`}
-                    detail={<TrazabilidadPanel titulo={`Detalle de ${f.referencia}`} traz={f.traz} />}>
+                    detail={<TrazabilidadPanel titulo={`Detalle de ${f.referencia}`}
+                      cadena={[{ label: "NPG", value: f.npg }]} traz={f.traz} />}>
                     <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                       <input type="checkbox" checked={seleccion.has(f.key)} onChange={() => toggle(f.key)} className="w-4 h-4 accent-brand-600" />
                     </td>
@@ -305,6 +308,7 @@ export default function FriClient({
                                   <th className="text-left py-1">Origen</th>
                                   <th className="text-left py-1">Referencia</th>
                                   <th className="text-left py-1">Detalle</th>
+                                  <th className="text-left py-1">NPG</th>
                                   <th className="text-left py-1">SIAF / Consolidación</th>
                                   <th className="text-right py-1">Total</th>
                                 </tr>
@@ -315,6 +319,7 @@ export default function FriClient({
                                     <td className="py-1.5">{r.origen}</td>
                                     <td className="py-1.5 font-mono">{r.referencia}</td>
                                     <td className="py-1.5">{r.detalle}</td>
+                                    <td className="py-1.5 font-mono text-gray-500">{r.npg ?? "—"}</td>
                                     <td className="py-1.5 font-mono text-gray-500">
                                       {r.traz
                                         ? `${r.traz.siaf_correlativos.join(", ") || "—"} · Cons. ${r.traz.consolidacion_numero}/${r.traz.consolidacion_anio}`
