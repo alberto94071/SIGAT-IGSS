@@ -602,8 +602,8 @@ export default function ImprimirDab60Client({ orden: o, renglones, datos, posici
           {columna("col_valor_total", valoresTotales, "right")}
 
           {o.marca && campo("marca", `Marca: ${o.marca.toUpperCase()}`)}
-          {o.lote && campo("lote", o.lote)}
-          {o.fecha_vencimiento && campo("fecha_vencimiento", o.fecha_vencimiento)}
+          {o.lote && campo("lote", `Lote: ${o.lote}`)}
+          {o.fecha_vencimiento && campo("fecha_vencimiento", `Fecha de Vencimiento: ${o.fecha_vencimiento}`)}
           {campo("descripcion", datos.descripcion, { style: { lineHeight: 1.35 }, multiline: true })}
           {campo("encargado_almacen", o.encargado_almacen ?? "")}
 
