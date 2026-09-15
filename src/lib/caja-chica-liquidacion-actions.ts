@@ -169,3 +169,98 @@ export async function getLibroCajaChicaCompleto(): Promise<LibroCajaChicaRow[]> 
   filas.sort((a, b) => (b.fecha_pago ?? "").localeCompare(a.fecha_pago ?? ""));
   return filas;
 }
+
+// ─── Libro Caja Chica (registro real, 2026-09-16) ──────────────────────────
+// El cliente mandó el modelo real de su Excel de Libro de Caja Chica
+// (MODELO_LIBRO_CAJA_CHICA.pdf): un libro contable de verdad — Crédito
+// (dinero que entra a Caja Chica) / Débito (dinero que sale) / Saldo
+// corriente —, no la lista plana de pagos liquidados que hasta ahora era
+// getLibroCajaChicaCompleto (esa función se queda igual, sigue siendo la
+// fuente del lado Débito de este libro nuevo).
+//
+// El Crédito (dinero que ENTRA a Caja Chica) es exactamente la
+// "Constitución de Caja Chica" — cada cheque de Vale ya asignado
+// (asignarChequeVale), de cualquiera de los 2 tipos (pasajes o gastos
+// varios) — es el único punto donde efectivo real entra a la caja física.
+// El Débito (dinero que SALE) es cada gasto puntual ya pagado con ese
+// efectivo: facturas de gastos varios (fondoRotativoPagos con
+// fecha_liquidacion_caja_chica) y pasajes individuales a afiliados
+// (pasajesPagos de una póliza Liquidada) — exactamente lo que ya traía
+// getLibroCajaChicaCompleto.
+//
+// Los viáticos pagados en efectivo NO entran acá — a propósito, no es un
+// olvido: desde la Fase F de Viáticos (2026-09-08, ver
+// registrarFormaPagoEfectivoViatico en viatico-pagos-actions.ts) un
+// viático en efectivo va directo a "Pendiente FRI" sin tocar ningún vale
+// ni configuracion.efectivo_caja — nunca sale de esta caja física. El
+// modelo que mandó el cliente sí traía una fila de viático como ejemplo,
+// pero es de datos de antes de esa Fase F (noviembre/diciembre 2025, el
+// módulo de Viáticos actual no existía todavía) — si el cliente confirma
+// que los viáticos en efectivo SÍ deben salir de Caja Chica hoy en día,
+// hay que revisar esa Fase F antes de agregar esto acá.
+export type MovimientoCajaChica = {
+  id: string; fecha: string; mes: string;
+  tipoDocumento: string; numeroDocumento: string;
+  beneficiario: string; descripcion: string;
+  credito: number; debito: number; saldo: number;
+};
+
+const MESES_LARGOS_CC = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
+  "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+function mesDeFechaCC(fecha: string): string {
+  const mesNum = Number(fecha.slice(5, 7));
+  return MESES_LARGOS_CC[mesNum - 1] ?? "";
+}
+
+export async function getLibroCajaChicaLedger(): Promise<MovimientoCajaChica[]> {
+  const [valeChequesRows, facturas, pasajesLiquidados] = await Promise.all([
+    db.select().from(valesCajaChica).where(isNotNull(valesCajaChica.numero_cheque)),
+    getLibroCajaChica(),
+    db.select({
+      id: pasajesPagos.id,
+      formulario_no: pasajesPagos.formulario_no,
+      nombre_afiliado: pasajesPagos.nombre_afiliado,
+      destino: pasajesPagos.destino,
+      fecha_pago: pasajesPagos.fecha_pago,
+      valor_pasaje: pasajesPagos.valor_pasaje,
+    })
+      .from(pasajesPagos)
+      .innerJoin(polizas, eq(pasajesPagos.poliza_id, polizas.id))
+      .where(eq(polizas.estado, "Liquidada")),
+  ]);
+
+  type Evento = {
+    fecha: string; orden: number; credito: number; debito: number;
+    tipoDocumento: string; numeroDocumento: string; beneficiario: string; descripcion: string;
+  };
+  const eventos: Evento[] = [
+    ...valeChequesRows.map((v): Evento => ({
+      fecha: v.fecha_emision ?? "", orden: 1000 + v.id, credito: v.monto_autorizado ?? v.monto, debito: 0,
+      tipoDocumento: "Cheque", numeroDocumento: v.numero_cheque ?? "—", beneficiario: v.destinatario_cheque ?? "—",
+      descripcion: v.motivo,
+    })),
+    ...facturas.map((p): Evento => ({
+      fecha: p.fecha_pago ?? "", orden: 2000 + p.id, credito: 0, debito: p.total ?? 0,
+      tipoDocumento: p.tipo_documento_pago ?? "Factura", numeroDocumento: p.no_factura || "—",
+      beneficiario: p.destinatario_nombre ?? "—",
+      descripcion: p.concepto_voucher || `A-04 ${p.numero_a04 ?? "—"}/${p.anio_a04 ?? "—"}`,
+    })),
+    ...pasajesLiquidados.map((p): Evento => ({
+      fecha: p.fecha_pago ?? "", orden: 3000 + p.id, credito: 0, debito: p.valor_pasaje,
+      tipoDocumento: "Formulario", numeroDocumento: String(p.formulario_no).padStart(6, "0"),
+      beneficiario: p.nombre_afiliado ?? "—", descripcion: `Pago de pasaje — ${p.destino}`,
+    })),
+  ];
+  eventos.sort((a, b) => a.fecha === b.fecha ? a.orden - b.orden : a.fecha.localeCompare(b.fecha));
+
+  let saldo = 0;
+  return eventos.map((e, i) => {
+    saldo += e.credito - e.debito;
+    return {
+      id: `mov-${i}`, fecha: e.fecha, mes: mesDeFechaCC(e.fecha),
+      tipoDocumento: e.tipoDocumento, numeroDocumento: e.numeroDocumento,
+      beneficiario: e.beneficiario, descripcion: e.descripcion,
+      credito: e.credito, debito: e.debito, saldo,
+    };
+  });
+}
