@@ -9,7 +9,7 @@ const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 
 
 type Vale = { id: number; numero: number; monto: number; monto_autorizado: number | null };
 type UsoPasajes = { total: number; polizas: { id: number; numero: number; total: number }[] } | null;
-type PagoGastoVario = { id: number; destinatario_nombre: string | null; total: number | null; numero_a04: number | null; anio_a04: number | null; traz: TrazabilidadConsolidacion | null };
+type PagoGastoVario = { id: number; destinatario_nombre: string | null; npg: string | null; total: number | null; numero_a04: number | null; anio_a04: number | null; traz: TrazabilidadConsolidacion | null };
 type UsoGastosVarios = { total: number; pagos: PagoGastoVario[] } | null;
 
 interface Props {
@@ -134,7 +134,8 @@ function ValeCard({
                 </div>
                 {rowExpanded && (
                   <div className="px-3 py-2 bg-gray-50">
-                    <TrazabilidadPanel titulo={`Detalle de A-04 ${p.numero_a04 ?? ""}/${p.anio_a04 ?? ""}`} traz={p.traz} />
+                    <TrazabilidadPanel titulo={`Detalle de A-04 ${p.numero_a04 ?? ""}/${p.anio_a04 ?? ""}`}
+                      cadena={[{ label: "NPG", value: p.npg }]} traz={p.traz} />
                   </div>
                 )}
               </div>

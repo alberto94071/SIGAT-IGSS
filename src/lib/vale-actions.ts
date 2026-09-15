@@ -303,7 +303,7 @@ export async function liquidarValePasajes(valeId: number, data: { numero_boleta_
 export async function getUsoValeGastosVarios(valeId: number) {
   const rows = await db.select({
     id: fondoRotativoPagos.id, consolidacion_id: fondoRotativoPagos.consolidacion_id,
-    destinatario_nombre: fondoRotativoPagos.destinatario_nombre,
+    destinatario_nombre: fondoRotativoPagos.destinatario_nombre, npg: fondoRotativoPagos.npg,
     total: consolidaciones.total, numero_a04: consolidaciones.numero_a04, anio_a04: consolidaciones.anio_a04,
   })
     .from(fondoRotativoPagos)

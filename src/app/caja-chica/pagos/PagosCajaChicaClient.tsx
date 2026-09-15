@@ -70,7 +70,10 @@ export default function PagosCajaChicaClient({ pagos: init }: Props) {
                     rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
                     detail={<TrazabilidadPanel
                       titulo={`Detalle de A-04 SIAF ${p.numero_a04 != null ? `${p.numero_a04}/${p.anio_a04}` : ""}`}
-                      cadena={[{ label: "FRI", value: p.fri_numero != null ? `${p.fri_numero}/${p.fri_anio}` : null }]}
+                      cadena={[
+                        { label: "NPG", value: p.npg },
+                        { label: "FRI", value: p.fri_numero != null ? `${p.fri_numero}/${p.fri_anio}` : null },
+                      ]}
                       traz={p.traz}
                     />}>
                     <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">

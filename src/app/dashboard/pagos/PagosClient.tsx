@@ -71,7 +71,10 @@ export default function PagosClient({ pagos: init, viaticos: initViaticos }: Pro
                     rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
                     detail={<TrazabilidadPanel
                       titulo={`Detalle de A-04 SIAF ${p.numero_a04 != null ? `${p.numero_a04}/${p.anio_a04}` : ""}`}
-                      cadena={[{ label: "FRI", value: p.fri_numero != null ? `${p.fri_numero}/${p.fri_anio}` : null }]}
+                      cadena={[
+                        { label: "NPG", value: p.npg },
+                        { label: "FRI", value: p.fri_numero != null ? `${p.fri_numero}/${p.fri_anio}` : null },
+                      ]}
                       traz={p.traz}
                     />}>
                     <td className="px-4 py-3 font-mono font-bold text-gray-900 whitespace-nowrap">
@@ -284,8 +287,11 @@ function FormaPagoModal({ pago, onClose, onDone }: {
   const [tipoDocumentoPago, setTipoDocumentoPago] = useState<"Factura" | "Vale" | "Formulario" | "">("Factura");
   const [nitBeneficiario, setNitBeneficiario] = useState(pago.nit_beneficiario ?? "");
   const [nombreBeneficiario, setNombreBeneficiario] = useState(pago.destinatario_nombre ?? "");
+  const [npg, setNpg] = useState(pago.npg ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const npgFalta = !pago.npg_exento && !npg.trim();
 
   async function handleConfirmar() {
     setLoading(true); setError("");
@@ -295,9 +301,10 @@ function FormaPagoModal({ pago, onClose, onDone }: {
             numero_cheque: numeroCheque.trim(), fecha_emision_cheque: fechaEmisionCheque,
             tipo_documento_pago: tipoDocumentoPago as "Factura" | "Vale" | "Formulario",
             nit_beneficiario: nitBeneficiario.trim(), destinatario_nombre: nombreBeneficiario.trim(),
+            npg: npg.trim(),
           })
-        : await elegirChequeDirecto(pago.id)
-      : await registrarFormaPagoEfectivo(pago.id);
+        : await elegirChequeDirecto(pago.id, npg.trim())
+      : await registrarFormaPagoEfectivo(pago.id, npg.trim());
     setLoading(false);
     if ("error" in res) { setError(res.error); return; }
     onDone();
@@ -372,6 +379,14 @@ function FormaPagoModal({ pago, onClose, onDone }: {
             </div>
           )}
 
+          {forma !== null && !pago.npg_exento && (
+            <div>
+              <label className="label">NPG</label>
+              <input className="input font-mono" value={npg} onChange={e => setNpg(e.target.value)}
+                placeholder="Número de referencia para control interno" />
+            </div>
+          )}
+
           {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
@@ -379,18 +394,18 @@ function FormaPagoModal({ pago, onClose, onDone }: {
           <button onClick={onClose} className="btn-secondary">Cancelar</button>
           {forma === "cheque" && pago.es_grupo_100 && (
             <button onClick={handleConfirmar}
-              disabled={loading || !numeroCheque.trim() || !fechaEmisionCheque || !tipoDocumentoPago || !nitBeneficiario.trim() || !nombreBeneficiario.trim()}
+              disabled={loading || !numeroCheque.trim() || !fechaEmisionCheque || !tipoDocumentoPago || !nitBeneficiario.trim() || !nombreBeneficiario.trim() || npgFalta}
               className="btn-primary disabled:opacity-50">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />} Confirmar pago
             </button>
           )}
           {forma === "cheque" && !pago.es_grupo_100 && (
-            <button onClick={handleConfirmar} disabled={loading} className="btn-primary disabled:opacity-50">
+            <button onClick={handleConfirmar} disabled={loading || npgFalta} className="btn-primary disabled:opacity-50">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />} Enviar a Bancos
             </button>
           )}
           {forma === "efectivo" && (
-            <button onClick={handleConfirmar} disabled={loading} className="btn-primary disabled:opacity-50">
+            <button onClick={handleConfirmar} disabled={loading || npgFalta} className="btn-primary disabled:opacity-50">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />} Enviar a Caja Chica
             </button>
           )}
