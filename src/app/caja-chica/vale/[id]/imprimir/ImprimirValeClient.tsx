@@ -4,6 +4,7 @@ import { montoEnLetras } from "@/lib/adjudicacion/deletreo";
 import { guardarPosicionesImpresion, getFondoImpresion } from "@/lib/impresion-posiciones-actions";
 import { Campo, CAMPO_POSICIONABLE_CSS, type Pos } from "@/components/print-posiciones/CampoPosicionable";
 import { PosicionesToolbar, HojaConFondo, HOJA_CON_FONDO_CSS } from "@/components/print-posiciones/PosicionesToolbar";
+import SelectorFirmante, { type Firmante } from "@/components/SelectorFirmante";
 
 type Vale = {
   id: number; numero: number; fecha: string; monto: number; monto_autorizado: number | null; motivo: string;
@@ -17,6 +18,7 @@ interface Props {
   municipio: string; nombreDependencia: string;
   nombreResponsable: string; numeroEmpleadoResp: string; nitResponsable: string;
   posicionesGuardadas: Record<string, Pos>;
+  firmantes: Firmante[];
 }
 
 const HOJA_W_MM = 215.9;
@@ -83,7 +85,7 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 export default function ImprimirValeClient({
-  vale: v, municipio, nombreDependencia, nombreResponsable, numeroEmpleadoResp, nitResponsable, posicionesGuardadas,
+  vale: v, municipio, nombreDependencia, nombreResponsable, numeroEmpleadoResp, nitResponsable, posicionesGuardadas, firmantes,
 }: Props) {
   const [verPosiciones, setVerPosiciones] = useState(false);
   const [pos, setPos] = useState<Record<string, Pos>>({ ...POS_DEFAULT, ...posicionesGuardadas });
@@ -92,6 +94,15 @@ export default function ImprimirValeClient({
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
   const hojaRef = useRef<HTMLDivElement>(null);
+
+  // Firmantes elegibles al imprimir — quiénes van a ser los que firman cada
+  // espacio esta vez (Lilia ya no trabaja acá, Fielfer está de vacaciones,
+  // etc.). Si no se elige nadie, se imprime el dato de siempre (el que
+  // quedó guardado en el vale al crearse, o el de Configuración para el
+  // responsable de Fondo Rotativo) — no rompe vales ya impresos.
+  const [firmanteSolicitante, setFirmanteSolicitante] = useState<Firmante | null>(null);
+  const [firmanteJefe, setFirmanteJefe] = useState<Firmante | null>(null);
+  const [firmanteResponsable, setFirmanteResponsable] = useState<Firmante | null>(null);
 
   useLayoutEffect(() => {
     if (!fondo) getFondoImpresion("vale").then(setFondo);
@@ -137,6 +148,13 @@ export default function ImprimirValeClient({
         verPosiciones={verPosiciones} onToggleVer={() => setVerPosiciones(p => !p)}
         onRestablecer={restablecerPosiciones} onGuardar={guardarPosiciones}
         guardando={guardando} guardado={guardado}
+        extraToolbar={
+          <div className="flex flex-wrap items-center gap-3">
+            <SelectorFirmante label="Solicitante" firmantes={firmantes} value={firmanteSolicitante} onChange={setFirmanteSolicitante} />
+            <SelectorFirmante label="Jefe de la Dependencia" firmantes={firmantes} value={firmanteJefe} onChange={setFirmanteJefe} />
+            <SelectorFirmante label="Responsable del F.R.I." firmantes={firmantes} value={firmanteResponsable} onChange={setFirmanteResponsable} />
+          </div>
+        }
       />
 
       <HojaConFondo hojaRef={hojaRef} fondo={fondo}>
@@ -147,16 +165,16 @@ export default function ImprimirValeClient({
         {campo("cantidad_letras", montoEnLetras(monto))}
         {campo("motivo", v.motivo, { multiline: true })}
 
-        {campo("solicitante_nombre", v.solicitante_nombre)}
-        {campo("solicitante_empleado", v.solicitante_numero_empleado)}
-        {campo("solicitante_nit", v.solicitante_nit)}
-        {campo("jefe_nombre", v.jefe_nombre)}
-        {campo("jefe_empleado", v.jefe_numero_empleado)}
-        {campo("jefe_nit", v.jefe_nit)}
+        {campo("solicitante_nombre", firmanteSolicitante?.nombre ?? v.solicitante_nombre)}
+        {campo("solicitante_empleado", firmanteSolicitante?.numero_empleado ?? v.solicitante_numero_empleado)}
+        {campo("solicitante_nit", firmanteSolicitante?.nit ?? v.solicitante_nit)}
+        {campo("jefe_nombre", firmanteJefe?.nombre ?? v.jefe_nombre)}
+        {campo("jefe_empleado", firmanteJefe?.numero_empleado ?? v.jefe_numero_empleado)}
+        {campo("jefe_nit", firmanteJefe?.nit ?? v.jefe_nit)}
 
-        {campo("responsable_nombre", nombreResponsable)}
-        {campo("responsable_empleado", numeroEmpleadoResp)}
-        {campo("responsable_nit", nitResponsable)}
+        {campo("responsable_nombre", firmanteResponsable?.nombre ?? nombreResponsable)}
+        {campo("responsable_empleado", firmanteResponsable?.numero_empleado ?? numeroEmpleadoResp)}
+        {campo("responsable_nit", firmanteResponsable?.nit ?? nitResponsable)}
 
         {campo("cheque_no", v.numero_cheque ?? "")}
         {campo("valor_q", Q(monto))}

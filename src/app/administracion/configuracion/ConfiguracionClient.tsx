@@ -16,7 +16,7 @@ type Config = {
   siaf_compras_numero_inicial?: number; siaf_compras_numero_inicial_anio?: number;
   viatico_exigir_fecha_limite?: boolean;
 };
-type Firmante = { id: number; nombre: string; cargo: string; unidad: string | null; activo: boolean };
+type Firmante = { id: number; nombre: string; cargo: string; unidad: string | null; numero_empleado: string | null; nit: string | null; activo: boolean };
 
 interface Props { config: Config; firmantes: Firmante[]; rol: string; }
 
@@ -36,6 +36,8 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
   const [fNombre,      setFNombre]      = useState("");
   const [fCargo,       setFCargo]       = useState("");
   const [fUnidad,      setFUnidad]      = useState("");
+  const [fNumEmpleado, setFNumEmpleado] = useState("");
+  const [fNit,         setFNit]         = useState("");
   const [fSaving,      setFSaving]      = useState(false);
 
   function set(k: keyof Config, v: string | number | boolean) {
@@ -52,19 +54,20 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
   }
 
   function openNewFirmante() {
-    setEditingF(null); setFNombre(""); setFCargo(""); setFUnidad(""); setFModal(true);
+    setEditingF(null); setFNombre(""); setFCargo(""); setFUnidad(""); setFNumEmpleado(""); setFNit(""); setFModal(true);
   }
   function openEditFirmante(f: Firmante) {
-    setEditingF(f); setFNombre(f.nombre); setFCargo(f.cargo); setFUnidad(f.unidad ?? ""); setFModal(true);
+    setEditingF(f); setFNombre(f.nombre); setFCargo(f.cargo); setFUnidad(f.unidad ?? "");
+    setFNumEmpleado(f.numero_empleado ?? ""); setFNit(f.nit ?? ""); setFModal(true);
   }
   async function handleSaveFirmante() {
     if (!fNombre.trim() || !fCargo.trim()) return;
     setFSaving(true);
     if (editingF) {
-      const res = await editarFirmante({ id: editingF.id, nombre: fNombre, cargo: fCargo, unidad: fUnidad });
+      const res = await editarFirmante({ id: editingF.id, nombre: fNombre, cargo: fCargo, unidad: fUnidad, numero_empleado: fNumEmpleado, nit: fNit });
       if (res.firmante) setFirmantes(p => p.map(f => f.id === editingF.id ? { ...f, ...res.firmante } : f));
     } else {
-      const res = await crearFirmante({ nombre: fNombre, cargo: fCargo, unidad: fUnidad });
+      const res = await crearFirmante({ nombre: fNombre, cargo: fCargo, unidad: fUnidad, numero_empleado: fNumEmpleado, nit: fNit });
       if (res.firmante) setFirmantes(p => [...p, res.firmante as Firmante]);
     }
     setFSaving(false); setFModal(false);
@@ -210,10 +213,10 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-semibold text-gray-700 text-sm uppercase tracking-wide flex items-center gap-2">
-                <UserCheck className="w-4 h-4" /> Firmantes A-01 SIAF
+                <UserCheck className="w-4 h-4" /> Firmantes
               </h2>
               <p className="text-xs text-gray-500 mt-0.5">
-                Personas que pueden firmar el formulario. Se seleccionan al imprimir.
+                Personas que pueden firmar documentos (A-01 SIAF, Viáticos, Vale de Caja Chica, Acta, FRI...). Se seleccionan al imprimir.
               </p>
             </div>
             <button onClick={openNewFirmante} className="btn-primary text-xs py-1.5 px-3">
@@ -234,6 +237,11 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm text-gray-900 truncate">{f.nombre}</p>
                   <p className="text-xs text-gray-500">{f.cargo}{f.unidad ? ` — ${f.unidad}` : ""}</p>
+                  {(f.numero_empleado || f.nit) && (
+                    <p className="text-xs text-gray-400">
+                      {f.numero_empleado ? `No. Empleado: ${f.numero_empleado}` : ""}{f.numero_empleado && f.nit ? " · " : ""}{f.nit ? `NIT: ${f.nit}` : ""}
+                    </p>
+                  )}
                 </div>
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${f.activo ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
                   {f.activo ? "Activo" : "Inactivo"}
@@ -285,6 +293,17 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
                   value={fUnidad} onChange={e => setFUnidad(e.target.value)} />
                 <p className="text-xs text-gray-400 mt-1">Se imprime como tercera línea bajo el nombre y cargo en la Forma A-04 SIAF, si se llena.</p>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">No. de Empleado (opcional)</label>
+                  <input className="input" value={fNumEmpleado} onChange={e => setFNumEmpleado(e.target.value)} />
+                </div>
+                <div>
+                  <label className="label">NIT (opcional)</label>
+                  <input className="input" value={fNit} onChange={e => setFNit(e.target.value)} />
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 -mt-2">Solo hace falta llenar esto si el firmante va a poder elegirse en el Vale de Caja Chica.</p>
             </div>
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
               <button onClick={() => setFModal(false)} className="btn-secondary">Cancelar</button>

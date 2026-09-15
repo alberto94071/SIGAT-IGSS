@@ -9,20 +9,25 @@ async function requireSuperadmin() {
   if (!s || s.user.rol !== "superadmin") throw new Error("Sin permiso");
 }
 
-export async function crearFirmante(data: { nombre: string; cargo: string; unidad?: string }) {
+export async function crearFirmante(data: { nombre: string; cargo: string; unidad?: string; numero_empleado?: string; nit?: string }) {
   await requireSuperadmin();
   const [row] = await db.insert(catalogoFirmantes).values({
     nombre: data.nombre.trim().toUpperCase(),
     cargo:  data.cargo.trim(),
     unidad: data.unidad?.trim() || null,
+    numero_empleado: data.numero_empleado?.trim() || null,
+    nit:             data.nit?.trim() || null,
   }).returning();
   return { firmante: row };
 }
 
-export async function editarFirmante(data: { id: number; nombre: string; cargo: string; unidad?: string }) {
+export async function editarFirmante(data: { id: number; nombre: string; cargo: string; unidad?: string; numero_empleado?: string; nit?: string }) {
   await requireSuperadmin();
   const [row] = await db.update(catalogoFirmantes)
-    .set({ nombre: data.nombre.trim().toUpperCase(), cargo: data.cargo.trim(), unidad: data.unidad?.trim() || null })
+    .set({
+      nombre: data.nombre.trim().toUpperCase(), cargo: data.cargo.trim(), unidad: data.unidad?.trim() || null,
+      numero_empleado: data.numero_empleado?.trim() || null, nit: data.nit?.trim() || null,
+    })
     .where(eq(catalogoFirmantes.id, data.id))
     .returning();
   return { firmante: row };
