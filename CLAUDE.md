@@ -1919,6 +1919,29 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   referencia es exactamente el mismo patrón ya probado en
   `Siaf04Client.tsx` (`descripcionDePresentacion` + mandar
   `descripcion_igss`/`unidad_medida` en el `seleccionPpr.push`).
+- **Devolver: Vale de "Autorizado" a "Pendiente autorización" (2026-09-15)**
+  — el encargado de Fondo Rotativo pidió poder corregir un vale que autorizó
+  con el monto equivocado, sin tener que rechazarlo y que el solicitante
+  vuelva a pedirlo desde cero. `devolverValeAPendienteAutorizacion`
+  (`vale-actions.ts`) — mismo patrón que `devolverValeAAutorizado`/
+  `devolverValeALiquidado`, pero un peldaño más atrás: exige
+  `estado === "Autorizado"`, limpia `monto_autorizado` (para que
+  `autorizarVale` lo vuelva a pedir desde cero, no lo precargue con el
+  valor equivocado) y regresa `estado = "Pendiente autorización"`. **No
+  toca `efectivo_caja`** — a diferencia de `devolverValeAAutorizado`
+  (Activo→Autorizado, que sí acredita), en el peldaño Autorizado→Pendiente
+  todavía no se ha descontado nada: el único punto que mueve
+  `efectivo_caja` es `asignarChequeVale` (Autorizado→Activo), que ocurre
+  después. Botón nuevo (ícono `Undo2`, mismo patrón de `confirm()` +
+  estado `devolviendo`/`errorDevolver` que ya usaban los otros dos
+  devolver de este archivo) en Fondo Rotativo/Vales → sección "Autorizados
+  — pendientes de asignar cheque", junto a "Imprimir"/"Asignar cheque".
+  Verificado en vivo con un vale de prueba desechable (id 14, numero
+  9999, sembrado por SQL directo en estado "Autorizado" con monto
+  autorizado 300 — sin tocar los 2 vales reales de producción, uno de
+  ellos justo en este mismo estado): clic en el botón nuevo movió el
+  registro a "Pendiente autorización" con `monto_autorizado = null`,
+  confirmado por consulta directa a la base — limpiado (`DELETE`) después.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

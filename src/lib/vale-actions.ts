@@ -243,6 +243,31 @@ export async function devolverValeAAutorizado(id: number): Promise<{ ok: true } 
   }
 }
 
+// Por si se autorizó con un monto equivocado — regresa el vale a "Pendiente
+// autorización" para volver a capturar el monto correcto con autorizarVale.
+// No mueve efectivo_caja porque a esta altura ("Autorizado", antes de
+// asignarChequeVale) todavía no se ha descontado nada — el único punto que
+// toca efectivo_caja es asignarChequeVale.
+export async function devolverValeAPendienteAutorizacion(id: number): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireEdit();
+    if ("error" in check) return check;
+
+    const [vale] = await db.select().from(valesCajaChica).where(eq(valesCajaChica.id, id)).limit(1);
+    if (!vale) return { error: "No se encontró el vale" };
+    if (vale.estado !== "Autorizado") return { error: "Este vale no está Autorizado" };
+
+    await db.update(valesCajaChica).set({
+      estado: "Pendiente autorización",
+      monto_autorizado: null,
+    }).where(eq(valesCajaChica.id, id));
+
+    return { ok: true };
+  } catch {
+    return { error: "Error al devolver el vale a Pendiente autorización" };
+  }
+}
+
 // ─── Voucher — cheques ya generados ───────────────────────────────────────────
 export async function getVouchers() {
   return db.select().from(valesCajaChica)
