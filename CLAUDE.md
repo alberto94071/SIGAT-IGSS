@@ -249,10 +249,26 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   del vale o Configuración), así que vales viejos y flujos sin tocar el
   selector no cambian. No se tocó `crearVale` ni el esquema de
   `valesCajaChica` — la elección es solo de impresión, igual que el resto de
-  documentos con este mecanismo. Verificado en vivo con datos desechables:
-  crear 2 firmantes con número de empleado/NIT desde Configuración, elegirlos
-  en el Vale de prueba y confirmar que sus datos (no los del snapshot viejo)
-  aparecen impresos — limpiado después.
+  documentos con este mecanismo. **Bug real encontrado el mismo día por el
+  cliente ("no me cambian sus datos, su número de empleado y nit") y
+  corregido de inmediato**: la primera versión hacía el fallback CAMPO POR
+  CAMPO (`firmanteSolicitante?.numero_empleado ?? v.solicitante_numero_
+  empleado`) — como los 4 firmantes reales que ya existían en el catálogo de
+  producción (Dr. Israel Ortiz, Glendy Zunun, Lic. Fielfer Hernández,
+  Nathalie Ochoa) se crearon antes de este cambio y no tienen `numero_
+  empleado`/`nit` cargados todavía, elegirlos cambiaba el nombre impreso
+  pero dejaba el número de empleado/NIT del snapshot VIEJO del vale (de otra
+  persona) — mezcla engañosa, no un dato en blanco. Fix: una vez elegido un
+  firmante, los 3 campos (nombre/empleado/nit) salen SIEMPRE de ese mismo
+  firmante completo — vacío si a ese firmante le falta el dato en el
+  catálogo, nunca mezclado con el snapshot de otra persona. **Para que el
+  Vale realmente imprima el número de empleado/NIT de estos firmantes reales,
+  hay que completarles esos dos campos desde Administración → Configuración →
+  Firmantes** — hoy los 4 solo tienen nombre/cargo. Verificado en vivo con
+  datos desechables: firmante con los 3 datos completos → los 3 imprimen
+  correctos y ninguno queda con el snapshot viejo; firmante real sin número
+  de empleado/NIT (Fielfer) → nombre cambia, empleado/NIT quedan en blanco
+  (no el dato viejo de otra persona) — limpiado después.
 - **`getConsolidacionesConDetalles`, `gruposRenglonDeConsolidacion` y
   similares ya tienen el patrón correcto de lookup acotado** — si se agrega
   una función nueva que lee `base_datos_central` o `pasajes_tarifario`,

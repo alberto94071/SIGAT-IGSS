@@ -165,16 +165,16 @@ export default function ImprimirValeClient({
         {campo("cantidad_letras", montoEnLetras(monto))}
         {campo("motivo", v.motivo, { multiline: true })}
 
-        {campo("solicitante_nombre", firmanteSolicitante?.nombre ?? v.solicitante_nombre)}
-        {campo("solicitante_empleado", firmanteSolicitante?.numero_empleado ?? v.solicitante_numero_empleado)}
-        {campo("solicitante_nit", firmanteSolicitante?.nit ?? v.solicitante_nit)}
-        {campo("jefe_nombre", firmanteJefe?.nombre ?? v.jefe_nombre)}
-        {campo("jefe_empleado", firmanteJefe?.numero_empleado ?? v.jefe_numero_empleado)}
-        {campo("jefe_nit", firmanteJefe?.nit ?? v.jefe_nit)}
+        {campo("solicitante_nombre", firmanteSolicitante ? firmanteSolicitante.nombre : v.solicitante_nombre)}
+        {campo("solicitante_empleado", firmanteSolicitante ? (firmanteSolicitante.numero_empleado ?? "") : v.solicitante_numero_empleado)}
+        {campo("solicitante_nit", firmanteSolicitante ? (firmanteSolicitante.nit ?? "") : v.solicitante_nit)}
+        {campo("jefe_nombre", firmanteJefe ? firmanteJefe.nombre : v.jefe_nombre)}
+        {campo("jefe_empleado", firmanteJefe ? (firmanteJefe.numero_empleado ?? "") : v.jefe_numero_empleado)}
+        {campo("jefe_nit", firmanteJefe ? (firmanteJefe.nit ?? "") : v.jefe_nit)}
 
-        {campo("responsable_nombre", firmanteResponsable?.nombre ?? nombreResponsable)}
-        {campo("responsable_empleado", firmanteResponsable?.numero_empleado ?? numeroEmpleadoResp)}
-        {campo("responsable_nit", firmanteResponsable?.nit ?? nitResponsable)}
+        {campo("responsable_nombre", firmanteResponsable ? firmanteResponsable.nombre : nombreResponsable)}
+        {campo("responsable_empleado", firmanteResponsable ? (firmanteResponsable.numero_empleado ?? "") : numeroEmpleadoResp)}
+        {campo("responsable_nit", firmanteResponsable ? (firmanteResponsable.nit ?? "") : nitResponsable)}
 
         {campo("cheque_no", v.numero_cheque ?? "")}
         {campo("valor_q", Q(monto))}
