@@ -16,6 +16,8 @@ export default async function AdministracionPage() {
       permisos:   usuarios.permisos,
       last_login: usuarios.last_login,
       created_at: usuarios.created_at,
+      numero_empleado: usuarios.numero_empleado,
+      nit:             usuarios.nit,
     })
     .from(usuarios)
     .orderBy(usuarios.id);

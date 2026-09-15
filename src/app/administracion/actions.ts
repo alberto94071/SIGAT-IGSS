@@ -25,6 +25,7 @@ function puedeGestionarUsuarios(me: { rol: Rol }): boolean {
 
 export async function crearUsuario(data: {
   nombre: string; email: string; password: string; rol: Rol;
+  numero_empleado?: string; nit?: string;
 }) {
   try {
     const me = await getMe();
@@ -40,6 +41,8 @@ export async function crearUsuario(data: {
       password_hash:hash,
       rol:          data.rol,
       permisos:     "{}",
+      numero_empleado: data.numero_empleado?.trim() || null,
+      nit:             data.nit?.trim() || null,
     }).returning();
 
     await db.insert(auditLog).values({
@@ -59,6 +62,7 @@ export async function crearUsuario(data: {
 
 export async function editarUsuario(data: {
   id: number; nombre: string; email: string; rol: Rol;
+  numero_empleado?: string; nit?: string;
 }) {
   try {
     const me = await getMe();
@@ -72,7 +76,10 @@ export async function editarUsuario(data: {
     }
 
     await db.update(usuarios)
-      .set({ nombre: data.nombre, email: data.email, rol: data.rol, updated_at: new Date().toISOString() })
+      .set({
+        nombre: data.nombre, email: data.email, rol: data.rol, updated_at: new Date().toISOString(),
+        numero_empleado: data.numero_empleado?.trim() || null, nit: data.nit?.trim() || null,
+      })
       .where(eq(usuarios.id, data.id));
 
     await db.insert(auditLog).values({

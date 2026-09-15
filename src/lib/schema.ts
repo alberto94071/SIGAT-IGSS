@@ -118,6 +118,13 @@ export const usuarios = pgTable("usuarios", {
   salario:           doublePrecision("salario"),
   grupo:             text("grupo"),
   categoria_puesto:  text("categoria_puesto"),
+  // Número de empleado para roles normales (operador/admin/etc, no
+  // colaborador — esos usan `ibm`). Junto con `nit` de arriba, identifica a
+  // la persona con la sesión abierta cuando pide un Vale de Caja Chica (ver
+  // crearVale en vale-actions.ts) — antes ese dato salía de un campo fijo de
+  // Configuración, que quedaba desactualizado en cuanto cambiaba quién pide
+  // el vale en la vida real. Editable desde Administración → Usuarios.
+  numero_empleado:   text("numero_empleado"),
 });
 
 // ─── Catálogo de insumos (hoja Cod) ──────────────────────────────────────────

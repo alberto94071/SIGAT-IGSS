@@ -2,7 +2,7 @@
 import { fechaGuatemala } from "@/lib/date-utils";
 
 import { db } from "@/lib/db";
-import { valesCajaChica, configuracion, polizas, fondoRotativoPagos, consolidaciones } from "@/lib/schema";
+import { valesCajaChica, configuracion, polizas, fondoRotativoPagos, consolidaciones, usuarios } from "@/lib/schema";
 import { eq, desc, sql, and, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { trazabilidadPorConsolidaciones } from "@/lib/adjudicacion/trazabilidad-utils";
@@ -83,6 +83,17 @@ export async function crearVale(data: NuevoValeData): Promise<{ vale: typeof val
     const config = await getConfig();
     if (!config) return { error: "No se encontró la configuración del sistema" };
 
+    // El solicitante es quien de verdad está pidiendo el vale ahora mismo —
+    // antes salía de un campo fijo de Configuración (mismo problema viejo del
+    // "Encargado(a) de Unidad": quedaba desactualizado en cuanto cambiaba
+    // quién lo pide en la vida real). Se toma de la cuenta con la sesión
+    // abierta; si a esa persona todavía no le cargaron número de empleado/NIT
+    // en Administración → Usuarios, esos dos campos quedan en blanco en vez
+    // de mostrar los datos de otra persona.
+    const [solicitante] = await db.select({
+      nombre: usuarios.nombre, numero_empleado: usuarios.numero_empleado, nit: usuarios.nit,
+    }).from(usuarios).where(eq(usuarios.id, check.uid)).limit(1);
+
     const res = await db.execute(sql`SELECT COALESCE(MAX(numero), 0) + 1 AS next FROM vales_caja_chica WHERE tipo = ${data.tipo}`);
     const numero = Number((res.rows[0] as any).next) || 1;
 
@@ -90,7 +101,7 @@ export async function crearVale(data: NuevoValeData): Promise<{ vale: typeof val
       numero, tipo: data.tipo,
       fecha: fechaGuatemala(),
       monto: data.monto, motivo: data.motivo.trim(),
-      solicitante_nombre: config.nombre_solicitante, solicitante_numero_empleado: config.numero_empleado_sol, solicitante_nit: config.nit_solicitante,
+      solicitante_nombre: solicitante?.nombre ?? "", solicitante_numero_empleado: solicitante?.numero_empleado ?? "", solicitante_nit: solicitante?.nit ?? "",
       jefe_nombre: config.nombre_encargado_unidad, jefe_numero_empleado: config.numero_empleado_encargado, jefe_nit: config.nit_encargado_unidad,
       estado: "Pendiente autorización",
       creado_por: check.uid,
