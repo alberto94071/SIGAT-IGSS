@@ -341,6 +341,10 @@ export type MovimientoBancoTotal = {
   descripcion: string;
   egresos: number; ingresos: number; saldo: number;
   totalEnLetras: string;
+  // Id de valesCajaChica cuando esta fila es el cheque de un Vale (Vale/
+  // Depósito de remanente) — para que el Voucher de un vale puntual pueda
+  // encontrar su propio saldo antes/después sin recalcularlo aparte.
+  valeId: number | null;
 };
 
 const MESES_LARGOS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
@@ -365,25 +369,26 @@ export async function getRegistroBancos(): Promise<MovimientoBancoTotal[]> {
     fecha: string; orden: number; egreso: number; ingreso: number;
     tipoDocumento: MovimientoBancoTotal["tipoDocumento"]; status: MovimientoBancoTotal["status"];
     numeroCheque: string | null; nitBeneficiario: string | null; beneficiario: string | null; descripcion: string;
+    valeId: number | null;
   };
   const eventos: Evento[] = [
     ...cheques.map((p): Evento => ({
       fecha: p.fecha_emision_cheque ?? "", orden: 1000 + p.id, egreso: p.monto_cheque ?? p.total ?? 0, ingreso: 0,
       tipoDocumento: (p.tipo_documento_pago as MovimientoBancoTotal["tipoDocumento"]) ?? "Factura",
       status: "Pagado", numeroCheque: p.numero_cheque, nitBeneficiario: p.nit_beneficiario, beneficiario: p.destinatario_nombre,
-      descripcion: p.concepto_voucher ?? `A-04 ${p.numero_a04 ?? "—"}/${p.anio_a04 ?? "—"}`,
+      descripcion: p.concepto_voucher ?? `A-04 ${p.numero_a04 ?? "—"}/${p.anio_a04 ?? "—"}`, valeId: null,
     })),
     ...viaticoCheques.map((v): Evento => ({
       fecha: v.fecha_emision_cheque ?? "", orden: 2000 + v.id, egreso: v.total, ingreso: 0,
       tipoDocumento: "Formulario", status: "Pagado", numeroCheque: v.numero_cheque,
       nitBeneficiario: v.nit_beneficiario, beneficiario: v.destinatario_nombre,
-      descripcion: `Viático V-L ${v.numero_formulario ?? "—"}`,
+      descripcion: `Viático V-L ${v.numero_formulario ?? "—"}`, valeId: null,
     })),
     ...valeChequesRows.map((v): Evento => ({
       fecha: v.fecha_emision ?? "", orden: 3000 + v.id, egreso: v.monto_autorizado ?? v.monto, ingreso: 0,
       tipoDocumento: "Vale", status: "Pagado", numeroCheque: v.numero_cheque,
       nitBeneficiario: v.destinatario_nit, beneficiario: v.destinatario_cheque,
-      descripcion: v.motivo,
+      descripcion: v.motivo, valeId: v.id,
     })),
     ...valeDepositosRows.map((v): Evento => ({
       fecha: v.fecha_boleta_deposito ?? v.fecha_liquidacion ?? "", orden: 4000 + v.id, egreso: 0, ingreso: v.monto_boleta_deposito ?? 0,
@@ -391,11 +396,13 @@ export async function getRegistroBancos(): Promise<MovimientoBancoTotal[]> {
       descripcion: v.motivo_boleta_deposito
         || `Remanente de Vale ${String(v.numero).padStart(7, "0")}`
         + (v.numero_boleta_deposito ? ` — boleta ${v.numero_boleta_deposito}` : ""),
+      valeId: v.id,
     })),
     ...reintegros.map((f): Evento => ({
       fecha: f.fecha_reintegro ?? "", orden: 5000 + f.id, egreso: 0, ingreso: f.total,
       tipoDocumento: "Depósito", status: "Operado", numeroCheque: null, nitBeneficiario: null, beneficiario: f.fondo_destino,
       descripcion: `Reintegro FRI ${f.numero}/${f.anio}` + (f.numero_boleta_deposito ? ` — boleta ${f.numero_boleta_deposito}` : ""),
+      valeId: null,
     })),
   ];
   eventos.sort((a, b) => a.fecha === b.fecha ? a.orden - b.orden : a.fecha.localeCompare(b.fecha));
@@ -409,6 +416,7 @@ export async function getRegistroBancos(): Promise<MovimientoBancoTotal[]> {
       nitBeneficiario: e.nitBeneficiario, beneficiario: e.beneficiario, descripcion: e.descripcion,
       egresos: e.egreso, ingresos: e.ingreso, saldo,
       totalEnLetras: montoEnLetras(e.egreso || e.ingreso),
+      valeId: e.valeId,
     };
   });
 }

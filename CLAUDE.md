@@ -2043,6 +2043,42 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     `configuracion` terminó exactamente en los mismos Q20,000/Q20,000 con
     los que arrancó (las operaciones de prueba se cancelaron entre sí:
     -500-500+500+500 en `efectivo_caja`).
+- **Voucher de Vale (2026-09-16) ganó cuenta bancaria + saldo antes/después,
+  igual que ya tenía el Voucher de compras — mismo talonario físico, dos
+  Client distintos que estaban desincronizados.** El cliente mandó
+  `MODELO_BAUCHER.pdf` (un voucher real lleno) para pedir que el Voucher del
+  Vale (`/dashboard/voucher/[id]/imprimir`) lleve nombre/número de cuenta
+  bancaria y el saldo antes/después de emitir el cheque — el modelo puntual
+  que mandó resultó tener datos mal cargados ("este que te mandé está
+  malo", el desglose de pólizas/depósito que trae ese PDF queda pendiente
+  de confirmar con el cliente, no implementado) pero confirmó explícitamente
+  lo fijo: nombre de cuenta, número de cuenta, saldo antes, saldo después, y
+  el concepto — nunca depósitos. Investigando se encontró que el Voucher de
+  **compras** (`/dashboard/bancos/[id]/imprimir/ImprimirVoucherBancosClient.tsx`)
+  **ya tenía exactamente esto** (`configuracion.banco_nombre`/
+  `cuenta_numero`/`cuenta_nombre`, ya poblados en producción real con
+  "BANRURAL"/"3-777-08924-4"/"FRI CONSULTORIO DE TACANA..." — de una ronda
+  anterior no documentada en detalle acá) — el Voucher de Vale
+  (`ImprimirVoucherClient.tsx`) nunca se actualizó a juego. Fix: se copió el
+  mismo patrón campo por campo (mismo talonario físico, según el comentario
+  ya existente en el archivo de compras) — `banco_datos` (los 3 campos
+  unidos con " · "), `saldo_anterior`, `saldo_nuevo`, en las mismas
+  posiciones (mm) que ya usa el de compras. El saldo antes/después se
+  calcula **en vivo, no en snapshot** — mismo criterio que ya usaba compras
+  (`page.tsx` busca en `getLibroBancosCompleto()` por `pagoId`): acá se
+  agregó `valeId: number | null` a `MovimientoBancoTotal`/`getRegistroBancos()`
+  (`fondo-rotativo-pagos-actions.ts`, el Registro de Bancos del punto de
+  arriba) para que `page.tsx` del Voucher de Vale busque `m.valeId ===
+  vale.id && m.tipoDocumento === "Vale"` y derive `saldoAnterior =
+  saldo + egresos`, `saldoNuevo = saldo` — sin tocar `getLibroBancosCompleto`
+  (que sigue sin incluir vales, ver el punto de arriba). Verificado en vivo
+  con un vale de prueba desechable (Q500, saldo arrancando en Q20,000):
+  asignar cheque 55 → el Voucher impreso mostró "BANRURAL · FRI CONSULTORIO
+  DE TACANA, DEPARTAMENTO DE SAN MARCOS · 3-777-08924-4", "Saldo anterior:
+  Q20,000.00" y "Saldo nuevo: Q19,500.00", coincidiendo exacto con el
+  Registro de Bancos — limpiado después (`efectivo_caja` se restauró a mano
+  a Q20,000 porque el vale se borró directo por SQL en vez de usar
+  "Devolver", que hubiera hecho la reversión sola).
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
