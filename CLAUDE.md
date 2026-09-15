@@ -200,6 +200,25 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   todavía, el pago se queda esperando en la lista de Caja Chica/Pagos — no
   es un bug, es el diseño ("que espere el proceso mientras se cuenta con
   el efectivo").
+- **Resuelto (2026-09-16): elegir "Efectivo" en Fondo Rotativo/Pagos abría
+  una pestaña nueva del navegador cada vez** (reportado por el cliente:
+  "cada vez que lo hago me abre otra pestaña... en la ruta de caja chica",
+  se le iban acumulando pestañas). `FormaPagoModal` (`PagosClient.tsx`,
+  `dashboard/pagos/`) tenía `window.open("/caja-chica/pagos", "_blank")`
+  justo después de confirmar, pensado como atajo para llevar al usuario a
+  Caja Chica — en la práctica, cada vez que se usaba el flujo (que es
+  constante, uno por cada pago en efectivo) abría una pestaña más sin
+  cerrar las anteriores. Fix: se quitó esa línea; el modal simplemente
+  cierra y refresca la lista de Fondo Rotativo/Pagos (el pago desaparece de
+  ahí porque ya cambió de estado), sin navegar a ningún lado — igual que ya
+  hacía el modal de viáticos (`FormaPagoViaticoModal`), que nunca tuvo este
+  problema. Verificado en vivo con un pago de prueba desechable (consolidación
+  + SIAF + ítem sembrados por SQL, renglón 231 para que NO sea grupo 100):
+  Playwright con un listener de `context.on("page", ...)` confirmó 0
+  pestañas nuevas al confirmar Efectivo, y que el pago sí transicionó a
+  `"Enviado a Liquidación"` — limpiado después (sin tocar
+  `presupuesto_renglones` real, el subproducto de prueba no calzaba con
+  ninguna fila real).
 - **Se puede "Devolver" la forma de pago elegida (Efectivo ↔ Cheque) desde
   Caja Chica/Pagos o Bancos** — por si el usuario se equivocó (eligió
   Efectivo sin tener efectivo, o Cheque cuando debía ser Efectivo).
