@@ -1942,6 +1942,107 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   ellos justo en este mismo estado): clic en el botón nuevo movió el
   registro a "Pendiente autorización" con `monto_autorizado = null`,
   confirmado por consulta directa a la base — limpiado (`DELETE`) después.
+- **Registro de Bancos (2026-09-15) — Fondo Rotativo/Bancos pasó de ser
+  solo la bandeja de "completar voucher de cheque de compras" a mostrar
+  primero un libro con saldo corriente real de toda la cuenta bancaria,**
+  a partir de un modelo real que mandó el cliente (`MODELO_BANCO.pdf`, su
+  Excel de control de banco) con columnas Mes/Cheque #/Tipo de Documento/
+  Status/Fecha/NIT Beneficiario/Beneficiario/Descripción/Egresos/Ingresos/
+  Saldo/Total en letras. El pedido explícito: cada cheque de Vale que se
+  asigna debita el saldo, cada depósito de remanente al liquidar un Vale
+  o cada Reintegro FRI lo acredita, el saldo **nunca puede bajar de 0**
+  (no se puede emitir un cheque sin fondos) **ni subir por encima del
+  monto total del Fondo Rotativo** (un depósito/reintegro no puede meter
+  más dinero del que el fondo realmente tiene).
+  - **`getRegistroBancos()`/`getSaldoRegistroBancos()`** (nuevas, en
+    `fondo-rotativo-pagos-actions.ts`) son una función **completamente
+    aparte de `getLibroBancosCompleto`** (la de "Libro Bancos"), a
+    propósito: `getLibroConciliacion` reutiliza esa otra función y separa
+    sus eventos por `origen: "compra" | "viatico"` para no pisar IDs entre
+    tablas al conciliar — si este registro nuevo le agregara un origen
+    "vale" ahí, un pago id=5 de compra y un vale id=5 se confundirían en
+    el mapa de conciliación. Se prefirió una función y un tipo
+    (`MovimientoBancoTotal`) totalmente independientes, aunque repitan
+    parte de la lógica de recorrido de eventos, en vez de arriesgar ese
+    cruce — los Vales todavía no entran a Libro Conciliación (no se pidió
+    en esta ronda). El saldo arranca en `configuracion.monto_fondo_rotativo`
+    y sobre él se aplican, en orden cronológico: cheques de compras
+    (egreso), de viáticos (egreso), de Vales (egreso, nuevo), depósitos de
+    remanente al liquidar un Vale (ingreso, nuevo) y Reintegros FRI
+    (ingreso).
+  - **Piso (0) y tope (`monto_fondo_rotativo`) se validan server-side en
+    los 3 puntos donde se escribe un movimiento nuevo** — recalculando el
+    saldo real con `getSaldoRegistroBancos()` antes de escribir, no
+    confiando en lo que el cliente vio al abrir el modal (mismo criterio
+    TOCTOU-safe que el resto del sistema): `asignarChequeVale`
+    (`vale-actions.ts`, piso — bloquea si el cheque deja el saldo bajo 0),
+    `liquidarValePasajes`/`liquidarValeGastosVarios` (`vale-actions.ts`,
+    tope — bloquea si el depósito del remanente deja el saldo por encima
+    del fondo), y `marcarFriReintegrado` (`fri-actions.ts`, tope — mismo
+    bloqueo para el Reintegro). Los cheques de compras/viáticos
+    (`registrarFormaPagoCheque`/`elegirChequeDirecto`/
+    `completarVoucherBancos`) **no llevan esta validación todavía** —
+    decisión explícita: el cliente solo pidió esto para el tramo de Vales,
+    no para compras/viáticos (se puede extender después si se pide).
+  - **3 columnas nuevas en `valesCajaChica`**: `destinatario_nit` (NIT del
+    beneficiario del cheque, se captura junto con el nombre en
+    `asignarChequeVale` — antes solo se pedía el nombre) y
+    `motivo_boleta_deposito`/`fecha_boleta_deposito` (justificación y
+    fecha real del depósito del remanente al liquidar — antes solo se
+    guardaba el número y monto de la boleta, sin decir por qué ni cuándo
+    se depositó). Los 3 son obligatorios en la UI solo cuando hay
+    remanente que depositar (`LiquidarModal` en `LiquidacionClient.tsx`) —
+    `fecha_liquidacion` (cuándo se procesó la liquidación en el sistema)
+    sigue siendo un campo distinto de `fecha_boleta_deposito` (cuándo se
+    hizo el depósito real en el banco, puede no ser el mismo día).
+  - **2 columnas nuevas en `friFondoRotativo`**: `fondo_destino` ("a qué
+    fondo corresponde" el reintegro, texto libre, precargado con "Fondo
+    Rotativo" en el modal ya que este sistema es de un solo fondo — el
+    cliente pidió capturarlo igual, para que quede en el registro) y
+    `numero_boleta_deposito` (número de boleta del depósito del
+    reintegro) — `fecha_reintegro`, que ya existía, sigue sirviendo como
+    la fecha del depósito. Los 3 (`ReintegrarModal` en `FriClient.tsx`)
+    son obligatorios siempre al marcar un FRI como Reintegrado.
+  - **Las 3 funciones de "Devolver" que ya tocaban estos flujos**
+    (`devolverValeAAutorizado`, `devolverValeALiquidado`,
+    `devolverFriDeReintegrado`) ahora también limpian los campos nuevos
+    correspondientes al deshacer — si no, quedarían con datos viejos
+    (número de boleta, motivo, fondo destino de una operación ya
+    revertida) la próxima vez que se vuelva a asignar cheque, liquidar, o
+    reintegrar.
+  - **`/dashboard/bancos` (`BancosClient.tsx`) ahora muestra primero la
+    tabla completa (Mes/Cheque #/Tipo Doc./Status/Fecha/NIT/Beneficiario/
+    Descripción/Egresos/Ingresos/Saldo/Total en letras) con buscador, y
+    debajo la bandeja de "Pendientes de completar voucher" que ya existía**
+    (decisión explícita del usuario al preguntarle dónde debía vivir esta
+    tabla — "Reemplazar Bancos" en vez de extender "Libro Bancos", que ya
+    tenía un concepto similar pero solo para compras/viáticos) — esa
+    bandeja de compras (`getLibroBancos`, `completarVoucherBancos`) sigue
+    funcionando exactamente igual, solo bajó de posición en la pantalla.
+    "Libro Bancos" y "Libro Conciliación" (pestañas aparte) tampoco se
+    tocaron — siguen sin incluir movimientos de Vales.
+  - Verificado en vivo de punta a punta con datos desechables sobre
+    producción real (arrancando desde `monto_fondo_rotativo =
+    efectivo_caja = Q20,000`, sin ningún cheque/reintegro real en el
+    sistema todavía): (1) vale Autorizado con monto Q25,000 → asignar
+    cheque bloqueado con "Bancos no tiene fondos suficientes para este
+    cheque (saldo actual: Q20000.00, cheque: Q25000.00)"; (2) dos vales
+    Autorizados de Q500 c/u → asignar cheque 22 y 23 con NIT → Bancos
+    mostró ambos como fila "Vale", saldo bajando a Q19,500 y luego
+    Q19,000.00 exacto, coincidiendo con el ejemplo real que dio el cliente
+    por WhatsApp; (3) liquidar un vale sin gasto (remanente completo
+    Q500) → botón "Liquidar" deshabilitado hasta llenar boleta/fecha/
+    justificación, al confirmar Bancos sumó una fila "Depósito" con la
+    justificación escrita y el saldo subió a Q19,500; (4) FRI de prueba
+    Q1,000 (dejaría el saldo en Q20,500, por encima del tope) → bloqueado
+    con "Ese reintegro dejaría el saldo de Bancos por encima del Fondo
+    Rotativo (Q20000.00) — saldo actual: Q19500.00"; reducido a Q500
+    (exacto el margen disponible) → reintegro exitoso, saldo de vuelta en
+    Q20,000.00 exacto, con "Fondo Rotativo" y la boleta B-777 visibles en
+    la fila. Todos los vales/FRI de prueba se borraron después —
+    `configuracion` terminó exactamente en los mismos Q20,000/Q20,000 con
+    los que arrancó (las operaciones de prueba se cancelaron entre sí:
+    -500-500+500+500 en `efectivo_caja`).
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

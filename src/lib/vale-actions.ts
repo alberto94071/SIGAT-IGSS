@@ -6,6 +6,7 @@ import { valesCajaChica, configuracion, polizas, fondoRotativoPagos, consolidaci
 import { eq, desc, sql, and, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { trazabilidadPorConsolidaciones } from "@/lib/adjudicacion/trazabilidad-utils";
+import { getSaldoRegistroBancos } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 
 async function requireEdit(): Promise<{ error: string } | { uid: number }> {
   const session = await auth();
@@ -178,7 +179,7 @@ export async function rechazarVale(id: number, motivo: string): Promise<{ ok: tr
 }
 
 // ─── Asignación de cheque (Fondo Rotativo) — genera el Voucher ──────────────
-export async function asignarChequeVale(id: number, data: { numero_cheque: string; destinatario_cheque: string }): Promise<{ ok: true } | { error: string }> {
+export async function asignarChequeVale(id: number, data: { numero_cheque: string; destinatario_cheque: string; destinatario_nit?: string }): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireEdit();
     if ("error" in check) return check;
@@ -191,9 +192,17 @@ export async function asignarChequeVale(id: number, data: { numero_cheque: strin
 
     const monto = vale.monto_autorizado ?? vale.monto;
 
+    // El saldo de Bancos nunca puede bajar de 0 — no se puede emitir un
+    // cheque sin fondos reales en la cuenta.
+    const { saldo } = await getSaldoRegistroBancos();
+    if (monto > saldo + 0.01) {
+      return { error: `Bancos no tiene fondos suficientes para este cheque (saldo actual: Q${saldo.toFixed(2)}, cheque: Q${monto.toFixed(2)})` };
+    }
+
     await db.update(valesCajaChica).set({
       numero_cheque: data.numero_cheque.trim(),
       destinatario_cheque: data.destinatario_cheque.trim(),
+      destinatario_nit: data.destinatario_nit?.trim() || null,
       fecha_emision: fechaGuatemala(),
       estado: "Activo",
     }).where(eq(valesCajaChica.id, id));
@@ -232,7 +241,7 @@ export async function devolverValeAAutorizado(id: number): Promise<{ ok: true } 
 
     await db.update(valesCajaChica).set({
       estado: "Autorizado",
-      numero_cheque: null, destinatario_cheque: null, fecha_emision: null,
+      numero_cheque: null, destinatario_cheque: null, destinatario_nit: null, fecha_emision: null,
     }).where(eq(valesCajaChica.id, id));
 
     await db.update(configuracion).set({ efectivo_caja: sql`COALESCE(${configuracion.efectivo_caja}, 0) + ${monto}` });
@@ -287,7 +296,7 @@ export async function getUsoValePasajes(valeId: number) {
   return { total: pendientes.reduce((s, p) => s + p.total, 0), polizas: pendientes };
 }
 
-export async function liquidarValePasajes(valeId: number, data: { numero_boleta_deposito?: string; monto_boleta_deposito?: number }): Promise<{ ok: true } | { error: string }> {
+export async function liquidarValePasajes(valeId: number, data: { numero_boleta_deposito?: string; monto_boleta_deposito?: number; motivo_boleta_deposito?: string; fecha_boleta_deposito?: string }): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireEdit();
     if ("error" in check) return check;
@@ -308,6 +317,14 @@ export async function liquidarValePasajes(valeId: number, data: { numero_boleta_
         return { error: `Debes ingresar el número de boleta de depósito por el remanente (Q${remanente.toFixed(2)})` };
       if (Math.abs(data.monto_boleta_deposito! - remanente) > 0.01)
         return { error: `El monto de la boleta debe ser exactamente el remanente (Q${remanente.toFixed(2)})` };
+      if (!data.motivo_boleta_deposito?.trim()) return { error: "La justificación del depósito es obligatoria" };
+      if (!data.fecha_boleta_deposito) return { error: "La fecha del depósito es obligatoria" };
+
+      // El saldo de Bancos nunca puede superar el monto total del Fondo Rotativo.
+      const { saldo, tope } = await getSaldoRegistroBancos();
+      if (saldo + data.monto_boleta_deposito! > tope + 0.01) {
+        return { error: `Ese depósito dejaría el saldo de Bancos por encima del Fondo Rotativo (Q${tope.toFixed(2)}) — saldo actual: Q${saldo.toFixed(2)}` };
+      }
     }
 
     await db.update(valesCajaChica).set({
@@ -316,6 +333,8 @@ export async function liquidarValePasajes(valeId: number, data: { numero_boleta_
       fecha_liquidacion: fechaGuatemala(),
       numero_boleta_deposito: data.numero_boleta_deposito?.trim() || null,
       monto_boleta_deposito: remanente > 0.009 ? data.monto_boleta_deposito : null,
+      motivo_boleta_deposito: remanente > 0.009 ? data.motivo_boleta_deposito!.trim() : null,
+      fecha_boleta_deposito: remanente > 0.009 ? data.fecha_boleta_deposito! : null,
     }).where(eq(valesCajaChica.id, valeId));
 
     if (pendientes.length > 0) {
@@ -352,7 +371,7 @@ export async function getUsoValeGastosVarios(valeId: number) {
   };
 }
 
-export async function liquidarValeGastosVarios(valeId: number, data: { numero_boleta_deposito?: string; monto_boleta_deposito?: number }): Promise<{ ok: true } | { error: string }> {
+export async function liquidarValeGastosVarios(valeId: number, data: { numero_boleta_deposito?: string; monto_boleta_deposito?: number; motivo_boleta_deposito?: string; fecha_boleta_deposito?: string }): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireEdit();
     if ("error" in check) return check;
@@ -371,6 +390,13 @@ export async function liquidarValeGastosVarios(valeId: number, data: { numero_bo
         return { error: `Debes ingresar el número de boleta de depósito por el remanente (Q${remanente.toFixed(2)})` };
       if (Math.abs(data.monto_boleta_deposito! - remanente) > 0.01)
         return { error: `El monto de la boleta debe ser exactamente el remanente (Q${remanente.toFixed(2)})` };
+      if (!data.motivo_boleta_deposito?.trim()) return { error: "La justificación del depósito es obligatoria" };
+      if (!data.fecha_boleta_deposito) return { error: "La fecha del depósito es obligatoria" };
+
+      const { saldo, tope } = await getSaldoRegistroBancos();
+      if (saldo + data.monto_boleta_deposito! > tope + 0.01) {
+        return { error: `Ese depósito dejaría el saldo de Bancos por encima del Fondo Rotativo (Q${tope.toFixed(2)}) — saldo actual: Q${saldo.toFixed(2)}` };
+      }
     }
 
     await db.update(valesCajaChica).set({
@@ -379,6 +405,8 @@ export async function liquidarValeGastosVarios(valeId: number, data: { numero_bo
       fecha_liquidacion: fechaGuatemala(),
       numero_boleta_deposito: data.numero_boleta_deposito?.trim() || null,
       monto_boleta_deposito: remanente > 0.009 ? data.monto_boleta_deposito : null,
+      motivo_boleta_deposito: remanente > 0.009 ? data.motivo_boleta_deposito!.trim() : null,
+      fecha_boleta_deposito: remanente > 0.009 ? data.fecha_boleta_deposito! : null,
     }).where(eq(valesCajaChica.id, valeId));
 
     if (remanente > 0.009) {
@@ -432,6 +460,7 @@ export async function devolverValeALiquidado(id: number): Promise<{ ok: true } |
       estado: "Activo",
       monto_liquidado: null, fecha_liquidacion: null,
       numero_boleta_deposito: null, monto_boleta_deposito: null,
+      motivo_boleta_deposito: null, fecha_boleta_deposito: null,
     }).where(eq(valesCajaChica.id, id));
 
     if (polizasARestaurar.length > 0) {

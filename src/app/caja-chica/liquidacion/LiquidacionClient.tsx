@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { FileCheck, Loader2, CheckCircle2, AlertTriangle, X, ChevronDown, ChevronRight } from "lucide-react";
 import { liquidarValePasajes, liquidarValeGastosVarios } from "@/lib/vale-actions";
+import { fechaGuatemala } from "@/lib/date-utils";
 import TrazabilidadPanel from "@/components/TrazabilidadPanel";
 import type { TrazabilidadConsolidacion } from "@/lib/adjudicacion/trazabilidad-utils";
 
@@ -69,7 +70,7 @@ function ValeCard({
   titulo, vale, totalUsado, liquidando, onLiquidar, detallePasajes, detallePagos,
 }: {
   titulo: string; vale: Vale; totalUsado: number; liquidando: boolean;
-  onLiquidar: (boleta: { numero_boleta_deposito?: string; monto_boleta_deposito?: number }) => Promise<{ ok: true } | { error: string }>;
+  onLiquidar: (boleta: { numero_boleta_deposito?: string; monto_boleta_deposito?: number; motivo_boleta_deposito?: string; fecha_boleta_deposito?: string }) => Promise<{ ok: true } | { error: string }>;
   detallePasajes?: { id: number; numero: number; total: number }[];
   detallePagos?: PagoGastoVario[];
 }) {
@@ -163,10 +164,12 @@ function ValeCard({
 
 function LiquidarModal({
   disponible, onClose, onConfirmar,
-}: { disponible: number; onClose: () => void; onConfirmar: (boleta: { numero_boleta_deposito?: string; monto_boleta_deposito?: number }) => Promise<{ ok: true } | { error: string }> }) {
+}: { disponible: number; onClose: () => void; onConfirmar: (boleta: { numero_boleta_deposito?: string; monto_boleta_deposito?: number; motivo_boleta_deposito?: string; fecha_boleta_deposito?: string }) => Promise<{ ok: true } | { error: string }> }) {
   const hayRemanente = disponible > 0.009;
   const [numeroBoleta, setNumeroBoleta] = useState("");
   const [montoBoleta, setMontoBoleta] = useState(hayRemanente ? disponible.toFixed(2) : "");
+  const [motivoBoleta, setMotivoBoleta] = useState("");
+  const [fechaBoleta, setFechaBoleta] = useState(fechaGuatemala());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -175,10 +178,14 @@ function LiquidarModal({
     const res = await onConfirmar({
       numero_boleta_deposito: hayRemanente ? numeroBoleta : undefined,
       monto_boleta_deposito: hayRemanente ? parseFloat(montoBoleta) : undefined,
+      motivo_boleta_deposito: hayRemanente ? motivoBoleta : undefined,
+      fecha_boleta_deposito: hayRemanente ? fechaBoleta : undefined,
     });
     setSaving(false);
     if ("error" in res) return setError(res.error);
   }
+
+  const valido = !hayRemanente || (numeroBoleta.trim() && Number(montoBoleta) > 0 && motivoBoleta.trim() && fechaBoleta);
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -197,8 +204,17 @@ function LiquidarModal({
               <input className="input font-mono" value={numeroBoleta} onChange={e => setNumeroBoleta(e.target.value)} />
             </div>
             <div>
+              <label className="label">Fecha del depósito</label>
+              <input type="date" className="input" value={fechaBoleta} onChange={e => setFechaBoleta(e.target.value)} />
+            </div>
+            <div>
               <label className="label">Monto depositado</label>
               <input type="number" step="0.01" className="input" value={montoBoleta} onChange={e => setMontoBoleta(e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Justificación del depósito</label>
+              <textarea className="input" rows={2} value={motivoBoleta} onChange={e => setMotivoBoleta(e.target.value)}
+                placeholder="Ej. Remanente de caja chica del vale..." />
             </div>
           </>
         ) : (
@@ -211,7 +227,7 @@ function LiquidarModal({
         )}
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="btn-secondary">Cancelar</button>
-          <button onClick={handleConfirmar} disabled={saving} className="btn-primary disabled:opacity-50">
+          <button onClick={handleConfirmar} disabled={saving || !valido} className="btn-primary disabled:opacity-50">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileCheck className="w-4 h-4" />} Liquidar
           </button>
         </div>

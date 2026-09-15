@@ -232,6 +232,10 @@ export const friFondoRotativo = pgTable("fri_fondo_rotativo", {
   estado:          text("estado").notNull().default("Generado"), // 'Generado' → 'Enviado' → 'Rechazado' | 'Reintegrado'
   fecha_envio_daf: text("fecha_envio_daf"),
   fecha_reintegro: text("fecha_reintegro"),
+  // A qué fondo corresponde + número de boleta del depósito de reintegro —
+  // se suman al Registro de Bancos (fecha_reintegro ya sirve de fecha).
+  fondo_destino:           text("fondo_destino"),
+  numero_boleta_deposito:  text("numero_boleta_deposito"),
   creado_por:      integer("creado_por").references(() => usuarios.id),
   created_at:      text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
@@ -960,6 +964,7 @@ export const valesCajaChica = pgTable("vales_caja_chica", {
   jefe_nit:                    text("jefe_nit").notNull(),
   numero_cheque:               text("numero_cheque"),
   destinatario_cheque:         text("destinatario_cheque"), // a nombre de quién sale el cheque
+  destinatario_nit:            text("destinatario_nit"), // NIT del beneficiario del cheque, para el Registro de Bancos
   fecha_emision:               text("fecha_emision"),
   fecha_entregado:             text("fecha_entregado"),
   motivo_rechazo:              text("motivo_rechazo"),
@@ -967,6 +972,8 @@ export const valesCajaChica = pgTable("vales_caja_chica", {
   monto_liquidado:             doublePrecision("monto_liquidado"), // total realmente usado (pasajes: suma de pólizas; gastos varios: ingresado a mano)
   numero_boleta_deposito:      text("numero_boleta_deposito"), // solo si sobró efectivo
   monto_boleta_deposito:       doublePrecision("monto_boleta_deposito"),
+  motivo_boleta_deposito:      text("motivo_boleta_deposito"), // justificación del depósito del remanente
+  fecha_boleta_deposito:       text("fecha_boleta_deposito"), // fecha real del depósito bancario (distinta de fecha_liquidacion)
   fecha_liquidacion:           text("fecha_liquidacion"),
   // 'Pendiente autorización' → 'Rechazado' | 'Autorizado' → 'Activo' (cheque
   // asignado, utilizable) → 'Liquidado'

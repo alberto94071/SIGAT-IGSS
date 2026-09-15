@@ -8,6 +8,7 @@ import { esGrupo100 } from "@/lib/programacion-constants";
 import { trazabilidadPorConsolidaciones, type TrazabilidadConsolidacion } from "./trazabilidad-utils";
 import { netoDeIva } from "@/lib/iva-utils";
 import { conDetalleViatico } from "@/lib/viatico-pagos-actions";
+import { montoEnLetras } from "./deletreo";
 
 // true si TODOS los renglones de la consolidación de este pago son 100-199 —
 // esos van a Pago/FRI en vez de Bancos/Caja Chica-Vale.
@@ -309,6 +310,119 @@ export async function getLibroBancosCompleto(): Promise<MovimientoBanco[]> {
       origen: e.origen, referencia: e.referencia,
     };
   });
+}
+
+// ─── Registro de Bancos (2026-09-15) ───────────────────────────────────────
+// El cliente mandó el modelo real de su Excel de control de cuenta
+// bancaria (MODELO_BANCO.pdf): todo movimiento de la cuenta — cheques de
+// compras, de viáticos Y de vales, más depósitos (Reintegro FRI, remanente
+// de Vale al liquidar) — en una sola tabla con saldo corriente, empezando
+// en configuracion.monto_fondo_rotativo. A diferencia de Libro Bancos
+// (getLibroBancosCompleto, que nunca bloquea nada), este saldo tiene dos
+// reglas duras: nunca baja de 0 (no se puede emitir un cheque de Vale sin
+// fondos) y nunca sube de monto_fondo_rotativo (un depósito/reintegro no
+// puede meter más dinero del que el fondo realmente tiene) — validadas en
+// asignarChequeVale/liquidarVale*/marcarFriReintegrado via
+// getSaldoRegistroBancos, antes de escribir nada.
+//
+// Es una función completamente aparte de getLibroBancosCompleto, a
+// propósito: getLibroConciliacion reutiliza esa otra función y separa sus
+// eventos por origen "compra"/"viatico" para no pisar IDs entre tablas
+// (ver el comentario de MovimientoBanco.origen) — si este registro le
+// agregara un origen "vale" ahí, un pago id=5 de compra y un vale id=5 se
+// confundirían en el mapa de conciliación. Los vales todavía no entran a
+// Libro Conciliación (el cliente no lo pidió en esta ronda).
+export type MovimientoBancoTotal = {
+  id: string; fecha: string; mes: string;
+  tipoDocumento: "Depósito" | "Vale" | "Factura" | "Formulario";
+  status: "Pagado" | "Operado";
+  numeroCheque: string | null;
+  nitBeneficiario: string | null; beneficiario: string | null;
+  descripcion: string;
+  egresos: number; ingresos: number; saldo: number;
+  totalEnLetras: string;
+};
+
+const MESES_LARGOS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
+  "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+function mesDeFecha(fecha: string): string {
+  const mesNum = Number(fecha.slice(5, 7));
+  return MESES_LARGOS[mesNum - 1] ?? "";
+}
+
+export async function getRegistroBancos(): Promise<MovimientoBancoTotal[]> {
+  const [config, chequesRows, viaticoChequesRows, valeChequesRows, valeDepositosRows, reintegros] = await Promise.all([
+    db.select({ monto_fondo_rotativo: configuracion.monto_fondo_rotativo }).from(configuracion).limit(1),
+    db.select().from(fondoRotativoPagos).where(isNotNull(fondoRotativoPagos.numero_cheque)),
+    db.select().from(viaticoPagos).where(isNotNull(viaticoPagos.numero_cheque)),
+    db.select().from(valesCajaChica).where(isNotNull(valesCajaChica.numero_cheque)),
+    db.select().from(valesCajaChica).where(isNotNull(valesCajaChica.monto_boleta_deposito)),
+    db.select().from(friFondoRotativo).where(isNotNull(friFondoRotativo.fecha_reintegro)),
+  ]);
+  const [cheques, viaticoCheques] = await Promise.all([conDetalle(chequesRows), conDetalleViatico(viaticoChequesRows)]);
+
+  type Evento = {
+    fecha: string; orden: number; egreso: number; ingreso: number;
+    tipoDocumento: MovimientoBancoTotal["tipoDocumento"]; status: MovimientoBancoTotal["status"];
+    numeroCheque: string | null; nitBeneficiario: string | null; beneficiario: string | null; descripcion: string;
+  };
+  const eventos: Evento[] = [
+    ...cheques.map((p): Evento => ({
+      fecha: p.fecha_emision_cheque ?? "", orden: 1000 + p.id, egreso: p.monto_cheque ?? p.total ?? 0, ingreso: 0,
+      tipoDocumento: (p.tipo_documento_pago as MovimientoBancoTotal["tipoDocumento"]) ?? "Factura",
+      status: "Pagado", numeroCheque: p.numero_cheque, nitBeneficiario: p.nit_beneficiario, beneficiario: p.destinatario_nombre,
+      descripcion: p.concepto_voucher ?? `A-04 ${p.numero_a04 ?? "—"}/${p.anio_a04 ?? "—"}`,
+    })),
+    ...viaticoCheques.map((v): Evento => ({
+      fecha: v.fecha_emision_cheque ?? "", orden: 2000 + v.id, egreso: v.total, ingreso: 0,
+      tipoDocumento: "Formulario", status: "Pagado", numeroCheque: v.numero_cheque,
+      nitBeneficiario: v.nit_beneficiario, beneficiario: v.destinatario_nombre,
+      descripcion: `Viático V-L ${v.numero_formulario ?? "—"}`,
+    })),
+    ...valeChequesRows.map((v): Evento => ({
+      fecha: v.fecha_emision ?? "", orden: 3000 + v.id, egreso: v.monto_autorizado ?? v.monto, ingreso: 0,
+      tipoDocumento: "Vale", status: "Pagado", numeroCheque: v.numero_cheque,
+      nitBeneficiario: v.destinatario_nit, beneficiario: v.destinatario_cheque,
+      descripcion: v.motivo,
+    })),
+    ...valeDepositosRows.map((v): Evento => ({
+      fecha: v.fecha_boleta_deposito ?? v.fecha_liquidacion ?? "", orden: 4000 + v.id, egreso: 0, ingreso: v.monto_boleta_deposito ?? 0,
+      tipoDocumento: "Depósito", status: "Operado", numeroCheque: null, nitBeneficiario: null, beneficiario: null,
+      descripcion: v.motivo_boleta_deposito
+        || `Remanente de Vale ${String(v.numero).padStart(7, "0")}`
+        + (v.numero_boleta_deposito ? ` — boleta ${v.numero_boleta_deposito}` : ""),
+    })),
+    ...reintegros.map((f): Evento => ({
+      fecha: f.fecha_reintegro ?? "", orden: 5000 + f.id, egreso: 0, ingreso: f.total,
+      tipoDocumento: "Depósito", status: "Operado", numeroCheque: null, nitBeneficiario: null, beneficiario: f.fondo_destino,
+      descripcion: `Reintegro FRI ${f.numero}/${f.anio}` + (f.numero_boleta_deposito ? ` — boleta ${f.numero_boleta_deposito}` : ""),
+    })),
+  ];
+  eventos.sort((a, b) => a.fecha === b.fecha ? a.orden - b.orden : a.fecha.localeCompare(b.fecha));
+
+  let saldo = config[0]?.monto_fondo_rotativo ?? 0;
+  return eventos.map((e, i) => {
+    saldo += e.ingreso - e.egreso;
+    return {
+      id: `mov-${i}`, fecha: e.fecha, mes: mesDeFecha(e.fecha),
+      tipoDocumento: e.tipoDocumento, status: e.status, numeroCheque: e.numeroCheque,
+      nitBeneficiario: e.nitBeneficiario, beneficiario: e.beneficiario, descripcion: e.descripcion,
+      egresos: e.egreso, ingresos: e.ingreso, saldo,
+      totalEnLetras: montoEnLetras(e.egreso || e.ingreso),
+    };
+  });
+}
+
+// Saldo actual del Registro de Bancos + el tope (monto_fondo_rotativo) —
+// para validar ANTES de escribir un cheque de Vale, un depósito de
+// remanente, o un Reintegro FRI (ver el comentario de arriba). Sin
+// movimientos todavía, el saldo es el tope completo.
+export async function getSaldoRegistroBancos(): Promise<{ saldo: number; tope: number }> {
+  const [config] = await db.select({ monto_fondo_rotativo: configuracion.monto_fondo_rotativo }).from(configuracion).limit(1);
+  const tope = config?.monto_fondo_rotativo ?? 0;
+  const movimientos = await getRegistroBancos();
+  const saldo = movimientos.length > 0 ? movimientos[movimientos.length - 1].saldo : tope;
+  return { saldo, tope };
 }
 
 // Historial completo de Fondo Rotativo — toda consolidación que ya generó su

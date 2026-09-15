@@ -394,6 +394,7 @@ function RechazarModal({ vale, onClose, onRechazado }: { vale: Vale; onClose: ()
 function AsignarChequeModal({ vale, onClose, onAsignado }: { vale: Vale; onClose: () => void; onAsignado: (numeroCheque: string, destinatario: string) => void }) {
   const [numeroCheque, setNumeroCheque] = useState("");
   const [destinatario, setDestinatario] = useState(vale.solicitante_nombre);
+  const [destinatarioNit, setDestinatarioNit] = useState(vale.solicitante_nit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -401,7 +402,7 @@ function AsignarChequeModal({ vale, onClose, onAsignado }: { vale: Vale; onClose
     if (!numeroCheque.trim()) return setError("El número de cheque es obligatorio");
     if (!destinatario.trim()) return setError("El nombre del destinatario es obligatorio");
     setSaving(true); setError("");
-    const res = await asignarChequeVale(vale.id, { numero_cheque: numeroCheque, destinatario_cheque: destinatario });
+    const res = await asignarChequeVale(vale.id, { numero_cheque: numeroCheque, destinatario_cheque: destinatario, destinatario_nit: destinatarioNit });
     setSaving(false);
     if ("error" in res) return setError(res.error);
     onAsignado(numeroCheque.trim(), destinatario.trim());
@@ -418,6 +419,10 @@ function AsignarChequeModal({ vale, onClose, onAsignado }: { vale: Vale; onClose
         <div>
           <label className="label">A nombre de quién sale el cheque</label>
           <input className="input" value={destinatario} onChange={e => setDestinatario(e.target.value)} />
+        </div>
+        <div>
+          <label className="label">NIT del beneficiario</label>
+          <input className="input font-mono" value={destinatarioNit} onChange={e => setDestinatarioNit(e.target.value)} />
         </div>
         {error && (
           <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
