@@ -1710,6 +1710,26 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   Galón, características "Clase: Purificada;"): produce exactamente
   "Agua; Clase: Purificada" y "Garrafón 5 Galón", coincidiendo con las
   capturas del cliente.
+- **La etiqueta del `<select>` de PPR/presentación (SIAF-04) también usaba
+  `descripcion_igss` — corregido 2026-09-15, mismo día que el punto de
+  arriba pero un problema distinto (ese era sobre qué se GUARDA, este es
+  sobre qué se MUESTRA en el selector antes de elegir).** El cliente marcó
+  con capturas que el texto de cada opción del selector (`etiquetaDeOpcion`
+  en `Siaf04Client.tsx`) debía concatenar únicamente PPR + "Descripción
+  PpR" (`nombre`) + "Característica PpR" (`caracteristicas`) + Presentación
+  + Unidad de Medida — en vez de eso, el prefijo de cada opción era
+  `descripcion_igss || nombre`, que para insumos como Agua es el mismo
+  texto largo y genérico de 91% de los códigos (ver el punto de arriba de
+  "`descripcion_igss` casi nunca distingue..."), haciendo que las ~60
+  presentaciones de Agua se vieran casi idénticas en el `<select>` salvo
+  por el PPR y lo que venía después. Fix: `etiquetaDeOpcion` ya no usa
+  `descripcion_igss` en absoluto, arma `"PPR {codigo_ppr} — {nombre}
+  ({caracteristicas}) · {presentacion} · {unidad_medida}"` — ej. "PPR 4877
+  - 28700 — Agua (Clase: Purificada;) · Garrafón · 5 Galón", mucho más
+  corto y legible. **No se tocó la copia duplicada de `etiquetaDeOpcion`
+  en `OrdenesClient.tsx`** — mismo criterio de alcance que los puntos de
+  arriba (el cliente no lo pidió para Órdenes esta vez); si algún día se
+  pide, es el mismo cambio, calcado.
 - **`OrdenesClient.tsx` (Normal) sigue sin este mecanismo, a propósito —
   se intentó extenderlo y se revirtió el mismo día (2026-09-12).** El
   cliente escribió "la misma lógica que usas para que los datos del PPR y

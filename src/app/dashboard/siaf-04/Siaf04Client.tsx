@@ -36,11 +36,16 @@ function codigoDeOpcion(o: PprOpcion): string {
 }
 // El cliente pidió (2026-09-02) que el número de PPR se vea siempre en el
 // selector, no solo para insumos con código real (ver mismo cambio en
-// OrdenesClient.tsx).
+// OrdenesClient.tsx). **Corregido 2026-09-15**: la etiqueta usaba
+// `descripcion_igss` (el texto largo y genérico de Base de Datos Central,
+// que casi nunca varía entre presentaciones — ver nota de
+// `descripcionDePresentacion` más abajo) — el cliente marcó con capturas
+// que el selector debe concatenar únicamente PPR + Descripción PPR
+// (`nombre`) + Característica PPR (`caracteristicas`) + Presentación +
+// Unidad de Medida, sin `descripcion_igss`.
 function etiquetaDeOpcion(o: PprOpcion): string {
   const prefijo = o.codigo_ppr ? `PPR ${o.codigo_ppr} — ` : "";
-  const desc = o.descripcion_igss || o.nombre;
-  return `${prefijo}${desc}${o.caracteristicas ? ` (${o.caracteristicas})` : ""}${o.presentacion ? ` · ${o.presentacion}` : ""}${o.unidad_medida ? ` · ${o.unidad_medida}` : ""}`;
+  return `${prefijo}${o.nombre}${o.caracteristicas ? ` (${o.caracteristicas})` : ""}${o.presentacion ? ` · ${o.presentacion}` : ""}${o.unidad_medida ? ` · ${o.unidad_medida}` : ""}`;
 }
 // Descripción a GUARDAR para la presentación elegida (distinto de
 // etiquetaDeOpcion, que es solo para el <select>) — reportado por el
