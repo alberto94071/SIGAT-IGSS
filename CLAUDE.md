@@ -328,6 +328,35 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   correctos y ninguno queda con el snapshot viejo; firmante real sin número
   de empleado/NIT (Fielfer) → nombre cambia, empleado/NIT quedan en blanco
   (no el dato viejo de otra persona) — limpiado después.
+- **Resuelto (2026-09-16): el "Solicitante" del Vale de Caja Chica al
+  crearse (no al imprimirse) también salía de un campo fijo de
+  Configuración — mismo problema viejo de "Encargado(a) de Unidad", pero
+  en OTRO punto del flujo.** El punto de arriba (2026-09-15) resolvió los 3
+  firmantes AL IMPRIMIR (selector, no persiste), pero `crearVale`
+  (`vale-actions.ts`) seguía guardando `solicitante_nombre`/
+  `solicitante_numero_empleado`/`solicitante_nit` desde
+  `config.nombre_solicitante`/etc. AL CREAR el vale — el dato que ve Fondo
+  Rotativo al autorizar (antes de llegar siquiera a imprimirse). El cliente
+  lo notó pidiendo un vale con su propio usuario y viendo "Fielfer" en la
+  bandeja de autorización en vez de su propio nombre. Fix: `usuarios` ganó
+  `numero_empleado` (nullable — `nit` ya existía desde Viáticos, reutilizado
+  acá), editable desde Administración → Usuarios para **cualquier rol**, no
+  solo colaboradores (que usan `ibm` en su lugar, un campo distinto).
+  `crearVale` ahora resuelve nombre/numero_empleado/nit de la cuenta con la
+  sesión abierta (`check.uid`) en vez de Configuración — si a esa persona
+  todavía no le cargaron número de empleado/NIT, esos dos quedan en blanco
+  en vez de mostrar los de otra persona (mismo criterio que el punto de
+  arriba). **No se tocó `jefe_nombre`/etc.** (sigue viniendo de
+  Configuración al crear, y del selector de `catalogoFirmantes` al
+  imprimir) — el cliente solo reportó el Solicitante. Verificado: el
+  formulario de Administración → Usuarios guarda correctamente número de
+  empleado/NIT para un usuario de prueba, y la consulta que usa `crearVale`
+  resuelve esos datos correctamente para esa cuenta — no se pudo probar la
+  creación completa del vale en vivo porque en ese momento ya había un vale
+  real activo de cada tipo (`pasajes` y `gastos_varios`) en producción, y
+  `crearVale` bloquea crear uno nuevo del mismo tipo mientras el anterior
+  siga activo — no se quiso forzar tocando esos dos vales reales solo para
+  probar. Usuario de prueba limpiado después.
 - **`getConsolidacionesConDetalles`, `gruposRenglonDeConsolidacion` y
   similares ya tienen el patrón correcto de lookup acotado** — si se agrega
   una función nueva que lee `base_datos_central` o `pasajes_tarifario`,

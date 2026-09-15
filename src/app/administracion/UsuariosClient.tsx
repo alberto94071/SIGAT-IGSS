@@ -17,6 +17,7 @@ type Usuario = {
   id: number; nombre: string; email: string;
   rol: Rol; activo: boolean; permisos: string;
   last_login: Date | null; created_at: Date | null;
+  numero_empleado: string | null; nit: string | null;
 };
 
 const MODULOS_LAUNCHER: { key: keyof Permisos; label: string }[] = [
@@ -143,14 +144,18 @@ export default function UsuariosClient({ usuarios: init, rol, currentUserId }: P
   const [email,   setEmail]   = useState("");
   const [rolForm, setRolForm] = useState<Rol>("operador");
   const [pass,    setPass]    = useState("");
+  const [numeroEmpleado, setNumeroEmpleado] = useState("");
+  const [nitForm,        setNitForm]        = useState("");
 
   function openCrear() {
     setNombre(""); setEmail(""); setRolForm("operador"); setPass(""); setError("");
+    setNumeroEmpleado(""); setNitForm("");
     setModal("crear");
   }
   function openEditar(u: Usuario) {
     setSelected(u); setNombre(u.nombre); setEmail(u.email);
     setRolForm(u.rol); setError("");
+    setNumeroEmpleado(u.numero_empleado ?? ""); setNitForm(u.nit ?? "");
     setModal("editar");
   }
   function openPermisos(u: Usuario) {
@@ -168,7 +173,7 @@ export default function UsuariosClient({ usuarios: init, rol, currentUserId }: P
   async function handleCrear() {
     if (!nombre || !email || !pass) return setError("Complete todos los campos");
     setLoading(true);
-    const res = await crearUsuario({ nombre, email, password: pass, rol: rolForm });
+    const res = await crearUsuario({ nombre, email, password: pass, rol: rolForm, numero_empleado: numeroEmpleado, nit: nitForm });
     setLoading(false);
     if (res.error) return setError(res.error);
     setLista(prev => [...prev, res.usuario!] as unknown as Usuario[]);
@@ -178,11 +183,11 @@ export default function UsuariosClient({ usuarios: init, rol, currentUserId }: P
   async function handleEditar() {
     if (!selected) return;
     setLoading(true);
-    const res = await editarUsuario({ id: selected.id, nombre, email, rol: rolForm });
+    const res = await editarUsuario({ id: selected.id, nombre, email, rol: rolForm, numero_empleado: numeroEmpleado, nit: nitForm });
     setLoading(false);
     if (res.error) return setError(res.error);
     setLista(prev => prev.map(u => u.id === selected.id
-      ? { ...u, nombre, email, rol: rolForm } : u));
+      ? { ...u, nombre, email, rol: rolForm, numero_empleado: numeroEmpleado.trim() || null, nit: nitForm.trim() || null } : u));
     closeModal();
   }
 
@@ -353,6 +358,19 @@ export default function UsuariosClient({ usuarios: init, rol, currentUserId }: P
                 <p className="text-xs text-gray-400 mt-1">Solo el Administrador Máster puede asignar el rol de Administrador.</p>
               )}
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">No. de Empleado (opcional)</label>
+                <input className="input" value={numeroEmpleado} onChange={e => setNumeroEmpleado(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">NIT (opcional)</label>
+                <input className="input" value={nitForm} onChange={e => setNitForm(e.target.value)} />
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 -mt-2">
+              Se usan para identificar a esta persona en documentos que ella misma genera (ej. el Solicitante del Vale de Caja Chica).
+            </p>
             {modal === "crear" && (
               <div>
                 <label className="label">Contraseña inicial</label>
