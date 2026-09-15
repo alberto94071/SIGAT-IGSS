@@ -608,7 +608,17 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   siempre trae la etiqueta concatenada, así que nunca queda vacío por sí
   solo). No afecta la posición de los demás campos porque cada uno tiene su
   propia posición absoluta independiente — simplemente no se renderiza nada
-  ahí cuando falta el dato.
+  ahí cuando falta el dato. **Lote y Fecha de Vencimiento no llevaban
+  etiqueta impresa, a diferencia de Marca/Modelo/Serie** (reportado por el
+  cliente 2026-09-16 con una captura: "aquí debería decir 'lote:
+  XL-202526'... pero solo en esos 5 campos") — se imprimía solo el valor
+  crudo, sin decir a qué campo correspondía. Fix: mismo patrón que
+  Marca/Modelo/Serie, `Lote: ${o.lote}` y `Fecha de Vencimiento:
+  ${o.fecha_vencimiento}` en vez del valor solo. Verificado en vivo con
+  una orden real de producción (id 29, que ya tenía Marca/Modelo/Fecha de
+  Vencimiento reales) — se le puso `lote` temporal, se confirmó "Lote:
+  XL-202526" impreso, y se revirtió a `NULL` de inmediato (esa orden nunca
+  tuvo lote real).
 - **Catálogo de Almacén (stock por lote, FEFO) y DAB-75 real — construido
   2026-08-26 a partir de una explicación completa del flujo físico del
   cliente.** Antes `almacen/catalogo` y `almacen/cuadricula` eran
