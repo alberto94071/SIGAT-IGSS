@@ -15,6 +15,11 @@ interface Props {
   montoEnLetras: string;
   municipio: string;
   codigoContable: string;
+  bancoNombre: string;
+  cuentaNumero: string;
+  cuentaNombre: string;
+  saldoAnterior: number | null;
+  saldoNuevo: number | null;
   posicionesGuardadas: Record<string, Pos>;
 }
 
@@ -43,9 +48,12 @@ const POS_DEFAULT: Record<string, Pos> = {
   monto_cheque:  { top: 19.8,  left: 161.3, width: 30, height: 5 },
   destinatario:  { top: 29.2,  left: 50.8,  width: 150, height: 5 },
   monto_letras:  { top: 36.8,  left: 40.6,  width: 163, height: 6 },
+  banco_datos:   { top: 83.0,  left: 15.2,  width: 163, height: 6 },
   cuenta_no:     { top: 96.0,  left: 15.2,  width: 25, height: 5 },
   concepto:      { top: 96.0,  left: 43.2,  width: 99, height: 5 },
   monto_stub:    { top: 96.0,  left: 148.6, width: 22, height: 5 },
+  saldo_anterior:{ top: 103.0, left: 43.2,  width: 60, height: 5 },
+  saldo_nuevo:   { top: 103.0, left: 105.2, width: 60, height: 5 },
   solicitante:   { top: 199.4, left: 14.0,  width: 38, height: 5 },
   jefe:          { top: 199.4, left: 104.1, width: 48, height: 5 },
   dia:           { top: 199.4, left: 191.8, width: 6,  height: 5 },
@@ -59,9 +67,12 @@ const FIELD_LABELS: Record<string, string> = {
   monto_cheque:  "Monto (Q., cuerpo del cheque)",
   destinatario:  "Pago a la orden de",
   monto_letras:  "Suma de (en letras)",
+  banco_datos:   "Banco / cuenta (dato fijo)",
   cuenta_no:     "Cuenta No. (voucher)",
   concepto:      "Concepto (voucher)",
   monto_stub:    "Monto (voucher, debe/haber)",
+  saldo_anterior:"Saldo anterior",
+  saldo_nuevo:   "Saldo nuevo",
   solicitante:   "Nombre del solicitante",
   jefe:          "Nombre del Jefe",
   dia:           "Día",
@@ -70,7 +81,8 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 export default function ImprimirVoucherClient({
-  vale: v, montoEnLetras, municipio, codigoContable, posicionesGuardadas,
+  vale: v, montoEnLetras, municipio, codigoContable, bancoNombre, cuentaNumero, cuentaNombre,
+  saldoAnterior, saldoNuevo, posicionesGuardadas,
 }: Props) {
   const [verPosiciones, setVerPosiciones] = useState(false);
   const [pos, setPos] = useState<Record<string, Pos>>({ ...POS_DEFAULT, ...posicionesGuardadas });
@@ -105,6 +117,8 @@ export default function ImprimirVoucherClient({
   const monto = v.monto_autorizado ?? v.monto;
   const montoTxt = monto.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const { dia, mes, anio } = partesFecha(v.fecha_emision);
+  const fmtQ = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const bancoDatosTxt = [bancoNombre, cuentaNombre, cuentaNumero].filter(Boolean).join(" · ");
 
   const campo = (id: string, textoDefault: string, opts?: { style?: React.CSSProperties }) => {
     const texto = overrides[id] ?? textoDefault;
@@ -134,9 +148,12 @@ export default function ImprimirVoucherClient({
         {campo("destinatario", v.destinatario_cheque ?? "")}
         {campo("monto_letras", montoEnLetras, { style: { fontSize: "8.5pt" } })}
 
+        {campo("banco_datos", bancoDatosTxt, { style: { fontSize: "7.5pt", color: "#444" } })}
         {campo("cuenta_no", codigoContable, { style: { textAlign: "center", fontSize: "8pt" } })}
         {campo("concepto", `${TIPO_LABEL[v.tipo] ?? v.tipo} No. ${String(v.numero).padStart(7, "0")} — ${v.motivo}`, { style: { fontSize: "8.5pt" } })}
         {campo("monto_stub", montoTxt, { style: { textAlign: "right", fontFamily: "monospace", fontSize: "8.5pt" } })}
+        {campo("saldo_anterior", saldoAnterior != null ? `Saldo anterior: ${fmtQ(saldoAnterior)}` : "", { style: { fontSize: "7.5pt", color: "#444" } })}
+        {campo("saldo_nuevo", saldoNuevo != null ? `Saldo nuevo: ${fmtQ(saldoNuevo)}` : "", { style: { fontSize: "7.5pt", color: "#444" } })}
 
         {campo("solicitante", v.solicitante_nombre, { style: { fontSize: "7.5pt" } })}
         {campo("jefe", v.jefe_nombre, { style: { fontSize: "7.5pt" } })}

@@ -5,6 +5,7 @@ import { configuracion } from "@/lib/schema";
 import { getVoucher } from "@/lib/vale-actions";
 import { montoEnLetras } from "@/lib/adjudicacion/deletreo";
 import { getPosicionesImpresion } from "@/lib/impresion-posiciones-actions";
+import { getRegistroBancos } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 import ImprimirVoucherClient from "./ImprimirVoucherClient";
 
 export default async function ImprimirVoucherPage({ params }: { params: Promise<{ id: string }> }) {
@@ -12,14 +13,22 @@ export default async function ImprimirVoucherPage({ params }: { params: Promise<
   if (!session) redirect("/login");
 
   const { id } = await params;
-  const [vale, config, posicionesGuardadas] = await Promise.all([
+  const [vale, config, posicionesGuardadas, registroBancos] = await Promise.all([
     getVoucher(Number(id)),
     db.select().from(configuracion).limit(1).then(r => r[0]),
     getPosicionesImpresion("cheque"),
+    getRegistroBancos(),
   ]);
   if (!vale || !vale.numero_cheque) notFound();
 
   const monto = vale.monto_autorizado ?? vale.monto;
+
+  // El saldo corriente de este cheque de vale ya lo calculó el Registro de
+  // Bancos (mismo orden cronológico, ver getRegistroBancos) — se busca por
+  // valeId en vez de recalcularlo aquí para no desincronizarse de esa fuente.
+  const movimiento = registroBancos.find(m => m.valeId === vale.id && m.tipoDocumento === "Vale");
+  const saldoNuevo = movimiento?.saldo ?? null;
+  const saldoAnterior = movimiento ? movimiento.saldo + movimiento.egresos : null;
 
   return (
     <ImprimirVoucherClient
@@ -27,6 +36,11 @@ export default async function ImprimirVoucherPage({ params }: { params: Promise<
       montoEnLetras={montoEnLetras(monto)}
       municipio={config?.municipio ?? "Tacaná, San Marcos"}
       codigoContable={config?.codigo_contable ?? "12.07.04"}
+      bancoNombre={config?.banco_nombre ?? ""}
+      cuentaNumero={config?.cuenta_numero ?? ""}
+      cuentaNombre={config?.cuenta_nombre ?? ""}
+      saldoAnterior={saldoAnterior}
+      saldoNuevo={saldoNuevo}
       posicionesGuardadas={posicionesGuardadas}
     />
   );
