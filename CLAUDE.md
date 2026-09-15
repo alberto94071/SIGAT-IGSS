@@ -219,10 +219,40 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   (`nombre_encargado_unidad`) dejó de trabajar en la unidad. Ahora es un
   selector (`SelectorFirmante`, ver `src/components/SelectorFirmante.tsx`)
   que lee de `catalogoFirmantes` (Configuración → Firmantes) en cada
-  documento impreso que lo necesita. **Pendiente**: los Vales de Caja Chica
-  todavía toman el jefe de ese campo de Configuración al crearse (mecanismo
-  distinto — necesitaría número de empleado y NIT en `catalogoFirmantes`,
-  que hoy no tiene).
+  documento impreso que lo necesita.
+- **Resuelto (2026-09-15): el Vale de Caja Chica ganó los mismos 3 selectores
+  de firmante que el resto de documentos, con número de empleado y NIT
+  incluidos.** Antes los 3 espacios de firma del Vale (Solicitante, Jefe de
+  la Dependencia, Responsable del F.R.I.) salían de 9 campos fijos de
+  Configuración (`nombre_solicitante`/`numero_empleado_sol`/`nit_solicitante`,
+  `nombre_encargado_unidad`/`numero_empleado_encargado`/`nit_encargado_unidad`,
+  `nombre_responsable`/`numero_empleado_resp`/`nit_responsable`) — los dos
+  primeros se snapshoteaban en el vale al crearse (`crearVale`,
+  `vale-actions.ts`), el tercero se resolvía en cada impresión — igual que
+  el viejo problema de "Encargado(a) de Unidad" de arriba, pero nunca se
+  había migrado a `catalogoFirmantes` porque a ese catálogo le faltaban
+  número de empleado y NIT (que el Vale sí necesita, a diferencia de A-01
+  SIAF/Viáticos/Acta/FRI, que solo piden nombre+cargo). Pedido explícito del
+  cliente con ejemplos reales ("Lilia ya no trabaja con nosotros", "Fielfer
+  está de vacaciones"). Fix: `catalogoFirmantes` ganó `numero_empleado`/`nit`
+  (nullable — el resto de documentos que usan este catálogo no los llenan),
+  el formulario de Administración → Configuración → Firmantes (renombrado de
+  "Firmantes A-01 SIAF" a "Firmantes", ya que sirve para varios documentos)
+  los captura opcionalmente, y `Firmante` (`SelectorFirmante.tsx`) los trae
+  opcionales. `ImprimirValeClient.tsx` (`caja-chica/vale/[id]/imprimir`)
+  agregó 3 `SelectorFirmante` en `extraToolbar` (mismo patrón "no-print" ya
+  usado por Acta/FRI/DPD-23/Poliza/SPS-75/Programación/Modificaciones/V-L:
+  se elige al imprimir, sin persistir en la base — si se reimprime sin
+  elegir de nuevo, se puede elegir otro firmante distinto cada vez) — si se
+  elige un firmante, su nombre/numero_empleado/nit reemplazan lo impreso en
+  ese bloque; si no se elige nada, se imprime el dato de siempre (snapshot
+  del vale o Configuración), así que vales viejos y flujos sin tocar el
+  selector no cambian. No se tocó `crearVale` ni el esquema de
+  `valesCajaChica` — la elección es solo de impresión, igual que el resto de
+  documentos con este mecanismo. Verificado en vivo con datos desechables:
+  crear 2 firmantes con número de empleado/NIT desde Configuración, elegirlos
+  en el Vale de prueba y confirmar que sus datos (no los del snapshot viejo)
+  aparecen impresos — limpiado después.
 - **`getConsolidacionesConDetalles`, `gruposRenglonDeConsolidacion` y
   similares ya tienen el patrón correcto de lookup acotado** — si se agrega
   una función nueva que lee `base_datos_central` o `pasajes_tarifario`,

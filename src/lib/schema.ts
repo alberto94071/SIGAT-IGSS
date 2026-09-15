@@ -663,7 +663,7 @@ export const siafComprasItems = pgTable("siaf_compras_items", {
   created_at:          text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
 
-// ─── Firmantes para Forma A-01 SIAF ──────────────────────────────────────────
+// ─── Firmantes (A-01 SIAF, Viáticos, Vale de Caja Chica...) ──────────────────
 export const catalogoFirmantes = pgTable("catalogo_firmantes", {
   id:         serial("id").primaryKey(),
   nombre:     text("nombre").notNull(),
@@ -672,6 +672,10 @@ export const catalogoFirmantes = pgTable("catalogo_firmantes", {
   // en la Forma A-04 SIAF (ej. "U.I.A.A.D.D.M. en el Municipio de Tejutla"),
   // solo cuando aplica; no todos los firmantes la llevan en el formato real.
   unidad:     text("unidad"),
+  // Solo el Vale de Caja Chica los necesita (para sus 3 espacios de firma) —
+  // nullable porque el resto de documentos que usan este catálogo no los piden.
+  numero_empleado: text("numero_empleado"),
+  nit:             text("nit"),
   activo:     boolean("activo").notNull().default(true),
   created_at: text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });
