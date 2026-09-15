@@ -69,11 +69,14 @@ function descripcionDePresentacion(o: PprOpcion): string {
 // Unidad de Medida a GUARDAR para la presentación elegida — el cliente
 // pidió explícitamente (2026-09-13, con capturas de "Presentación" +
 // "U. Medida" circuladas juntas en Base de Datos → Insumos) que sea la
-// unión de esos dos campos (ej. "Garrafón 5 Galón"), no solo unidad_medida
-// sola (que antes se guardaba aparte y perdía la presentación).
+// unión de esos dos campos, no solo unidad_medida sola (que antes se
+// guardaba aparte y perdía la presentación). Separador corregido a "; "
+// el 2026-09-15 (el cliente pidió "Garrafón; 5 Galón" con capturas del
+// A-04 impreso, no "Garrafón 5 Galón" sin separador — mismo formato ya
+// usado en descripcionDePresentacion de arriba).
 function unidadMedidaDePresentacion(o: PprOpcion): string | null {
   const partes = [o.presentacion, o.unidad_medida].filter((p): p is string => !!p?.trim());
-  return partes.length > 0 ? partes.join(" ") : (o.unidad_medida ?? null);
+  return partes.length > 0 ? partes.join("; ") : (o.unidad_medida ?? null);
 }
 
 interface Props { consolidaciones: Consolidacion[]; }

@@ -1730,6 +1730,33 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   en `OrdenesClient.tsx`** — mismo criterio de alcance que los puntos de
   arriba (el cliente no lo pidió para Órdenes esta vez); si algún día se
   pide, es el mismo cambio, calcado.
+- **A-04 de un solo renglón: "Unidad de Medida" tenía el mismo bug de
+  prioridad que ya se había corregido para "Descripción" — corregido
+  2026-09-15, detectado con el mismo expediente real del cliente
+  (consolidación 63, A-04 SIAF 1/2026, Agua Garrafón 5 Galón).** El cliente
+  mandó una captura del A-04 impreso mostrando "Unidad de Medida: 5 Galón"
+  (sin "Garrafón") pese a que la descripción SÍ salía bien ("AGUA; CLASE:
+  PURIFICADA", con el fix del punto de arriba). Investigado contra la base
+  real: `siaf_compras_items.unidad_medida` de esa consolidación SÍ tenía el
+  valor correcto ("Garrafón 5 Galón") — el bug estaba en
+  `ImprimirA04Client.tsx`, caso de un solo renglón: la línea de
+  `descripcion` ya priorizaba `renglon?.descripcion_igss` sobre
+  `c.a04_descripcion` (fix de 2026-09-09), pero la línea de `unidad`
+  (justo debajo) seguía con el orden viejo — `c.a04_unidad_medida ??
+  renglon?.unidad_medida` — priorizando el campo capturado a mano al
+  registrar Regularizado (ANTES de elegir el PPR) por encima del snapshot
+  fresco. `configuracion`/`consolidaciones.a04_unidad_medida` de esa
+  consolidación real seguía en `"5 Galón"` (el valor de antes de elegir
+  PPR), confirmando la causa. Fix: se invirtió la prioridad, igual que ya
+  estaba para `descripcion` — `renglon?.unidad_medida ?? c.a04_unidad_medida
+  ?? "—"`. **De paso, el cliente pidió cambiar el separador de
+  `unidadMedidaDePresentacion` (`Siaf04Client.tsx`, punto de arriba
+  "Descripción vs. Unidad de Medida...") de espacio a `"; "`** — con
+  capturas mostrando que quiere "Garrafón; 5 Galón", no "Garrafón 5 Galón".
+  **No se tocó la consolidación real 63** — su `unidad_medida` guardado
+  sigue con el separador de espacio viejo (así quedará su A-04 impreso
+  mientras no se regenere); si el cliente quiere el separador nuevo ahí
+  también, tiene que usar "Devolver a SIAF-04" y volver a elegir el PPR.
 - **`OrdenesClient.tsx` (Normal) sigue sin este mecanismo, a propósito —
   se intentó extenderlo y se revirtió el mismo día (2026-09-12).** El
   cliente escribió "la misma lógica que usas para que los datos del PPR y

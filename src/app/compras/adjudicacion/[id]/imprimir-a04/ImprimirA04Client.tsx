@@ -143,7 +143,13 @@ export default function ImprimirA04Client({
           // descripción específica es la que debe imprimirse, no la
           // genérica (reportado por el cliente 2026-09-09).
           descripcion: (renglon?.descripcion_igss || c.a04_descripcion || renglon?.nombre || "—").toUpperCase(),
-          unidad: c.a04_unidad_medida ?? renglon?.unidad_medida ?? "—",
+          // unidad_medida primero: mismo bug que descripcion_igss arriba —
+          // a04_unidad_medida se deriva sola al registrar Regularizado,
+          // ANTES de elegir el PPR/presentación; si ya hay una presentación
+          // elegida, su unidad de medida específica es la que debe
+          // imprimirse (reportado por el cliente 2026-09-15, caso real
+          // "5 Galón" en vez de "Garrafón; 5 Galón").
+          unidad: renglon?.unidad_medida ?? c.a04_unidad_medida ?? "—",
           cantidad: cantidadNum?.toLocaleString("es-GT") ?? "—",
           // Precio unitario = total ÷ cantidad (mismo cálculo que el caso de
           // varios renglones) — antes se imprimía el monto bruto completo
