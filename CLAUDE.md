@@ -2079,6 +2079,108 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   Registro de Bancos — limpiado después (`efectivo_caja` se restauró a mano
   a Q20,000 porque el vale se borró directo por SQL en vez de usar
   "Devolver", que hubiera hecho la reversión sola).
+- **Fix (2026-09-16): imprimir el A-04 SIAF desde Fondo Rotativo mostraba la
+  navbar de Compras.** La ruta `/compras/adjudicacion/[id]/imprimir-a04`
+  (usada por Hoja de Ruta, Fondo Rotativo/Archivo y Fondo Rotativo/SIAF-04)
+  cuelga físicamente de `compras/layout.tsx`, así que sin importar desde
+  dónde se navegara, siempre mostraba la navbar de Compras — Next.js App
+  Router no permite que un `page.tsx` "salga" del layout de su carpeta
+  padre. Fix: mismo patrón ya usado para Solicitar Insumos/DAB-75 y
+  Viáticos ("nunca se duplica el componente, solo el `page.tsx` con su
+  propio gate") — `dashboard/imprimir-a04/[id]/page.tsx` (nuevo, cuelga de
+  `dashboard/layout.tsx`, Fondo Rotativo) importa el mismo
+  `ImprimirA04Client` de la ruta de Compras con la misma data — solo
+  `Siaf04Client.tsx` y `ArchivoFondoRotativoClient.tsx` (los 2 lugares
+  donde se reportó el problema) se actualizaron para apuntar ahí. La ruta
+  vieja bajo `compras/` se deja intacta para Hoja de Ruta (no reportó el
+  mismo problema, y no quedó claro a qué módulo pertenece realmente).
+  Verificado en vivo contra la consolidación real 63 (A-04 SIAF 1/2026,
+  Distribuidora Jalapeña) — solo lectura, sin tocar datos: la navbar mostró
+  SIAF-04/Vales/Pagos/Pago-FRI/Bancos/Libro Bancos/Libro Conciliación/
+  Archivo (Fondo Rotativo), no Compras.
+- **Libro Caja Chica pasó de una lista plana de pagos liquidados a un libro
+  contable real (2026-09-16)** — a partir de un modelo real que mandó el
+  cliente (`MODELO_LIBRO_CAJA_CHICA.pdf`, su Excel real): columnas Fecha/
+  Tipo de Documento/No. Documento/Beneficiario/Descripción del Desembolso/
+  Crédito/Debito/Saldo, con saldo corriente, título en barra azul oscuro
+  ("Movimiento correspondiente del 1 al {último día} de {Mes} de {Año}") y
+  encabezado de tabla verde oliva oscuro. El pedido incluía también poder
+  **exportar** el reporte en este mismo formato (no solo imprimirlo).
+  - **`getLibroCajaChicaLedger()`** (nueva, `caja-chica-liquidacion-
+    actions.ts`) — el **Crédito** (dinero que ENTRA a Caja Chica) es cada
+    cheque de Vale ya asignado (`asignarChequeVale`, de cualquiera de los 2
+    tipos — pasajes o gastos varios — es el único punto donde efectivo real
+    entra a la caja física, tipo documento "Cheque"); el **Débito** (dinero
+    que SALE) es cada gasto puntual ya pagado con ese efectivo — exactamente
+    lo que ya traía `getLibroCajaChicaCompleto` (que se queda igual, sigue
+    siendo la fuente del lado Débito): facturas de gastos varios
+    (`fondoRotativoPagos.fecha_liquidacion_caja_chica`) y pasajes
+    individuales a afiliados (`pasajesPagos` de una póliza Liquidada). El
+    saldo arranca en **0** (a diferencia del Registro de Bancos, que arranca
+    en `monto_fondo_rotativo` — Caja Chica no tiene saldo propio, todo su
+    efectivo viene de vales).
+  - **Los viáticos pagados en efectivo NO entran acá, a propósito — no es
+    un olvido.** El modelo que mandó el cliente traía un renglón de viático
+    como ejemplo, pero investigando el código se confirmó que desde la
+    Fase F de Viáticos (2026-09-08,
+    `registrarFormaPagoEfectivoViatico` en `viatico-pagos-actions.ts`) un
+    viático en efectivo va directo a "Pendiente FRI" sin tocar ningún vale
+    ni `configuracion.efectivo_caja` — nunca sale de esta caja física hoy
+    en día. Los datos del modelo eran de noviembre/diciembre 2025, antes de
+    que el módulo de Viáticos actual existiera — probablemente reflejan un
+    proceso viejo que ya no aplica. **Pendiente**: si el cliente confirma
+    que un viático en efectivo sí debe descontarse de Caja Chica, hay que
+    revisar esa Fase F antes de agregarlo acá.
+  - **`LibroCajaChicaTable.tsx`** (pantalla, antes una lista plana con
+    Origen/Destinatario/Factura-Detalle/No.Vale/Total sin saldo) ahora
+    muestra el libro completo con saldo corriente y buscador — mismo
+    patrón visual que `LibroBancosClient.tsx`. El selector de mes para
+    imprimir ganó un botón hermano **"Exportar Excel"**.
+  - **`/api/caja-chica/reporte?mes=YYYY-MM`** (Route Handler nuevo, mismo
+    criterio que los reportes de Almacén — Server Action no puede fijar
+    `Content-Disposition` para forzar la descarga) genera un `.xlsx` con
+    `exceljs` puro (celdas fusionadas para el título, colores de relleno
+    para título/encabezado, `numFmt` de quetzales) — **sin inyección de
+    XML a mano** (a diferencia de los reportes de Almacén con gráfico
+    nativo), así que no hace falta verificar con `xmllint`/`openpyxl`
+    contra "reparar archivo" — es la API estándar de `exceljs`, que
+    siempre produce OOXML válido.
+  - **`ImprimirLibroCajaChicaClient.tsx`** (impresión, ya existía con
+    `PrintPages`) se rediseñó con los mismos colores/columnas — **no se
+    replicó el patrón "Sumas Iguales"/"Vienen" del modelo** (totales
+    corridos página por página, con hojas en blanco de respaldo) — decisión
+    deliberada, no un descuido: `PrintPages` no expone qué filas cayeron en
+    qué página (solo `onPageCount`, el número total), así que no hay forma
+    de calcular un subtotal específico por página desde el `Client`; además
+    el modelo del cliente parece ser un export de Excel con un número fijo
+    de páginas pre-asignadas por mes, algo que no aplica acá (se generan
+    solo las páginas que hacen falta). En su lugar hay un renglón "Saldo
+    inicial del mes" + un renglón "Totales del mes" al final, una sola vez.
+  - **El rango de fechas del título ("del 1 al {último día}") asume mes
+    calendario completo** — el modelo real que mandó el cliente decía "del
+    5 al 5 de Diciembre" con una fila fechada 20 de noviembre adentro (un
+    dato inconsistente del Excel viejo, o un significado de rango distinto
+    que no se pudo determinar con un solo ejemplo) — no se intentó adivinar
+    esa lógica más específica; si el cliente confirma que el rango debe ser
+    otra cosa (ej. el rango real de fechas de los movimientos de ese mes,
+    no el mes calendario completo), hay que ajustar `ultimoDiaDelMes` en
+    ambos lados (impresión y exportación).
+  - **Firmas en blanco, sin `SelectorFirmante`** — mismo criterio que
+    `ImprimirLibroViaticosClient.tsx` (el "Libro" más parecido a este, ya
+    tenía el patrón): nombre en blanco para firma física + el cargo fijo
+    como texto ("Analista 'A'/Encargado de Fondo Rotativo" y "Vo.Bo. ...
+    Analista 'A'/Encargada de Unidad", tal como aparecen en el modelo) — no
+    se agregó un selector de `catalogoFirmantes` acá porque el precedente
+    directo (Libro Viáticos) tampoco lo usa.
+  - Verificado en vivo con un vale de prueba desechable (cheque 2170,
+    Q495, "Angelica Anayely Guzman Alfaro", replicando la primera fila del
+    modelo real): la pantalla mostró Crédito Q495.00/Saldo Q495.00 igual
+    que el modelo; la impresión mostró el título en barra azul con el rango
+    del mes, encabezado verde oliva, la fila, "Saldo inicial del mes"
+    Q0.00, "Totales del mes" Q495.00/Q0.00/Q495.00 y las 2 firmas en
+    blanco con sus cargos; el Excel exportado se abrió correctamente
+    (verificado con `unzip`, estructura OOXML válida — título fusionado,
+    colores de encabezado, `numFmt` de quetzales) — limpiado después.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

@@ -282,7 +282,7 @@ function GenerarSiafModal({ consolidacion: c, onClose, onDone }: {
     setLoading(false);
     if ("error" in res) { setError(res.error); return; }
     onDone();
-    router.push(`/compras/adjudicacion/${c.id}/imprimir-a04`);
+    router.push(`/dashboard/imprimir-a04/${c.id}`);
   }
 
   return (
