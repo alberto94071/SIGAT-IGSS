@@ -412,17 +412,21 @@ function EnviarDafModal({ fri, onClose, onDone }: { fri: Fri; onClose: () => voi
 
 function ReintegrarModal({ fri, onClose, onDone }: { fri: Fri; onClose: () => void; onDone: () => void }) {
   const [fecha, setFecha] = useState(fechaGuatemala());
+  const [fondoDestino, setFondoDestino] = useState("Fondo Rotativo");
+  const [numeroBoleta, setNumeroBoleta] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function handleConfirmar() {
     setLoading(true); setError("");
-    const res = await marcarFriReintegrado(fri.id, fecha);
+    const res = await marcarFriReintegrado(fri.id, fecha, fondoDestino, numeroBoleta);
     setLoading(false);
     if ("error" in res) return setError(res.error);
     fri.fecha_reintegro = fecha;
     onDone();
   }
+
+  const valido = fecha && fondoDestino.trim() && numeroBoleta.trim();
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -436,14 +440,22 @@ function ReintegrarModal({ fri, onClose, onDone }: { fri: Fri; onClose: () => vo
             Al confirmar, se suman <strong>{Q(fri.total)}</strong> al saldo disponible del Fondo Rotativo.
           </p>
           <div>
+            <label className="label">A qué fondo corresponde</label>
+            <input className="input" value={fondoDestino} onChange={e => setFondoDestino(e.target.value)} />
+          </div>
+          <div>
             <label className="label">Fecha del depósito de reintegro</label>
             <input type="date" className="input" value={fecha} onChange={e => setFecha(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">No. de boleta de depósito</label>
+            <input className="input font-mono" value={numeroBoleta} onChange={e => setNumeroBoleta(e.target.value)} />
           </div>
           {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
           <button onClick={onClose} className="btn-secondary">Cancelar</button>
-          <button onClick={handleConfirmar} disabled={loading || !fecha} className="btn-primary disabled:opacity-50">
+          <button onClick={handleConfirmar} disabled={loading || !valido} className="btn-primary disabled:opacity-50">
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Marcar como Reintegrado
           </button>
         </div>

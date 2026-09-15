@@ -1,23 +1,41 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { fechaGuatemala } from "@/lib/date-utils";
 import Link from "next/link";
-import { Landmark, X, Loader2, Send, CheckCircle2, Printer, FileEdit, Undo2 } from "lucide-react";
-import { completarVoucherBancos, devolverAFormaPago, type PagoFondoRotativo, type TipoDocumentoPago } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import { Landmark, X, Loader2, Send, CheckCircle2, Printer, FileEdit, Undo2, Search, BookOpen } from "lucide-react";
+import { completarVoucherBancos, devolverAFormaPago, type PagoFondoRotativo, type TipoDocumentoPago, type MovimientoBancoTotal } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 import { montoEnLetras } from "@/lib/adjudicacion/deletreo";
 import ExpandableRow from "@/components/ExpandableRow";
 import TrazabilidadPanel from "@/components/TrazabilidadPanel";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-interface Props { pagos: PagoFondoRotativo[]; }
+const TIPO_DOC_COLOR: Record<MovimientoBancoTotal["tipoDocumento"], string> = {
+  "Depósito": "bg-green-100 text-green-700",
+  "Vale": "bg-amber-100 text-amber-700",
+  "Factura": "bg-red-100 text-red-700",
+  "Formulario": "bg-blue-100 text-blue-700",
+};
 
-export default function BancosClient({ pagos: init }: Props) {
+interface Props { pagos: PagoFondoRotativo[]; movimientos: MovimientoBancoTotal[]; }
+
+export default function BancosClient({ pagos: init, movimientos }: Props) {
   const [pagos, setPagos] = useState(init);
   const [modalFor, setModalFor] = useState<PagoFondoRotativo | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [procesando, setProcesando] = useState<number | null>(null);
   const [rowError, setRowError] = useState<Record<number, string>>({});
+  const [query, setQuery] = useState("");
+
+  const q = query.toLowerCase().trim();
+  const movimientosFiltrados = useMemo(() => !q ? movimientos : movimientos.filter(m =>
+    m.descripcion.toLowerCase().includes(q) ||
+    (m.beneficiario ?? "").toLowerCase().includes(q) ||
+    (m.nitBeneficiario ?? "").toLowerCase().includes(q) ||
+    (m.numeroCheque ?? "").toLowerCase().includes(q) ||
+    m.fecha.includes(q)
+  ), [movimientos, q]);
+  const saldoActual = movimientos.length > 0 ? movimientos[movimientos.length - 1].saldo : null;
 
   async function handleDevolver(p: PagoFondoRotativo) {
     if (!confirm("¿Devolver este pago a Fondo Rotativo/Pagos para elegir otra forma de pago? Se deshacen los datos de cheque ya capturados (y lo que ya se posteó en Ejecución)."))
@@ -30,13 +48,78 @@ export default function BancosClient({ pagos: init }: Props) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
           <Landmark className="w-5 h-5" /> Fondo Rotativo — Bancos
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          {pagos.length} pago(s) por cheque. Completa el número de cheque y los datos del Voucher para poder imprimirlo.
+          Registro total de la cuenta del Fondo Rotativo
+          {saldoActual != null && <> · Saldo actual: <span className="font-mono font-semibold text-gray-700">{Q(saldoActual)}</span></>}
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative max-w-sm flex-1 min-w-[220px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input className="input pl-9" placeholder="Buscar por cheque, beneficiario, NIT, fecha…"
+            value={query} onChange={e => setQuery(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="table-header">
+                <th className="px-4 py-3 text-left whitespace-nowrap">Mes</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">Cheque #</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">Tipo Doc.</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">Status</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">Fecha</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">NIT Beneficiario</th>
+                <th className="px-4 py-3 text-left">Beneficiario</th>
+                <th className="px-4 py-3 text-left">Descripción</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Egresos</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Ingresos</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Saldo</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap">Total en letras</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {movimientosFiltrados.map(m => (
+                <tr key={m.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{m.mes || "—"}</td>
+                  <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{m.numeroCheque ?? "—"}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${TIPO_DOC_COLOR[m.tipoDocumento]}`}>{m.tipoDocumento}</span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{m.status}</td>
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{m.fecha || "—"}</td>
+                  <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{m.nitBeneficiario ?? "—"}</td>
+                  <td className="px-4 py-3 text-gray-900">{m.beneficiario ?? "—"}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500">{m.descripcion}</td>
+                  <td className="px-4 py-3 text-right font-mono text-red-700 whitespace-nowrap">{m.egresos > 0 ? Q(m.egresos) : "—"}</td>
+                  <td className="px-4 py-3 text-right font-mono text-green-700 whitespace-nowrap">{m.ingresos > 0 ? Q(m.ingresos) : "—"}</td>
+                  <td className="px-4 py-3 text-right font-mono font-bold text-gray-900 whitespace-nowrap">{Q(m.saldo)}</td>
+                  <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{m.totalEnLetras}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {movimientosFiltrados.length === 0 && (
+            <div className="text-center py-16 text-gray-400">
+              <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">{q ? "Sin resultados para esa búsqueda." : "Todavía no hay movimientos registrados."}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <h2 className="text-sm font-semibold text-gray-700 mb-2">Pendientes de completar voucher</h2>
+        <p className="text-xs text-gray-500 mb-2">
+          {pagos.length} pago(s) por cheque de compras. Completa el número de cheque y los datos del Voucher para poder imprimirlo.
         </p>
       </div>
 

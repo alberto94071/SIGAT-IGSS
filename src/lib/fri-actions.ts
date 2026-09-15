@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { fondoRotativoPagos, friFondoRotativo, consolidaciones, configuracion, polizas, viaticoPagos } from "@/lib/schema";
 import { eq, inArray, sql, desc, and, isNull, isNotNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { conDetalle, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import { conDetalle, type PagoFondoRotativo, getSaldoRegistroBancos } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 import { conDetalleViatico, type PagoViatico } from "@/lib/viatico-pagos-actions";
 import { gruposRenglonDeConsolidacion } from "@/lib/adjudicacion/renglon-utils";
 import { netoDeIva } from "@/lib/iva-utils";
@@ -233,18 +233,27 @@ export async function marcarFriRechazado(friId: number): Promise<{ ok: true } | 
 // vales con ese dinero. Los pagos de gastos varios y los viáticos quedan
 // archivados como "Reintegrado"; las pólizas de pasajes NO se tocan — su
 // liquidación en Caja Chica sigue siendo un proceso aparte.
-export async function marcarFriReintegrado(friId: number, fechaReintegro: string): Promise<{ ok: true } | { error: string }> {
+export async function marcarFriReintegrado(friId: number, fechaReintegro: string, fondoDestino: string, numeroBoletaDeposito: string): Promise<{ ok: true } | { error: string }> {
   try {
     const check = await requireEdit();
     if ("error" in check) return check;
     if (!fechaReintegro) return { error: "La fecha de reintegro es obligatoria" };
+    if (!fondoDestino.trim()) return { error: "Debes indicar a qué fondo corresponde el reintegro" };
+    if (!numeroBoletaDeposito.trim()) return { error: "El número de boleta de depósito es obligatorio" };
 
     const [fri] = await db.select().from(friFondoRotativo).where(eq(friFondoRotativo.id, friId)).limit(1);
     if (!fri) return { error: "No se encontró el FRI" };
     if (fri.estado !== "Enviado") return { error: "El FRI debe estar Enviado a la DAF antes de marcarlo como reintegrado" };
 
+    // El saldo de Bancos nunca puede superar el monto total del Fondo Rotativo.
+    const { saldo, tope } = await getSaldoRegistroBancos();
+    if (saldo + fri.total > tope + 0.01) {
+      return { error: `Ese reintegro dejaría el saldo de Bancos por encima del Fondo Rotativo (Q${tope.toFixed(2)}) — saldo actual: Q${saldo.toFixed(2)}` };
+    }
+
     await db.update(friFondoRotativo).set({
       estado: "Reintegrado", fecha_reintegro: fechaReintegro,
+      fondo_destino: fondoDestino.trim(), numero_boleta_deposito: numeroBoletaDeposito.trim(),
     }).where(eq(friFondoRotativo.id, friId));
 
     await db.update(fondoRotativoPagos).set({ estado: "Reintegrado" }).where(eq(fondoRotativoPagos.fri_id, friId));
@@ -282,7 +291,9 @@ export async function devolverFriDeReintegrado(friId: number): Promise<{ ok: tru
       return { error: `No se puede devolver: el reintegro (Q${fri.total.toFixed(2)}) ya se gastó — el saldo actual (Q${saldo.toFixed(2)}) no alcanza para quitarlo` };
     }
 
-    await db.update(friFondoRotativo).set({ estado: "Enviado", fecha_reintegro: null }).where(eq(friFondoRotativo.id, friId));
+    await db.update(friFondoRotativo).set({
+      estado: "Enviado", fecha_reintegro: null, fondo_destino: null, numero_boleta_deposito: null,
+    }).where(eq(friFondoRotativo.id, friId));
     await db.update(fondoRotativoPagos).set({ estado: "En FRI" }).where(eq(fondoRotativoPagos.fri_id, friId));
     await db.update(viaticoPagos).set({ estado: "En FRI" }).where(eq(viaticoPagos.fri_id, friId));
     await db.update(configuracion).set({
