@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Receipt, CheckCircle2, XCircle, Printer, Loader2, AlertTriangle, X, Undo2 } from "lucide-react";
-import { autorizarVale, rechazarVale, asignarChequeVale, devolverValeAAutorizado, devolverValeALiquidado } from "@/lib/vale-actions";
+import { autorizarVale, rechazarVale, asignarChequeVale, devolverValeAAutorizado, devolverValeALiquidado, devolverValeAPendienteAutorizacion } from "@/lib/vale-actions";
 
 type Vale = {
   id: number; numero: number; tipo: string; fecha: string; monto: number; monto_autorizado: number | null;
@@ -38,6 +38,16 @@ export default function ValesClient({
     setActivos(prev => prev.filter(x => x.id !== v.id));
     setAutorizados(prev => [{ ...v, estado: "Autorizado", numero_cheque: null, destinatario_cheque: null }, ...prev]);
     setSaldoActual(prev => prev + (v.monto_autorizado ?? v.monto));
+  }
+
+  async function handleDevolverAPendiente(v: Vale) {
+    if (!confirm(`¿Devolver el vale ${String(v.numero).padStart(7, "0")} a Pendiente de autorización? Se borra el monto autorizado para volver a capturarlo.`)) return;
+    setDevolviendo(v.id); setErrorDevolver(prev => ({ ...prev, [v.id]: "" }));
+    const res = await devolverValeAPendienteAutorizacion(v.id);
+    setDevolviendo(null);
+    if ("error" in res) { setErrorDevolver(prev => ({ ...prev, [v.id]: res.error })); return; }
+    setAutorizados(prev => prev.filter(x => x.id !== v.id));
+    setPendientes(prev => [{ ...v, estado: "Pendiente autorización", monto_autorizado: null }, ...prev]);
   }
 
   async function handleDevolverLiquidado(v: Vale) {
@@ -148,7 +158,15 @@ export default function ValesClient({
                             Asignar cheque
                           </button>
                         )}
+                        {canEdit && (
+                          <button onClick={() => handleDevolverAPendiente(v)} disabled={devolviendo === v.id}
+                            title="Devolver a Pendiente de autorización"
+                            className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">
+                            {devolviendo === v.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Undo2 className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
                       </div>
+                      {errorDevolver[v.id] && <p className="text-red-600 text-[10px] mt-1 max-w-[180px] text-right ml-auto">{errorDevolver[v.id]}</p>}
                     </td>
                   </tr>
                 ))}
