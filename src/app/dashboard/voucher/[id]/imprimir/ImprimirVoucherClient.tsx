@@ -1,8 +1,14 @@
 "use client";
-import { useState, useCallback, useRef, useLayoutEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
 import { guardarPosicionesImpresion, getFondoImpresion } from "@/lib/impresion-posiciones-actions";
-import { Campo, CAMPO_POSICIONABLE_CSS, type Pos } from "@/components/print-posiciones/CampoPosicionable";
+import { Campo, CAMPO_POSICIONABLE_CSS, CAMPO_HIDE_BTN_CSS, type Pos } from "@/components/print-posiciones/CampoPosicionable";
 import { PosicionesToolbar, HojaConFondo, HOJA_CON_FONDO_CSS } from "@/components/print-posiciones/PosicionesToolbar";
+
+// Campos ocultados con la "×" — se guardan en el navegador y aplican a los
+// dos Voucher (Vale y Bancos, mismo talonario físico), hasta que el usuario
+// le dé clic a "Reiniciar campos ocultos". Mismo patrón ya probado en DAB-60
+// (ImprimirDab60Client.tsx) — una sola clave, no una por documento impreso.
+const OCULTOS_KEY = "cip-voucher-campos-ocultos";
 
 type Vale = {
   numero: number; tipo: string; motivo: string; monto: number; monto_autorizado: number | null;
@@ -89,7 +95,32 @@ export default function ImprimirVoucherClient({
   const [fondo, setFondo] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
+  const [ocultos, setOcultos] = useState<string[]>([]);
   const hojaRef = useRef<HTMLDivElement>(null);
+
+  // Se lee después del montaje (nunca durante el render inicial) para que el
+  // primer render en el servidor y en el cliente coincidan — mismo patrón
+  // que DAB-60.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(OCULTOS_KEY);
+      if (raw) setOcultos(JSON.parse(raw));
+    } catch { /* localStorage no disponible — sigue mostrando todo */ }
+  }, []);
+
+  const ocultarCampo = useCallback((id: string) => {
+    setOcultos(prev => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      try { localStorage.setItem(OCULTOS_KEY, JSON.stringify(next)); } catch { /* ignorar */ }
+      return next;
+    });
+  }, []);
+
+  function reiniciarOcultos() {
+    setOcultos([]);
+    try { localStorage.removeItem(OCULTOS_KEY); } catch { /* ignorar */ }
+  }
 
   useLayoutEffect(() => {
     if (!fondo) getFondoImpresion("cheque").then(setFondo);
@@ -120,6 +151,7 @@ export default function ImprimirVoucherClient({
   const bancoDatosTxt = [bancoNombre, cuentaNombre, cuentaNumero].filter(Boolean).join(" · ");
 
   const campo = (id: string, textoDefault: string, opts?: { style?: React.CSSProperties }) => {
+    if (ocultos.includes(id)) return null;
     const texto = overrides[id] ?? textoDefault;
     return (
       <Campo
@@ -127,6 +159,7 @@ export default function ImprimirVoucherClient({
         pos={pos[id] ?? POS_DEFAULT[id]} onChange={onChangePos}
         editable={verPosiciones} style={opts?.style} label={FIELD_LABELS[id] ?? id}
         onTextChange={onTextChange}
+        onHide={() => ocultarCampo(id)}
       />
     );
   };
@@ -138,6 +171,7 @@ export default function ImprimirVoucherClient({
         verPosiciones={verPosiciones} onToggleVer={() => setVerPosiciones(p => !p)}
         onRestablecer={restablecerPosiciones} onGuardar={guardarPosiciones}
         guardando={guardando} guardado={guardado}
+        ocultosCount={ocultos.length} onReiniciarOcultos={reiniciarOcultos}
       />
 
       <HojaConFondo hojaRef={hojaRef} fondo={fondo}>
@@ -162,6 +196,7 @@ export default function ImprimirVoucherClient({
       </HojaConFondo>
 
       <style>{HOJA_CON_FONDO_CSS}</style>
+      <style>{CAMPO_HIDE_BTN_CSS}</style>
       {verPosiciones && <style>{CAMPO_POSICIONABLE_CSS}</style>}
     </>
   );

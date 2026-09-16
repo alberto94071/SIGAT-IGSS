@@ -1438,3 +1438,28 @@ export const posicionesImpresion = pgTable("posiciones_impresion", {
 }, table => ({
   documentoCampoUnico: uniqueIndex("posiciones_impresion_documento_campo_idx").on(table.documento, table.campo),
 }));
+
+// ─── Estado real (conciliación) de cada movimiento del Registro de Bancos
+// (2026-09-16) ──────────────────────────────────────────────────────────────
+// getRegistroBancos() (fondo-rotativo-pagos-actions.ts) arma cada fila a
+// partir de 5 tablas de origen (fondoRotativoPagos, viaticoPagos,
+// valesCajaChica dos veces — cheque y depósito de remanente son eventos
+// distintos de la misma fila — y friFondoRotativo), ninguna con un campo de
+// estado propio para esto. "origen" + "origen_id" identifican la fila real
+// sin ambigüedad (mismo criterio ya usado para el "origen" de
+// MovimientoBanco en getLibroConciliacion, para no pisar ids entre tablas —
+// por eso "vale_cheque"/"vale_deposito" son dos origen distintos aunque
+// ambos apunten al mismo id de valesCajaChica). Por defecto (sin fila acá)
+// el movimiento se muestra "Operado" — recién se persiste una fila cuando el
+// usuario lo marca "Pagado"/"Anulado" al conciliar contra su estado de
+// cuenta a fin de mes.
+export const registroBancosEstado = pgTable("registro_bancos_estado", {
+  id:              serial("id").primaryKey(),
+  origen:          text("origen").notNull(),
+  origen_id:       integer("origen_id").notNull(),
+  estado:          text("estado").notNull().default("Operado"),
+  actualizado_por: integer("actualizado_por").references(() => usuarios.id),
+  actualizado_en:  text("actualizado_en"),
+}, table => ({
+  origenIdUnico: uniqueIndex("registro_bancos_estado_origen_idx").on(table.origen, table.origen_id),
+}));

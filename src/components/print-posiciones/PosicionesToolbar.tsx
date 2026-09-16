@@ -4,12 +4,18 @@ import { Printer, ArrowLeft, Eye, EyeOff, Save, RotateCcw } from "lucide-react";
 
 export function PosicionesToolbar({
   titulo, verPosiciones, onToggleVer, onRestablecer, onGuardar, guardando, guardado, extraToolbar,
+  ocultosCount, onReiniciarOcultos,
 }: {
   titulo: string; verPosiciones: boolean; onToggleVer: () => void;
   onRestablecer: () => void; onGuardar: () => void; guardando: boolean; guardado: boolean;
   // Controles adicionales (ej. selector de firmante) entre el título y el
   // resto de la barra — mismo hueco que ya tenía OverlayPrint.
   extraToolbar?: React.ReactNode;
+  // "Reiniciar campos ocultos" — mismo patrón de DAB-60, independiente de
+  // "Restablecer" (que resetea posición/tamaño, no visibilidad). Omitir
+  // ambas props si el documento no usa el botón "×" de ocultar campo.
+  ocultosCount?: number;
+  onReiniciarOcultos?: () => void;
 }) {
   const router = useRouter();
   return (
@@ -37,6 +43,12 @@ export function PosicionesToolbar({
               <Save className="w-3.5 h-3.5" /> {guardando ? "Guardando…" : guardado ? "Guardado ✓" : "Guardar posiciones"}
             </button>
           </>
+        )}
+        {!!ocultosCount && onReiniciarOcultos && (
+          <button onClick={onReiniciarOcultos}
+            className="flex items-center gap-2 px-3 py-1.5 border border-red-200 bg-red-50 text-red-700 rounded-lg text-xs hover:bg-red-100">
+            <RotateCcw className="w-3.5 h-3.5" /> Reiniciar campos ocultos ({ocultosCount})
+          </button>
         )}
         <button onClick={onToggleVer}
           className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">

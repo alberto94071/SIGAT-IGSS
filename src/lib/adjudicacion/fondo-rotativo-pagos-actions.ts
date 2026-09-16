@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/lib/db";
-import { fondoRotativoPagos, consolidaciones, valesCajaChica, friFondoRotativo, presupuestoRenglones, configuracion, viaticoPagos } from "@/lib/schema";
+import { fondoRotativoPagos, consolidaciones, valesCajaChica, friFondoRotativo, presupuestoRenglones, configuracion, viaticoPagos, registroBancosEstado } from "@/lib/schema";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { gruposRenglonDeConsolidacion } from "./renglon-utils";
@@ -9,6 +9,7 @@ import { trazabilidadPorConsolidaciones, type TrazabilidadConsolidacion } from "
 import { netoDeIva } from "@/lib/iva-utils";
 import { conDetalleViatico } from "@/lib/viatico-pagos-actions";
 import { montoEnLetras } from "./deletreo";
+import { fechaHoraGuatemala } from "@/lib/date-utils";
 
 // true si TODOS los renglones de la consolidación de este pago son 100-199 —
 // esos van a Pago/FRI en vez de Bancos/Caja Chica-Vale.
@@ -332,10 +333,22 @@ export async function getLibroBancosCompleto(): Promise<MovimientoBanco[]> {
 // agregara un origen "vale" ahí, un pago id=5 de compra y un vale id=5 se
 // confundirían en el mapa de conciliación. Los vales todavía no entran a
 // Libro Conciliación (el cliente no lo pidió en esta ronda).
+// Status real de conciliación (2026-09-16, ver registroBancosEstado en
+// schema.ts): "Operado" es el default al generar cualquier cheque/depósito —
+// ya NO es un valor fijo por tipo (antes cheques nacían "Pagado" y depósitos
+// "Operado" sin ninguna fila de estado real detrás). El usuario selecciona
+// varias filas a fin de mes, al conciliar contra su estado de cuenta, y las
+// pasa a "Pagado" (cobrado) o "Anulado" (no cobrado/anulado) — ver
+// actualizarEstadoBancos más abajo. El status es puramente informativo para
+// esta pantalla: NO afecta egresos/ingresos/saldo (que ya se movieron al
+// generarse el cheque/depósito) ni el presupuesto/efectivo_caja — si un
+// cheque se anula de verdad y hay que revertir el dinero, eso sigue siendo
+// trabajo de las funciones "Devolver" ya existentes (devolverAFormaPago,
+// devolverValeAAutorizado, etc.), no de este campo.
 export type MovimientoBancoTotal = {
   id: string; fecha: string; mes: string;
   tipoDocumento: "Depósito" | "Vale" | "Factura" | "Formulario";
-  status: "Pagado" | "Operado";
+  status: "Operado" | "Pagado" | "Anulado";
   numeroCheque: string | null;
   nitBeneficiario: string | null; beneficiario: string | null;
   descripcion: string;
@@ -345,6 +358,10 @@ export type MovimientoBancoTotal = {
   // Depósito de remanente) — para que el Voucher de un vale puntual pueda
   // encontrar su propio saldo antes/después sin recalcularlo aparte.
   valeId: number | null;
+  // Identidad estable de la fila real detrás de este movimiento — ver
+  // registroBancosEstado. Se manda tal cual a actualizarEstadoBancos.
+  origen: "compra" | "viatico" | "vale_cheque" | "vale_deposito" | "fri_reintegro";
+  origenId: number;
 };
 
 const MESES_LARGOS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
@@ -355,54 +372,64 @@ function mesDeFecha(fecha: string): string {
 }
 
 export async function getRegistroBancos(): Promise<MovimientoBancoTotal[]> {
-  const [config, chequesRows, viaticoChequesRows, valeChequesRows, valeDepositosRows, reintegros] = await Promise.all([
+  const [config, chequesRows, viaticoChequesRows, valeChequesRows, valeDepositosRows, reintegros, estados] = await Promise.all([
     db.select({ monto_fondo_rotativo: configuracion.monto_fondo_rotativo }).from(configuracion).limit(1),
     db.select().from(fondoRotativoPagos).where(isNotNull(fondoRotativoPagos.numero_cheque)),
     db.select().from(viaticoPagos).where(isNotNull(viaticoPagos.numero_cheque)),
     db.select().from(valesCajaChica).where(isNotNull(valesCajaChica.numero_cheque)),
     db.select().from(valesCajaChica).where(isNotNull(valesCajaChica.monto_boleta_deposito)),
     db.select().from(friFondoRotativo).where(isNotNull(friFondoRotativo.fecha_reintegro)),
+    db.select().from(registroBancosEstado),
   ]);
   const [cheques, viaticoCheques] = await Promise.all([conDetalle(chequesRows), conDetalleViatico(viaticoChequesRows)]);
+
+  const estadoMap = new Map(estados.map(e => [`${e.origen}:${e.origen_id}`, e.estado as MovimientoBancoTotal["status"]]));
+  const estadoDe = (origen: MovimientoBancoTotal["origen"], origenId: number): MovimientoBancoTotal["status"] =>
+    estadoMap.get(`${origen}:${origenId}`) ?? "Operado";
 
   type Evento = {
     fecha: string; orden: number; egreso: number; ingreso: number;
     tipoDocumento: MovimientoBancoTotal["tipoDocumento"]; status: MovimientoBancoTotal["status"];
     numeroCheque: string | null; nitBeneficiario: string | null; beneficiario: string | null; descripcion: string;
-    valeId: number | null;
+    valeId: number | null; origen: MovimientoBancoTotal["origen"]; origenId: number;
   };
   const eventos: Evento[] = [
     ...cheques.map((p): Evento => ({
       fecha: p.fecha_emision_cheque ?? "", orden: 1000 + p.id, egreso: p.monto_cheque ?? p.total ?? 0, ingreso: 0,
       tipoDocumento: (p.tipo_documento_pago as MovimientoBancoTotal["tipoDocumento"]) ?? "Factura",
-      status: "Pagado", numeroCheque: p.numero_cheque, nitBeneficiario: p.nit_beneficiario, beneficiario: p.destinatario_nombre,
+      status: estadoDe("compra", p.id), numeroCheque: p.numero_cheque, nitBeneficiario: p.nit_beneficiario, beneficiario: p.destinatario_nombre,
       descripcion: p.concepto_voucher ?? `A-04 ${p.numero_a04 ?? "—"}/${p.anio_a04 ?? "—"}`, valeId: null,
+      origen: "compra", origenId: p.id,
     })),
     ...viaticoCheques.map((v): Evento => ({
       fecha: v.fecha_emision_cheque ?? "", orden: 2000 + v.id, egreso: v.total, ingreso: 0,
-      tipoDocumento: "Formulario", status: "Pagado", numeroCheque: v.numero_cheque,
+      tipoDocumento: "Formulario", status: estadoDe("viatico", v.id), numeroCheque: v.numero_cheque,
       nitBeneficiario: v.nit_beneficiario, beneficiario: v.destinatario_nombre,
       descripcion: `Viático V-L ${v.numero_formulario ?? "—"}`, valeId: null,
+      origen: "viatico", origenId: v.id,
     })),
     ...valeChequesRows.map((v): Evento => ({
       fecha: v.fecha_emision ?? "", orden: 3000 + v.id, egreso: v.monto_autorizado ?? v.monto, ingreso: 0,
-      tipoDocumento: "Vale", status: "Pagado", numeroCheque: v.numero_cheque,
+      tipoDocumento: "Vale", status: estadoDe("vale_cheque", v.id), numeroCheque: v.numero_cheque,
       nitBeneficiario: v.destinatario_nit, beneficiario: v.destinatario_cheque,
       descripcion: v.motivo, valeId: v.id,
+      origen: "vale_cheque", origenId: v.id,
     })),
     ...valeDepositosRows.map((v): Evento => ({
       fecha: v.fecha_boleta_deposito ?? v.fecha_liquidacion ?? "", orden: 4000 + v.id, egreso: 0, ingreso: v.monto_boleta_deposito ?? 0,
-      tipoDocumento: "Depósito", status: "Operado", numeroCheque: null, nitBeneficiario: null, beneficiario: null,
+      tipoDocumento: "Depósito", status: estadoDe("vale_deposito", v.id), numeroCheque: null, nitBeneficiario: null, beneficiario: null,
       descripcion: v.motivo_boleta_deposito
         || `Remanente de Vale ${String(v.numero).padStart(7, "0")}`
         + (v.numero_boleta_deposito ? ` — boleta ${v.numero_boleta_deposito}` : ""),
       valeId: v.id,
+      origen: "vale_deposito", origenId: v.id,
     })),
     ...reintegros.map((f): Evento => ({
       fecha: f.fecha_reintegro ?? "", orden: 5000 + f.id, egreso: 0, ingreso: f.total,
-      tipoDocumento: "Depósito", status: "Operado", numeroCheque: null, nitBeneficiario: null, beneficiario: f.fondo_destino,
+      tipoDocumento: "Depósito", status: estadoDe("fri_reintegro", f.id), numeroCheque: null, nitBeneficiario: null, beneficiario: f.fondo_destino,
       descripcion: `Reintegro FRI ${f.numero}/${f.anio}` + (f.numero_boleta_deposito ? ` — boleta ${f.numero_boleta_deposito}` : ""),
       valeId: null,
+      origen: "fri_reintegro", origenId: f.id,
     })),
   ];
   eventos.sort((a, b) => a.fecha === b.fecha ? a.orden - b.orden : a.fecha.localeCompare(b.fecha));
@@ -416,9 +443,53 @@ export async function getRegistroBancos(): Promise<MovimientoBancoTotal[]> {
       nitBeneficiario: e.nitBeneficiario, beneficiario: e.beneficiario, descripcion: e.descripcion,
       egresos: e.egreso, ingresos: e.ingreso, saldo,
       totalEnLetras: montoEnLetras(e.egreso || e.ingreso),
-      valeId: e.valeId,
+      valeId: e.valeId, origen: e.origen, origenId: e.origenId,
     };
   });
+}
+
+// Marca en bloque el estado real de conciliación de varios movimientos del
+// Registro de Bancos (ver comentario de MovimientoBancoTotal.status) — el
+// flujo real del cliente es: a fin de mes entra a su estado de cuenta,
+// revisa cuáles cheques ya fueron cobrados, selecciona esas filas acá y las
+// pasa a "Pagado" (o "Anulado" si el banco lo rechazó/se anuló). Upsert por
+// (origen, origen_id) — "Operado" simplemente borra cualquier fila de
+// override anterior en vez de guardar "Operado" explícito, para no dejar
+// basura acumulándose en la tabla por cada ida y vuelta.
+export async function actualizarEstadoBancos(
+  items: { origen: MovimientoBancoTotal["origen"]; origenId: number }[],
+  estado: MovimientoBancoTotal["status"],
+): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireCompras();
+    if ("error" in check) return check;
+    if (items.length === 0) return { error: "Selecciona al menos un movimiento" };
+
+    if (estado === "Operado") {
+      await db.transaction(async (tx) => {
+        for (const it of items) {
+          await tx.delete(registroBancosEstado)
+            .where(and(eq(registroBancosEstado.origen, it.origen), eq(registroBancosEstado.origen_id, it.origenId)));
+        }
+      });
+      return { ok: true };
+    }
+
+    const ahora = fechaHoraGuatemala();
+    await db.transaction(async (tx) => {
+      for (const it of items) {
+        await tx.insert(registroBancosEstado)
+          .values({ origen: it.origen, origen_id: it.origenId, estado, actualizado_por: check.uid, actualizado_en: ahora })
+          .onConflictDoUpdate({
+            target: [registroBancosEstado.origen, registroBancosEstado.origen_id],
+            set: { estado, actualizado_por: check.uid, actualizado_en: ahora },
+          });
+      }
+    });
+    return { ok: true };
+  } catch {
+    return { error: "Error al actualizar el estado" };
+  }
 }
 
 // Saldo actual del Registro de Bancos + el tope (monto_fondo_rotativo) —

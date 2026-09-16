@@ -37,6 +37,9 @@ export default async function ImprimirVoucherBancosPage({ params }: { params: Pr
         destinatario_nombre: pago.destinatario_nombre ?? "",
         concepto_voucher: pago.concepto_voucher ?? "",
         numero_a04: null, anio_a04: null,
+        tipo_documento_pago: pago.tipo_documento_pago,
+        no_factura: pago.no_factura,
+        serie_factura: pago.serie_factura,
       }}
       municipio={config?.municipio ?? "Tacaná, San Marcos"}
       bancoNombre={config?.banco_nombre ?? ""}

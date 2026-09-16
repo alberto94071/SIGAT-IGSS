@@ -1,13 +1,20 @@
 "use client";
-import { useState, useCallback, useRef, useLayoutEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
 import { guardarPosicionesImpresion, getFondoImpresion } from "@/lib/impresion-posiciones-actions";
-import { Campo, CAMPO_POSICIONABLE_CSS, type Pos } from "@/components/print-posiciones/CampoPosicionable";
+import { Campo, CAMPO_POSICIONABLE_CSS, CAMPO_HIDE_BTN_CSS, type Pos } from "@/components/print-posiciones/CampoPosicionable";
 import { PosicionesToolbar, HojaConFondo, HOJA_CON_FONDO_CSS } from "@/components/print-posiciones/PosicionesToolbar";
+
+// Misma clave que ImprimirVoucherClient.tsx (Voucher de Vale) — es el mismo
+// talonario físico, ver comentario ahí. Preferencia por navegador, no por
+// documento impreso — mismo patrón que DAB-60.
+const OCULTOS_KEY = "cip-voucher-campos-ocultos";
 
 type Pago = {
   numero_cheque: string; fecha_emision_cheque: string | null;
   monto_cheque: number; monto_letras: string; destinatario_nombre: string; concepto_voucher: string;
   numero_a04: number | null; anio_a04: number | null;
+  tipo_documento_pago: string | null;
+  no_factura: string; serie_factura: string;
 };
 
 interface Props {
@@ -48,8 +55,11 @@ const POS_DEFAULT: Record<string, Pos> = {
   concepto:        { top: 96.0,  left: 43.2,  width: 99, height: 5 },
   debe:            { top: 96.0,  left: 148.6, width: 22, height: 5 },
   haber:           { top: 96.0,  left: 172.6, width: 22, height: 5 },
-  saldo_anterior:  { top: 103.0, left: 43.2,  width: 60, height: 5 },
-  saldo_nuevo:     { top: 103.0, left: 105.2, width: 60, height: 5 },
+  tipo_documento:  { top: 103.0, left: 15.2,  width: 30, height: 5 },
+  numero_documento:{ top: 103.0, left: 47.2,  width: 25, height: 5 },
+  serie_documento: { top: 103.0, left: 74.2,  width: 25, height: 5 },
+  saldo_anterior:  { top: 110.0, left: 43.2,  width: 60, height: 5 },
+  saldo_nuevo:     { top: 110.0, left: 105.2, width: 60, height: 5 },
   hecho_por:       { top: 199.4, left: 14.0,  width: 38, height: 5 },
   revisado:        { top: 199.4, left: 60.0,  width: 38, height: 5 },
   autorizado:      { top: 199.4, left: 104.1, width: 38, height: 5 },
@@ -70,6 +80,9 @@ const FIELD_LABELS: Record<string, string> = {
   concepto:        "Concepto (voucher)",
   debe:            "Debe",
   haber:           "Haber",
+  tipo_documento:  "Según Documento(s) — Tipo",
+  numero_documento:"Según Documento(s) — Número",
+  serie_documento: "Según Documento(s) — Serie",
   saldo_anterior:  "Saldo anterior",
   saldo_nuevo:     "Saldo nuevo",
   hecho_por:       "Hecho por (en blanco)",
@@ -91,7 +104,29 @@ export default function ImprimirVoucherBancosClient({
   const [fondo, setFondo] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
+  const [ocultos, setOcultos] = useState<string[]>([]);
   const hojaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(OCULTOS_KEY);
+      if (raw) setOcultos(JSON.parse(raw));
+    } catch { /* localStorage no disponible — sigue mostrando todo */ }
+  }, []);
+
+  const ocultarCampo = useCallback((id: string) => {
+    setOcultos(prev => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      try { localStorage.setItem(OCULTOS_KEY, JSON.stringify(next)); } catch { /* ignorar */ }
+      return next;
+    });
+  }, []);
+
+  function reiniciarOcultos() {
+    setOcultos([]);
+    try { localStorage.removeItem(OCULTOS_KEY); } catch { /* ignorar */ }
+  }
 
   useLayoutEffect(() => {
     if (!fondo) getFondoImpresion("cheque").then(setFondo);
@@ -120,6 +155,7 @@ export default function ImprimirVoucherBancosClient({
   const bancoDatosTxt = [bancoNombre, cuentaNombre, cuentaNumero].filter(Boolean).join(" · ");
 
   const campo = (id: string, textoDefault: string, opts?: { style?: React.CSSProperties }) => {
+    if (ocultos.includes(id)) return null;
     const texto = overrides[id] ?? textoDefault;
     return (
       <Campo
@@ -127,6 +163,7 @@ export default function ImprimirVoucherBancosClient({
         pos={pos[id] ?? POS_DEFAULT[id]} onChange={onChangePos}
         editable={verPosiciones} style={opts?.style} label={FIELD_LABELS[id] ?? id}
         onTextChange={onTextChange}
+        onHide={() => ocultarCampo(id)}
       />
     );
   };
@@ -138,6 +175,7 @@ export default function ImprimirVoucherBancosClient({
         verPosiciones={verPosiciones} onToggleVer={() => setVerPosiciones(v => !v)}
         onRestablecer={restablecerPosiciones} onGuardar={guardarPosiciones}
         guardando={guardando} guardado={guardado}
+        ocultosCount={ocultos.length} onReiniciarOcultos={reiniciarOcultos}
       />
 
       <HojaConFondo hojaRef={hojaRef} fondo={fondo}>
@@ -152,6 +190,17 @@ export default function ImprimirVoucherBancosClient({
         {campo("concepto", p.concepto_voucher, { style: { fontSize: "8.5pt" } })}
         {campo("debe", montoTxt, { style: { textAlign: "right", fontFamily: "monospace", fontSize: "8.5pt" } })}
         {campo("haber", "", { style: { textAlign: "right", fontFamily: "monospace", fontSize: "8.5pt" } })}
+
+        {/* "Según Documento(s)" — tipo de documento elegido al completar el
+            Voucher (Factura/Vale/Formulario) + el número/serie de la
+            factura que respalda la compra. No. y Serie solo se imprimen
+            cuando el tipo es "Factura" (pedido explícito del cliente); para
+            Vale/Formulario no hay un número/serie propio capturado en este
+            punto del flujo, así que quedan en blanco. */}
+        {campo("tipo_documento", p.tipo_documento_pago ?? "", { style: { fontSize: "7.5pt" } })}
+        {campo("numero_documento", p.tipo_documento_pago === "Factura" ? p.no_factura : "", { style: { fontSize: "7.5pt" } })}
+        {campo("serie_documento", p.tipo_documento_pago === "Factura" ? p.serie_factura : "", { style: { fontSize: "7.5pt" } })}
+
         {campo("saldo_anterior", saldoAnterior != null ? `Saldo anterior: ${fmtQ(saldoAnterior)}` : "", { style: { fontSize: "7.5pt", color: "#444" } })}
         {campo("saldo_nuevo", saldoNuevo != null ? `Saldo nuevo: ${fmtQ(saldoNuevo)}` : "", { style: { fontSize: "7.5pt", color: "#444" } })}
 
@@ -167,6 +216,7 @@ export default function ImprimirVoucherBancosClient({
       </HojaConFondo>
 
       <style>{HOJA_CON_FONDO_CSS}</style>
+      <style>{CAMPO_HIDE_BTN_CSS}</style>
       {verPosiciones && <style>{CAMPO_POSICIONABLE_CSS}</style>}
     </>
   );

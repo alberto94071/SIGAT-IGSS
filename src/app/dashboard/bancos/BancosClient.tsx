@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { fechaGuatemala } from "@/lib/date-utils";
 import Link from "next/link";
 import { Landmark, X, Loader2, Send, CheckCircle2, Printer, FileEdit, Undo2, Search, BookOpen } from "lucide-react";
-import { completarVoucherBancos, devolverAFormaPago, type PagoFondoRotativo, type TipoDocumentoPago, type MovimientoBancoTotal } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import { completarVoucherBancos, devolverAFormaPago, actualizarEstadoBancos, type PagoFondoRotativo, type TipoDocumentoPago, type MovimientoBancoTotal } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 import { montoEnLetras } from "@/lib/adjudicacion/deletreo";
 import ExpandableRow from "@/components/ExpandableRow";
 import TrazabilidadPanel from "@/components/TrazabilidadPanel";
@@ -18,15 +18,29 @@ const TIPO_DOC_COLOR: Record<MovimientoBancoTotal["tipoDocumento"], string> = {
   "Formulario": "bg-blue-100 text-blue-700",
 };
 
+const STATUS_COLOR: Record<MovimientoBancoTotal["status"], string> = {
+  "Operado": "bg-gray-100 text-gray-600",
+  "Pagado": "bg-green-100 text-green-700",
+  "Anulado": "bg-red-100 text-red-700",
+};
+
+// Clave estable para identificar un movimiento entre selección/servidor —
+// mismo par (origen, origenId) que espera actualizarEstadoBancos.
+const claveMov = (m: MovimientoBancoTotal) => `${m.origen}:${m.origenId}`;
+
 interface Props { pagos: PagoFondoRotativo[]; movimientos: MovimientoBancoTotal[]; }
 
-export default function BancosClient({ pagos: init, movimientos }: Props) {
+export default function BancosClient({ pagos: init, movimientos: movInit }: Props) {
   const [pagos, setPagos] = useState(init);
+  const [movimientos, setMovimientos] = useState(movInit);
   const [modalFor, setModalFor] = useState<PagoFondoRotativo | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [procesando, setProcesando] = useState<number | null>(null);
   const [rowError, setRowError] = useState<Record<number, string>>({});
   const [query, setQuery] = useState("");
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  const [actualizandoEstado, setActualizandoEstado] = useState(false);
+  const [errorEstado, setErrorEstado] = useState("");
 
   const q = query.toLowerCase().trim();
   const movimientosFiltrados = useMemo(() => !q ? movimientos : movimientos.filter(m =>
@@ -37,6 +51,31 @@ export default function BancosClient({ pagos: init, movimientos }: Props) {
     m.fecha.includes(q)
   ), [movimientos, q]);
   const saldoActual = movimientos.length > 0 ? movimientos[movimientos.length - 1].saldo : null;
+
+  function toggleSeleccion(clave: string) {
+    setSeleccionados(prev => {
+      const next = new Set(prev);
+      if (next.has(clave)) next.delete(clave); else next.add(clave);
+      return next;
+    });
+  }
+
+  function toggleSeleccionTodos() {
+    setSeleccionados(prev =>
+      movimientosFiltrados.every(m => prev.has(claveMov(m))) ? new Set() : new Set(movimientosFiltrados.map(claveMov))
+    );
+  }
+
+  async function handleActualizarEstado(estado: MovimientoBancoTotal["status"]) {
+    const items = movimientos.filter(m => seleccionados.has(claveMov(m))).map(m => ({ origen: m.origen, origenId: m.origenId }));
+    if (items.length === 0) return;
+    setActualizandoEstado(true); setErrorEstado("");
+    const res = await actualizarEstadoBancos(items, estado);
+    setActualizandoEstado(false);
+    if ("error" in res) { setErrorEstado(res.error); return; }
+    setMovimientos(prev => prev.map(m => seleccionados.has(claveMov(m)) ? { ...m, status: estado } : m));
+    setSeleccionados(new Set());
+  }
 
   async function handleDevolver(p: PagoFondoRotativo) {
     if (!confirm("¿Devolver este pago a Fondo Rotativo/Pagos para elegir otra forma de pago? Se deshacen los datos de cheque ya capturados (y lo que ya se posteó en Ejecución)."))
@@ -66,13 +105,38 @@ export default function BancosClient({ pagos: init, movimientos }: Props) {
           <input className="input pl-9" placeholder="Buscar por cheque, beneficiario, NIT, fecha…"
             value={query} onChange={e => setQuery(e.target.value)} />
         </div>
+        {seleccionados.size > 0 && (
+          <div className="flex items-center gap-2 ml-auto">
+            <span className="text-xs text-gray-500">{seleccionados.size} seleccionado(s)</span>
+            <button onClick={() => handleActualizarEstado("Pagado")} disabled={actualizandoEstado}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">
+              {actualizandoEstado ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />} Marcar Pagado
+            </button>
+            <button onClick={() => handleActualizarEstado("Anulado")} disabled={actualizandoEstado}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">
+              <X className="w-3.5 h-3.5" /> Marcar Anulado
+            </button>
+            <button onClick={() => handleActualizarEstado("Operado")} disabled={actualizandoEstado}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50">
+              Volver a Operado
+            </button>
+          </div>
+        )}
       </div>
+      {errorEstado && (
+        <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{errorEstado}</div>
+      )}
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
+                <th className="px-4 py-3 w-8">
+                  <input type="checkbox" className="rounded border-gray-300"
+                    checked={movimientosFiltrados.length > 0 && movimientosFiltrados.every(m => seleccionados.has(claveMov(m)))}
+                    onChange={toggleSeleccionTodos} />
+                </th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Mes</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Cheque #</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Tipo Doc.</th>
@@ -88,24 +152,33 @@ export default function BancosClient({ pagos: init, movimientos }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {movimientosFiltrados.map(m => (
-                <tr key={m.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{m.mes || "—"}</td>
-                  <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{m.numeroCheque ?? "—"}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${TIPO_DOC_COLOR[m.tipoDocumento]}`}>{m.tipoDocumento}</span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{m.status}</td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{m.fecha || "—"}</td>
-                  <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{m.nitBeneficiario ?? "—"}</td>
-                  <td className="px-4 py-3 text-gray-900">{m.beneficiario ?? "—"}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{m.descripcion}</td>
-                  <td className="px-4 py-3 text-right font-mono text-red-700 whitespace-nowrap">{m.egresos > 0 ? Q(m.egresos) : "—"}</td>
-                  <td className="px-4 py-3 text-right font-mono text-green-700 whitespace-nowrap">{m.ingresos > 0 ? Q(m.ingresos) : "—"}</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-gray-900 whitespace-nowrap">{Q(m.saldo)}</td>
-                  <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{m.totalEnLetras}</td>
-                </tr>
-              ))}
+              {movimientosFiltrados.map(m => {
+                const clave = claveMov(m);
+                return (
+                  <tr key={m.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <input type="checkbox" className="rounded border-gray-300"
+                        checked={seleccionados.has(clave)} onChange={() => toggleSeleccion(clave)} />
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{m.mes || "—"}</td>
+                    <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{m.numeroCheque ?? "—"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${TIPO_DOC_COLOR[m.tipoDocumento]}`}>{m.tipoDocumento}</span>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_COLOR[m.status]}`}>{m.status}</span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{m.fecha || "—"}</td>
+                    <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{m.nitBeneficiario ?? "—"}</td>
+                    <td className="px-4 py-3 text-gray-900">{m.beneficiario ?? "—"}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500">{m.descripcion}</td>
+                    <td className="px-4 py-3 text-right font-mono text-red-700 whitespace-nowrap">{m.egresos > 0 ? Q(m.egresos) : "—"}</td>
+                    <td className="px-4 py-3 text-right font-mono text-green-700 whitespace-nowrap">{m.ingresos > 0 ? Q(m.ingresos) : "—"}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-gray-900 whitespace-nowrap">{Q(m.saldo)}</td>
+                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{m.totalEnLetras}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {movimientosFiltrados.length === 0 && (
