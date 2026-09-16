@@ -2477,6 +2477,40 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     `I10` con la fórmula `=I8-I9` intacta (verificado con `openpyxl`) — el
     cheque real se revirtió a "Operado" después de cada prueba, confirmado
     por consulta directa a la base.
+    **Resuelto (2026-09-17): "Saldo a corte" se puede llenar mal y resta el
+    cheque en circulación dos veces — no es un bug de la fórmula, es que el
+    valor de arriba (19428.57 en la verificación de arriba) es justo el
+    ejemplo de cómo NO hay que llenarlo.** El cliente reportó con una
+    captura real: "me está descontando dos veces el cheque que generé que
+    está en circulación y no lo han cobrado, sólo me lo debe descontar una
+    vez". Confirmado con el cliente que "Saldo a corte" debe ser el saldo
+    que muestra su **banca en línea real, ahora mismo** — no el "Saldo
+    actual" que ya muestra el sistema. La fórmula (`Saldo según estado de
+    cuenta − Cheques en circulación = Saldo conciliado`) es la de
+    conciliación bancaria estándar y es correcta: mientras un cheque no lo
+    cobra el banco, el saldo real de la banca en línea sigue **sin
+    reducirse** por ese cheque — sigue siendo más alto que el "Saldo al
+    ..." que ya calcula el sistema (que sí resta cada cheque desde que se
+    emite, lo haya cobrado el banco o no). El error real: el cliente
+    escribió en "Saldo a corte" el mismo número que el "Saldo actual" de la
+    pantalla (que YA tiene el cheque restado), así que la fórmula lo
+    restaba una segunda vez. No se puede prohibir el valor a nivel de
+    formulario (es un dato externo que el sistema no puede verificar), pero
+    sí se puede avisar: `ImprimirLibroBancosClient.tsx` calcula
+    `posibleDobleResta` (el valor entrado es ≤ el "Saldo al..." del libro Y
+    hay cheques en circulación ese mes) y muestra una advertencia roja
+    junto a la Conciliación, solo en pantalla (`className="no-print"`,
+    nunca en el papel impreso ni en el Excel). Además se reescribió el
+    texto del modal "Saldo a corte" (`LibroBancosClient.tsx`) y el hint de
+    la barra de impresión para decir explícitamente "banca en línea ahora
+    mismo, no el Saldo actual de esta pantalla" y mostrar ese "Saldo
+    actual" al lado como referencia de lo que NO hay que copiar. Verificado
+    en vivo contra el cheque real 21 (marcado temporalmente "En
+    circulación"): con `saldoCorte=19428.57` (el mismo "Saldo actual" del
+    sistema) aparece la advertencia; con `saldoCorte=20000` (el valor real
+    si el cheque no se ha cobrado, ya que arrancó en Q20,000) NO aparece, y
+    "Saldo final conciliado" da exactamente Q19,428.57 — coincide con el
+    "Saldo al..." del libro, cero doble resta — revertido después.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
