@@ -2534,6 +2534,43 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     si el cheque no se ha cobrado, ya que arrancó en Q20,000) NO aparece, y
     "Saldo final conciliado" da exactamente Q19,428.57 — coincide con el
     "Saldo al..." del libro, cero doble resta — revertido después.
+- **Lote de 2 bugs de Viáticos reportados por el cliente 2026-09-17 (WhatsApp
+  con capturas: pantalla del Informe de Comisión de un viático real y una
+  liquidación V-L física llena con el numeral 7 circulado):**
+  - **Un formulario `Rechazado` no tenía NINGUNA acción disponible — no había
+    forma de corregirlo y volver a enviarlo.** A diferencia de Anulado/
+    Extraviado (`revertirMarcaFormulario`, botón "Revertir") o Aprobado
+    (`devolverSolicitudAprobada`, botón "Devolver a revisión"), Rechazado
+    solo mostraba un "—" en Entrega de Formulario. Caso real: Formulario
+    117971, rechazado con motivo literal "corregir descripcion de la
+    comision" — exactamente lo que el cliente reportó necesitar arreglar.
+    Fix: `revertirRechazo(id)` (`viaticos/registro-comision/actions.ts`)
+    regresa `Rechazado` → **`Habilitado`** (no solo a `Enviado`, que queda
+    de solo lectura para el colaborador) — así puede usar
+    `eliminarComision`/`agregarComision` (gate `estado === "Habilitado"`,
+    `solicitar-viaticos/actions.ts`) para borrar la comisión mal capturada
+    y volverla a registrar corregida; limpia `rechazado_por`/`rechazado_en`/
+    `motivo_rechazo`. Botón "Revertir" nuevo en Entrega de Formulario, mismo
+    patrón que los otros dos. Aplicado en vivo al caso real (Formulario
+    117971, id 18): quedó en `Habilitado` con los 3 campos de rechazo en
+    `NULL` — el colaborador ya puede corregir la descripción y reenviar (el
+    interruptor `viatico_exigir_fecha_limite` sigue en `false`, así que la
+    `fecha_limite` vieja de agosto no bloquea el reenvío).
+  - **El V-L impreso (numeral 7) nunca mostró la CANTIDAD de cada servicio
+    (desayuno/almuerzo/cena/hospedaje), solo el monto en quetzales** —
+    reportado con una liquidación real llena (talonario físico) circulando
+    la columna de cantidad vacía. `ImprimirVLClient.tsx` solo tenía campos
+    `gasto_desayuno`/etc. (el monto, `Q{cantidad × precio}`); nunca hubo un
+    campo para la cantidad misma. Fix: 4 campos posicionables nuevos
+    (`cant_desayuno`/`cant_almuerzo`/`cant_cena`/`cant_hospedaje`),
+    posiciones estimadas a ojo a la izquierda de los campos de monto ya
+    existentes (mismo criterio que el resto de campos pre-impresos de este
+    sistema — se ajustan arrastrando en "Ver posiciones" si no calzan
+    exacto contra el talonario físico real). Verificado en vivo, de solo
+    lectura, contra un V-L real ya Aprobado (Formulario 125698, dos
+    comisiones combinadas): imprimió "2/2/1/1" de cantidad junto a
+    "Q90.00/Q120.00/Q45.00/Q150.00" de monto — antes solo salían los
+    montos — sin tocar ningún dato real.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

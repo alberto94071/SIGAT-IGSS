@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FileText, Printer, Undo2 } from "lucide-react";
-import { revertirMarcaFormulario, devolverSolicitudAprobada } from "../registro-comision/actions";
+import { revertirMarcaFormulario, devolverSolicitudAprobada, revertirRechazo } from "../registro-comision/actions";
 
 type Solicitud = {
   id: number; numero_formulario: string | null; persona_nombre: string | null; estado: string;
@@ -35,6 +35,15 @@ export default function EntregaFormularioClient({ solicitudes, canEdit }: { soli
     setError("");
     if (!confirm("¿Devolver este V-L a revisión? Se borra el pago creado en Fondo Rotativo (si todavía no se le eligió forma de pago) y se limpian los datos de Liquidación/Informe/Justificación.")) return;
     const res = await devolverSolicitudAprobada(id);
+    if ("error" in res) return setError(res.error);
+    setLista(prev => prev.filter(s => s.id !== id));
+    router.refresh();
+  }
+
+  async function handleRevertirRechazo(id: number) {
+    setError("");
+    if (!confirm("¿Revertir el rechazo? El formulario vuelve a \"Habilitado\" para que el colaborador pueda corregir sus comisiones y volver a enviarlo.")) return;
+    const res = await revertirRechazo(id);
     if ("error" in res) return setError(res.error);
     setLista(prev => prev.filter(s => s.id !== id));
     router.refresh();
@@ -115,7 +124,13 @@ export default function EntregaFormularioClient({ solicitudes, canEdit }: { soli
                         <Undo2 className="w-3 h-3" /> Revertir
                       </button>
                     )}
-                    {s.estado === "Rechazado" && <span className="text-xs text-gray-400">—</span>}
+                    {s.estado === "Rechazado" && canEdit && (
+                      <button onClick={() => handleRevertirRechazo(s.id)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+                        <Undo2 className="w-3 h-3" /> Revertir
+                      </button>
+                    )}
+                    {s.estado === "Rechazado" && !canEdit && <span className="text-xs text-gray-400">—</span>}
                   </td>
                 </tr>
               ))}

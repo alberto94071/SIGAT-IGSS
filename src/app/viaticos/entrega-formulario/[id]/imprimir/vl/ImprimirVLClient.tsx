@@ -60,6 +60,15 @@ const POS_DEFAULT: Record<string, Pos> = {
   lugar:               { top: 2.62 * IN, left: 3.2 * IN, width: 0.9 * IN },
   dias:                { top: 2.65 * IN, left: 4.2 * IN, width: 0.6 * IN },
 
+  // Cantidad (numeral 7) — reportado por el cliente 2026-09-17: solo se
+  // imprimía el monto por servicio, nunca cuántos de cada uno; posiciones
+  // estimadas a ojo, se ajustan arrastrando en "Ver posiciones" igual que
+  // el resto de campos de este formulario.
+  cant_desayuno:       { top: 2.66 * IN, left: 5.9 * IN, width: 0.6 * IN },
+  cant_almuerzo:       { top: 3.09 * IN, left: 5.9 * IN, width: 0.6 * IN },
+  cant_cena:           { top: 3.52 * IN, left: 5.9 * IN, width: 0.6 * IN },
+  cant_hospedaje:      { top: 3.95 * IN, left: 5.9 * IN, width: 0.6 * IN },
+
   gasto_desayuno:      { top: 2.66 * IN, left: 6.6 * IN, width: 1.2 * IN },
   gasto_almuerzo:      { top: 3.09 * IN, left: 6.6 * IN, width: 1.2 * IN },
   gasto_cena:          { top: 3.52 * IN, left: 6.6 * IN, width: 1.2 * IN },
@@ -95,6 +104,7 @@ const POS_DEFAULT: Record<string, Pos> = {
 const FIELD_LABELS: Record<string, string> = {
   por_q: "1. POR Q.", entidad_recibio: "2. RECIBÍ DE", monto_letras: "3. LA CANTIDAD DE",
   tipo_comision: "4. TIPO DE COMISIÓN", lugar: "5. LUGAR DE PERMANENCIA", dias: "6. No. DE DÍAS",
+  cant_desayuno: "7. Cantidad Desayuno", cant_almuerzo: "7. Cantidad Almuerzo", cant_cena: "7. Cantidad Cena", cant_hospedaje: "7. Cantidad Hospedaje",
   gasto_desayuno: "Desayuno", gasto_almuerzo: "Almuerzo", gasto_cena: "Cena", gasto_hospedaje: "Hospedaje",
   suma_gastos: "9. SUMAN LOS GASTOS DE VIÁTICO", otros_gastos: "10. OTROS GASTOS DERIVADOS", total_11: "11. TOTAL",
   recibido_va: "12. RECIBIDO POR MEDIO DE FORMULARIO V-A", reintegro: "13. REINTEGRO", complemento: "14. COMPLEMENTO", total_15: "15. TOTAL",
@@ -204,6 +214,11 @@ export default function ImprimirVLClient({
         {campo("tipo_comision", tipoComisionLineas.join("\n"), { style: { fontSize: "8pt" }, multiline: true })}
         {campo("lugar", lugarLineas.join("\n"), { style: { fontSize: "8pt" }, multiline: true })}
         {campo("dias", String(diasTotal), { style: { textAlign: "center" } })}
+
+        {cantDesayuno > 0 && campo("cant_desayuno", String(cantDesayuno), { style: { textAlign: "center" } })}
+        {cantAlmuerzo > 0 && campo("cant_almuerzo", String(cantAlmuerzo), { style: { textAlign: "center" } })}
+        {cantCena > 0 && campo("cant_cena", String(cantCena), { style: { textAlign: "center" } })}
+        {cantHospedaje > 0 && campo("cant_hospedaje", String(cantHospedaje), { style: { textAlign: "center" } })}
 
         {cantDesayuno > 0 && campo("gasto_desayuno", Q(montoDesayuno), { style: { textAlign: "right" } })}
         {cantAlmuerzo > 0 && campo("gasto_almuerzo", Q(montoAlmuerzo), { style: { textAlign: "right" } })}
