@@ -310,6 +310,32 @@ export async function devolverSolicitudAprobada(id: number): Promise<{ ok: true 
   return { ok: true };
 }
 
+// Por si el encargado rechazó por error, o el colaborador necesita corregir
+// datos de la comisión (ej. cantidades de servicio mal capturadas) antes de
+// volver a enviar — regresa a "Habilitado" (no solo a "Enviado", que queda
+// de solo lectura para el colaborador) para que pueda usar
+// agregarComision/eliminarComision de nuevo (solicitar-viaticos/actions.ts,
+// gate por estado === "Habilitado") y corregir la comisión borrándola y
+// volviéndola a registrar con los datos correctos. Mismo patrón que
+// revertirMarcaFormulario, pedido explícito del cliente 2026-09-17 con un
+// caso real (Formulario 117971, Rechazado, sin ninguna acción disponible).
+export async function revertirRechazo(id: number): Promise<{ ok: true } | { error: string }> {
+  const check = await requireTabAccessAction("mod_viaticos", TAB);
+  if ("error" in check) return check;
+
+  const [sol] = await db.select({ estado: viaticoSolicitudes.estado }).from(viaticoSolicitudes)
+    .where(eq(viaticoSolicitudes.id, id)).limit(1);
+  if (!sol) return { error: "No se encontró la solicitud" };
+  if (sol.estado !== "Rechazado") return { error: "Esta solicitud no está rechazada" };
+
+  await db.update(viaticoSolicitudes).set({
+    estado: "Habilitado",
+    rechazado_por: null, rechazado_en: null, motivo_rechazo: null,
+  }).where(eq(viaticoSolicitudes.id, id));
+
+  return { ok: true };
+}
+
 export async function rechazarSolicitud(id: number, motivo: string): Promise<{ ok: true } | { error: string }> {
   const check = await requireTabAccessAction("mod_viaticos", TAB);
   if ("error" in check) return check;
