@@ -2329,6 +2329,86 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   mismo pago real id 29 en Fondo Rotativo/Bancos: la fila de "Agua" mostró
   "40" en Cantidad y "Garrafón 5 Galón" en Presentación, en columnas
   separadas.
+- **Libro Bancos — rediseño completo (2026-09-16), a partir de
+  `MODELO_LIBRO_BANCOS.pdf` que mandó el cliente (su Excel real de control
+  de banco).** Antes esta pestaña (`dashboard/libro-bancos/`) usaba
+  `getLibroBancosCompleto` — solo cheques de compras/viáticos, sin Vales ni
+  status. Ahora reusa **`getRegistroBancos()`** (el mismo que ya alimenta
+  Fondo Rotativo/Bancos — ver el punto de arriba "Registro de Bancos"),
+  que ya trae todo lo que pedía el modelo: compras, viáticos, cheques de
+  Vale, depósitos de remanente de Vale, Reintegros FRI, saldo corriente
+  desde `monto_fondo_rotativo`, y el status real (Operado/Pagado/Anulado).
+  No hizo falta ninguna tabla nueva — todo el dato ya existía.
+  - **Pantalla** (`LibroBancosClient.tsx`): mismas columnas que el modelo
+    (Fecha/Tipo de Documento/No. Documento/Beneficiario/Descripción/
+    Estado/Crédito/Débito/Saldo) + buscador + selector de mes con
+    "Imprimir reporte del mes" y **"Exportar Excel"** nuevo (antes esta
+    pestaña no exportaba, solo imprimía).
+  - **Impresión** (`imprimir/[mes]/ImprimirLibroBancosClient.tsx`, mismos
+    colores que Libro Caja Chica — barra de título azul oscuro, encabezado
+    verde oliva, `PrintPages` landscape): además de la tabla con fila
+    "Saldo al {último día} de {Mes} de {Año}", agrega dos secciones nuevas
+    que el modelo sí lleva y Libro Caja Chica no necesitaba:
+    - **"Conciliación del estado de cuenta monetaria"** — 3 filas. "Saldo
+      final según estado de cuenta" es un `<input>` en blanco (el sistema
+      no puede saber el saldo real del banco, es dato externo que se llena
+      en pantalla antes de imprimir, no persiste). "Cheques en
+      circulación Nos." se **sugiere solo** (cheques no-Depósito con
+      `status === "Operado"` ese mes, número y suma) pero queda editable
+      por si la realidad del banco difiere. "Saldo final conciliado" se
+      recalcula en vivo mientras se escribe — mientras el primer campo
+      esté vacío, muestra "Q —" en vez de un número negativo sin sentido
+      (bug atrapado y corregido en la misma ronda, antes de mergear:
+      mostraba "Q -571.43" con el campo todavía vacío).
+    - **"Resumen de libro de bancos"** — 7 filas, todas calculadas (sin
+      captura manual): Saldo inicial (mismo que ya usa la tabla), (+)
+      Depósitos (créditos de tipo "Depósito"), (+) Notas de
+      Crédito/(-) Notas de débito (fijos en Q0.00 — no hay un concepto de
+      "nota de crédito/débito" en el sistema todavía), (+) Cheques
+      anulados (débitos de filas `status === "Anulado"` — se vuelven a
+      sumar porque esos cheques nunca salieron del banco de verdad, aunque
+      la tabla de arriba los sigue restando en su saldo corrido a
+      propósito, ver el punto de "Registro de Bancos"), (-) Cheques
+      emitidos (débitos de todo lo no-Depósito, tal cual quedó
+      registrado), y "Saldo final conciliado" (bold) — cuando no hay
+      cheques anulados en el mes, este total coincide exacto con el
+      "Saldo al..." de la tabla de arriba; si los hay, es mayor (excluye
+      lo anulado), que es la distinción real entre "saldo corrido naive"
+      (arriba) y "saldo contable de verdad" (Resumen).
+    - **Firmas en blanco, con cargo fijo transcrito literal del modelo**
+      (mismo criterio que Libro Caja Chica/Viáticos): "Analista 'A'/
+      Encargado de Fondo Rotativo Interno" + "IGSS-U.I.A.A.D.D.M. En el
+      Municipio de Tejutla" y "Vo.Bo. ... Analista 'A'/Encargada de
+      Unidad" + la misma línea de unidad. **El modelo trae nombres reales
+      tipeados** (Bernon Raúl Miranda González / Lilia Zucely Pérez
+      Fuentes) que coinciden con `configuracion.nombre_responsable`/
+      `nombre_encargado_unidad` — **a propósito no se hardcodearon**:
+      `nombre_encargado_unidad` ya está documentado arriba como un campo
+      fijo obsoleto (la persona que ahí aparecía dejó de trabajar en la
+      unidad), así que hardcodear ese nombre real habría reintroducido el
+      mismo bug ya resuelto una vez — se deja en blanco para firma física,
+      igual que el precedente más reciente (Libro Caja Chica).
+  - **Excel** (`/api/fondo-rotativo/libro-bancos/reporte?mes=YYYY-MM`,
+    mismo patrón `exceljs` puro que el de Caja Chica — sin inyección XML a
+    mano, no hace falta verificar "reparar archivo"): mismo layout que la
+    impresión, con las 9 columnas + fila de totales + las 2 secciones
+    de abajo. A diferencia de la impresión (que captura el saldo del
+    estado de cuenta en pantalla), acá esa celda **queda vacía con formato
+    de quetzales** — el archivo es "editable" a propósito (pedido
+    explícito del cliente), el usuario la llena directo en Excel; "Saldo
+    final conciliado" de esa sección es una **fórmula real de Excel**
+    (`=I{fila}-I{fila}`), así que recalcula sola en cuanto se llena la
+    celda de arriba.
+  - Verificado en vivo, de solo lectura, contra el pago real id 29 (cheque
+    21, Q571.43): la pantalla mostró Tipo "Factura"/Estado "Operado"
+    igual que Fondo Rotativo/Bancos; la impresión mostró el título con el
+    rango del mes, "Saldo al 31 de Agosto de 2026" con los totales
+    correctos, "Cheques en circulación Nos. 21" auto-sugerido con
+    Q571.43, y escribir "19428.57" en el saldo del estado de cuenta
+    recalculó en vivo "Saldo final conciliado: Q 18,857.14"; el Excel
+    descargado se abrió correctamente con `openpyxl` — título fusionado,
+    encabezado verde, fila del movimiento real, fórmula de conciliación
+    intacta como fórmula (no como texto) — sin tocar ningún dato real.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
