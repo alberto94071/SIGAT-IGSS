@@ -120,12 +120,31 @@ function ResizeHandle({ handlers, label }: { handlers: Handlers; label?: string 
   );
 }
 
+// Botón para ocultar un campo permanentemente (hasta "Reiniciar campos
+// ocultos") — visible siempre en pantalla (no depende del modo "Ver
+// posiciones"), nunca en el papel impreso. Mismo patrón ya probado en
+// DAB-60 (ImprimirDab60Client.tsx), extraído acá para los formularios que
+// usan este motor genérico (Voucher, Vale de Caja Chica, Cheque).
+function HideButton({ onClick, label }: { onClick: () => void; label?: string }) {
+  return (
+    <button
+      type="button" className="cpos-hide-btn no-print"
+      title={label ? `Ocultar — ${label}` : "Ocultar este campo"}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick(); }}
+    >
+      ×
+    </button>
+  );
+}
+
 export function Campo({
-  id, texto, hojaRef, hojaWMm, hojaHMm, pos, onChange, editable, style, label, onTextChange, multiline = false, font = "Arial, Helvetica, sans-serif",
+  id, texto, hojaRef, hojaWMm, hojaHMm, pos, onChange, editable, style, label, onTextChange, multiline = false, font = "Arial, Helvetica, sans-serif", onHide,
 }: {
   id: string; texto: string; hojaRef: RefObject<HTMLDivElement | null>; hojaWMm: number; hojaHMm: number; pos: Pos;
   onChange: (id: string, pos: Pos) => void; editable: boolean; style?: React.CSSProperties;
   label?: string; onTextChange?: (id: string, texto: string) => void; multiline?: boolean; font?: string;
+  onHide?: () => void;
 }) {
   // El wrapper externo (outerRef) define posición y tamaño y aloja las
   // manijas de mover/redimensionar sin recortarlas; el recorte (overflow
@@ -178,6 +197,7 @@ export function Campo({
       </div>
       {editable && <DragHandle handlers={drag} label={label} />}
       {editable && <ResizeHandle handlers={resize} label={label} />}
+      {onHide && <HideButton onClick={onHide} label={label} />}
     </div>
   );
 }
@@ -192,4 +212,17 @@ export const CAMPO_POSICIONABLE_CSS = `
   .cpos-handle { position: absolute; width: 3mm; height: 3mm; border-radius: 2px; box-sizing: border-box; z-index: 10; }
   .cpos-handle-move { top: 0; left: -4mm; background: #3b82f6; cursor: grab; touch-action: none; }
   .cpos-handle-resize { bottom: -1.5mm; right: -1.5mm; background: #10b981; cursor: nwse-resize; touch-action: none; }
+`;
+
+// CSS del botón "×" de ocultar campo — a diferencia de CAMPO_POSICIONABLE_CSS
+// (que solo se inyecta en modo "Ver posiciones"), este se inyecta siempre:
+// el botón debe funcionar sin entrar a ese modo, igual que en DAB-60.
+export const CAMPO_HIDE_BTN_CSS = `
+  .cpos-hide-btn {
+    position: absolute; top: -2mm; right: -2mm; width: 3.2mm; height: 3.2mm; border-radius: 50%;
+    background: #ef4444; color: #fff; border: none; cursor: pointer; z-index: 12; padding: 0;
+    font-size: 7px; line-height: 1; display: flex; align-items: center; justify-content: center;
+    opacity: 0.5;
+  }
+  .cpos-hide-btn:hover { opacity: 1; }
 `;

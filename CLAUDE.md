@@ -2219,6 +2219,88 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   modificar nada, solo impresión): "CUENTA No." pasó de mostrar "12.07.04"
   a "3-777-08924-4", igual que ya mostraba el renglón "Banco/cuenta" justo
   arriba.
+- **Registro de Bancos: el "Status" pasó de ser fijo por tipo de movimiento a
+  un estado real, persistido y editable en bloque (2026-09-16)** — antes
+  `getRegistroBancos()` (`fondo-rotativo-pagos-actions.ts`) hardcodeaba
+  `"Pagado"` para todo cheque y `"Operado"` para todo depósito, sin ninguna
+  fila detrás — no reflejaba si el cheque realmente ya fue cobrado en el
+  banco. Pedido explícito del cliente: *"el estatus en cuanto yo genero el
+  cheque me debe de salir operado, y a fin de mes yo ingreso a mi estado de
+  cuenta y reviso cuales ya fueron cobrados, entonces me tiene que dejar
+  seleccionar varios para pasarlos... a pagados o anulados"*. Tabla nueva
+  `registro_bancos_estado` (`origen`, `origen_id`, `estado`, UNIQUE en
+  `origen+origen_id`) — **"origen" es el mismo patrón de desambiguación ya
+  usado en `getLibroConciliacion`** (`"compra" | "viatico" | "vale_cheque" |
+  "vale_deposito" | "fri_reintegro"`): imprescindible porque el cheque y el
+  depósito de remanente de un mismo Vale son dos eventos distintos sobre el
+  mismo id de `valesCajaChica` — sin el origen separado, marcar uno pisaría
+  el estado del otro. Todo movimiento nuevo nace `"Operado"` (default,
+  sin fila en la tabla — solo se escribe una fila al pasar a `"Pagado"`/
+  `"Anulado"`, y volver a `"Operado"` borra la fila en vez de guardarlo
+  explícito, para no acumular basura). `actualizarEstadoBancos(items,
+  estado)` hace upsert en lote; `BancosClient.tsx` ganó checkbox por fila +
+  "seleccionar todos" (visibles/filtrados) + 3 botones (Marcar Pagado/
+  Marcar Anulado/Volver a Operado) que aparecen con la selección activa.
+  **El status es puramente informativo para esta pantalla — a propósito NO
+  toca egresos/ingresos/saldo ni presupuesto/efectivo_caja**: si un cheque
+  se anula de verdad y hay que revertir el dinero, eso sigue siendo trabajo
+  de las funciones "Devolver" ya existentes (`devolverAFormaPago`,
+  `devolverValeAAutorizado`, etc.), no de este campo — evita duplicar/pisar
+  la lógica de reversión ya probada. Verificado en vivo contra el pago real
+  id 29 (cheque 21, sin tocar datos financieros): marcar Pagado → badge
+  verde, `registro_bancos_estado` con una fila; recargar la página (render
+  de servidor nuevo, no solo estado de React) → sigue mostrando "Pagado",
+  confirmando que persiste server-side y no es optimista nada más; Volver a
+  Operado → badge gris, la fila se borró de la tabla (`COUNT(*) = 0` al
+  terminar) — sin ningún cambio en `fondo_rotativo_pagos` ni en
+  `configuracion`.
+- **Voucher (compras) ganó un bloque "Según Documento(s)" — Tipo/Número/Serie
+  (2026-09-16), a partir de un modelo de referencia que mandó el cliente.**
+  `ImprimirVoucherBancosClient.tsx` (el único Voucher con selector de
+  `tipo_documento_pago` — Factura/Vale/Formulario, elegido en "Completar
+  cheque y Voucher") ganó 3 campos posicionables nuevos: `tipo_documento`
+  (siempre `p.tipo_documento_pago`), `numero_documento`/`serie_documento`
+  (`p.no_factura`/`p.serie_factura` — **solo cuando el tipo elegido es
+  "Factura"**, pedido explícito del cliente; para Vale/Formulario quedan en
+  blanco porque no hay un número/serie propio capturado en ese punto del
+  flujo para esos dos tipos). `no_factura`/`serie_factura` son `NOT NULL`
+  en `fondoRotativoPagos` — siempre existen (vienen de la factura original
+  de la compra), independientes de qué tipo se elija después en el Voucher.
+  **No se tocó `debe`/`haber`** — el cliente pidió que salgan "en dos
+  columnas diferentes... dependiendo si es ingreso o egreso", pero este
+  Voucher SOLO representa cheques de compras (siempre egreso, nunca un
+  depósito) — el código ya hacía exactamente eso (`debe = monto`, `haber`
+  en blanco, sin condicional), así que no había nada que corregir ahí.
+  Verificado en vivo, de solo lectura, contra el mismo pago real id 29
+  ("Factura" / no_factura "544646464654" / serie "B13131131") — el bloque
+  impreso mostró los 3 valores correctos.
+- **Campos ocultables con "×" (patrón de DAB-60) se extendieron al Voucher
+  (2026-09-16)** — pedido del cliente: *"en la impresión de baucher, también
+  me tiene que dejar eliminar campos de impresión, con la 'x' en la
+  esquina... y reiniciar posiciones me vuelve a mostrar todos"*. A
+  diferencia de DAB-60 (que tiene su propio motor de campo posicionable
+  standalone), Voucher usa el motor **compartido**
+  (`src/components/print-posiciones/CampoPosicionable.tsx` +
+  `PosicionesToolbar.tsx`, el mismo que Vale de Caja Chica y V-A/V-C/V-L) —
+  se extendió ahí en vez de duplicar el patrón por tercera vez:
+  `Campo` ganó un `onHide?` opcional que renderiza el mismo botón "×"
+  (`HideButton`/`.cpos-hide-btn`, visible siempre en pantalla, nunca en el
+  papel, independiente del modo "Ver posiciones" — mismo criterio que
+  DAB-60) y `PosicionesToolbar` ganó `ocultosCount`/`onReiniciarOcultos`
+  opcionales para el botón "Reiniciar campos ocultos" (aparece junto a
+  "Restablecer", son independientes — uno resetea posición/tamaño, el otro
+  visibilidad). `ImprimirVoucherClient.tsx` (Vale) e
+  `ImprimirVoucherBancosClient.tsx` (Bancos/compras) comparten una sola
+  clave de localStorage (`"cip-voucher-campos-ocultos"`) porque es el mismo
+  talonario físico — mismo criterio "una preferencia del navegador, no por
+  documento" que ya usa DAB-60. Otros documentos que ya usan este motor
+  compartido (Vale de Caja Chica, V-A/V-C/V-L) NO se tocaron — el cliente
+  solo pidió Voucher; si se pide después, es agregar `ocultosCount`/
+  `onReiniciarOcultos` a esos Client, ya no hay que tocar el motor de nuevo.
+  Verificado en vivo contra el Voucher del pago real id 29: 22 botones "×"
+  en pantalla (uno por campo), ocultar el de "No. de cheque" lo quita del
+  papel al instante, "Reiniciar campos ocultos (1)" aparece y lo devuelve —
+  sin tocar ningún dato real (todo queda en localStorage del navegador).
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
