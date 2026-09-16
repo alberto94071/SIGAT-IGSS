@@ -7,6 +7,7 @@ import { completarVoucherBancos, devolverAFormaPago, type PagoFondoRotativo, typ
 import { montoEnLetras } from "@/lib/adjudicacion/deletreo";
 import ExpandableRow from "@/components/ExpandableRow";
 import TrazabilidadPanel from "@/components/TrazabilidadPanel";
+import NitAutocomplete from "@/components/adjudicacion/NitAutocomplete";
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -289,7 +290,14 @@ function CompletarVoucherModal({ pago: p, onClose, onDone }: {
           </div>
           <div>
             <label className="label">NIT del beneficiario</label>
-            <input className="input font-mono" value={nitBeneficiario} onChange={e => setNitBeneficiario(e.target.value)} />
+            <NitAutocomplete
+              value={nitBeneficiario}
+              onChange={setNitBeneficiario}
+              onSelect={prov => {
+                setNitBeneficiario(prov.nit ?? nitBeneficiario);
+                setDestinatarioNombre(prov.nombre);
+              }}
+            />
           </div>
           <div className="col-span-2">
             <label className="label">Nombre del beneficiario</label>

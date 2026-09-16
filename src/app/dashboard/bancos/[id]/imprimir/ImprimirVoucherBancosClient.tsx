@@ -13,7 +13,6 @@ type Pago = {
 interface Props {
   pago: Pago;
   municipio: string;
-  codigoContable: string;
   bancoNombre: string;
   cuentaNumero: string;
   cuentaNombre: string;
@@ -67,7 +66,7 @@ const FIELD_LABELS: Record<string, string> = {
   destinatario:    "Pago a la orden de",
   monto_letras:    "Suma de (en letras)",
   banco_datos:     "Banco / cuenta (dato fijo)",
-  cuenta_no:       "Cuenta No. contable (voucher)",
+  cuenta_no:       "Número de cuenta (voucher)",
   concepto:        "Concepto (voucher)",
   debe:            "Debe",
   haber:           "Haber",
@@ -83,7 +82,7 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 export default function ImprimirVoucherBancosClient({
-  pago: p, municipio, codigoContable, bancoNombre, cuentaNumero, cuentaNombre,
+  pago: p, municipio, bancoNombre, cuentaNumero, cuentaNombre,
   saldoAnterior, saldoNuevo, posicionesGuardadas,
 }: Props) {
   const [verPosiciones, setVerPosiciones] = useState(false);
@@ -149,7 +148,7 @@ export default function ImprimirVoucherBancosClient({
         {campo("monto_letras", p.monto_letras, { style: { fontSize: "8.5pt" } })}
 
         {campo("banco_datos", bancoDatosTxt, { style: { fontSize: "7.5pt", color: "#444" } })}
-        {campo("cuenta_no", codigoContable, { style: { textAlign: "center", fontSize: "8pt" } })}
+        {campo("cuenta_no", cuentaNumero, { style: { textAlign: "center", fontSize: "8pt" } })}
         {campo("concepto", p.concepto_voucher, { style: { fontSize: "8.5pt" } })}
         {campo("debe", montoTxt, { style: { textAlign: "right", fontFamily: "monospace", fontSize: "8.5pt" } })}
         {campo("haber", "", { style: { textAlign: "right", fontFamily: "monospace", fontSize: "8.5pt" } })}

@@ -39,7 +39,6 @@ export default async function ImprimirVoucherBancosPage({ params }: { params: Pr
         numero_a04: null, anio_a04: null,
       }}
       municipio={config?.municipio ?? "Tacaná, San Marcos"}
-      codigoContable={config?.codigo_contable ?? "12.07.04"}
       bancoNombre={config?.banco_nombre ?? ""}
       cuentaNumero={config?.cuenta_numero ?? ""}
       cuentaNombre={config?.cuenta_nombre ?? ""}
