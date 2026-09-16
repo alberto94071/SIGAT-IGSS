@@ -2315,6 +2315,20 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   en pantalla (uno por campo), ocultar el de "No. de cheque" lo quita del
   papel al instante, "Reiniciar campos ocultos (1)" aparece y lo devuelve —
   sin tocar ningún dato real (todo queda en localStorage del navegador).
+- **`TrazabilidadPanel.tsx` (el detalle expandible compartido por casi todo
+  el pipeline — Fondo Rotativo/Pagos, Bancos, Caja Chica, Pago/FRI, etc.)
+  separó "Cantidad" en dos columnas (2026-09-16)** — antes la columna
+  "Cantidad" imprimía `cantidad_total` + `unidad_medida` pegados en una
+  sola celda (ej. "40 Garrafón 5 Galón"), pedido del cliente con una
+  captura real: quiere "40" solo en Cantidad y "Garrafón; 5 Galón" en una
+  columna aparte. Fix: nueva columna "Presentación" entre "Cantidad" y
+  "P. Unitario" con `item.unidad_medida` sola; "Cantidad" se queda solo con
+  el número. Como es un componente compartido (no hay una copia por
+  pantalla), el cambio aplica a todas las pantallas que ya usan este panel
+  sin tocarlas una por una. Verificado en vivo, de solo lectura, contra el
+  mismo pago real id 29 en Fondo Rotativo/Bancos: la fila de "Agua" mostró
+  "40" en Cantidad y "Garrafón 5 Galón" en Presentación, en columnas
+  separadas.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

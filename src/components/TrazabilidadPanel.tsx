@@ -50,6 +50,7 @@ export default function TrazabilidadPanel({
                 <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Subproducto</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Renglón</th>
                 <th className="px-3 py-2 text-right font-semibold text-gray-600 whitespace-nowrap">Cantidad</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Presentación</th>
                 <th className="px-3 py-2 text-right font-semibold text-gray-600 whitespace-nowrap">P. Unitario</th>
                 <th className="px-3 py-2 text-right font-semibold text-gray-600 whitespace-nowrap">Monto</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">SIAF de origen</th>
@@ -64,7 +65,10 @@ export default function TrazabilidadPanel({
                   <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{item.subproducto}</td>
                   <td className="px-3 py-2 tabular-nums text-gray-600 whitespace-nowrap">{item.renglon ?? "—"}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-gray-700 whitespace-nowrap">
-                    {item.cantidad_total.toLocaleString("es-GT")} {item.unidad_medida ?? ""}
+                    {item.cantidad_total.toLocaleString("es-GT")}
+                  </td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                    {item.unidad_medida ?? "—"}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums text-gray-700 whitespace-nowrap">
                     {item.precio_unitario != null ? `Q${item.precio_unitario.toLocaleString("es-GT", { minimumFractionDigits: 2 })}` : "—"}
