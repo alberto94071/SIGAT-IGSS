@@ -6,13 +6,14 @@ import { eq, asc } from "drizzle-orm";
 import { getRegistroBancos } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 import ImprimirLibroBancosClient from "./ImprimirLibroBancosClient";
 
-interface Props { params: Promise<{ mes: string }> }
+interface Props { params: Promise<{ mes: string }>; searchParams: Promise<{ saldoCorte?: string }> }
 
-export default async function ImprimirLibroBancosPage({ params }: Props) {
+export default async function ImprimirLibroBancosPage({ params, searchParams }: Props) {
   const session = await auth();
   if (!session) redirect("/login");
 
   const { mes } = await params;
+  const { saldoCorte } = await searchParams;
   if (!/^\d{4}-\d{2}$/.test(mes)) notFound();
 
   const [movimientos, [config], firmantes] = await Promise.all([
@@ -38,6 +39,7 @@ export default async function ImprimirLibroBancosPage({ params }: Props) {
       nombreUnidad={config?.nombre_unidad ?? ""}
       municipio={config?.municipio ?? ""}
       firmantes={firmantes as any}
+      saldoCorteInicial={saldoCorte ?? ""}
     />
   );
 }
