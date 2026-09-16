@@ -318,6 +318,13 @@ export async function pprPuroParaImprimir(valoresGuardados: (string | null)[]): 
   }
   for (const v of valoresGuardados) {
     if (!v || map.has(v)) continue;
+    // "S/C-{id}" que no se resolvió arriba (id corrupto tipo "S/C-null", o
+    // la fila de Base de Datos Central ya no existe/perdió su codigo_ppr) —
+    // NO se puede partir por guión a ciegas como el caso "código-ppr" de
+    // abajo, porque no tiene un prefijo de código real que recortar (daría
+    // "null" literal impreso). Se deja el valor crudo tal cual, igual que
+    // antes de que existiera este resolutor.
+    if (v.startsWith("S/C-")) { map.set(v, v); continue; }
     const i = v.indexOf("-");
     map.set(v, i === -1 ? v : v.slice(i + 1).trim());
   }
