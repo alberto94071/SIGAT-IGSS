@@ -15,6 +15,7 @@ type Pago = {
   numero_a04: number | null; anio_a04: number | null;
   tipo_documento_pago: string | null;
   no_factura: string; serie_factura: string;
+  nit_beneficiario: string | null;
 };
 
 interface Props {
@@ -55,11 +56,16 @@ const POS_DEFAULT: Record<string, Pos> = {
   concepto:        { top: 96.0,  left: 43.2,  width: 99, height: 5 },
   debe:            { top: 96.0,  left: 148.6, width: 22, height: 5 },
   haber:           { top: 96.0,  left: 172.6, width: 22, height: 5 },
+  tipo_documento_header:  { top: 99.5,  left: 15.2,  width: 30, height: 4 },
+  numero_documento_header:{ top: 99.5,  left: 47.2,  width: 25, height: 4 },
+  serie_documento_header: { top: 99.5,  left: 74.2,  width: 25, height: 4 },
   tipo_documento:  { top: 103.0, left: 15.2,  width: 30, height: 5 },
   numero_documento:{ top: 103.0, left: 47.2,  width: 25, height: 5 },
   serie_documento: { top: 103.0, left: 74.2,  width: 25, height: 5 },
   saldo_anterior:  { top: 110.0, left: 43.2,  width: 60, height: 5 },
   saldo_nuevo:     { top: 110.0, left: 105.2, width: 60, height: 5 },
+  pago_orden_de:   { top: 188.0, left: 14.0,  width: 130, height: 5 },
+  pago_orden_nit:  { top: 188.0, left: 150.0, width: 50, height: 5 },
   hecho_por:       { top: 199.4, left: 14.0,  width: 38, height: 5 },
   revisado:        { top: 199.4, left: 60.0,  width: 38, height: 5 },
   autorizado:      { top: 199.4, left: 104.1, width: 38, height: 5 },
@@ -80,11 +86,16 @@ const FIELD_LABELS: Record<string, string> = {
   concepto:        "Concepto (voucher)",
   debe:            "Debe",
   haber:           "Haber",
+  tipo_documento_header:   "Encabezado columna — Según Documento(s)",
+  numero_documento_header: "Encabezado columna — Número",
+  serie_documento_header:  "Encabezado columna — Serie",
   tipo_documento:  "Según Documento(s) — Tipo",
   numero_documento:"Según Documento(s) — Número",
   serie_documento: "Según Documento(s) — Serie",
   saldo_anterior:  "Saldo anterior",
   saldo_nuevo:     "Saldo nuevo",
+  pago_orden_de:   "Pago a la orden de (pie, con NIT)",
+  pago_orden_nit:  "NIT del beneficiario (pie)",
   hecho_por:       "Hecho por (en blanco)",
   revisado:        "Revisado (en blanco)",
   autorizado:      "Autorizado (en blanco)",
@@ -196,13 +207,24 @@ export default function ImprimirVoucherBancosClient({
             factura que respalda la compra. No. y Serie solo se imprimen
             cuando el tipo es "Factura" (pedido explícito del cliente); para
             Vale/Formulario no hay un número/serie propio capturado en este
-            punto del flujo, así que quedan en blanco. */}
+            punto del flujo, así que quedan en blanco. Los 3 encabezados de
+            columna van fijos arriba de cada dato (pedido del cliente). */}
+        {campo("tipo_documento_header", "Según Documento(s)", { style: { fontSize: "6.5pt", fontWeight: "bold", textDecoration: "underline" } })}
+        {campo("numero_documento_header", "Número", { style: { fontSize: "6.5pt", fontWeight: "bold", textDecoration: "underline" } })}
+        {campo("serie_documento_header", "Serie", { style: { fontSize: "6.5pt", fontWeight: "bold", textDecoration: "underline" } })}
         {campo("tipo_documento", p.tipo_documento_pago ?? "", { style: { fontSize: "7.5pt" } })}
         {campo("numero_documento", p.tipo_documento_pago === "Factura" ? p.no_factura : "", { style: { fontSize: "7.5pt" } })}
         {campo("serie_documento", p.tipo_documento_pago === "Factura" ? p.serie_factura : "", { style: { fontSize: "7.5pt" } })}
 
         {campo("saldo_anterior", saldoAnterior != null ? `Saldo anterior: ${fmtQ(saldoAnterior)}` : "", { style: { fontSize: "7.5pt", color: "#444" } })}
         {campo("saldo_nuevo", saldoNuevo != null ? `Saldo nuevo: ${fmtQ(saldoNuevo)}` : "", { style: { fontSize: "7.5pt", color: "#444" } })}
+
+        {/* Pie del voucher (parte baja de la hoja, no la línea "páguese a la
+            orden de" del cheque en sí, que ya viene pre-impresa en el
+            talonario) — pedido explícito del cliente: repetir a quién se le
+            extendió el cheque, con su NIT, hasta abajo del documento. */}
+        {campo("pago_orden_de", `PAGO A LA ORDEN DE: ${p.destinatario_nombre}`, { style: { fontSize: "8pt", fontWeight: "bold" } })}
+        {campo("pago_orden_nit", `NIT: ${p.nit_beneficiario ?? ""}`, { style: { fontSize: "8pt" } })}
 
         {/* Hecho por / Revisado / Autorizado / Recibí conforme / Día-Mes-Año
             quedan en blanco a propósito — se llenan a mano al recibir el cheque. */}
