@@ -114,6 +114,23 @@ export default function ImprimirLibroBancosClient({ mes, movimientos, saldoAnter
   // sentido mostrar un "conciliado" calculado sobre 0 (saldría negativo) —
   // se deja en blanco hasta que el encargado lo complete.
   const saldoConciliado = saldoEstadoCuenta.trim() === "" ? null : (Number(saldoEstadoCuenta) || 0) - (Number(circulacionMonto) || 0);
+  // Aviso de doble resta (2026-09-17, reportado por el cliente con un caso
+  // real): "Saldo final según estado de cuenta" tiene que ser el saldo de
+  // la banca en línea AHORA MISMO — que normalmente es MAYOR al "Saldo al
+  // ..." de la tabla de arriba (`saldoFinal`, ya restado por todo cheque
+  // emitido, cobrado o no) cuando hay cheques en circulación, porque el
+  // banco no descuenta un cheque hasta que lo procesa. Si el encargado
+  // copia el "Saldo actual" que ya muestra el sistema (que YA tiene el
+  // cheque restado) en este campo, la fórmula lo resta una SEGUNDA vez —
+  // el cliente lo reportó con un caso real (cheque de Q571.43 en
+  // circulación, terminaba restándose dos veces). No se puede prohibir el
+  // número exacto (es dato externo, el sistema no sabe qué banca vio el
+  // encargado), pero si el valor entra igual o por debajo del saldo del
+  // libro mientras hay cheques en circulación, es casi seguro ese error —
+  // se avisa en pantalla, nunca se imprime.
+  const saldoEstadoCuentaNum = saldoEstadoCuenta.trim() === "" ? null : Number(saldoEstadoCuenta) || 0;
+  const circulacionMontoNum = Number(circulacionMonto) || 0;
+  const posibleDobleResta = saldoEstadoCuentaNum != null && circulacionMontoNum > 0 && saldoEstadoCuentaNum <= saldoFinal;
 
   const encabezado = (
     <div style={{ fontFamily: FONT, color: C }}>
@@ -207,6 +224,16 @@ export default function ImprimirLibroBancosClient({ mes, movimientos, saldoAnter
           {filaSeccion("Saldo final conciliado", saldoConciliado != null ? `Q ${Q(saldoConciliado)}` : "Q —", true)}
         </tbody>
       </table>
+      {posibleDobleResta && (
+        <p className="no-print" style={{ margin: "6px 0 0 0", fontSize: "7.5pt", color: "#b91c1c", fontWeight: "bold" }}>
+          ⚠ Revisá el "Saldo final según estado de cuenta": es Q {Q(saldoEstadoCuentaNum ?? 0)}, igual o menor al
+          "Saldo al {ultimoDia} de {nombreMesCap}" de la tabla de arriba (Q {Q(saldoFinal)}), aunque hay
+          Q {Q(circulacionMontoNum)} en cheques todavía en circulación. Ese campo debe ser el saldo que muestra
+          tu banca en línea AHORA MISMO — normalmente es MAYOR al de la tabla mientras haya cheques sin cobrar,
+          porque el banco no los descuenta hasta que los procesa. Si copiaste el "Saldo actual" que ya muestra
+          esta pantalla, ese ya tiene el cheque restado y la fórmula lo va a restar una segunda vez.
+        </p>
+      )}
     </div>
   );
 
@@ -265,7 +292,8 @@ export default function ImprimirLibroBancosClient({ mes, movimientos, saldoAnter
           Libro Bancos — {MESES[(mesNum ?? 1) - 1] ?? mes} {anio} · {paginas} {paginas === 1 ? "hoja" : "hojas"} tamaño Carta
         </span>
         <span className="text-xs text-gray-400">
-          Completá "Saldo según estado de cuenta" y "Cheques en circulación" contra tu estado de cuenta real antes de imprimir.
+          "Saldo según estado de cuenta" es el saldo de tu banca en línea AHORA MISMO (no el "Saldo actual" de
+          esta pantalla) — normalmente es mayor mientras haya cheques en circulación sin cobrar.
         </span>
         <span className="text-gray-300">|</span>
         <SelectorFirmante label="Encargado" firmantes={firmantes} value={firmanteEncargado} onChange={setFirmanteEncargado} />

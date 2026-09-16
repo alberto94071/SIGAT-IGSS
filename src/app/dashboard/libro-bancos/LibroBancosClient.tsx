@@ -114,8 +114,13 @@ export default function LibroBancosClient({ movimientos }: { movimientos: Movimi
               </button>
             </div>
             <p className="text-xs text-gray-500 mb-3">
-              Ingresá el saldo real que tenés en la cuenta de banco en este momento — se usará
-              para llenar &quot;Saldo final según estado de cuenta&quot; en la conciliación del reporte de {mes}.
+              Ingresá el saldo que muestra tu <strong>banca en línea ahora mismo</strong> — se usará para llenar
+              &quot;Saldo final según estado de cuenta&quot; en la conciliación del reporte de {mes}.
+            </p>
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2 mb-3">
+              No es el mismo número que el &quot;Saldo actual&quot; de esta pantalla{saldoActual != null && <> ({Q(saldoActual)})</>} —
+              ese ya tiene restado cada cheque que generaste, aunque el banco todavía no lo haya cobrado. Si tenés
+              cheques en circulación sin cobrar, el saldo real de tu banca en línea va a ser <strong>mayor</strong> a ese número.
             </p>
             <label className="block text-xs font-medium text-gray-600 mb-1">Saldo a corte (Q)</label>
             <input
