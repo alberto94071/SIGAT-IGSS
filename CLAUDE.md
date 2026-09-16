@@ -2571,6 +2571,38 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     comisiones combinadas): imprimió "2/2/1/1" de cantidad junto a
     "Q90.00/Q120.00/Q45.00/Q150.00" de monto — antes solo salían los
     montos — sin tocar ningún dato real.
+- **A-01 SIAF: reimprimir un SIAF que ya pasó por Consolidación mostraba
+  "Código PpR: S/C-{id}" literal en vez del PPR real — reportado por el
+  cliente 2026-09-17 con dos casos reales (SIAF 20/2026 y 75/2026).**
+  `siaf_compras_items.codigo_ppr` arranca `NULL` y solo se llena en
+  Consolidación vía `guardarPprSeleccion` — pero ahí guarda la **clave
+  compuesta** del selector de presentación ("S/C-{id de Base de Datos
+  Central}" para insumos sin código real, "código-ppr" para los que sí
+  tienen — ver el comentario de `pprPuroParaImprimir` en
+  `renglon-utils.ts`), no el PPR puro. `imprimir/page.tsx` (A-01 SIAF)
+  tenía `if (i.codigo_ppr) return i;` — una vez que ese campo dejaba de
+  ser `NULL`, se imprimía tal cual sin pasar por ningún resolutor. Fix: se
+  llama a `pprPuroParaImprimir` (la misma función que ya usan DAB-60/A-04
+  para esto) sobre los `codigo_ppr` de los ítems antes de armar `itemsConPpr`
+  — solo cuando el campo YA tiene valor; si sigue `NULL` (SIAF que nunca
+  pasó por Consolidación), sigue cayendo en el fallback existente
+  (`codigoPprLookupMap`/`codigoPprSinCodigoLookupMap`, resolución por
+  nombre). **De paso se encontraron 2 filas reales con dato corrupto
+  `codigo_ppr = "S/C-null"`** (un id no numérico, de un bug anterior no
+  identificado — SIAF 98/2026 y 105/2026) — `pprPuroParaImprimir` partía
+  ese string a ciegas por el primer guión e imprimía "null" literal; se
+  agregó un guard (si empieza con "S/C-" y no matcheó por id, se deja el
+  valor crudo tal cual, igual que antes de este fix) para no regresar eso.
+  Verificado en vivo, de solo lectura, contra los 2 casos reales
+  reportados: SIAF 20/2026 (id 67) pasó de "S/C-199441" a "55406 - 65408"
+  (coincide con `base_datos_central.codigo_ppr` de esa fila); SIAF 75/2026
+  (id 122) de "S/C-201980" a "64237 - 77286"; SIAF 207/2026 (código real,
+  compuesto "93279-4877 - 28700") sigue mostrando la leyenda en vez del
+  PpR (correcto, mutuamente excluyentes); SIAF 98/2026 y 105/2026 (el dato
+  corrupto) se quedaron igual que antes ("S/C-null", sin regresión a
+  "null"); SIAF 200/2026 (nunca consolidado, `codigo_ppr` sigue `NULL`)
+  resolvió por nombre sin cambios ("180871 - 211568") — sin tocar ningún
+  dato real en ningún caso.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

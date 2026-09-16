@@ -3,7 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { siafCompras, siafComprasItems, catalogoFirmantes, configuracion } from "@/lib/schema";
 import { eq, asc, inArray } from "drizzle-orm";
-import { renglonLookupMap, codigoPprLookupMap, codigoPprSinCodigoLookupMap, normalizaNombre, SIN_CODIGO } from "@/lib/adjudicacion/renglon-utils";
+import { renglonLookupMap, codigoPprLookupMap, codigoPprSinCodigoLookupMap, pprPuroParaImprimir, normalizaNombre, SIN_CODIGO } from "@/lib/adjudicacion/renglon-utils";
 import ImprimirClient from "./ImprimirClient";
 
 interface Props { params: Promise<{ id: string }>; searchParams: Promise<{ firmantes?: string; fecha?: string }> }
@@ -48,8 +48,16 @@ export default async function ImprimirPage({ params, searchParams }: Props) {
     items.filter(i => i.codigo_ppr == null && (i.codigo_igss == null || i.codigo_igss === SIN_CODIGO))
       .map(i => ({ nombre: i.nombre, descripcion_igss: i.descripcion_igss }))
   );
+  // Si el SIAF ya pasó por Consolidación (guardarPprSeleccion), codigo_ppr
+  // ya no está vacío — pero ahí guarda la CLAVE COMPUESTA del selector de
+  // presentación ("S/C-{id de Base de Datos Central}" o "código-ppr"), no
+  // el PPR puro (ver el comentario de pprPuroParaImprimir en renglon-utils.ts).
+  // Antes se imprimía ese valor crudo tal cual — mostraba "Código PpR:
+  // S/C-199441" en vez del PPR real ("55406 - 65408") — reportado por el
+  // cliente 2026-09-17 con dos casos reales (SIAF 20/2026 y 75/2026).
+  const pprPuroMap = await pprPuroParaImprimir(items.map(i => i.codigo_ppr));
   const itemsConPpr = items.map(i => {
-    if (i.codigo_ppr) return i;
+    if (i.codigo_ppr) return { ...i, codigo_ppr: pprPuroMap.get(i.codigo_ppr) ?? i.codigo_ppr };
     if (i.codigo_igss && i.codigo_igss !== SIN_CODIGO) {
       return { ...i, codigo_ppr: pprMap.get(`${i.codigo_igss}::${normalizaNombre(i.nombre)}`) ?? pprMap.get(i.codigo_igss) ?? null };
     }
