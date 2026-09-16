@@ -2266,6 +2266,29 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   Volver a Operado → badge gris, la fila se borró de la tabla
   (`COUNT(*) = 0` al terminar) — sin ningún cambio en `fondo_rotativo_pagos`
   ni en `configuracion`.
+  **Aclarado (2026-09-17): el estado SÍ se actualiza sin recargar — la
+  causa real era falta de feedback visual, no un bug de estado.** El
+  cliente reportó "al seleccionar varios en algún estado... no me
+  actualiza inmediatamente el estado, tengo que recargar" — investigado a
+  fondo con Playwright contra el pago real id 29 (selección individual y
+  "seleccionar todos", ambas rutas): `setMovimientos` sí actualiza el badge
+  de la fila al instante, sin reload, en los dos casos. La causa más
+  probable: de los 4 botones, solo "Marcar Pagado" mostraba un spinner
+  (`accionEnCurso` == boolean `actualizandoEstado` antes) mientras
+  procesaba — los otros 3 (Anulado/En Circulación/Operado) solo se veían
+  atenuados (`disabled:opacity-50`) sin ningún ícono de "está procesando",
+  así que el cliente probablemente pensaba que no había pasado nada y
+  recargaba antes de que la respuesta llegara — coincidencia que el reload
+  sí mostraba el estado correcto (porque ya se había guardado), reforzando
+  la idea equivocada de "hace falta recargar". Fix: `actualizandoEstado`
+  pasó de boolean a `accionEnCurso: MovimientoBancoTotal["status"] | null`
+  (guarda CUÁL de los 4 estados se está aplicando) — cada botón ahora
+  muestra su propio `Loader2` girando mientras es el que está en curso,
+  los otros 3 solo quedan deshabilitados. No se tocó la lógica de
+  actualización en sí (ya era correcta). Verificado en vivo contra el pago
+  real id 29: el spinner aparece de inmediato al hacer clic en "Marcar En
+  Circulación" y el badge de la fila cambia sin recargar — revertido a
+  "Operado" después.
 - **Voucher (compras) ganó un bloque "Según Documento(s)" — Tipo/Número/Serie
   (2026-09-16), a partir de un modelo de referencia que mandó el cliente.**
   `ImprimirVoucherBancosClient.tsx` (el único Voucher con selector de
