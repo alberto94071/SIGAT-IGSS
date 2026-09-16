@@ -40,7 +40,14 @@ export default function BancosClient({ pagos: init, movimientos: movInit }: Prop
   const [rowError, setRowError] = useState<Record<number, string>>({});
   const [query, setQuery] = useState("");
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
-  const [actualizandoEstado, setActualizandoEstado] = useState(false);
+  // Estado en curso (no un simple boolean) para que el botón que realmente
+  // se clickeó muestre su propio spinner — antes solo "Marcar Pagado" tenía
+  // el ícono condicional, los otros 3 solo se veían deshabilitados/opacos
+  // sin ningún indicio visual de que la acción estaba en curso, lo que
+  // llevaba a pensar que no había pasado nada y recargar la página en vez
+  // de esperar la respuesta (reportado por el cliente 2026-09-17).
+  const [accionEnCurso, setAccionEnCurso] = useState<MovimientoBancoTotal["status"] | null>(null);
+  const actualizandoEstado = accionEnCurso != null;
   const [errorEstado, setErrorEstado] = useState("");
 
   const q = query.toLowerCase().trim();
@@ -70,9 +77,9 @@ export default function BancosClient({ pagos: init, movimientos: movInit }: Prop
   async function handleActualizarEstado(estado: MovimientoBancoTotal["status"]) {
     const items = movimientos.filter(m => seleccionados.has(claveMov(m))).map(m => ({ origen: m.origen, origenId: m.origenId }));
     if (items.length === 0) return;
-    setActualizandoEstado(true); setErrorEstado("");
+    setAccionEnCurso(estado); setErrorEstado("");
     const res = await actualizarEstadoBancos(items, estado);
-    setActualizandoEstado(false);
+    setAccionEnCurso(null);
     if ("error" in res) { setErrorEstado(res.error); return; }
     setMovimientos(prev => prev.map(m => seleccionados.has(claveMov(m)) ? { ...m, status: estado } : m));
     setSeleccionados(new Set());
@@ -111,19 +118,19 @@ export default function BancosClient({ pagos: init, movimientos: movInit }: Prop
             <span className="text-xs text-gray-500">{seleccionados.size} seleccionado(s)</span>
             <button onClick={() => handleActualizarEstado("Pagado")} disabled={actualizandoEstado}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">
-              {actualizandoEstado ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />} Marcar Pagado
+              {accionEnCurso === "Pagado" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />} Marcar Pagado
             </button>
             <button onClick={() => handleActualizarEstado("Anulado")} disabled={actualizandoEstado}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">
-              <X className="w-3.5 h-3.5" /> Marcar Anulado
+              {accionEnCurso === "Anulado" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />} Marcar Anulado
             </button>
             <button onClick={() => handleActualizarEstado("En circulación")} disabled={actualizandoEstado}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
-              <Send className="w-3.5 h-3.5" /> Marcar En Circulación
+              {accionEnCurso === "En circulación" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Marcar En Circulación
             </button>
             <button onClick={() => handleActualizarEstado("Operado")} disabled={actualizandoEstado}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50">
-              Volver a Operado
+              {accionEnCurso === "Operado" && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Volver a Operado
             </button>
           </div>
         )}
