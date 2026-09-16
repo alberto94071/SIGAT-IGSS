@@ -2394,14 +2394,21 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
       `firmante?.cargo ?? '<cargo fijo del modelo>'` — el cargo fijo queda
       solo como respaldo si no se elige nada, ya no como el valor esperado.
       La línea de unidad ahora es dinámica:
-      `IGSS-U.I.A.A.D.D.M. En el Municipio de {soloMunicipio}`, donde
-      `soloMunicipio` es `configuracion.municipio` recortado antes de la
-      primera coma (`"Tacaná, San Marcos"` → `"Tacaná"`) — no un valor
-      fijo, para no repetir el mismo error si el municipio configurado
-      cambia algún día. **`nombre_encargado_unidad`/`nombre_responsable`
-      de Configuración no se usaron para nada de esto** (siguen
-      documentados arriba como campos obsoletos) — sirvió justo para
-      confirmar que ya no hay que tocarlos ni para este Libro nuevo.
+      `IGSS Consultorio en el Municipio de {soloMunicipio}` — **corregido
+      de nuevo el mismo día**: la primera versión de este fix conservó el
+      prefijo institucional "U.I.A.A.D.D.M." del modelo (esa sigla es de
+      la unidad de Tejutla, no de esta), el cliente pidió literal "IGSS
+      Consultorio en el Municipio de Tacaná" — coincide con como ya se
+      identifica la unidad en el resto del sistema ("Consultorio de
+      Tacaná, Departamento de San Marcos" en `configuracion.nombre_
+      unidad`). `soloMunicipio` es `configuracion.municipio` recortado
+      antes de la primera coma (`"Tacaná, San Marcos"` → `"Tacaná"`) — no
+      un valor fijo, para no repetir el mismo error si el municipio
+      configurado cambia algún día. **`nombre_encargado_unidad`/
+      `nombre_responsable` de Configuración no se usaron para nada de
+      esto** (siguen documentados arriba como campos obsoletos) — sirvió
+      justo para confirmar que ya no hay que tocarlos ni para este Libro
+      nuevo.
   - **Excel** (`/api/fondo-rotativo/libro-bancos/reporte?mes=YYYY-MM`,
     mismo patrón `exceljs` puro que el de Caja Chica — sin inyección XML a
     mano, no hace falta verificar "reparar archivo"): mismo layout que la

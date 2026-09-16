@@ -224,12 +224,12 @@ export default function ImprimirLibroBancosClient({ mes, movimientos, saldoAnter
       <div style={{ textAlign: "center", width: "45%" }}>
         <div style={{ borderTop: "1px solid #000", paddingTop: "3px", fontWeight: "bold" }}>{firmanteEncargado?.nombre ?? "___________________________"}</div>
         <p style={{ margin: "2px 0 0 0" }}>{firmanteEncargado?.cargo ?? 'Analista "A"/Encargado de Fondo Rotativo Interno'}</p>
-        <p style={{ margin: 0 }}>IGSS-U.I.A.A.D.D.M. En el Municipio de {soloMunicipio}</p>
+        <p style={{ margin: 0 }}>IGSS Consultorio en el Municipio de {soloMunicipio}</p>
       </div>
       <div style={{ textAlign: "center", width: "45%" }}>
         <div style={{ borderTop: "1px solid #000", paddingTop: "3px", fontWeight: "bold" }}>Vo.Bo. {firmanteVoBo?.nombre ?? "___________________________"}</div>
         <p style={{ margin: "2px 0 0 0" }}>{firmanteVoBo?.cargo ?? 'Analista "A"/Encargada de Unidad'}</p>
-        <p style={{ margin: 0 }}>IGSS-U.I.A.A.D.D.M. En el Municipio de {soloMunicipio}</p>
+        <p style={{ margin: 0 }}>IGSS Consultorio en el Municipio de {soloMunicipio}</p>
       </div>
     </div>
   );
