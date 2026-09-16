@@ -2273,7 +2273,21 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   en blanco, sin condicional), así que no había nada que corregir ahí.
   Verificado en vivo, de solo lectura, contra el mismo pago real id 29
   ("Factura" / no_factura "544646464654" / serie "B13131131") — el bloque
-  impreso mostró los 3 valores correctos.
+  impreso mostró los 3 valores correctos. **Extendido el mismo día**: el
+  cliente pidió además los encabezados de columna literales ("Según
+  Documento(s)"/"Número"/"Serie", 3 campos posicionables nuevos —
+  `tipo_documento_header`/`numero_documento_header`/`serie_documento_header`
+  — fijos arriba de cada dato) y, aparte, un pie de página nuevo con
+  "PAGO A LA ORDEN DE: {nombre}" + "NIT: {nit}" (`pago_orden_de`/
+  `pago_orden_nit`, cerca del final de la hoja) — **no** es lo mismo que el
+  campo `destinatario` que ya existe arriba (esa es la línea "páguese a la
+  orden de" del cheque en sí, sin texto de etiqueta porque el talonario
+  físico ya la trae pre-impresa; este pie nuevo sí lleva la etiqueta
+  literal porque esa zona de la hoja no la tiene). `nit_beneficiario` se
+  agregó al tipo `Pago`/props (ya existía en `fondoRotativoPagos`, solo
+  faltaba pasarlo). Verificado en vivo, de nuevo de solo lectura contra el
+  pago real id 29: los 3 encabezados de columna y "PAGO A LA ORDEN DE:
+  Distribuidora..." + "NIT: 3306224" salieron impresos correctamente.
 - **Campos ocultables con "×" (patrón de DAB-60) se extendieron al Voucher
   (2026-09-16)** — pedido del cliente: *"en la impresión de baucher, también
   me tiene que dejar eliminar campos de impresión, con la 'x' en la
