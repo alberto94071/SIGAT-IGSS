@@ -1,7 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { configuracion } from "@/lib/schema";
+import { configuracion, catalogoFirmantes } from "@/lib/schema";
+import { eq, asc } from "drizzle-orm";
 import { getRegistroBancos } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 import ImprimirLibroBancosClient from "./ImprimirLibroBancosClient";
 
@@ -14,9 +15,10 @@ export default async function ImprimirLibroBancosPage({ params }: Props) {
   const { mes } = await params;
   if (!/^\d{4}-\d{2}$/.test(mes)) notFound();
 
-  const [movimientos, [config]] = await Promise.all([
+  const [movimientos, [config], firmantes] = await Promise.all([
     getRegistroBancos(),
     db.select().from(configuracion).limit(1),
+    db.select().from(catalogoFirmantes).where(eq(catalogoFirmantes.activo, true)).orderBy(asc(catalogoFirmantes.nombre)),
   ]);
 
   const delMes = movimientos.filter(m => m.fecha.slice(0, 7) === mes);
@@ -35,6 +37,7 @@ export default async function ImprimirLibroBancosPage({ params }: Props) {
       saldoAnterior={saldoAnterior}
       nombreUnidad={config?.nombre_unidad ?? ""}
       municipio={config?.municipio ?? ""}
+      firmantes={firmantes as any}
     />
   );
 }

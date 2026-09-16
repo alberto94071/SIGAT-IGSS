@@ -4,11 +4,12 @@ import { useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
 import PrintPages from "@/components/print-pages/PrintPages";
 import { fechaGuatemala } from "@/lib/date-utils";
+import SelectorFirmante, { type Firmante } from "@/components/SelectorFirmante";
 import type { MovimientoBancoTotal } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 
 interface Props {
   mes: string; movimientos: MovimientoBancoTotal[]; saldoAnterior: number;
-  nombreUnidad: string; municipio: string;
+  nombreUnidad: string; municipio: string; firmantes: Firmante[];
 }
 
 const Q = (n: number) => n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -50,12 +51,21 @@ function InputMonto({ value, onChange, bold }: { value: string; onChange: (v: st
   );
 }
 
-export default function ImprimirLibroBancosClient({ mes, movimientos, saldoAnterior, nombreUnidad, municipio }: Props) {
+export default function ImprimirLibroBancosClient({ mes, movimientos, saldoAnterior, nombreUnidad, municipio, firmantes }: Props) {
   const router = useRouter();
   const [paginas, setPaginas] = useState(1);
   const [anio, mesNum] = mes.split("-").map(Number);
   const nombreMesCap = MESES_CAP[(mesNum ?? 1) - 1] ?? mes;
   const ultimoDia = ultimoDiaDelMes(anio, mesNum);
+  // Solo el nombre del municipio (sin ", San Marcos") — el rótulo fijo
+  // "IGSS-U.I.A.A.D.D.M. En el Municipio de ..." lo necesita así.
+  const soloMunicipio = municipio.split(",")[0]?.trim() || municipio;
+
+  // Firmantes elegidos del catálogo (Administración → Configuración →
+  // Firmantes) — pedido explícito del cliente: nunca en blanco para firma
+  // física, siempre elegidos acá al imprimir, mismo patrón que Pago/FRI.
+  const [firmanteEncargado, setFirmanteEncargado] = useState<Firmante | null>(null);
+  const [firmanteVoBo, setFirmanteVoBo] = useState<Firmante | null>(null);
 
   const totalCredito = movimientos.reduce((s, m) => s + m.ingresos, 0);
   const totalDebito = movimientos.reduce((s, m) => s + m.egresos, 0);
@@ -212,14 +222,14 @@ export default function ImprimirLibroBancosClient({ mes, movimientos, saldoAnter
   const firmas = (
     <div key="firmas" style={{ display: "flex", justifyContent: "space-between", marginTop: "30px", fontFamily: FONT, color: C, fontSize: "8pt" }}>
       <div style={{ textAlign: "center", width: "45%" }}>
-        <div style={{ borderTop: "1px solid #000", paddingTop: "3px" }}>Nombre completo</div>
-        <p style={{ margin: "2px 0 0 0" }}>Analista &quot;A&quot;/Encargado de Fondo Rotativo Interno</p>
-        <p style={{ margin: 0 }}>IGSS-U.I.A.A.D.D.M. En el Municipio de Tejutla</p>
+        <div style={{ borderTop: "1px solid #000", paddingTop: "3px", fontWeight: "bold" }}>{firmanteEncargado?.nombre ?? "___________________________"}</div>
+        <p style={{ margin: "2px 0 0 0" }}>{firmanteEncargado?.cargo ?? 'Analista "A"/Encargado de Fondo Rotativo Interno'}</p>
+        <p style={{ margin: 0 }}>IGSS-U.I.A.A.D.D.M. En el Municipio de {soloMunicipio}</p>
       </div>
       <div style={{ textAlign: "center", width: "45%" }}>
-        <div style={{ borderTop: "1px solid #000", paddingTop: "3px" }}>Vo.Bo. Nombre completo</div>
-        <p style={{ margin: "2px 0 0 0" }}>Analista &quot;A&quot;/Encargada de Unidad</p>
-        <p style={{ margin: 0 }}>IGSS-U.I.A.A.D.D.M. En el Municipio de Tejutla</p>
+        <div style={{ borderTop: "1px solid #000", paddingTop: "3px", fontWeight: "bold" }}>Vo.Bo. {firmanteVoBo?.nombre ?? "___________________________"}</div>
+        <p style={{ margin: "2px 0 0 0" }}>{firmanteVoBo?.cargo ?? 'Analista "A"/Encargada de Unidad'}</p>
+        <p style={{ margin: 0 }}>IGSS-U.I.A.A.D.D.M. En el Municipio de {soloMunicipio}</p>
       </div>
     </div>
   );
@@ -247,6 +257,9 @@ export default function ImprimirLibroBancosClient({ mes, movimientos, saldoAnter
         <span className="text-xs text-gray-400">
           Completá "Saldo según estado de cuenta" y "Cheques en circulación" contra tu estado de cuenta real antes de imprimir.
         </span>
+        <span className="text-gray-300">|</span>
+        <SelectorFirmante label="Encargado" firmantes={firmantes} value={firmanteEncargado} onChange={setFirmanteEncargado} />
+        <SelectorFirmante label="Vo.Bo." firmantes={firmantes} value={firmanteVoBo} onChange={setFirmanteVoBo} />
         <button onClick={() => window.print()}
           className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700">
           <Printer className="w-4 h-4" /> Imprimir

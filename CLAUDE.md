@@ -2375,19 +2375,33 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
       "Saldo al..." de la tabla de arriba; si los hay, es mayor (excluye
       lo anulado), que es la distinción real entre "saldo corrido naive"
       (arriba) y "saldo contable de verdad" (Resumen).
-    - **Firmas en blanco, con cargo fijo transcrito literal del modelo**
-      (mismo criterio que Libro Caja Chica/Viáticos): "Analista 'A'/
-      Encargado de Fondo Rotativo Interno" + "IGSS-U.I.A.A.D.D.M. En el
-      Municipio de Tejutla" y "Vo.Bo. ... Analista 'A'/Encargada de
-      Unidad" + la misma línea de unidad. **El modelo trae nombres reales
-      tipeados** (Bernon Raúl Miranda González / Lilia Zucely Pérez
-      Fuentes) que coinciden con `configuracion.nombre_responsable`/
-      `nombre_encargado_unidad` — **a propósito no se hardcodearon**:
-      `nombre_encargado_unidad` ya está documentado arriba como un campo
-      fijo obsoleto (la persona que ahí aparecía dejó de trabajar en la
-      unidad), así que hardcodear ese nombre real habría reintroducido el
-      mismo bug ya resuelto una vez — se deja en blanco para firma física,
-      igual que el precedente más reciente (Libro Caja Chica).
+    - **Firmas: `SelectorFirmante` (catálogo de Administración →
+      Configuración → Firmantes), no en blanco** — corregido el mismo día,
+      revirtiendo la primera versión. La primera versión copió el criterio
+      de Libro Caja Chica/Viáticos (nombre en blanco para firma física +
+      cargo fijo) y transcribió literal el texto del modelo, incluyendo
+      **"IGSS-U.I.A.A.D.D.M. En el Municipio de Tejutla"** — el cliente
+      señaló dos problemas de una vez: (1) la unidad real es **Tacaná**,
+      no Tejutla (el modelo que mandó es de otra unidad, solo sirvió de
+      referencia de formato); (2) los nombres **siempre** deben salir del
+      catálogo de firmantes ya configurado, nunca en blanco — mismo patrón
+      que Pago/FRI (`ImprimirFriClient.tsx`, dos `SelectorFirmante` en la
+      barra "no-print", uno por firma). Fix: `page.tsx` trae
+      `catalogoFirmantes` (activos, mismo query que FRI) y lo pasa como
+      prop `firmantes`; el Client guarda `firmanteEncargado`/`firmanteVoBo`
+      (`Firmante | null`) y cada bloque de firma imprime
+      `firmante?.nombre ?? "___________________________"` +
+      `firmante?.cargo ?? '<cargo fijo del modelo>'` — el cargo fijo queda
+      solo como respaldo si no se elige nada, ya no como el valor esperado.
+      La línea de unidad ahora es dinámica:
+      `IGSS-U.I.A.A.D.D.M. En el Municipio de {soloMunicipio}`, donde
+      `soloMunicipio` es `configuracion.municipio` recortado antes de la
+      primera coma (`"Tacaná, San Marcos"` → `"Tacaná"`) — no un valor
+      fijo, para no repetir el mismo error si el municipio configurado
+      cambia algún día. **`nombre_encargado_unidad`/`nombre_responsable`
+      de Configuración no se usaron para nada de esto** (siguen
+      documentados arriba como campos obsoletos) — sirvió justo para
+      confirmar que ya no hay que tocarlos ni para este Libro nuevo.
   - **Excel** (`/api/fondo-rotativo/libro-bancos/reporte?mes=YYYY-MM`,
     mismo patrón `exceljs` puro que el de Caja Chica — sin inyección XML a
     mano, no hace falta verificar "reparar archivo"): mismo layout que la
@@ -2409,6 +2423,13 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     descargado se abrió correctamente con `openpyxl` — título fusionado,
     encabezado verde, fila del movimiento real, fórmula de conciliación
     intacta como fórmula (no como texto) — sin tocar ningún dato real.
+    **Corregido el mismo día** (municipio + firmantes, ver arriba):
+    verificado en vivo contra el catálogo real de Firmantes — elegir "DR.
+    ISRAEL EDGAR ORTIZ DIAZ" como Encargado y "GLENDY ELIZABETH ZUNUN
+    VELASQUEZ" como Vo.Bo. imprimió sus nombres y cargos reales del
+    catálogo (DIRECTOR "A" / BODEGUERO "A") en vez del texto en blanco, y
+    ambas líneas de unidad mostraron "...En el Municipio de Tacaná" — sin
+    tocar ningún dato real.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
