@@ -22,6 +22,7 @@ const STATUS_COLOR: Record<MovimientoBancoTotal["status"], string> = {
   "Operado": "bg-gray-100 text-gray-600",
   "Pagado": "bg-green-100 text-green-700",
   "Anulado": "bg-red-100 text-red-700",
+  "En circulación": "bg-blue-100 text-blue-700",
 };
 
 // Clave estable para identificar un movimiento entre selección/servidor —
@@ -115,6 +116,10 @@ export default function BancosClient({ pagos: init, movimientos: movInit }: Prop
             <button onClick={() => handleActualizarEstado("Anulado")} disabled={actualizandoEstado}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">
               <X className="w-3.5 h-3.5" /> Marcar Anulado
+            </button>
+            <button onClick={() => handleActualizarEstado("En circulación")} disabled={actualizandoEstado}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+              <Send className="w-3.5 h-3.5" /> Marcar En Circulación
             </button>
             <button onClick={() => handleActualizarEstado("Operado")} disabled={actualizandoEstado}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50">

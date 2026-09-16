@@ -11,10 +11,12 @@ import { getRegistroBancos } from "@/lib/adjudicacion/fondo-rotativo-pagos-actio
 // Descripción/Estado/Crédito/Débito/Saldo, más las secciones "Conciliación
 // del estado de cuenta monetaria" y "Resumen de libro de bancos"), a
 // partir de MODELO_LIBRO_BANCOS.pdf que mandó el cliente. "Saldo según
-// estado de cuenta" y "Cheques en circulación" quedan como celdas vacías
-// con formato de quetzales — a diferencia de la impresión (que los captura
-// en pantalla antes de imprimir), este archivo es "editable" a propósito:
-// el usuario los llena directo en Excel contra su estado de cuenta real.
+// estado de cuenta" se precarga desde el query param `saldoCorte` (modal
+// "Saldo a corte" en LibroBancosClient.tsx, 2026-09-16) en vez de quedar
+// vacío — la celda sigue editable en Excel por si hace falta corregirlo.
+// "Cheques en circulación" ya no es un proxy sobre status === "Operado" —
+// lista los cheques marcados explícitamente "En circulación" en Fondo
+// Rotativo/Bancos (ver MovimientoBancoTotal.status).
 const MESES_CAP = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
   "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
@@ -30,6 +32,8 @@ export async function GET(req: NextRequest) {
   const mes = searchParams.get("mes") ?? "";
   if (!/^\d{4}-\d{2}$/.test(mes)) return Response.json({ error: "Mes inválido" }, { status: 400 });
   const [anio, mesNum] = mes.split("-").map(Number);
+  const saldoCorteParam = searchParams.get("saldoCorte");
+  const saldoCorte = saldoCorteParam != null && saldoCorteParam.trim() !== "" ? Number(saldoCorteParam) : null;
 
   const [movimientos, [config]] = await Promise.all([
     getRegistroBancos(),
@@ -46,9 +50,9 @@ export async function GET(req: NextRequest) {
   const chequesAnulados = delMes.filter(m => m.status === "Anulado").reduce((s, m) => s + m.egresos, 0);
   const chequesEmitidos = delMes.filter(m => m.tipoDocumento !== "Depósito").reduce((s, m) => s + m.egresos, 0);
   const saldoFinalResumen = saldoAnterior + depositos + chequesAnulados - chequesEmitidos;
-  const chequesOperados = delMes.filter(m => m.tipoDocumento !== "Depósito" && m.status === "Operado");
-  const circulacionNos = chequesOperados.map(m => m.numeroCheque).filter(Boolean).join(", ");
-  const circulacionMonto = chequesOperados.reduce((s, m) => s + m.egresos, 0);
+  const chequesEnCirculacion = delMes.filter(m => m.tipoDocumento !== "Depósito" && m.status === "En circulación");
+  const circulacionNos = chequesEnCirculacion.map(m => m.numeroCheque).filter(Boolean).join(", ");
+  const circulacionMonto = chequesEnCirculacion.reduce((s, m) => s + m.egresos, 0);
 
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Libro Bancos");
@@ -112,7 +116,8 @@ export async function GET(req: NextRequest) {
 
   const filaSaldoBanco = ws.addRow([`Saldo final según estado de cuenta al ${ultimoDiaDelMes(anio, mesNum)} de ${MESES_CAP[mesNum - 1] ?? mes} de ${anio}`]);
   ws.mergeCells(filaSaldoBanco.number, 1, filaSaldoBanco.number, 8);
-  filaSaldoBanco.getCell(9).numFmt = "Q#,##0.00"; // vacía, editable en Excel
+  if (saldoCorte != null) filaSaldoBanco.getCell(9).value = saldoCorte;
+  filaSaldoBanco.getCell(9).numFmt = "Q#,##0.00"; // precargado desde "Saldo a corte", editable en Excel
 
   const filaCirculacion = ws.addRow([`(-) Integración de cheques en circulación Nos. ${circulacionNos || "—"}`]);
   ws.mergeCells(filaCirculacion.number, 1, filaCirculacion.number, 8);

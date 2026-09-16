@@ -2220,7 +2220,8 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   a "3-777-08924-4", igual que ya mostraba el renglón "Banco/cuenta" justo
   arriba.
 - **Registro de Bancos: el "Status" pasó de ser fijo por tipo de movimiento a
-  un estado real, persistido y editable en bloque (2026-09-16)** — antes
+  un estado real, persistido y editable en bloque (2026-09-16), con un 4to
+  valor "En circulación" agregado el mismo día.** Antes
   `getRegistroBancos()` (`fondo-rotativo-pagos-actions.ts`) hardcodeaba
   `"Pagado"` para todo cheque y `"Operado"` para todo depósito, sin ninguna
   fila detrás — no reflejaba si el cheque realmente ya fue cobrado en el
@@ -2236,24 +2237,35 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   mismo id de `valesCajaChica` — sin el origen separado, marcar uno pisaría
   el estado del otro. Todo movimiento nuevo nace `"Operado"` (default,
   sin fila en la tabla — solo se escribe una fila al pasar a `"Pagado"`/
-  `"Anulado"`, y volver a `"Operado"` borra la fila en vez de guardarlo
-  explícito, para no acumular basura). `actualizarEstadoBancos(items,
+  `"Anulado"`/`"En circulación"`, y volver a `"Operado"` borra la fila en
+  vez de guardarlo explícito, para no acumular basura). `actualizarEstadoBancos(items,
   estado)` hace upsert en lote; `BancosClient.tsx` ganó checkbox por fila +
-  "seleccionar todos" (visibles/filtrados) + 3 botones (Marcar Pagado/
-  Marcar Anulado/Volver a Operado) que aparecen con la selección activa.
-  **El status es puramente informativo para esta pantalla — a propósito NO
-  toca egresos/ingresos/saldo ni presupuesto/efectivo_caja**: si un cheque
-  se anula de verdad y hay que revertir el dinero, eso sigue siendo trabajo
-  de las funciones "Devolver" ya existentes (`devolverAFormaPago`,
-  `devolverValeAAutorizado`, etc.), no de este campo — evita duplicar/pisar
-  la lógica de reversión ya probada. Verificado en vivo contra el pago real
-  id 29 (cheque 21, sin tocar datos financieros): marcar Pagado → badge
-  verde, `registro_bancos_estado` con una fila; recargar la página (render
-  de servidor nuevo, no solo estado de React) → sigue mostrando "Pagado",
-  confirmando que persiste server-side y no es optimista nada más; Volver a
-  Operado → badge gris, la fila se borró de la tabla (`COUNT(*) = 0` al
-  terminar) — sin ningún cambio en `fondo_rotativo_pagos` ni en
-  `configuracion`.
+  "seleccionar todos" (visibles/filtrados) + 4 botones (Marcar Pagado/
+  Marcar Anulado/Marcar En Circulación/Volver a Operado) que aparecen con la
+  selección activa. **El status es puramente informativo para esta pantalla
+  — a propósito NO toca egresos/ingresos/saldo ni presupuesto/efectivo_caja**:
+  si un cheque se anula de verdad y hay que revertir el dinero, eso sigue
+  siendo trabajo de las funciones "Devolver" ya existentes
+  (`devolverAFormaPago`, `devolverValeAAutorizado`, etc.), no de este campo —
+  evita duplicar/pisar la lógica de reversión ya probada. **"En circulación"
+  (agregado 2026-09-16, pedido explícito del cliente) es el único de los 4
+  valores que un reporte externo consume directamente** — es el status que
+  alimenta la línea "(-) Integración de cheques en circulación Nos." del
+  Libro Bancos (ver el punto de abajo), antes un proxy sobre
+  `status === "Operado"` que ya no distingue "todavía no lo revisé" de "sé
+  que está en circulación" — `MovimientoBancoTotal["status"]` es
+  `"Operado" | "Pagado" | "Anulado" | "En circulación"`, y ambos
+  consumidores (`ImprimirLibroBancosClient.tsx` y el Route Handler de
+  exportación) filtran por el valor explícito, no por inferencia. Verificado
+  en vivo contra el pago real id 29 (cheque 21, sin tocar datos
+  financieros): marcar Pagado → badge verde, `registro_bancos_estado` con
+  una fila; recargar la página (render de servidor nuevo, no solo estado de
+  React) → sigue mostrando "Pagado", confirmando que persiste server-side y
+  no es optimista nada más; marcar En Circulación → badge azul, aparece con
+  ese status en Libro Bancos también (misma fuente `getRegistroBancos`);
+  Volver a Operado → badge gris, la fila se borró de la tabla
+  (`COUNT(*) = 0` al terminar) — sin ningún cambio en `fondo_rotativo_pagos`
+  ni en `configuracion`.
 - **Voucher (compras) ganó un bloque "Según Documento(s)" — Tipo/Número/Serie
   (2026-09-16), a partir de un modelo de referencia que mandó el cliente.**
   `ImprimirVoucherBancosClient.tsx` (el único Voucher con selector de
@@ -2350,16 +2362,28 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     "Saldo al {último día} de {Mes} de {Año}", agrega dos secciones nuevas
     que el modelo sí lleva y Libro Caja Chica no necesitaba:
     - **"Conciliación del estado de cuenta monetaria"** — 3 filas. "Saldo
-      final según estado de cuenta" es un `<input>` en blanco (el sistema
-      no puede saber el saldo real del banco, es dato externo que se llena
-      en pantalla antes de imprimir, no persiste). "Cheques en
-      circulación Nos." se **sugiere solo** (cheques no-Depósito con
-      `status === "Operado"` ese mes, número y suma) pero queda editable
-      por si la realidad del banco difiere. "Saldo final conciliado" se
-      recalcula en vivo mientras se escribe — mientras el primer campo
-      esté vacío, muestra "Q —" en vez de un número negativo sin sentido
-      (bug atrapado y corregido en la misma ronda, antes de mergear:
-      mostraba "Q -571.43" con el campo todavía vacío).
+      final según estado de cuenta" es un `<input>` que se precarga desde el
+      modal "Saldo a corte" (ver más abajo) — sigue editable en pantalla por
+      si hace falta corregirlo antes de imprimir, pero ya no arranca vacío.
+      "Cheques en circulación Nos." se **sugiere desde el status explícito**
+      (cheques no-Depósito con `status === "En circulación"` ese mes —
+      corregido 2026-09-16, antes era un proxy sobre `status === "Operado"`
+      que ya no tenía sentido una vez que "Operado" volvió a significar
+      "todavía sin revisar" con la llegada del 4to status — ver "Registro de
+      Bancos" arriba) pero queda editable por si la realidad del banco
+      difiere. "Saldo final conciliado" se recalcula en vivo mientras se
+      escribe — mientras el primer campo esté vacío, muestra "Q —" en vez de
+      un número negativo sin sentido (bug atrapado y corregido en la misma
+      ronda, antes de mergear: mostraba "Q -571.43" con el campo todavía
+      vacío).
+    - **Modal "Saldo a corte" (2026-09-16)** — pedido explícito del cliente:
+      tanto "Imprimir reporte del mes" como "Exportar Excel"
+      (`LibroBancosClient.tsx`) ahora abren primero un modal pidiendo el
+      saldo real que el usuario tiene en la cuenta de banco en ese momento,
+      antes de navegar — el valor se manda como query param `saldoCorte` (a
+      `imprimir/[mes]` y al Route Handler de exportación) y llena "Saldo
+      final según estado de cuenta" en destino, reemplazando el enfoque
+      anterior de dejarlo en blanco/editable sin ningún valor de partida.
     - **"Resumen de libro de bancos"** — 7 filas, todas calculadas (sin
       captura manual): Saldo inicial (mismo que ya usa la tabla), (+)
       Depósitos (créditos de tipo "Depósito"), (+) Notas de
@@ -2413,13 +2437,14 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     mismo patrón `exceljs` puro que el de Caja Chica — sin inyección XML a
     mano, no hace falta verificar "reparar archivo"): mismo layout que la
     impresión, con las 9 columnas + fila de totales + las 2 secciones
-    de abajo. A diferencia de la impresión (que captura el saldo del
-    estado de cuenta en pantalla), acá esa celda **queda vacía con formato
-    de quetzales** — el archivo es "editable" a propósito (pedido
-    explícito del cliente), el usuario la llena directo en Excel; "Saldo
-    final conciliado" de esa sección es una **fórmula real de Excel**
-    (`=I{fila}-I{fila}`), así que recalcula sola en cuanto se llena la
-    celda de arriba.
+    de abajo. Esa celda de "Saldo final según estado de cuenta" se precarga
+    con el query param `saldoCorte` (corregido 2026-09-16, ver el modal
+    "Saldo a corte" arriba — antes quedaba siempre vacía) pero sigue
+    editable en Excel por si hace falta corregirla; "Cheques en circulación"
+    lista los cheques con `status === "En circulación"` explícito (mismo fix
+    de arriba, ya no `"Operado"`); "Saldo final conciliado" de esa sección
+    es una **fórmula real de Excel** (`=I{fila}-I{fila}`), así que recalcula
+    sola en cuanto se corrige la celda de arriba.
   - Verificado en vivo, de solo lectura, contra el pago real id 29 (cheque
     21, Q571.43): la pantalla mostró Tipo "Factura"/Estado "Operado"
     igual que Fondo Rotativo/Bancos; la impresión mostró el título con el
@@ -2437,6 +2462,21 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     catálogo (DIRECTOR "A" / BODEGUERO "A") en vez del texto en blanco, y
     ambas líneas de unidad mostraron "...En el Municipio de Tacaná" — sin
     tocar ningún dato real.
+    **Extendido el mismo día** (4to status "En circulación" + modal "Saldo
+    a corte", ver "Registro de Bancos" arriba): verificado en vivo marcando
+    el cheque 21 real como "En circulación" en Fondo Rotativo/Bancos →
+    apareció con ese status en la tabla de Libro Bancos también (misma
+    fuente); abrir "Imprimir reporte del mes" mostró el modal "Saldo a
+    corte", escribir 19428.57 y confirmar navegó a
+    `.../imprimir/2026-08?saldoCorte=19428.57` con "Saldo final según
+    estado de cuenta" precargado en 19428.57, "cheques en circulación Nos."
+    con "21" y Q571.43 (ya no por inferencia de "Operado"), y "Saldo final
+    conciliado: Q 18,857.14" recalculado correcto; "Exportar Excel" con el
+    mismo query param generó un `.xlsx` con `F4 = "En circulación"`,
+    `I8 = 19428.57` (precargado), `A9`/`I9` con el cheque 21/Q571.43, e
+    `I10` con la fórmula `=I8-I9` intacta (verificado con `openpyxl`) — el
+    cheque real se revirtió a "Operado" después de cada prueba, confirmado
+    por consulta directa a la base.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

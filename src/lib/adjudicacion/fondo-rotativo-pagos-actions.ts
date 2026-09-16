@@ -338,7 +338,10 @@ export async function getLibroBancosCompleto(): Promise<MovimientoBanco[]> {
 // ya NO es un valor fijo por tipo (antes cheques nacían "Pagado" y depósitos
 // "Operado" sin ninguna fila de estado real detrás). El usuario selecciona
 // varias filas a fin de mes, al conciliar contra su estado de cuenta, y las
-// pasa a "Pagado" (cobrado) o "Anulado" (no cobrado/anulado) — ver
+// pasa a "Pagado" (cobrado), "Anulado" (no cobrado/anulado) o "En
+// circulación" (emitido pero todavía no aparece en el estado de cuenta —
+// este último alimenta directo la línea "Integración de cheques en
+// circulación" del Libro Bancos, ver ImprimirLibroBancosClient.tsx) — ver
 // actualizarEstadoBancos más abajo. El status es puramente informativo para
 // esta pantalla: NO afecta egresos/ingresos/saldo (que ya se movieron al
 // generarse el cheque/depósito) ni el presupuesto/efectivo_caja — si un
@@ -348,7 +351,7 @@ export async function getLibroBancosCompleto(): Promise<MovimientoBanco[]> {
 export type MovimientoBancoTotal = {
   id: string; fecha: string; mes: string;
   tipoDocumento: "Depósito" | "Vale" | "Factura" | "Formulario";
-  status: "Operado" | "Pagado" | "Anulado";
+  status: "Operado" | "Pagado" | "Anulado" | "En circulación";
   numeroCheque: string | null;
   nitBeneficiario: string | null; beneficiario: string | null;
   descripcion: string;

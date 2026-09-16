@@ -10,6 +10,11 @@ import type { MovimientoBancoTotal } from "@/lib/adjudicacion/fondo-rotativo-pag
 interface Props {
   mes: string; movimientos: MovimientoBancoTotal[]; saldoAnterior: number;
   nombreUnidad: string; municipio: string; firmantes: Firmante[];
+  // Saldo real de la cuenta bancaria capturado en el modal "Saldo a corte"
+  // (LibroBancosClient.tsx) antes de llegar a esta página — precarga "Saldo
+  // final según estado de cuenta" en vez de dejarlo en blanco. Sigue editable
+  // acá por si el encargado necesita corregirlo antes de imprimir.
+  saldoCorteInicial?: string;
 }
 
 const Q = (n: number) => n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -51,7 +56,7 @@ function InputMonto({ value, onChange, bold }: { value: string; onChange: (v: st
   );
 }
 
-export default function ImprimirLibroBancosClient({ mes, movimientos, saldoAnterior, nombreUnidad, municipio, firmantes }: Props) {
+export default function ImprimirLibroBancosClient({ mes, movimientos, saldoAnterior, nombreUnidad, municipio, firmantes, saldoCorteInicial }: Props) {
   const router = useRouter();
   const [paginas, setPaginas] = useState(1);
   const [anio, mesNum] = mes.split("-").map(Number);
@@ -85,21 +90,26 @@ export default function ImprimirLibroBancosClient({ mes, movimientos, saldoAnter
   const chequesEmitidos = movimientos.filter(m => m.tipoDocumento !== "Depósito").reduce((s, m) => s + m.egresos, 0);
   const saldoFinalResumen = saldoAnterior + depositos + chequesAnulados - chequesEmitidos;
 
-  // "Cheques en circulación" (Conciliación) — cheques que este Libro ya
-  // registró como emitidos pero que el banco todavía no procesó (status
-  // "Operado", no "Pagado" todavía) al cierre del mes. Se sugiere solo, el
-  // encargado lo ajusta contra el estado de cuenta real antes de imprimir.
-  const chequesOperadosMes = useMemo(
-    () => movimientos.filter(m => m.tipoDocumento !== "Depósito" && m.status === "Operado"),
+  // "Cheques en circulación" (Conciliación) — cheques marcados explícitamente
+  // con el estado "En circulación" en Fondo Rotativo/Bancos (2026-09-16,
+  // antes era un proxy sobre status === "Operado", que ya no distingue "no
+  // sé todavía" de "sé que está en circulación" — ver el comentario de
+  // MovimientoBancoTotal.status en fondo-rotativo-pagos-actions.ts). Se
+  // sigue mostrando editable por si el encargado necesita ajustarlo a mano
+  // antes de imprimir.
+  const chequesEnCirculacionMes = useMemo(
+    () => movimientos.filter(m => m.tipoDocumento !== "Depósito" && m.status === "En circulación"),
     [movimientos],
   );
   const [circulacionNos, setCirculacionNos] = useState(
-    () => chequesOperadosMes.map(m => m.numeroCheque).filter(Boolean).join(", "),
+    () => chequesEnCirculacionMes.map(m => m.numeroCheque).filter(Boolean).join(", "),
   );
   const [circulacionMonto, setCirculacionMonto] = useState(
-    () => chequesOperadosMes.reduce((s, m) => s + m.egresos, 0).toFixed(2),
+    () => chequesEnCirculacionMes.reduce((s, m) => s + m.egresos, 0).toFixed(2),
   );
-  const [saldoEstadoCuenta, setSaldoEstadoCuenta] = useState("");
+  // Precargado desde el modal "Saldo a corte" (LibroBancosClient.tsx) — el
+  // saldo real de la cuenta al momento de generar el reporte.
+  const [saldoEstadoCuenta, setSaldoEstadoCuenta] = useState(saldoCorteInicial ?? "");
   // Mientras no se llene el saldo real del estado de cuenta, no tiene
   // sentido mostrar un "conciliado" calculado sobre 0 (saldría negativo) —
   // se deja en blanco hasta que el encargado lo complete.
