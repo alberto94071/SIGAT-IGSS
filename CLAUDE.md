@@ -2181,6 +2181,44 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     blanco con sus cargos; el Excel exportado se abrió correctamente
     (verificado con `unzip`, estructura OOXML válida — título fusionado,
     colores de encabezado, `numFmt` de quetzales) — limpiado después.
+- **Fondo Rotativo/Bancos → "Completar cheque y Voucher": NIT/Nombre del
+  beneficiario ahora autocompletan contra el catálogo de Proveedores
+  (2026-09-16)** — el campo "NIT del beneficiario" (antes un `<input>`
+  plano) pasó a `NitAutocomplete` (`components/adjudicacion/
+  NitAutocomplete.tsx`, ya existía y se usa en varios formularios de
+  Regularizado/Cotizaciones — busca por NIT O nombre en un solo campo
+  contra `proveedores`, `buscarProveedoresAuto`). Al elegir una coincidencia
+  llena NIT y Nombre juntos (mismo patrón que `ComprasAdjudicacionClient.tsx`)
+  — "Nombre del beneficiario" se queda como `<input>` editable aparte, para
+  poder corregirlo a mano si no hay coincidencia exacta. **El pedido del
+  cliente decía "base de datos central"** pero el lookup correcto es el
+  catálogo de **Proveedores** (`buscarProveedoresAuto`), no
+  `base_datos_central` (esa es el catálogo nacional de insumos, ~208k
+  filas, no tiene NIT/nombre de personas o empresas) — se interpretó así
+  porque el contexto (NIT+Nombre de quien recibe un cheque) no tiene
+  sentido contra un catálogo de productos. Verificado en vivo, de solo
+  lectura, contra el pago real pendiente en Bancos (id 29, A-04 SIAF
+  1/2026, "Distribuidora la jalapeña S,A." con NIT 3306224 guardado con
+  mayúsculas/puntuación inconsistentes): escribir "330622" mostró la
+  coincidencia real del catálogo "Distribuidora Jalapeña, S.A." — elegirla
+  corrigió el nombre a la grafía correcta del catálogo — cerrado con
+  "Cancelar" sin guardar, para no tocar el dato real.
+- **El campo "Cuenta No." del Voucher impreso (compras y Vale) imprimía el
+  código contable (`configuracion.codigo_contable`, ej. "12.07.04"), no el
+  número de cuenta bancaria real** — el cliente lo notó explícitamente:
+  "en donde dice numero de cuenta me debe de poner el campo que está en
+  Cuenta bancaria... que se llama 'Número de cuenta'"
+  (`configuracion.cuenta_numero`, ya existe — ver el punto de arriba del
+  Voucher de Vale, 2026-09-15, que ya lo usaba para el renglón nuevo
+  "Banco/cuenta" pero no había corregido este campo viejo). Fix en los 2
+  Client (`ImprimirVoucherBancosClient.tsx` y
+  `ImprimirVoucherClient.tsx`, mismo talonario físico): el campo `cuenta_no`
+  ahora imprime `cuentaNumero` — la prop `codigoContable` se eliminó por
+  completo de ambos componentes y sus `page.tsx` (ya no se usaba para nada
+  más ahí). Verificado en vivo contra el mismo pago real id 29 (sin
+  modificar nada, solo impresión): "CUENTA No." pasó de mostrar "12.07.04"
+  a "3-777-08924-4", igual que ya mostraba el renglón "Banco/cuenta" justo
+  arriba.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

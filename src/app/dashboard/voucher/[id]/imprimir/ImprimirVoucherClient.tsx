@@ -14,7 +14,6 @@ interface Props {
   vale: Vale;
   montoEnLetras: string;
   municipio: string;
-  codigoContable: string;
   bancoNombre: string;
   cuentaNumero: string;
   cuentaNombre: string;
@@ -68,7 +67,7 @@ const FIELD_LABELS: Record<string, string> = {
   destinatario:  "Pago a la orden de",
   monto_letras:  "Suma de (en letras)",
   banco_datos:   "Banco / cuenta (dato fijo)",
-  cuenta_no:     "Cuenta No. (voucher)",
+  cuenta_no:     "Número de cuenta (voucher)",
   concepto:      "Concepto (voucher)",
   monto_stub:    "Monto (voucher, debe/haber)",
   saldo_anterior:"Saldo anterior",
@@ -81,7 +80,7 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 export default function ImprimirVoucherClient({
-  vale: v, montoEnLetras, municipio, codigoContable, bancoNombre, cuentaNumero, cuentaNombre,
+  vale: v, montoEnLetras, municipio, bancoNombre, cuentaNumero, cuentaNombre,
   saldoAnterior, saldoNuevo, posicionesGuardadas,
 }: Props) {
   const [verPosiciones, setVerPosiciones] = useState(false);
@@ -149,7 +148,7 @@ export default function ImprimirVoucherClient({
         {campo("monto_letras", montoEnLetras, { style: { fontSize: "8.5pt" } })}
 
         {campo("banco_datos", bancoDatosTxt, { style: { fontSize: "7.5pt", color: "#444" } })}
-        {campo("cuenta_no", codigoContable, { style: { textAlign: "center", fontSize: "8pt" } })}
+        {campo("cuenta_no", cuentaNumero, { style: { textAlign: "center", fontSize: "8pt" } })}
         {campo("concepto", `${TIPO_LABEL[v.tipo] ?? v.tipo} No. ${String(v.numero).padStart(7, "0")} — ${v.motivo}`, { style: { fontSize: "8.5pt" } })}
         {campo("monto_stub", montoTxt, { style: { textAlign: "right", fontFamily: "monospace", fontSize: "8.5pt" } })}
         {campo("saldo_anterior", saldoAnterior != null ? `Saldo anterior: ${fmtQ(saldoAnterior)}` : "", { style: { fontSize: "7.5pt", color: "#444" } })}

@@ -35,7 +35,6 @@ export default async function ImprimirVoucherPage({ params }: { params: Promise<
       vale={vale}
       montoEnLetras={montoEnLetras(monto)}
       municipio={config?.municipio ?? "Tacaná, San Marcos"}
-      codigoContable={config?.codigo_contable ?? "12.07.04"}
       bancoNombre={config?.banco_nombre ?? ""}
       cuentaNumero={config?.cuenta_numero ?? ""}
       cuentaNombre={config?.cuenta_nombre ?? ""}
