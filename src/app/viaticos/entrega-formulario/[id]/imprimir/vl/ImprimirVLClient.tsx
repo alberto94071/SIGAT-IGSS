@@ -64,10 +64,29 @@ const POS_DEFAULT: Record<string, Pos> = {
   // imprimía el monto por servicio, nunca cuántos de cada uno; posiciones
   // estimadas a ojo, se ajustan arrastrando en "Ver posiciones" igual que
   // el resto de campos de este formulario.
-  cant_desayuno:       { top: 2.66 * IN, left: 5.9 * IN, width: 0.6 * IN },
-  cant_almuerzo:       { top: 3.09 * IN, left: 5.9 * IN, width: 0.6 * IN },
-  cant_cena:           { top: 3.52 * IN, left: 5.9 * IN, width: 0.6 * IN },
-  cant_hospedaje:      { top: 3.95 * IN, left: 5.9 * IN, width: 0.6 * IN },
+  cant_desayuno:       { top: 2.66 * IN, left: 5.5 * IN, width: 0.45 * IN },
+  cant_almuerzo:       { top: 3.09 * IN, left: 5.5 * IN, width: 0.45 * IN },
+  cant_cena:           { top: 3.52 * IN, left: 5.5 * IN, width: 0.45 * IN },
+  cant_hospedaje:      { top: 3.95 * IN, left: 5.5 * IN, width: 0.45 * IN },
+
+  // Precio unitario (numeral 7) — pedido explícito del cliente 2026-09-17:
+  // "debe llevar primero la cantidad... luego el precio, y a la par el
+  // total, que es el producto del precio por la cantidad" — antes solo se
+  // imprimían cantidad y total, el precio unitario nunca salía como dato
+  // propio (aunque en el papel físico real pueda venir pre-impreso, el PDF
+  // digital tiene que traerlo solo). El `top` de cada fila NO usa el mismo
+  // estimado original de cant_*/gasto_* (2.66/3.09/3.52/3.95 * IN) — esos
+  // dos campos ya se recalibraron y guardaron por el cliente vía "Ver
+  // posiciones" desde que se agregaron (fila real más abajo de lo
+  // estimado), así que precio_* arranca ya alineado a esa fila real en vez
+  // de nacer descuadrado un renglón más arriba (bug real detectado
+  // 2026-09-17: el campo nuevo, sin posición guardada todavía, caía en el
+  // estimado viejo mientras sus vecinos ya estaban en la posición
+  // corregida). Sigue siendo editable/arrastrable igual que los demás.
+  precio_desayuno:     { top: 75.2, left: 6.0 * IN, width: 0.55 * IN },
+  precio_almuerzo:     { top: 82.7, left: 6.0 * IN, width: 0.55 * IN },
+  precio_cena:         { top: 90.5, left: 6.0 * IN, width: 0.55 * IN },
+  precio_hospedaje:    { top: 97.2, left: 6.0 * IN, width: 0.55 * IN },
 
   gasto_desayuno:      { top: 2.66 * IN, left: 6.6 * IN, width: 1.2 * IN },
   gasto_almuerzo:      { top: 3.09 * IN, left: 6.6 * IN, width: 1.2 * IN },
@@ -105,6 +124,7 @@ const FIELD_LABELS: Record<string, string> = {
   por_q: "1. POR Q.", entidad_recibio: "2. RECIBÍ DE", monto_letras: "3. LA CANTIDAD DE",
   tipo_comision: "4. TIPO DE COMISIÓN", lugar: "5. LUGAR DE PERMANENCIA", dias: "6. No. DE DÍAS",
   cant_desayuno: "7. Cantidad Desayuno", cant_almuerzo: "7. Cantidad Almuerzo", cant_cena: "7. Cantidad Cena", cant_hospedaje: "7. Cantidad Hospedaje",
+  precio_desayuno: "7. Precio Desayuno", precio_almuerzo: "7. Precio Almuerzo", precio_cena: "7. Precio Cena", precio_hospedaje: "7. Precio Hospedaje",
   gasto_desayuno: "Desayuno", gasto_almuerzo: "Almuerzo", gasto_cena: "Cena", gasto_hospedaje: "Hospedaje",
   suma_gastos: "9. SUMAN LOS GASTOS DE VIÁTICO", otros_gastos: "10. OTROS GASTOS DERIVADOS", total_11: "11. TOTAL",
   recibido_va: "12. RECIBIDO POR MEDIO DE FORMULARIO V-A", reintegro: "13. REINTEGRO", complemento: "14. COMPLEMENTO", total_15: "15. TOTAL",
@@ -230,6 +250,11 @@ export default function ImprimirVLClient({
         {cantAlmuerzo > 0 && campo("cant_almuerzo", String(cantAlmuerzo), { style: { textAlign: "center" } })}
         {cantCena > 0 && campo("cant_cena", String(cantCena), { style: { textAlign: "center" } })}
         {cantHospedaje > 0 && campo("cant_hospedaje", String(cantHospedaje), { style: { textAlign: "center" } })}
+
+        {cantDesayuno > 0 && campo("precio_desayuno", Q(precios.desayuno), { style: { textAlign: "right" } })}
+        {cantAlmuerzo > 0 && campo("precio_almuerzo", Q(precios.almuerzo), { style: { textAlign: "right" } })}
+        {cantCena > 0 && campo("precio_cena", Q(precios.cena), { style: { textAlign: "right" } })}
+        {cantHospedaje > 0 && campo("precio_hospedaje", Q(precios.hospedaje), { style: { textAlign: "right" } })}
 
         {cantDesayuno > 0 && campo("gasto_desayuno", Q(montoDesayuno), { style: { textAlign: "right" } })}
         {cantAlmuerzo > 0 && campo("gasto_almuerzo", Q(montoAlmuerzo), { style: { textAlign: "right" } })}
