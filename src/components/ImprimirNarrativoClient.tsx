@@ -1,6 +1,8 @@
 "use client";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Printer } from "lucide-react";
+import SelectorFirmante, { type Firmante } from "@/components/SelectorFirmante";
 
 // Documento narrativo libre (Informe de Comisión / Justificación de
 // Estancia) — a diferencia de los formularios pre-impresos (V-A/V-C/V-L),
@@ -9,12 +11,22 @@ import { ArrowLeft, Printer } from "lucide-react";
 export default function ImprimirNarrativoClient({
   titulo, nombreUnidad, destinatarioNombre, destinatarioCargo,
   personaNombre, personaCargo, personaNoEmpleado, lugarYFecha, texto,
+  firmantesDirigidoA,
 }: {
   titulo: string; nombreUnidad: string; destinatarioNombre: string; destinatarioCargo: string;
   personaNombre: string | null; personaCargo: string | null; personaNoEmpleado: string | null;
   lugarYFecha: string; texto: string | null;
+  // Cuando viene con datos, agrega un selector "Dirigido a" en la barra de
+  // impresión (mismo patrón "se elige al imprimir, no persiste" que el
+  // resto del sistema) — la elección reemplaza destinatarioNombre/Cargo. Si
+  // no se elige nada, se imprime el destinatario que ya venía resuelto por
+  // el servidor (o nada, si tampoco había).
+  firmantesDirigidoA?: Firmante[];
 }) {
   const router = useRouter();
+  const [firmanteElegido, setFirmanteElegido] = useState<Firmante | null>(null);
+  const nombreFinal = firmanteElegido?.nombre ?? destinatarioNombre;
+  const cargoFinal = firmanteElegido?.cargo ?? destinatarioCargo;
 
   return (
     <>
@@ -24,6 +36,12 @@ export default function ImprimirNarrativoClient({
         </button>
         <span className="text-gray-300">|</span>
         <span className="text-sm font-semibold text-gray-700">{titulo}</span>
+        {firmantesDirigidoA && firmantesDirigidoA.length > 0 && (
+          <>
+            <span className="text-gray-300">|</span>
+            <SelectorFirmante label="Dirigido a" firmantes={firmantesDirigidoA} value={firmanteElegido} onChange={setFirmanteElegido} />
+          </>
+        )}
         <button onClick={() => window.print()}
           className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700">
           <Printer className="w-4 h-4" /> Imprimir
@@ -33,16 +51,16 @@ export default function ImprimirNarrativoClient({
       <div id="narrativo-wrapper">
         <div id="narrativo-page">
           <div className="text-center mb-8">
+            <img src="/LOGO_SIAF01.svg" alt="" style={{ height: "60px", margin: "0 auto 8px auto" }} />
             <p className="font-bold text-sm">INSTITUTO GUATEMALTECO DE SEGURIDAD SOCIAL</p>
             <p className="text-sm">{nombreUnidad}</p>
             <p className="font-bold text-base mt-4 uppercase">{titulo}</p>
           </div>
 
-          {destinatarioNombre && (
+          {nombreFinal && (
             <div className="mb-6 text-sm">
-              <p>Licenciado(a):</p>
-              <p className="font-semibold">{destinatarioNombre}</p>
-              <p>{destinatarioCargo}</p>
+              <p className="font-semibold">{nombreFinal}</p>
+              <p>{cargoFinal}</p>
             </div>
           )}
 
@@ -53,7 +71,7 @@ export default function ImprimirNarrativoClient({
             <p>No. de Empleado: {personaNoEmpleado}</p>
           </div>
 
-          <p className="text-sm leading-relaxed whitespace-pre-wrap min-h-[3in]">{texto || "—"}</p>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap min-h-[3in]" style={{ textAlign: "justify" }}>{texto || "—"}</p>
 
           <div className="mt-16 text-center text-sm">
             <p>{lugarYFecha}</p>

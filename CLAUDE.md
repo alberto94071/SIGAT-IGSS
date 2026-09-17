@@ -2603,6 +2603,81 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   "null"); SIAF 200/2026 (nunca consolidado, `codigo_ppr` sigue `NULL`)
   resolvió por nombre sin cambios ("180871 - 211568") — sin tocar ningún
   dato real en ningún caso.
+- **Lote de 6 pedidos de Viáticos por WhatsApp 2026-09-17 (capturas del
+  Informe de Comisión, Justificación de Estancia y V-L reales del
+  Formulario 117971):**
+  - **Logo del IGSS + párrafo justificado** en `ImprimirNarrativoClient.tsx`
+    (componente compartido por Informe de Comisión y Justificación de
+    Estancia — no hay talonario físico detrás, así que dibuja su propia
+    hoja membretada). Se agregó `<img src="/LOGO_SIAF01.svg">` al
+    encabezado (mismo asset genérico del escudo IGSS que ya usan DPD-23/
+    Planilla de Viáticos) y `textAlign: "justify"` al párrafo del texto
+    libre.
+  - **"Licenciado(a):" hardcodeado delante del destinatario — quitado.**
+    El cliente reportó "el doctor no es licenciado" (el destinatario real
+    era "DR. ISRAEL EDGAR ORTIZ DIAZ"). Como `catalogoFirmantes.nombre` ya
+    guarda el tratamiento correcto como parte del nombre (Dr./Lic./etc.,
+    mismo criterio que el resto del sistema), la etiqueta fija sobraba y
+    encima podía contradecir el título real — se eliminó la línea, queda
+    solo nombre + cargo.
+  - **La fecha de cierre de ambos documentos imprimía la fecha de
+    impresión/reimpresión (`fechaGuatemala()`), no la fecha límite real.**
+    El cliente pidió explícitamente "la fecha tiene q ser la q marca el
+    sistema 10 días hábiles después de haber entregado el formulario" —
+    ese valor ya existe calculado y guardado (`viatico_solicitudes.
+    fecha_limite`, `sumarDiasHabiles(fecha_nombramiento, 10)` al habilitar,
+    ver Fase C de Viáticos arriba). Fix en `informe/page.tsx` y
+    `justificacion/page.tsx`: `lugarYFecha` usa
+    `solicitud.fecha_limite ?? fechaGuatemala()` (el `??` es solo defensivo,
+    `fecha_limite` siempre existe para una solicitud ya `Aprobado`).
+  - **Justificación de Estancia ganó un selector "Dirigido a"** (nuevo prop
+    `firmantesDirigidoA` en `ImprimirNarrativoClient.tsx`, mismo patrón
+    "se elige al imprimir, no persiste" de siempre) — antes
+    `destinatarioNombre=""` siempre, no se imprimía nada. El cliente aclaró
+    "esa justificación va dirigido al de la DAF" — a diferencia del Informe
+    de Comisión (que sigue dirigiéndose automáticamente a quien firmó el
+    nombramiento vía `getFirmantePrincipal`, sin selector, eso no cambió),
+    el destinatario de la Justificación no tiene por qué coincidir con
+    ese firmante, así que hace falta elegirlo a mano del mismo catálogo de
+    siempre (Configuración → Firmantes) — no existía todavía un firmante
+    de la DAF cargado en el catálogo, el cliente tiene que agregarlo ahí
+    antes de poder elegirlo.
+  - **V-L numeral 30 "REVISADO POR" pasó de campo fijo de Configuración
+    (`config.nombre_responsable`, literal "Nombre del responsable del
+    FRI") a un `SelectorFirmante` más, igual que "Vo.Bo." (numeral 31)** —
+    el cliente señaló "el encargado de revisar el viático es el encargado
+    del fondo rotativo", y el valor fijo de Configuración no reflejaba
+    quién es esa persona en cada momento (mismo problema recurrente de
+    "campo fijo de Configuración para una persona" que ya mordió varias
+    veces en este proyecto — Encargado de Unidad, Solicitante del Vale,
+    etc. — la solución siempre termina siendo un selector del catálogo de
+    Firmantes). `ImprimirVLClient.tsx` ganó un segundo estado
+    `firmanteRevisor` con su propio `SelectorFirmante` en la barra
+    ("Revisado por", junto a "Vo.Bo."); si no se elige nada, queda en
+    blanco para firma física (`"___________________________"`, mismo
+    criterio que Vo.Bo. — ya NO cae al valor de Configuración, que es
+    justo lo que el cliente reportó como incorrecto). El prop
+    `nombreResponsable` se eliminó de `ImprimirVLClient`/ambos `page.tsx`
+    (encargado y colaborador) — ya no se usa para nada acá.
+  - **"Le falta el costo en el numeral 7" (V-L, captura con flecha verde)
+    — ya estaba resuelto por el PR anterior de esta misma sesión (el que
+    agregó `cant_desayuno`/etc.), el cliente mandó la captura de antes de
+    que ese cambio quedara desplegado.** Verificado generando el PDF real
+    del Formulario 117971 (mismo caso exacto de la captura — 2 días,
+    1 de cada servicio): el numeral 7 imprime cantidad Y costo de los 4
+    servicios (`45.00`/`60.00`/`45.00`/`150.00`) sin faltar nada — no hizo
+    falta ningún cambio adicional de código para esto.
+  - Verificado en vivo de punta a punta con un colaborador y una solicitud
+    Aprobado 100% desechables (sembrados por SQL directo, incluyendo
+    `informe_comision`/`justificacion_estancia` con texto largo para poder
+    ver el justificado): Informe de Comisión mostró el logo, el párrafo
+    justificado a ambos márgenes, destinatario sin "Licenciado(a):" y la
+    fecha de cierre en el `fecha_limite` de prueba (no la fecha real del
+    día); Justificación de Estancia igual, más el selector "Dirigido a"
+    vacío por defecto y correctamente poblado (nombre + cargo) al elegir
+    un firmante real del catálogo; V-L mostró los dos selectores
+    "Revisado por"/"Vo.Bo." en la barra, ambos con la misma lista de
+    firmantes — colaborador y solicitud de prueba borrados después.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
