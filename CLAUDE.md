@@ -2678,6 +2678,44 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     un firmante real del catálogo; V-L mostró los dos selectores
     "Revisado por"/"Vo.Bo." en la barra, ambos con la misma lista de
     firmantes — colaborador y solicitud de prueba borrados después.
+- **Seguimiento el mismo día (2026-09-17): "le falta el costo" no era la
+  misma confusión de "Ver Posiciones" del punto anterior — faltaba de
+  verdad el precio unitario como dato propio en el numeral 7 del V-L.** El
+  cliente aclaró con precisión: "debe llevar, por ejemplo primero la
+  cantidad de desayunos, luego el precio, y a la par el total, que es el
+  producto del precio por la cantidad" — antes de este fix, esa fila solo
+  imprimía Cantidad y Total (`cant_*`/`gasto_*`), nunca el precio unitario
+  suelto (aunque el total ya reflejaba correctamente cantidad × precio, el
+  precio en sí nunca salía impreso como su propio número). Fix: 4 campos
+  nuevos `precio_desayuno`/`precio_almuerzo`/`precio_cena`/
+  `precio_hospedaje` en `ImprimirVLClient.tsx` (mismo patrón
+  `CampoPosicionable` que el resto — editable/arrastrable en "Ver
+  posiciones"), colocados entre la columna de Cantidad (que se angostó de
+  `0.6in` a `0.45in` para hacerle campo) y la de Total, mostrando
+  `precios.desayuno`/etc. (los mismos precios fijos de Configuración que ya
+  usa el cálculo). **Bug real encontrado y corregido antes de desplegar,
+  detectado comparando contra la posición guardada real en
+  `posiciones_impresion`**: la primera versión posicionó `precio_*` con la
+  misma fórmula `top` original de `cant_*`/`gasto_*`
+  (`2.66/3.09/3.52/3.95 * IN` ≈ 67.5-100.3mm) — pero esos dos campos ya
+  tenían posiciones recalibradas y guardadas por el cliente vía "Ver
+  posiciones" desde que se agregaron (fila real ≈75-97mm, no la del
+  estimado original), así que el campo nuevo nacía descuadrado un renglón
+  por encima de sus vecinos. Se corrigieron los 4 `top` de `precio_*` a los
+  valores reales tomados de `posiciones_impresion` para este documento
+  (`documento = 'viatico_vl'`, campos `gasto_*`) en vez de la fórmula
+  vieja. **Trampa para la próxima vez que se agregue un campo a un
+  documento con posiciones ya recalibradas por el usuario**: el
+  `POS_DEFAULT` del código deja de ser la fuente de verdad de la posición
+  real en cuanto el usuario guarda desde "Ver posiciones" — un campo
+  hermano nuevo tiene que alinearse contra la posición GUARDADA de sus
+  vecinos (consultable con el patrón SQL de arriba sobre
+  `posiciones_impresion`), no contra el estimado original del código.
+  Verificado en vivo con el mismo Formulario 117971 real (solicitud id 18):
+  PDF generado con `media: 'print'` (sin fondo de referencia ni manijas)
+  muestra las 4 filas del numeral 7 con Cantidad/Precio/Total alineados en
+  la misma línea — "1 / 45.00 / 45.00", "1 / 60.00 / 60.00", "1 / 45.00 /
+  45.00", "1 / 150.00 / 150.00" — sin tocar ningún dato real.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
