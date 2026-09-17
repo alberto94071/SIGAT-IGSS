@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { estadoLoginUsuario } from "@/lib/auth-actions";
 
 const INTERVALO_MS = 7000;
@@ -13,7 +12,6 @@ function formatoMMSS(totalSegundos: number): string {
 }
 
 export default function LoginClient({ fotos }: { fotos: string[] }) {
-  const router = useRouter();
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
   const [error,    setError]    = useState("");
@@ -60,7 +58,16 @@ export default function LoginClient({ fotos }: { fotos: string[] }) {
       }
       setLoading(false);
     } else {
-      router.push("/launcher");
+      // Recarga completa (no router.push) a propósito: el layout raíz lee
+      // las preferencias de interfaz (tema/colores, ver preferencias.ts) del
+      // usuario de la sesión y las estampa en <html> al renderizar en el
+      // servidor. Con router.push (navegación del lado del cliente) ese
+      // layout no se vuelve a pedir siempre desde cero de forma garantizada
+      // — con una recarga completa sí, igual que ya hace "Salir"
+      // (signOut usa window.location por defecto), evitando cualquier
+      // posibilidad de que quede un rastro visual de la sesión anterior en
+      // la misma pestaña/computadora compartida.
+      window.location.href = "/launcher";
     }
   }
 
