@@ -28,7 +28,12 @@ export default async function ImprimirInformePage({ params }: { params: Promise<
       personaNombre={solicitud.persona_nombre}
       personaCargo={solicitud.persona_cargo}
       personaNoEmpleado={solicitud.persona_no_empleado}
-      lugarYFecha={`${config?.municipio ?? ""}, ${fechaGuatemala()}`}
+      // La fecha de cierre es el límite de 10 días hábiles desde el
+      // nombramiento (fecha_limite, ya calculado al habilitar) — no la
+      // fecha real de impresión/reimpresión, que podía ser cualquier día
+      // posterior (reportado por el cliente 2026-09-17, con capturas
+      // mostrando el día de la reimpresión en vez del límite real).
+      lugarYFecha={`${config?.municipio ?? ""}, ${solicitud.fecha_limite ?? fechaGuatemala()}`}
       texto={solicitud.informe_comision}
     />
   );

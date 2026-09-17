@@ -26,7 +26,6 @@ export default async function ImprimirMiVLPage({ params }: { params: Promise<{ i
       solicitud={solicitud}
       entidadRecibio={config?.entidad_recibio_viatico ?? ""}
       municipio={config?.municipio ?? ""}
-      nombreResponsable={config?.nombre_responsable ?? ""}
       partidaPresupuestaria={config?.viatico_partida_presupuestaria ?? ""}
       precios={{
         desayuno: config?.viatico_precio_desayuno ?? 45, almuerzo: config?.viatico_precio_almuerzo ?? 60,

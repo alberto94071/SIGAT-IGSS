@@ -117,16 +117,24 @@ const FIELD_LABELS: Record<string, string> = {
 
 interface Props {
   solicitud: Solicitud; entidadRecibio: string; municipio: string;
-  nombreResponsable: string; partidaPresupuestaria: string; precios: Precios; firmantes: Firmante[];
+  partidaPresupuestaria: string; precios: Precios; firmantes: Firmante[];
   posicionesGuardadas: Record<string, Pos>;
 }
 
 export default function ImprimirVLClient({
-  solicitud: s, entidadRecibio, municipio, nombreResponsable, partidaPresupuestaria, precios, firmantes,
+  solicitud: s, entidadRecibio, municipio, partidaPresupuestaria, precios, firmantes,
   posicionesGuardadas,
 }: Props) {
   const [firmante, setFirmante] = useState<Firmante | null>(null);
   const voBoNombre = firmante?.nombre ?? "___________________________";
+  // "REVISADO POR" (numeral 30) — corregido 2026-09-17, revirtiendo el
+  // campo fijo de Configuración (nombre_responsable): el cliente reportó
+  // que ese valor no reflejaba a quien realmente revisa cada viático (el
+  // encargado de Fondo Rotativo puede cambiar) — mismo selector del
+  // catálogo de Firmantes que ya usa Vo.Bo., sin persistir, se elige cada
+  // vez que se imprime.
+  const [firmanteRevisor, setFirmanteRevisor] = useState<Firmante | null>(null);
+  const revisorNombre = firmanteRevisor?.nombre ?? "___________________________";
 
   const [verPosiciones, setVerPosiciones] = useState(false);
   const [pos, setPos] = useState<Record<string, Pos>>({ ...POS_DEFAULT, ...posicionesGuardadas });
@@ -203,7 +211,10 @@ export default function ImprimirVLClient({
         verPosiciones={verPosiciones} onToggleVer={() => setVerPosiciones(p => !p)}
         onRestablecer={restablecerPosiciones} onGuardar={guardarPosiciones}
         guardando={guardando} guardado={guardado}
-        extraToolbar={<SelectorFirmante label="Vo.Bo." firmantes={firmantes} value={firmante} onChange={setFirmante} />}
+        extraToolbar={<>
+          <SelectorFirmante label="Revisado por" firmantes={firmantes} value={firmanteRevisor} onChange={setFirmanteRevisor} />
+          <SelectorFirmante label="Vo.Bo." firmantes={firmantes} value={firmante} onChange={setFirmante} />
+        </>}
       />
 
       <HojaConFondo hojaRef={hojaRef} fondo={fondo}>
@@ -248,7 +259,7 @@ export default function ImprimirVLClient({
         {campo("firmante_cargo", primerFirmanteCargo, { style: { fontSize: "8.5pt" } })}
         {campo("lugar_fecha", `${municipio}   ${fechasNombramientoTexto}`)}
 
-        {campo("responsable_nombre", nombreResponsable)}
+        {campo("responsable_nombre", revisorNombre)}
         {campo("vobo_nombre", voBoNombre)}
       </HojaConFondo>
 
