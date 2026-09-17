@@ -2716,6 +2716,38 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   muestra las 4 filas del numeral 7 con Cantidad/Precio/Total alineados en
   la misma línea — "1 / 45.00 / 45.00", "1 / 60.00 / 60.00", "1 / 45.00 /
   45.00", "1 / 150.00 / 150.00" — sin tocar ningún dato real.
+- **Personalización de interfaz (tema claro/oscuro, tamaño de letra y 3
+  colores) ya era por usuario individual — investigado 2026-09-17 tras un
+  reporte del cliente de "una usuaria cambió los colores y se le reflejó a
+  todos".** `usuarios.preferencias_ui` (columna JSON, una fila por usuario)
+  es la única fuente — no existe ningún campo de tema/color en
+  `configuracion` (esa tabla es genuinamente global, para otras cosas).
+  `getMisPreferenciasUI`/`guardarPreferenciasUI` (`preferencias-actions.ts`)
+  y la lectura en `layout.tsx` (raíz) siempre filtran por
+  `eq(usuarios.id, session.user.id)` — no hay ninguna acción de admin ni de
+  "Reiniciar Sistema" que escriba `preferencias_ui` de otro usuario ni de
+  todos a la vez (`grep` de todo el árbol confirma solo esos 3 puntos de
+  lectura/escritura). Verificado en vivo con 2 usuarios de prueba
+  desechables en 2 escenarios reales: (1) dos contextos de navegador
+  totalmente separados (simula dos computadoras distintas) — cambiar el
+  color en uno nunca aparece en el otro, ni antes ni después del cambio;
+  (2) la misma pestaña reutilizada — Persona 1 cambia su tema, cierra
+  sesión con el botón "Salir" real, Persona 2 inicia sesión ahí mismo de
+  inmediato — ve su propio tema por defecto, nunca el de Persona 1. **No se
+  encontró ningún bug de fondo** — la hipótesis más probable, dado que el
+  cliente confirmó que cada persona tiene su propia cuenta, es una
+  computadora/sesión de navegador compartida donde no se cerró sesión
+  correctamente entre una persona y otra (`preferencias_ui` real de
+  producción muestra colores realmente distintos por fila, no copiados).
+  **Se hizo un endurecimiento preventivo de todas formas**: `LoginClient.tsx`
+  redirigía tras el login con `router.push("/launcher")` (navegación del
+  lado del cliente) — se cambió a `window.location.href = "/launcher"`
+  (recarga completa), igual que ya hacía "Salir" (`signOut` de next-auth
+  usa `window.location` por defecto) — así el layout raíz (que estampa el
+  tema en `<html>` al renderizar en el servidor) se vuelve a pedir siempre
+  desde cero al iniciar sesión, sin depender de que Next.js decida
+  refrescar el árbol de layouts en una navegación suave. Verificado que el
+  login sigue funcionando normal tras el cambio.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
