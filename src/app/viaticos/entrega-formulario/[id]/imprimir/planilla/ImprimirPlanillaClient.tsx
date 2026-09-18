@@ -159,7 +159,7 @@ export default function ImprimirPlanillaClient({
         }
         .pl-header { display: flex; align-items: flex-start; gap: 12px;
           border-bottom: 2px solid #111827; padding-bottom: 8px; margin-bottom: 14px; }
-        .pl-header-logo { height: 46px; width: auto; flex-shrink: 0; }
+        .pl-header-logo { height: 72px; width: auto; flex-shrink: 0; }
         .pl-header-texto { flex: 1; }
         .pl-header-titulo { font-weight: 700; font-size: 11pt; margin: 0; }
         .pl-header-sub { margin: 2px 0 0; font-size: 8.5pt; max-width: 4.6in; }
