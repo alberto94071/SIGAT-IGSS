@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { siafCompras, siafComprasItems, catalogoCompras, baseDatosCentral } from "@/lib/schema";
-import { eq, and, or, inArray, ilike, isNotNull, isNull } from "drizzle-orm";
+import { eq, and, or, inArray, ilike, isNotNull, isNull, sql } from "drizzle-orm";
 
 // ─── PPR (presentación) por código base ──────────────────────────────────────
 // Un mismo insumo puede tener varias presentaciones/PPR registradas en Base de
@@ -274,15 +274,60 @@ export async function codigoPprSinCodigoLookupMap(
   }
 
   const map = new Map<string, string>();
+  const sinResolver: typeof items = [];
   for (const item of items) {
     const candidatos = porNombre.get(item.nombre.trim().toLowerCase()) ?? [];
-    if (candidatos.length === 0) continue;
     const descripcionCompleta = (item.descripcion_igss ?? "").trim();
     const elegido = candidatos.length === 1
       ? candidatos[0]
       : candidatos.find(c => `${item.nombre.trim()}; ${c.caracteristicas ?? ""}`.trim() === descripcionCompleta);
     if (elegido) map.set(`${item.nombre.trim()}::${descripcionCompleta}`, elegido.codigo_ppr);
+    else sinResolver.push(item);
   }
+
+  // Respaldo para "S/C" con `nombre` legado, de antes de que
+  // buscarInsumosCentral agrupara por nombre normalizado (2026-08-24,
+  // catálogo_compras) — esos insumos guardaron la descripción compuesta
+  // completa ("Estantería rack -  Alto: 2 Metro;  Ancho: ...") como
+  // `nombre`, no el nombre corto ("Estantería rack"), así que el match
+  // exacto de arriba nunca encuentra nada: el nombre corto de Base de Datos
+  // Central queda "adentro" de esa cadena, nunca es igual a ella (reportado
+  // por el cliente 2026-09-18 con "Estantería rack", que sí tiene una fila
+  // exacta en Base de Datos Central para esas dimensiones puntuales — el
+  // dato existe, el bug era de matching, no de datos faltantes). Acá se
+  // busca al revés: filas cuyas `caracteristicas` (el texto de dimensiones)
+  // aparezcan tal cual dentro de la descripción larga guardada. **No basta
+  // con exigir un solo resultado** — una `caracteristicas` corta y genérica
+  // de un producto totalmente distinto (ej. "Ancho: 60 Centímetro;" de
+  // "Vinil textil para sublimación de ropa") puede coincidir por pura
+  // casualidad como substring de una descripción larga que no tiene nada
+  // que ver con ese producto (encontrado probando este caso real: dio 2
+  // candidatos, uno de ellos así de espurio). Se queda con el candidato de
+  // `caracteristicas` MÁS LARGA (la más específica gana) — y solo si es
+  // estrictamente más larga que cualquier otro candidato, para seguir sin
+  // adivinar cuando hay empate.
+  for (const item of sinResolver) {
+    const descripcionKey = (item.descripcion_igss ?? "").trim();
+    const textoBusqueda = (item.descripcion_igss || item.nombre).trim();
+    if (!textoBusqueda) continue;
+    const candidatos = await db.select({
+      codigo_ppr: baseDatosCentral.codigo_ppr, caracteristicas: baseDatosCentral.caracteristicas,
+    }).from(baseDatosCentral).where(and(
+      isNull(baseDatosCentral.codigo_igss),
+      isNotNull(baseDatosCentral.codigo_ppr),
+      isNotNull(baseDatosCentral.caracteristicas),
+      sql`length(${baseDatosCentral.caracteristicas}) > 10`,
+      sql`${textoBusqueda} ILIKE '%' || ${baseDatosCentral.caracteristicas} || '%'`,
+    ));
+    if (candidatos.length === 0) continue;
+    const porLargo = [...candidatos].sort((a, b) => (b.caracteristicas?.length ?? 0) - (a.caracteristicas?.length ?? 0));
+    const masEspecifico = porLargo[0];
+    const empatado = porLargo[1] && porLargo[1].caracteristicas?.length === masEspecifico.caracteristicas?.length;
+    if (!empatado) {
+      map.set(`${item.nombre.trim()}::${descripcionKey}`, masEspecifico.codigo_ppr!);
+    }
+  }
+
   return map;
 }
 

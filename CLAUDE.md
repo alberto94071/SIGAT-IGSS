@@ -2768,6 +2768,47 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   en blanco, solo con el número de formulario/sello de autorización
   pre-impresos de fábrica) y los campos existentes siguen cayendo dentro de
   sus casillas correspondientes sin desalinearse.
+- **A-01 SIAF: "Código PpR:" seguía sin aparecer para insumos "S/C" con
+  `nombre` legado (la descripción compuesta completa guardada como
+  `nombre`, no el nombre corto) — reportado por el cliente 2026-09-18 con
+  "Estantería rack" ("mira ahora ya no aparece el ppr").** No era el mismo
+  bug del "S/C-{id}" de 2026-09-17 (ese ya estaba corregido) — acá
+  `codigo_igss = 'S/C'` y `codigo_ppr` sigue `NULL` (el ítem nunca pasó por
+  Órdenes/SIAF-04, que es donde se elige el PPR — ver el selector de
+  presentación en Trampas de arriba), así que cae en el respaldo por
+  nombre, `codigoPprSinCodigoLookupMap`. Ese respaldo busca por **match
+  exacto** de `item.nombre` contra `base_datos_central.nombre` — funciona
+  para ítems agregados después del fix de `buscarInsumosCentral`
+  (2026-08-24, `nombre` corto + `caracteristicas` aparte), pero varios
+  ítems de ANTES de ese fix guardaron la descripción compuesta ENTERA como
+  `nombre` (ej. `"Estantería rack -  Alto: 2 Metro;  Ancho: 60
+  Centímetro;..."` en vez de solo `"Estantería rack"`) — el match exacto
+  nunca podía encontrar nada, porque el nombre corto real de Base de Datos
+  Central queda "adentro" de esa cadena larga, nunca es igual a ella. El
+  dato SÍ existe en Base de Datos Central (confirmado con SQL directo: una
+  sola fila con esas dimensiones exactas) — el bug era de matching, no de
+  catálogo incompleto. Fix: `codigoPprSinCodigoLookupMap`
+  (`renglon-utils.ts`) ganó un segundo paso para los ítems que el match
+  exacto no resuelve — busca al revés, filas de Base de Datos Central cuyas
+  `caracteristicas` aparezcan tal cual como substring dentro de la
+  descripción larga guardada. **No basta con "un solo resultado" como
+  criterio de inequívoco acá** — una `caracteristicas` corta y genérica de
+  un producto totalmente distinto (ej. `"Ancho: 60 Centímetro;"` de "Vinil
+  textil para sublimación de ropa") puede colarse como substring
+  coincidental de una descripción larga sin relación real (pasó en vivo con
+  este mismo caso: dio 2 candidatos, uno espurio) — se queda con el
+  candidato de `caracteristicas` **más larga**, y solo si es estrictamente
+  más larga que cualquier otro candidato (empate = no se adivina, sigue en
+  blanco). Verificado en vivo contra el caso real reportado (SIAF 262/2026,
+  solicitud id 322, "Estantería rack" con esas dimensiones exactas): antes
+  del fix la leyenda salía en blanco (confirmado con captura ampliada del
+  papel impreso real que mandó el cliente); con el fix imprime "Código PpR:
+  105325 - 122810", la única fila de Base de Datos Central con esas 4
+  dimensiones exactas. También se probaron otros 4 ítems "S/C" legado
+  reales de producción (Lámpara, Reloj biométrico, Cilindro de oxígeno,
+  Amueblado de comedor) por SQL directo — los 4 resuelven a un candidato
+  único y claramente más específico que cualquier coincidencia genérica,
+  sin falsos positivos.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
