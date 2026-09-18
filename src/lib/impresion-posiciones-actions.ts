@@ -27,9 +27,12 @@ const FONDOS: Record<string, string> = {
   cheque: "cheque-fondo.jpg",
   // Viáticos (V-A/V-C/V-L) — el cliente pidió (2026-09-07) el mismo sistema
   // de posiciones arrastrables que ya tiene el DAB-60. Las imágenes de fondo
-  // son del modelo real lleno que mandó el cliente (MODELO_VIATICO.pdf,
-  // páginas 1-3), no un talonario en blanco — sirve igual para calibrar,
-  // porque solo se usa como referencia semitransparente en pantalla.
+  // son los 3 formularios reales EN BLANCO que mandó el cliente
+  // (VIATICO_ANTICIPO_V-A1.pdf/VIATICO_CONSTANCIA_V-C.pdf/
+  // VIATICO_LIQUIDACION_V-L.pdf, 2026-09-18) — reemplazaron las primeras
+  // imágenes de fondo, que eran del modelo LLENO (MODELO_VIATICO.pdf) y se
+  // veían confusas/difíciles de leer al mezclar el texto de ejemplo ya
+  // escrito con el texto real que captura cada usuario encima.
   viatico_va: "viatico-va-fondo.jpg",
   viatico_vc: "viatico-vc-fondo.jpg",
   viatico_vl: "viatico-vl-fondo.jpg",
