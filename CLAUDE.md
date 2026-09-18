@@ -2748,6 +2748,26 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   desde cero al iniciar sesión, sin depender de que Next.js decida
   refrescar el árbol de layouts en una navegación suave. Verificado que el
   login sigue funcionando normal tras el cambio.
+- **Imágenes de fondo de V-A/V-C/V-L reemplazadas por los formularios reales
+  EN BLANCO (2026-09-18)** — las 3 imágenes en `private/viatico-v{a,c,l}-
+  fondo.jpg` (solo referencia visual en "Ver posiciones", nunca se imprimen)
+  eran del modelo real LLENO que mandó el cliente al principio del módulo
+  (`MODELO_VIATICO.pdf`, ver Fase E de Viáticos arriba) — el cliente pidió
+  cambiarlas porque mezclar el texto de ese ejemplo ya escrito con el texto
+  real que cada usuario captura encima se veía feo/costaba leer. El cliente
+  mandó los 3 PDF del talonario real en blanco (`VIATICO_ANTICIPO_V-A1.pdf`/
+  `VIATICO_CONSTANCIA_V-C.pdf`/`VIATICO_LIQUIDACION_V-L.pdf`) — se
+  convirtieron a JPG con `pypdfium2` (`page.render(scale=144/72)`, sin
+  necesitar poppler/ImageMagick, que no están instalados en este entorno) a
+  1224x1584px, el mismo tamaño que ya tenían las imágenes viejas (612x792pt
+  Letter @144dpi) — no hizo falta recalibrar ningún `POS_DEFAULT`, porque
+  esas posiciones ya estaban calibradas contra el papel físico real, no
+  contra la imagen de referencia (ver el comentario ya existente sobre
+  esto en la Fase E). Verificado en vivo con el Formulario 117971 real, modo
+  "Ver posiciones" en los 3 documentos: el fondo nuevo se ve limpio (talonario
+  en blanco, solo con el número de formulario/sello de autorización
+  pre-impresos de fábrica) y los campos existentes siguen cayendo dentro de
+  sus casillas correspondientes sin desalinearse.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
