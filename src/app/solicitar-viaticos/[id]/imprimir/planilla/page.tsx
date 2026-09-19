@@ -6,6 +6,15 @@ import { fechaGuatemala } from "@/lib/date-utils";
 import { getSolicitudParaImprimir } from "@/app/viaticos/registro-comision/actions";
 import ImprimirPlanillaClient from "@/app/viaticos/entrega-formulario/[id]/imprimir/planilla/ImprimirPlanillaClient";
 
+const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+  "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+// Ver el comentario gemelo en viaticos/entrega-formulario/.../planilla/page.tsx
+function fechaLarga(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${d} de ${MESES[m - 1]} de ${y}.`;
+}
+
 export default async function ImprimirMiPlanillaPage({ params }: { params: Promise<{ id: string }> }) {
   const { session } = await requireColaborador();
   const { id } = await params;
@@ -36,7 +45,7 @@ export default async function ImprimirMiPlanillaPage({ params }: { params: Promi
       fechaEntradaUnidad={primera?.fecha_entrada_unidad ?? null}
       horaEntradaUnidad={primera?.hora_entrada_unidad ?? null}
       gastos={solicitud.gastos}
-      lugarYFecha={`${config?.municipio ?? ""}, ${fechaGuatemala()}`}
+      lugarYFecha={`${config?.municipio ?? ""}, ${fechaLarga(primera?.fecha_entrada_unidad ?? fechaGuatemala())}`}
     />
   );
 }
