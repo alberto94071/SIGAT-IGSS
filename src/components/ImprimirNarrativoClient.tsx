@@ -11,7 +11,7 @@ import SelectorFirmante, { type Firmante } from "@/components/SelectorFirmante";
 export default function ImprimirNarrativoClient({
   titulo, nombreUnidad, destinatarioNombre, destinatarioCargo,
   personaNombre, personaCargo, personaNoEmpleado, lugarYFecha, texto,
-  firmantesDirigidoA,
+  firmantesDirigidoA, cartaFormal, parrafoIntro, seccionTitulo, ocultarDatosComisionado,
 }: {
   titulo: string; nombreUnidad: string; destinatarioNombre: string; destinatarioCargo: string;
   personaNombre: string | null; personaCargo: string | null; personaNoEmpleado: string | null;
@@ -22,11 +22,28 @@ export default function ImprimirNarrativoClient({
   // no se elige nada, se imprime el destinatario que ya venía resuelto por
   // el servidor (o nada, si tampoco había).
   firmantesDirigidoA?: Firmante[];
+  // Modo "carta formal" (Justificación de Estancia, 2026-09-19, a partir de
+  // una carta real que mandó el cliente dirigida al Jefe de DAF): agrega la
+  // etiqueta "{tratamiento}:" sobre el nombre, la unidad como tercera línea,
+  // el saludo "{tratamiento} {apellido}:" y el párrafo de cortesía fijo
+  // antes del cuerpo. tratamiento/apellido salen del firmante elegido en
+  // "Dirigido a" (ver catalogoFirmantes) — a propósito NO se derivan
+  // partiendo destinatarioNombre por espacios (adivinar el apellido de un
+  // nombre compuesto es frágil), se capturan aparte en el catálogo.
+  cartaFormal?: boolean;
+  parrafoIntro?: string;
+  seccionTitulo?: string;
+  // Oculta el bloque "Datos del comisionado" — la carta formal no lo trae
+  // (el destinatario es externo, ese bloque es redundante con la firma).
+  ocultarDatosComisionado?: boolean;
 }) {
   const router = useRouter();
   const [firmanteElegido, setFirmanteElegido] = useState<Firmante | null>(null);
   const nombreFinal = firmanteElegido?.nombre ?? destinatarioNombre;
   const cargoFinal = firmanteElegido?.cargo ?? destinatarioCargo;
+  const unidadFinal = firmanteElegido?.unidad ?? null;
+  const tratamientoFinal = firmanteElegido?.tratamiento ?? null;
+  const apellidoFinal = firmanteElegido?.apellido ?? null;
 
   return (
     <>
@@ -59,19 +76,42 @@ export default function ImprimirNarrativoClient({
 
           {nombreFinal && (
             <div className="mb-6 text-sm">
+              {cartaFormal && tratamientoFinal && <p>{tratamientoFinal}:</p>}
               <p className="font-semibold">{nombreFinal}</p>
               <p>{cargoFinal}</p>
+              {cartaFormal && unidadFinal && <p>{unidadFinal}</p>}
             </div>
           )}
 
-          <div className="mb-6 text-sm">
-            <p className="font-semibold">Datos del comisionado</p>
-            <p>Nombre: {personaNombre}</p>
-            <p>Cargo: {personaCargo}</p>
-            <p>No. de Empleado: {personaNoEmpleado}</p>
-          </div>
+          {cartaFormal && tratamientoFinal && apellidoFinal && (
+            <p className="mb-4 text-sm">{tratamientoFinal} {apellidoFinal}:</p>
+          )}
 
-          <p className="text-sm leading-relaxed whitespace-pre-wrap min-h-[3in]" style={{ textAlign: "justify" }}>{texto || "—"}</p>
+          {parrafoIntro && (
+            <p className="mb-4 text-sm leading-relaxed">{parrafoIntro}</p>
+          )}
+
+          {seccionTitulo && (
+            <p className="mb-1 text-sm font-bold uppercase">{seccionTitulo}</p>
+          )}
+
+          {!ocultarDatosComisionado && (
+            <div className="mb-6 text-sm">
+              <p className="font-semibold">Datos del comisionado</p>
+              <p>Nombre: {personaNombre}</p>
+              <p>Cargo: {personaCargo}</p>
+              <p>No. de Empleado: {personaNoEmpleado}</p>
+            </div>
+          )}
+
+          <div className="min-h-[3in]">
+            {(texto || "—").split("\n\n").map((parrafo, i) => (
+              <p key={i} className="text-sm leading-relaxed whitespace-pre-wrap mb-4"
+                style={{ textAlign: "justify", textIndent: cartaFormal ? "0.5in" : undefined }}>
+                {parrafo}
+              </p>
+            ))}
+          </div>
 
           <div className="mt-16 text-center text-sm">
             <p>{lugarYFecha}</p>

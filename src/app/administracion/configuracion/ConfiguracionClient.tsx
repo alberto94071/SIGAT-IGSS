@@ -16,7 +16,11 @@ type Config = {
   siaf_compras_numero_inicial?: number; siaf_compras_numero_inicial_anio?: number;
   viatico_exigir_fecha_limite?: boolean;
 };
-type Firmante = { id: number; nombre: string; cargo: string; unidad: string | null; numero_empleado: string | null; nit: string | null; activo: boolean };
+type Firmante = {
+  id: number; nombre: string; cargo: string; unidad: string | null;
+  numero_empleado: string | null; nit: string | null;
+  tratamiento: string | null; apellido: string | null; activo: boolean;
+};
 
 interface Props { config: Config; firmantes: Firmante[]; rol: string; }
 
@@ -38,6 +42,8 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
   const [fUnidad,      setFUnidad]      = useState("");
   const [fNumEmpleado, setFNumEmpleado] = useState("");
   const [fNit,         setFNit]         = useState("");
+  const [fTratamiento, setFTratamiento] = useState("");
+  const [fApellido,    setFApellido]    = useState("");
   const [fSaving,      setFSaving]      = useState(false);
 
   function set(k: keyof Config, v: string | number | boolean) {
@@ -54,20 +60,28 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
   }
 
   function openNewFirmante() {
-    setEditingF(null); setFNombre(""); setFCargo(""); setFUnidad(""); setFNumEmpleado(""); setFNit(""); setFModal(true);
+    setEditingF(null); setFNombre(""); setFCargo(""); setFUnidad(""); setFNumEmpleado(""); setFNit("");
+    setFTratamiento(""); setFApellido(""); setFModal(true);
   }
   function openEditFirmante(f: Firmante) {
     setEditingF(f); setFNombre(f.nombre); setFCargo(f.cargo); setFUnidad(f.unidad ?? "");
-    setFNumEmpleado(f.numero_empleado ?? ""); setFNit(f.nit ?? ""); setFModal(true);
+    setFNumEmpleado(f.numero_empleado ?? ""); setFNit(f.nit ?? "");
+    setFTratamiento(f.tratamiento ?? ""); setFApellido(f.apellido ?? ""); setFModal(true);
   }
   async function handleSaveFirmante() {
     if (!fNombre.trim() || !fCargo.trim()) return;
     setFSaving(true);
     if (editingF) {
-      const res = await editarFirmante({ id: editingF.id, nombre: fNombre, cargo: fCargo, unidad: fUnidad, numero_empleado: fNumEmpleado, nit: fNit });
+      const res = await editarFirmante({
+        id: editingF.id, nombre: fNombre, cargo: fCargo, unidad: fUnidad, numero_empleado: fNumEmpleado, nit: fNit,
+        tratamiento: fTratamiento, apellido: fApellido,
+      });
       if (res.firmante) setFirmantes(p => p.map(f => f.id === editingF.id ? { ...f, ...res.firmante } : f));
     } else {
-      const res = await crearFirmante({ nombre: fNombre, cargo: fCargo, unidad: fUnidad, numero_empleado: fNumEmpleado, nit: fNit });
+      const res = await crearFirmante({
+        nombre: fNombre, cargo: fCargo, unidad: fUnidad, numero_empleado: fNumEmpleado, nit: fNit,
+        tratamiento: fTratamiento, apellido: fApellido,
+      });
       if (res.firmante) setFirmantes(p => [...p, res.firmante as Firmante]);
     }
     setFSaving(false); setFModal(false);
@@ -304,6 +318,20 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
                 </div>
               </div>
               <p className="text-xs text-gray-400 -mt-2">Solo hace falta llenar esto si el firmante va a poder elegirse en el Vale de Caja Chica.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Tratamiento (opcional)</label>
+                  <input className="input" placeholder='Licenciado' value={fTratamiento} onChange={e => setFTratamiento(e.target.value)} />
+                </div>
+                <div>
+                  <label className="label">Apellido para saludo (opcional)</label>
+                  <input className="input" placeholder="Monterroso Juárez" value={fApellido} onChange={e => setFApellido(e.target.value)} />
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 -mt-2">
+                Solo hace falta llenar esto si el firmante va a poder elegirse como destinatario de la Justificación de
+                Estancia de Viáticos — arma la etiqueta "Licenciado:" y el saludo "Licenciado {"{apellido}"}:".
+              </p>
             </div>
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
               <button onClick={() => setFModal(false)} className="btn-secondary">Cancelar</button>

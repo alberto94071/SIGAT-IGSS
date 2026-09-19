@@ -39,26 +39,25 @@ function generarInformeComision(comisiones: ComisionParaNarrativo[], numeroFormu
   }).join("\n\n");
 }
 
-// El cliente confirmó (2026-09-07) que el primer párrafo de la
-// Justificación de Estancia usa la misma concatenación que el Informe
-// (con redacción propia, "Fui comisionado para..."), y que el resto del
-// documento (párrafos siguientes) es texto fijo que ya debe aparecer por
-// defecto — no cambia de un viático a otro. Texto extraído literal del
-// modelo real; el colaborador lo puede ajustar después si un caso puntual
-// lo necesita (ej. un nombramiento del día anterior distinto a "76/2026").
-const JUSTIFICACION_ESTANCIA_FIJA = `La Unidad Integral de Adscripción, Acreditación de Derechos y Despacho de Medicamentos en el Municipio de Tejutla, está ubicada geográficamente a 45 kilómetros de la Cabecera Departamental de San Marcos y a 295 kilómetros de la Ciudad de Guatemala, con una duración de 8 a 10 horas de camino; no existe transporte público ni se tiene vehículo institucional para viajar el mismo día de la comisión a la ciudad de Guatemala.
+// Reemplaza la plantilla anterior (2026-09-07, "La Unidad Integral de
+// Adscripción..." sobre Tejutla/295km) por el texto literal de una carta
+// real que el cliente mandó (2026-09-19, dirigida al Jefe de DAF,
+// Quetzaltenango) con la instrucción explícita "así tiene que quedar
+// literalmente la justificación" — la fecha (lugarYFecha, ver
+// justificacion/page.tsx) y el número de Nombramiento son los únicos dos
+// datos dinámicos que el cliente marcó; el resto del texto es fijo, tal
+// cual (incluye una preposición faltante y "comision"/"guatemala" en
+// minúscula, ya en el original del cliente — se preserva literal, no se
+// corrige). El encabezado en negrita ("JUSTIFICACIÓN DEL PAGO DE CENA Y
+// HOSPEDAJE") y el saludo/párrafo de cortesía previos NO viven acá — son
+// props fijos de ImprimirNarrativoClient (seccionTitulo/parrafoIntro,
+// modo cartaFormal), esto solo genera el cuerpo de dos párrafos que el
+// colaborador puede seguir editando después desde el textarea.
+function generarJustificacionEstancia(comisiones: ComisionParaNarrativo[]): string {
+  const nombramiento = comisiones.find(c => c.nombramiento_numero)?.nombramiento_numero ?? "";
+  return `Por la distancia que existe de nuestro lugar de trabajo a la ciudad de Guatemala aproximadamente 310 kilómetros; el tiempo de viaje es de aproximadamente 7 horas; el tráfico al ingreso la ciudad capital, es necesario viajar un día antes, cabe mencionar que por el horario de llegada a guatemala y la inseguridad que se vive actualmente, la obtención de un sello representa un riesgo para mi integridad.
 
-Por lo descrito anteriormente fui comisionado(a) un día antes, según consta en Nombramiento No. 76/2026, para transportarme del Municipio de Tejutla a la Ciudad de Guatemala, y estar presente en horario y día indicado de la comisión; cabe mencionar que, por la inseguridad que se vive actualmente y no contar con vehículo institucional, no es posible obtener comprobante, firma o sello institucional que avale la estancia un día antes de la comisión.
-
-Por lo que solicito sus buenos oficios a efecto de aceptar la justificación por la estancia de un día antes a la comisión, según documentos anexos que amparan el cobro del viático en cuestión. Atentamente,`;
-
-function generarJustificacionEstancia(comisiones: ComisionParaNarrativo[], numeroFormulario: string | null): string {
-  const primerosParrafos = comisiones.map(c => {
-    return `Fui comisionado(a) para; ${c.descripcion_comision ?? ""}, según Nombramiento No. ${c.nombramiento_numero ?? ""} `
-      + `(Formulario V-L No. ${numeroFormulario ?? ""}), que se llevó a cabo el ${fechaCorta(c.fecha_llegada_lugar)} en `
-      + `horario de ${c.hora_llegada_lugar ?? ""} a ${c.hora_salida_lugar ?? ""} horas.`;
-  }).join("\n\n");
-  return `${primerosParrafos}\n\n${JUSTIFICACION_ESTANCIA_FIJA}`;
+Por lo descrito anteriormente fui comisionado(a) un día antes, según consta en Nombramiento No. ${nombramiento}, para estar presente en el lugar fecha y hora establecida y dar cumplimiento a la comision por la cual fui comisionado(a).`;
 }
 
 // Bandeja del encargado de Viáticos: solicitudes que un colaborador pidió y
@@ -248,7 +247,7 @@ export async function aprobarSolicitud(id: number, datos: DatosAprobar): Promise
     reintegro: datos.reintegro,
     complemento: datos.complemento,
     informe_comision: generarInformeComision(comisiones, sol.numero_formulario),
-    justificacion_estancia: generarJustificacionEstancia(comisiones, sol.numero_formulario),
+    justificacion_estancia: generarJustificacionEstancia(comisiones),
   }).where(eq(viaticoSolicitudes.id, id));
 
   await db.delete(viaticoGastos).where(eq(viaticoGastos.solicitud_id, id));

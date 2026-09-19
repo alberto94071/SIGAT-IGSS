@@ -2809,6 +2809,60 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   Amueblado de comedor) por SQL directo — los 4 resuelven a un candidato
   único y claramente más específico que cualquier coincidencia genérica,
   sin falsos positivos.
+- **Justificación de Estancia: reescrita por completo a partir de una carta
+  real que el cliente mandó (2026-09-19), dirigida a un destinatario externo
+  (Jefe de DAF) — formato de carta formal, no solo el párrafo libre de
+  antes.** El texto fijo anterior (2026-09-07, "La Unidad Integral de
+  Adscripción... Tejutla/295km") ya no aplica — `generarJustificacionEstancia`
+  (`viaticos/registro-comision/actions.ts`) ahora arma solo el cuerpo (dos
+  párrafos: distancia/riesgo de sello, y el cierre con el Nombramiento) con
+  el texto literal que dio el cliente ("puede ayudarme a dejarlo exactamente
+  igual" — se preservan tal cual detalles como "guatemala"/"comision" en
+  minúscula y una preposición faltante, ya así en el original). El
+  Nombramiento No. del cierre sale de la primera comisión que tenga uno
+  (mismo criterio "primera comisión" ya usado para el firmante del V-L/
+  Informe). El resto de la carta (etiqueta "Licenciado:"/saludo/párrafo de
+  cortesía/encabezado en negrita) son props nuevos de
+  `ImprimirNarrativoClient` (`cartaFormal`/`parrafoIntro`/`seccionTitulo`/
+  `ocultarDatosComisionado`) — el cuerpo ahora se parte por `"\n\n"` en
+  `<p>` separados con sangría de primera línea, para que cada párrafo se
+  indente igual que en la carta real (antes era un solo bloque). **El
+  "Licenciado:"/saludo "Licenciado {apellido}:" NO se derivan partiendo el
+  nombre completo por espacios** (adivinar el apellido de un nombre
+  compuesto es frágil, y ya mordió una vez con un "Licenciado(a):"
+  hardcodeado que no calzaba con el destinatario real — ver el punto de
+  arriba del Informe de Comisión, 2026-09-17) — en vez de eso,
+  `catalogoFirmantes` ganó `tratamiento`/`apellido` (nullable, capturados a
+  mano en Administración → Configuración → Firmantes, igual de opcionales
+  que `unidad`/`numero_empleado`/`nit`); si el firmante elegido no los
+  tiene cargados, esas líneas simplemente no se imprimen. `unidad` (ya
+  existía, "tercera línea bajo nombre+cargo" que ya usa el A-04 SIAF) se
+  reaprovechó tal cual para la línea de ciudad/oficina del destinatario
+  ("Quetzaltenango" en el ejemplo real) — no fue necesario agregar un campo
+  nuevo para eso. La fecha (`lugarYFecha`) pasó de imprimir el ISO crudo a
+  `"{Departamento}, {d} de {Mes} de {año}."` (`soloDepartamento`/
+  `fechaCartaFormal` en `justificacion/page.tsx`) — usa la cabecera
+  departamental (parte de `configuracion.municipio` DESPUÉS de la coma, ej.
+  "San Marcos"), no el municipio de la unidad (`soloMunicipio`, la mitad
+  ANTES de la coma, ya usada al revés en Libro Bancos) — sigue viniendo de
+  `fecha_limite` de la solicitud, no de la fecha real de impresión (el
+  cliente ya había pedido explícitamente lo contrario para el V-L/Informe
+  el 2026-09-17; "la fecha tiene que agarrar en tiempo real" en este pedido
+  se interpretó como "es dinámica" en general, no como pedir volver a la
+  fecha de impresión — a confirmar si la captura no calza). Verificado en
+  vivo con datos 100% desechables (colaborador + solicitud Aprobado +
+  comisión con Nombramiento "19/2026" + un firmante de prueba con
+  tratamiento "Licenciado"/apellido "Monterroso Juárez"/unidad
+  "Quetzaltenango", sembrados por SQL y borrados después): la carta impresa
+  salió letra por letra igual a la referencia del cliente, incluyendo
+  "San Marcos, 14 de Agosto de 2026." (coincidencia exacta con el ejemplo
+  real porque la fecha límite de prueba se sembró igual). **Pendiente de
+  confirmar con el cliente vía la captura enviada**: la fecha en este
+  sistema sigue imprimiéndose al final junto a la firma (como el resto de
+  documentos), no arriba a la derecha como en su carta de referencia — no
+  se movió porque cambiar la posición del encabezado/fecha es compartido
+  con el Informe de Comisión (mismo componente) y el cliente no había
+  señalado eso como parte de lo que "no calzaba".
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
