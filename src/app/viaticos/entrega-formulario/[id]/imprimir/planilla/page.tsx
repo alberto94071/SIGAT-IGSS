@@ -6,6 +6,19 @@ import { fechaGuatemala } from "@/lib/date-utils";
 import { getSolicitudParaImprimir } from "../../../../registro-comision/actions";
 import ImprimirPlanillaClient from "./ImprimirPlanillaClient";
 
+const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+  "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+// "2026-07-28" → "28 de julio de 2026." — el cliente pidió (2026-09-19) que
+// "Lugar y fecha" ya no imprima la fecha real de impresión (quedaba con
+// hoy, ej. "2026-09-19", sin relación con el viático) sino el último día de
+// entrega de la comisión (fecha_entrada_unidad, ya se muestra arriba en la
+// tabla) — mismo dato, reaprovechado, no una fecha nueva que capturar.
+function fechaLarga(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${d} de ${MESES[m - 1]} de ${y}.`;
+}
+
 export default async function ImprimirPlanillaPage({ params }: { params: Promise<{ id: string }> }) {
   await requireTabAccess("mod_viaticos", "tab_viaticos_entrega");
   const { id } = await params;
@@ -36,7 +49,7 @@ export default async function ImprimirPlanillaPage({ params }: { params: Promise
       fechaEntradaUnidad={primera?.fecha_entrada_unidad ?? null}
       horaEntradaUnidad={primera?.hora_entrada_unidad ?? null}
       gastos={solicitud.gastos}
-      lugarYFecha={`${config?.municipio ?? ""}, ${fechaGuatemala()}`}
+      lugarYFecha={`${config?.municipio ?? ""}, ${fechaLarga(primera?.fecha_entrada_unidad ?? fechaGuatemala())}`}
     />
   );
 }
