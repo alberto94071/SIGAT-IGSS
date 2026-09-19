@@ -45,7 +45,7 @@ export default async function ImprimirMiPlanillaPage({ params }: { params: Promi
       fechaEntradaUnidad={primera?.fecha_entrada_unidad ?? null}
       horaEntradaUnidad={primera?.hora_entrada_unidad ?? null}
       gastos={solicitud.gastos}
-      lugarYFecha={`${config?.municipio ?? ""}, ${fechaLarga(primera?.fecha_entrada_unidad ?? fechaGuatemala())}`}
+      lugarYFecha={`${config?.municipio ?? ""}, ${fechaLarga(solicitud.fecha_limite ?? fechaGuatemala())}`}
     />
   );
 }

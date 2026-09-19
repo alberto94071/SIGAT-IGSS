@@ -2864,29 +2864,30 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   con el Informe de Comisión (mismo componente) y el cliente no había
   señalado eso como parte de lo que "no calzaba".
 - **Planilla de Viáticos: "Lugar y fecha" imprimía la fecha real de
-  impresión, no una fecha del viático — corregido 2026-09-19.** El cliente
-  ya había pedido esto antes de esta ronda ("Te dije q lo quitarás o q el
-  sistema agarre el último día de entrega") y reportó con una captura real
-  (Formulario 117951, Fielfer Hernández) que seguía sin corregirse:
-  `lugarYFecha` en los dos `page.tsx` de la Planilla (encargado y
-  colaborador) usaba `fechaGuatemala()` (hoy, ej. "2026-09-19", sin
-  relación con las fechas reales del viático de julio) en vez de una de
-  las dos opciones que dio el cliente. Se eligió la segunda ("que el
-  sistema agarre el último día de entrega") sobre quitar el campo, para no
-  perder el dato — usa `primera.fecha_entrada_unidad` (el mismo valor que
-  ya se muestra arriba en la fila "Fecha y hora de entrada" de la tabla,
-  el regreso a la unidad de la primera comisión de la solicitud, mismo
-  criterio "primera comisión" que ya usa el resto de este documento),
-  formateado como "28 de julio de 2026." (`fechaLarga`, duplicada en
-  ambos `page.tsx` — mismo patrón de pequeños helpers de fecha repetidos
-  por ruta que ya usa el resto del sistema) en vez del ISO crudo. Solo cae
-  a `fechaGuatemala()` si por algún motivo no hay comisión con esa fecha
-  (defensivo, no debería pasar en una solicitud ya `Aprobado`). Verificado
-  en vivo, de solo lectura, contra la solicitud real reportada (id 14,
-  Formulario 117951): "Lugar y fecha" pasó de la fecha de hoy a
-  "Tacaná, San Marcos, 28 de julio de 2026." — coincide con "Fecha y hora
-  de entrada: 28/07/2026 21:00 Hrs." de la misma tabla, sin tocar ningún
-  dato real.
+  impresión — corregido 2026-09-19, con un intento intermedio revertido el
+  mismo día.** El cliente reportó con una captura real (Formulario 117951,
+  Fielfer Hernández) que `lugarYFecha` en los dos `page.tsx` de la Planilla
+  (encargado y colaborador) usaba `fechaGuatemala()` (hoy, sin relación con
+  el viático). Primer intento: `primera.fecha_entrada_unidad` (el regreso
+  de la comisión) — el cliente aclaró de inmediato que NO es esa fecha:
+  "si en donde dice 'en fecha' es del 01 de julio... la fecha que debería
+  poner es 10 de Julio porque es 10 días después de haberlo solicitado.
+  Los 10 días que tienen para presentarlo" — es el mismo plazo de 10 días
+  hábiles para PRESENTAR el trámite que ya usan Informe de Comisión y
+  Justificación de Estancia desde el 2026-09-17 (`solicitud.fecha_limite`,
+  calculado al habilitar con `sumarDiasHabiles`), no la fecha del viaje.
+  Fix final: `lugarYFecha` usa `solicitud.fecha_limite` (ya venía en el
+  tipo que devuelve `getSolicitudParaImprimir`, no hizo falta traer nada
+  nuevo), formateado como "10 de agosto de 2026." (`fechaLarga`, duplicada
+  en ambos `page.tsx`) en vez del ISO crudo. Solo cae a `fechaGuatemala()`
+  si por algún motivo la solicitud no tiene `fecha_limite` (defensivo, no
+  debería pasar en una ya `Aprobado`). Verificado en vivo, de solo lectura,
+  contra la solicitud real reportada (id 14, Formulario 117951,
+  `fecha_limite` real = 2026-08-10): "Lugar y fecha" pasó de la fecha de
+  hoy a "Tacaná, San Marcos, 10 de agosto de 2026." — sin tocar ningún
+  dato real. **Mismo criterio que Informe/Justificación** — si el cliente
+  pide mover este mismo campo a otro documento nuevo de Viáticos en el
+  futuro, es `fecha_limite`, no una fecha del viaje.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
