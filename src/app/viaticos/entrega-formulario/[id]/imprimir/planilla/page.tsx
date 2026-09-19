@@ -9,11 +9,14 @@ import ImprimirPlanillaClient from "./ImprimirPlanillaClient";
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
   "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
-// "2026-07-28" → "28 de julio de 2026." — el cliente pidió (2026-09-19) que
-// "Lugar y fecha" ya no imprima la fecha real de impresión (quedaba con
-// hoy, ej. "2026-09-19", sin relación con el viático) sino el último día de
-// entrega de la comisión (fecha_entrada_unidad, ya se muestra arriba en la
-// tabla) — mismo dato, reaprovechado, no una fecha nueva que capturar.
+// "2026-08-10" → "10 de agosto de 2026." — el cliente pidió (2026-09-19)
+// que "Lugar y fecha" ya no imprima la fecha real de impresión (quedaba con
+// hoy). Primer intento (revertido el mismo día): usar el último día de la
+// comisión (fecha_entrada_unidad) — el cliente aclaró que no es esa, es la
+// fecha límite de los 10 días hábiles que tienen para PRESENTAR el trámite
+// (mismo `fecha_limite` que ya usan Informe de Comisión/Justificación de
+// Estancia desde el 2026-09-17, ver el punto de arriba) — no un dato nuevo,
+// mismo campo ya calculado al habilitar (`sumarDiasHabiles`).
 function fechaLarga(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
   return `${d} de ${MESES[m - 1]} de ${y}.`;
@@ -49,7 +52,7 @@ export default async function ImprimirPlanillaPage({ params }: { params: Promise
       fechaEntradaUnidad={primera?.fecha_entrada_unidad ?? null}
       horaEntradaUnidad={primera?.hora_entrada_unidad ?? null}
       gastos={solicitud.gastos}
-      lugarYFecha={`${config?.municipio ?? ""}, ${fechaLarga(primera?.fecha_entrada_unidad ?? fechaGuatemala())}`}
+      lugarYFecha={`${config?.municipio ?? ""}, ${fechaLarga(solicitud.fecha_limite ?? fechaGuatemala())}`}
     />
   );
 }
