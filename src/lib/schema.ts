@@ -693,6 +693,15 @@ export const catalogoFirmantes = pgTable("catalogo_firmantes", {
   // nullable porque el resto de documentos que usan este catálogo no los piden.
   numero_empleado: text("numero_empleado"),
   nit:             text("nit"),
+  // Solo la Justificación de Estancia de Viáticos los necesita (2026-09-19,
+  // carta formal dirigida a un destinatario externo): "tratamiento" arma la
+  // etiqueta "Licenciado:" sobre el nombre y el saludo "Licenciado
+  // {apellido}:" — deliberadamente NO se deriva del nombre completo (partir
+  // el nombre por espacios para adivinar el apellido es frágil con nombres
+  // compuestos), se captura aparte, igual de a mano que el resto de estos
+  // campos opcionales del catálogo.
+  tratamiento: text("tratamiento"),
+  apellido:    text("apellido"),
   activo:     boolean("activo").notNull().default(true),
   created_at: text("created_at").default(sql`to_char(now(), 'YYYY-MM-DD HH24:MI:SS')`),
 });

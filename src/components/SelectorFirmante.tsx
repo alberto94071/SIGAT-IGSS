@@ -1,6 +1,9 @@
 "use client";
 
-export type Firmante = { id: number; nombre: string; cargo: string; numero_empleado?: string | null; nit?: string | null };
+export type Firmante = {
+  id: number; nombre: string; cargo: string; numero_empleado?: string | null; nit?: string | null;
+  unidad?: string | null; tratamiento?: string | null; apellido?: string | null;
+};
 
 // Selector de firmante para la barra "no-print" de un documento impreso —
 // reemplaza los nombres fijos que antes venían hardcodeados o de un campo
