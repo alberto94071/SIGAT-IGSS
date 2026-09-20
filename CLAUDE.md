@@ -3148,6 +3148,52 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   `registro_bancos_estado` para AMBOS `origen_id` (41 y 42) a "Pagado",
   sin tocar el pago 43 (cheque distinto) — confirmado por consulta directa
   a la base — limpiado después.
+- **Voucher de cheques de Viáticos — no existía ninguna ruta de impresión
+  (2026-09-20), descubierto por el cliente al usar la fila agrupada del
+  punto anterior en producción real ("aquí necesito que me deje imprimir
+  el voucher, o en dónde imprimo ese voucher?", sobre un cheque real "22"
+  que cubre 2 V-L).** Los viáticos SIEMPRE se tratan como grupo 100 (ver
+  Fase F de Viáticos, arriba): completan sus datos de cheque enteros en
+  Fondo Rotativo/Pagos y nunca pasan por "Enviado a Bancos"/"Completar
+  cheque y Voucher" de compras — por eso nunca cayeron en la bandeja que
+  ya tenía Voucher. Fix: `src/app/dashboard/bancos/viatico/[id]/imprimir/
+  page.tsx` (nuevo), mismo patrón que el Voucher de compras — agrupa por
+  `numero_cheque` sobre `viatico_pagos` (un mismo cheque puede pagar varios
+  V-L, igual que ya pasaba con facturas de compras desde el
+  2026-09-20 anterior), arma el concepto combinado ("Pago de Formulario
+  No. X; Pago de Formulario No. Y") y calcula saldo antes/después buscando
+  en `getLibroBancosCompleto()` filtrado por `origen === "viatico"` (mismo
+  criterio de no cruzarse con un id de compra que por casualidad coincida).
+  Reutiliza el mismo `ImprimirVoucherBancosClient.tsx` de compras — no se
+  duplicó el componente. **`ImprimirVoucherBancosClient` ganó un prop
+  `origen?: "compra" | "viatico"`** porque el criterio de cuándo imprimir
+  "Número de documento" no es el mismo para los dos: para compras con
+  `tipo_documento_pago === "Formulario"/"Vale"` el cliente pidió
+  explícitamente que quede en blanco (2026-09-16, no hay número real
+  capturado en ese punto del flujo), pero para viáticos `tipo_documento_pago`
+  es SIEMPRE "Formulario" y sí tiene un número real y significativo (el
+  `numero_formulario` del V-L) — así que la condición quedó
+  `p.tipo_documento_pago?.includes("Factura") || p.origen === "viatico"`
+  en vez de solo relajar el chequeo de "Factura" (que hubiera filtrado
+  también el número real de las facturas de compra bajo "Formulario"/"Vale").
+  **`voucherHref(origen, origenId)`** (nuevo helper en `BancosClient.tsx`)
+  centraliza a qué ruta de Voucher ir según el `origen` de
+  `MovimientoBancoTotal` (compra/viatico/vale_cheque — depósitos/reintegros
+  devuelven `null`, no son un documento de cheque) — un ícono de impresora
+  se agregó junto al número de cheque tanto en `FilaMovimiento` (fila
+  simple) como en `FilaGrupoCheque` (fila agrupada del punto anterior, usa
+  el último miembro del grupo como representante del origen/id — un grupo
+  mixto compra+viático bajo el mismo texto de cheque, coincidencia rara no
+  manejada especialmente, solo imprime el Voucher del origen del último
+  miembro). Verificado en vivo, de solo lectura, contra el cheque real "22"
+  de producción (`viatico_pagos` id 23/24, Q180+Q400): el ícono en la fila
+  agrupada de Fondo Rotativo/Bancos llevó a
+  `/dashboard/bancos/viatico/24/imprimir`, que imprimió el Voucher
+  combinado — total Q580.00 en letras "Quinientos ochenta quetzales con
+  00/100", concepto con ambos "Pago de Formulario No. 118001; ... 117964",
+  "Según Documento(s)" con Formulario/118001, 117964, beneficiario y NIT
+  reales, y Saldo anterior Q20,000.00 → Saldo nuevo Q19,420.00 (coincide
+  exacto con el saldo real de Bancos) — sin tocar ningún dato real.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
