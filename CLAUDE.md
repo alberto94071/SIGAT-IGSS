@@ -3072,6 +3072,43 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   `MODULES_COLABORADOR`, esa ya estaba activa desde la Fase B de Viáticos.)
   Verificado en vivo: la tarjeta ya no muestra el badge "Próximamente" y su
   botón dice "Ingresar" en vez de "Ver detalle".
+- **El Voucher impreso de Fondo Rotativo/Bancos ahora imprime UN solo
+  documento por cheque físico, aunque ese cheque pague varias facturas —
+  antes imprimía un Voucher separado por cada pago, aunque compartieran el
+  mismo número de cheque (2026-09-20, pedido explícito del cliente con un
+  caso real: "en bancos me aparecen dos pagos... son del mismo cheque...
+  cuando yo quiera imprimir el voucher, deben ir esas dos descripciones en
+  la impresión... en un solo voucher").** Como Fondo Rotativo/Pagos no
+  tiene selección múltiple (ver el punto de arriba de Libro Bancos), el
+  encargado le asigna el mismo `numero_cheque` a cada pago por separado —
+  antes de este fix, cada uno tenía su propia URL de impresión
+  (`/dashboard/bancos/{id}/imprimir`) mostrando solo su propia factura,
+  aunque el papel físico (un solo cheque del talonario) sea uno solo.
+  `dashboard/bancos/[id]/imprimir/page.tsx` ahora, al recibir el `id` de
+  cualquiera de los pagos, busca TODOS los `fondo_rotativo_pagos` con el
+  mismo `numero_cheque` y arma un Voucher combinado: `concepto` es la
+  concatenación de "Pago de Factura No. X y Serie: Y" de cada uno (mismo
+  formato que la Descripción de Bancos/Libro Bancos, ver el punto de
+  arriba) unidos con "; "; `monto_cheque`/`monto_letras` son la SUMA real
+  (recalculada con `montoEnLetras`, no la de un solo pago); "Según
+  Documento(s)" — Número/Serie muestran la lista completa separada por
+  comas en vez de un solo valor (el campo ya se llamaba "Documento(s)",
+  plural, preparado para esto); Beneficiario/NIT se unen con " / " si
+  llegaran a diferir entre los pagos del grupo (no debería pasar, un
+  cheque físico es para un solo beneficiario). **No importa cuál de los
+  ids del grupo traiga la URL — todos producen el mismo Voucher
+  combinado**, así que da igual desde cuál fila de la bandeja "Pendientes
+  de completar voucher" (`BancosClient.tsx`, que sigue sin tocarse, cada
+  pago sigue con su propio botón "Imprimir Voucher") se haga clic.
+  Saldo antes/después se calcula sobre el efecto NETO del grupo completo
+  (saldo justo antes del primer pago del grupo → saldo justo después del
+  último, en el mismo orden cronológico de `getLibroBancosCompleto`), no
+  solo del pago puntual de la URL. Verificado en vivo con 2 pagos de
+  prueba desechables (2 consolidaciones + 2 `fondo_rotativo_pagos`, mismo
+  `numero_cheque` "99999", facturas 111222/serie A1/Q600 y 333444/serie
+  A2/Q400): imprimir desde CUALQUIERA de los 2 ids produjo el mismo
+  Voucher con ambas descripciones, "111222, 333444" y "A1, A2" en Según
+  Documento(s), y **Q1,000.00** de monto total — limpiado después.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
