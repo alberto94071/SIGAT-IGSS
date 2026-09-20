@@ -451,6 +451,60 @@ export async function getRegistroBancos(): Promise<MovimientoBancoTotal[]> {
   });
 }
 
+// Libro Bancos (2026-09-20, pedido explícito del cliente): si varios pagos
+// comparten el mismo número de cheque físico (ej. 10 facturas distintas de
+// Fondo Rotativo/Pagos, cada una asignada una por una al mismo cheque —
+// Pagos no tiene selección múltiple, ver el comentario ahí), el Libro tiene
+// que mostrar UNA sola fila con el beneficiario y el monto TOTAL de ese
+// cheque, no una fila repetida por cada pago. El Voucher de cada pago sigue
+// imprimiendo su propio detalle individual (eso no cambia), y Fondo
+// Rotativo/Bancos (`getRegistroBancos` sin agrupar, `BancosClient.tsx`)
+// tampoco se tocó — ahí el detalle por fila sigue haciendo falta para poder
+// marcar Pagado/Anulado/En circulación pago por pago. Solo agrupa egresos
+// (nunca depósitos/reintegros, que ya son un solo evento cada uno). La fila
+// combinada hereda fecha/status/saldo/numeroCheque del ÚLTIMO pago del grupo
+// en orden cronológico (su `saldo` ya refleja correctamente la suma
+// acumulada de todo el grupo) — si el grupo tiene beneficiarios/NIT
+// distintos entre sí (dato mal capturado, o un caso real poco común), se
+// listan todos separados por " / " en vez de perder el dato.
+export async function agruparPorCheque(movimientos: MovimientoBancoTotal[]): Promise<MovimientoBancoTotal[]> {
+  type ConIndice = MovimientoBancoTotal & { _i: number };
+  const conIndice: ConIndice[] = movimientos.map((m, i) => ({ ...m, _i: i }));
+
+  const porCheque = new Map<string, ConIndice[]>();
+  const salida: ConIndice[] = [];
+  for (const m of conIndice) {
+    if (m.numeroCheque && m.egresos > 0) {
+      const arr = porCheque.get(m.numeroCheque) ?? [];
+      arr.push(m);
+      porCheque.set(m.numeroCheque, arr);
+    } else {
+      salida.push(m);
+    }
+  }
+
+  for (const filas of porCheque.values()) {
+    if (filas.length === 1) { salida.push(filas[0]); continue; }
+    const ordenadas = [...filas].sort((a, b) => a._i - b._i);
+    const ultima = ordenadas[ordenadas.length - 1];
+    const egresos = ordenadas.reduce((s, m) => s + m.egresos, 0);
+    const beneficiarios = [...new Set(ordenadas.map(m => m.beneficiario).filter((x): x is string => !!x))];
+    const nits = [...new Set(ordenadas.map(m => m.nitBeneficiario).filter((x): x is string => !!x))];
+    salida.push({
+      ...ultima,
+      id: `chq-${ultima.numeroCheque}`,
+      beneficiario: beneficiarios.join(" / ") || null,
+      nitBeneficiario: nits.join(" / ") || null,
+      descripcion: ordenadas.map(m => m.descripcion).join("; "),
+      egresos,
+      totalEnLetras: montoEnLetras(egresos),
+    });
+  }
+
+  salida.sort((a, b) => a._i - b._i);
+  return salida.map(({ _i, ...m }) => m);
+}
+
 // Marca en bloque el estado real de conciliación de varios movimientos del
 // Registro de Bancos (ver comentario de MovimientoBancoTotal.status) — el
 // flujo real del cliente es: a fin de mes entra a su estado de cuenta,

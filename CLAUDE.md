@@ -2992,6 +2992,44 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     2026-09-15` (mes distinto a propósito) — apareció en el Libro de Julio
     2026 (con Q420.00, el monto real de `viatico_pagos`) y NO apareció en
     el de Septiembre 2026, confirmando el cambio de mes base.
+- **Fondo Rotativo/Pagos no tiene selección múltiple, a propósito — el
+  cliente preguntó (2026-09-20) si podía juntar varios de los 10-11 pagos
+  pendientes de forma de pago en un solo cheque. Confirmado que se procesan
+  uno por uno (nada bloquea ponerle el mismo número de cheque a cada uno por
+  separado), y que el Voucher de cada pago SÍ debe seguir mostrando su
+  detalle individual completo — eso el cliente lo confirmó explícitamente
+  que está bien así, no se tocó Pagos/Voucher/Registro de Bancos.** Lo que
+  sí pidió: que **Libro Bancos** (no Fondo Rotativo/Bancos — son pantallas
+  distintas que comparten la misma fuente) muestre esos pagos agrupados
+  bajo un mismo número de cheque como **una sola fila**, con el beneficiario
+  y el monto TOTAL del cheque — antes mostraba una fila repetida por cada
+  pago, cada una con su monto parcial. `agruparPorCheque(movimientos)`
+  (nueva, `fondo-rotativo-pagos-actions.ts`, async porque el archivo es
+  `"use server"` y no puede exportar una función sync) agrupa por
+  `numeroCheque` cualquier fila de egreso (nunca depósitos/reintegros, que
+  ya son un solo evento) — la fila combinada hereda fecha/status/saldo del
+  ÚLTIMO pago del grupo en orden cronológico (su `saldo` ya es la suma
+  acumulada correcta), suma los `egresos`, y concatena beneficiarios/NIT con
+  " / " si llegan a diferir entre sí (no debería pasar en la práctica, un
+  cheque físico es para un solo beneficiario). Se aplicó a los 3 lugares que
+  leen `getRegistroBancos()` para Libro Bancos — pantalla
+  (`dashboard/libro-bancos/page.tsx`), impresión mensual
+  (`imprimir/[mes]/page.tsx`) y exportación Excel
+  (`api/fondo-rotativo/libro-bancos/reporte/route.ts`) — **NO** a Fondo
+  Rotativo/Bancos (`dashboard/bancos/page.tsx`/`BancosClient.tsx`, que sigue
+  sin agrupar: ahí el detalle por fila sigue haciendo falta para poder
+  marcar Pagado/Anulado/En circulación pago por pago) ni al Voucher
+  individual de cada pago. **`saldoAnterior` (impresión/Excel) se calcula
+  siempre sobre los movimientos SIN agrupar** — agrupar reposiciona la fila
+  combinada en la fecha del último pago del grupo, y eso no debe alterar
+  cuál fue la última transacción real antes del mes que se está imprimiendo.
+  Verificado en vivo con 3 pagos de prueba desechables (3 consolidaciones +
+  3 `fondo_rotativo_pagos`, mismo `numero_cheque` "77777", montos
+  Q1,000/Q1,250/Q1,500): Fondo Rotativo/Bancos siguió mostrando las 3 filas
+  separadas (6 ocurrencias de "77777" contando la bandeja de pendientes
+  debajo, 2 por pago); Libro Bancos (pantalla, impresión del mes, y Excel
+  exportado) mostró una sola fila "77777" con "Proveedor Prueba Cheque
+  Agrupado" y **Q3,750.00** — la suma exacta de los 3 — limpiado después.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
