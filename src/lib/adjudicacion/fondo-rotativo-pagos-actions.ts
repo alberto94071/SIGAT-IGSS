@@ -277,7 +277,7 @@ export async function getLibroBancosCompleto(): Promise<MovimientoBanco[]> {
   const eventos: Evento[] = [
     ...cheques.map((p): Evento => ({
       fecha: p.fecha_emision_cheque ?? "", orden: p.id, tipo: "Cheque",
-      descripcion: p.concepto_voucher ?? `A-04 ${p.numero_a04 ?? "—"}/${p.anio_a04 ?? "—"}`,
+      descripcion: `Pago de Factura No. ${p.no_factura} y Serie: ${p.serie_factura}`,
       beneficiario: p.destinatario_nombre, numero_cheque: p.numero_cheque,
       monto: p.monto_cheque ?? p.total ?? 0,
       numero_a04: p.numero_a04, anio_a04: p.anio_a04, pagoId: p.id,
@@ -285,7 +285,7 @@ export async function getLibroBancosCompleto(): Promise<MovimientoBanco[]> {
     })),
     ...viaticoCheques.map((v): Evento => ({
       fecha: v.fecha_emision_cheque ?? "", orden: v.id, tipo: "Cheque",
-      descripcion: `Viático V-L ${v.numero_formulario ?? "—"}`,
+      descripcion: `Pago de Formulario No. ${v.numero_formulario ?? "—"}`,
       beneficiario: v.destinatario_nombre, numero_cheque: v.numero_cheque,
       monto: v.total,
       numero_a04: null, anio_a04: null, pagoId: v.id,
@@ -401,14 +401,14 @@ export async function getRegistroBancos(): Promise<MovimientoBancoTotal[]> {
       fecha: p.fecha_emision_cheque ?? "", orden: 1000 + p.id, egreso: p.monto_cheque ?? p.total ?? 0, ingreso: 0,
       tipoDocumento: (p.tipo_documento_pago as MovimientoBancoTotal["tipoDocumento"]) ?? "Factura",
       status: estadoDe("compra", p.id), numeroCheque: p.numero_cheque, nitBeneficiario: p.nit_beneficiario, beneficiario: p.destinatario_nombre,
-      descripcion: p.concepto_voucher ?? `A-04 ${p.numero_a04 ?? "—"}/${p.anio_a04 ?? "—"}`, valeId: null,
+      descripcion: `Pago de Factura No. ${p.no_factura} y Serie: ${p.serie_factura}`, valeId: null,
       origen: "compra", origenId: p.id,
     })),
     ...viaticoCheques.map((v): Evento => ({
       fecha: v.fecha_emision_cheque ?? "", orden: 2000 + v.id, egreso: v.total, ingreso: 0,
       tipoDocumento: "Formulario", status: estadoDe("viatico", v.id), numeroCheque: v.numero_cheque,
       nitBeneficiario: v.nit_beneficiario, beneficiario: v.destinatario_nombre,
-      descripcion: `Viático V-L ${v.numero_formulario ?? "—"}`, valeId: null,
+      descripcion: `Pago de Formulario No. ${v.numero_formulario ?? "—"}`, valeId: null,
       origen: "viatico", origenId: v.id,
     })),
     ...valeChequesRows.map((v): Evento => ({
