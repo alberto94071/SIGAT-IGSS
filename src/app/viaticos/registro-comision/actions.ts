@@ -88,17 +88,47 @@ export async function getSolicitudesEnviadas() {
   return rows;
 }
 
-// Detalle completo (solicitud + comisiones) para el modal de revisión final.
+// Detalle completo (solicitud + comisiones) para el modal de revisión final
+// ("Revisar viático") — el encargado necesita ver prácticamente todo el
+// viático acá (fechas/horas de cada tramo, tipo de comisión, quién firmó el
+// nombramiento, y el subtotal real por grupo), no solo la descripción corta
+// que se mostraba antes (pedido del cliente 2026-09-20: "cuando se revisa el
+// viático solo se visualiza lo q fue hacer y tiene q visualizarse todo").
+// Reutiliza el mismo join de firmante que ya usa getSolicitudParaImprimir, y
+// calcula los precios reales por grupo (preciosPorGrupo) para que el
+// subtotal de cada comisión deje de estar hardcodeado a 45/60/45/150 — desde
+// 2026-09-20 el precio varía por persona_grupo (ver viatico-precios.ts).
 export async function getSolicitudCompleta(id: number) {
   const session = await auth();
   if (!session) return null;
   const [sol] = await db.select().from(viaticoSolicitudes).where(eq(viaticoSolicitudes.id, id)).limit(1);
   if (!sol) return null;
-  const comisiones = await db.select().from(viaticoComisiones)
+
+  const comisionesRaw = await db.select().from(viaticoComisiones)
     .where(eq(viaticoComisiones.solicitud_id, id)).orderBy(viaticoComisiones.orden);
+
+  const firmanteIds = [...new Set(comisionesRaw.map(c => c.firmante_catalogo_id).filter((x): x is number => x != null))];
+  const firmantesMap = new Map<number, { nombre: string; cargo: string }>();
+  if (firmanteIds.length > 0) {
+    const filas = await db.select({ id: catalogoFirmantes.id, nombre: catalogoFirmantes.nombre, cargo: catalogoFirmantes.cargo })
+      .from(catalogoFirmantes).where(sql`${catalogoFirmantes.id} IN (${sql.join(firmanteIds, sql`, `)})`);
+    for (const f of filas) firmantesMap.set(f.id, f);
+  }
+  const comisiones = comisionesRaw.map(c => {
+    const firmante = c.firmante_catalogo_id != null ? firmantesMap.get(c.firmante_catalogo_id) : null;
+    return { ...c, firmante_nombre: firmante?.nombre ?? null, firmante_cargo: firmante?.cargo ?? null };
+  });
+
   const gastos = await db.select().from(viaticoGastos)
     .where(eq(viaticoGastos.solicitud_id, id)).orderBy(viaticoGastos.orden);
-  return { ...sol, comisiones, gastos };
+
+  const [cfg] = await db.select({
+    viatico_cuota_grupo_1_2: configuracion.viatico_cuota_grupo_1_2, viatico_cuota_grupo_3: configuracion.viatico_cuota_grupo_3,
+    viatico_cuota_grupo_4: configuracion.viatico_cuota_grupo_4, viatico_cuota_grupo_5: configuracion.viatico_cuota_grupo_5,
+  }).from(configuracion).limit(1);
+  const precios = preciosPorGrupo(sol.persona_grupo, cfg ?? { viatico_cuota_grupo_1_2: 600, viatico_cuota_grupo_3: 500, viatico_cuota_grupo_4: 400, viatico_cuota_grupo_5: 300 });
+
+  return { ...sol, comisiones, gastos, precios };
 }
 
 // Archivo: solicitudes ya resueltas (Aprobado, Rechazado, o el formulario se

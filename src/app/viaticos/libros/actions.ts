@@ -65,8 +65,16 @@ export async function getLibroViaticos(mes: string): Promise<MovimientoLibro[]> 
   }).from(viaticoSolicitudes)
     .where(sql`${viaticoSolicitudes.estado} IN ('Aprobado', 'Anulado', 'Extraviado')`);
 
+  // La fecha que decide a qué mes pertenece cada fila (y la que se muestra
+  // en la columna "Fecha") es la del Nombramiento, no la de entrega/cierre
+  // del trámite (pedido explícito del cliente 2026-09-20: "el informe o
+  // registro de los viáticos tiene q ser por la fecha de los nombramientos
+  // y no de la fecha de entrega") — antes usaba aprobado_en/
+  // formulario_marcado_en. fecha_nombramiento siempre existe para cualquier
+  // solicitud que llegó a Aprobado/Anulado/Extraviado (se captura al
+  // habilitar, paso obligatorio previo), el fallback es solo defensivo.
   const relevantes = solicitudes
-    .map(s => ({ ...s, fechaEvento: (s.estado === "Aprobado" ? s.aprobado_en : s.formulario_marcado_en) ?? "" }))
+    .map(s => ({ ...s, fechaEvento: s.fecha_nombramiento ?? (s.estado === "Aprobado" ? s.aprobado_en : s.formulario_marcado_en) ?? "" }))
     .filter(s => s.fechaEvento.slice(0, 7) === mes);
 
   const idsAprobados = relevantes.filter(s => s.estado === "Aprobado").map(s => s.id);

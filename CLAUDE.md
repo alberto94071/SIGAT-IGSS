@@ -2939,6 +2939,59 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     respectivamente. La sección nueva en Configuración → Viáticos mostró
     los 4 valores reales de producción (600/500/400/300) — limpiado
     después (colaboradores y solicitudes de prueba borrados).
+- **Lote de 2 pedidos de Viáticos 2026-09-20 (WhatsApp del cliente, relayed
+  por el usuario):**
+  - **"Revisar viático" (`RevisarModal`, `viaticos/registro-comision/
+    RegistroComisionClient.tsx`) solo mostraba `descripcion_comision`,
+    lugar/departamento, días y nombramiento — el cliente pidió que se vea
+    "prácticamente todo el viático" (fechas, horarios, a dónde fueron) antes
+    de aprobar, no solo el "qué fue a hacer".** `getSolicitudCompleta`
+    (`viaticos/registro-comision/actions.ts`) ya traía la fila completa de
+    `viatico_comisiones` (con las 4 fechas/horas — salida unidad, llegada
+    lugar, salida lugar, entrada unidad — y `tipo_comision`), pero el tipo
+    TypeScript del cliente solo destructuraba un subconjunto y el modal no
+    los renderizaba. Fix: `getSolicitudCompleta` ganó el mismo join contra
+    `catalogoFirmantes` que ya usa `getSolicitudParaImprimir` (mismo
+    archivo) para resolver `firmante_nombre`/`firmante_cargo` por comisión
+    — antes solo se veía en la impresión, nunca en la revisión previa. El
+    modal ahora muestra `tipo_comision`, los 4 pares fecha/hora, y quién
+    firmó el nombramiento, además de lo que ya tenía.
+  - **De paso, autodetectado (no reportado por el cliente): el subtotal de
+    cada comisión en ese mismo modal seguía hardcodeado a `45/60/45/150`**
+    — quedó obsoleto por el cambio de precios por grupo del mismo día (ver
+    el punto de arriba, "cuotas por grupo") sin que nadie lo tocara ahí.
+    `getSolicitudCompleta` ahora también calcula y devuelve `precios` (vía
+    `preciosPorGrupo(sol.persona_grupo, cfg)`, mismo patrón que
+    `aprobarSolicitud` en el mismo archivo) y el modal usa `sol.precios` en
+    vez del literal viejo — si no se corrige, el subtotal que ve el
+    encargado antes de aprobar no coincide con lo que `aprobarSolicitud`
+    realmente calcula y guarda en `viatico_pagos`.
+  - **El Libro de Viáticos (`viaticos/libros/actions.ts`,
+    `getLibroViaticos`) filtraba/ordenaba/mostraba cada fila por
+    `aprobado_en`/`formulario_marcado_en` ("fecha de entrega/cierre del
+    trámite") — el cliente pidió explícitamente que sea por la fecha del
+    Nombramiento en su lugar** ("el informe o registro de los viáticos
+    tiene q ser por la fecha de los nombramientos y no de la fecha de
+    entrega"). Fix: `fechaEvento` ahora usa `s.fecha_nombramiento` primero
+    (con el cálculo viejo solo como respaldo defensivo — `fecha_nombramiento`
+    siempre existe para cualquier solicitud que llegó a
+    Aprobado/Anulado/Extraviado, se captura al habilitar, paso obligatorio
+    previo). Esto cambia a qué mes pertenece cada fila (el mes que se pide
+    al imprimir el Libro) y el valor de la primera columna "Fecha" — la
+    columna "Fecha Nombramiento" ya existía aparte en
+    `ImprimirLibroViaticosClient.tsx` y ahora, para las filas de tipo
+    "formulario", muestra lo mismo que "Fecha" (esperado, no se tocó el
+    layout — el cliente no pidió quitar la columna duplicada).
+  - Verificado en vivo con datos 100% desechables (un colaborador +
+    2 solicitudes, borrados después): (1) una solicitud `Enviado` con una
+    comisión de grupo 1 (cuota Q600, 1 de cada servicio) — el modal
+    "Revisar" mostró tipo de comisión, descripción, las 4 fechas/horas, el
+    firmante real del catálogo, y el subtotal correcto "Q600.00" (antes
+    hubiera dado "Q300.00" con el cálculo hardcodeado); (2) una solicitud
+    `Aprobado` con `fecha_nombramiento = 2026-07-15` pero `aprobado_en =
+    2026-09-15` (mes distinto a propósito) — apareció en el Libro de Julio
+    2026 (con Q420.00, el monto real de `viatico_pagos`) y NO apareció en
+    el de Septiembre 2026, confirmando el cambio de mes base.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
