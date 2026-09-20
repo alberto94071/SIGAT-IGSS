@@ -3,7 +3,7 @@ import ExcelJS from "exceljs";
 import { requireTabAccessAction } from "@/lib/modulo-access";
 import { db } from "@/lib/db";
 import { configuracion } from "@/lib/schema";
-import { getRegistroBancos } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
+import { getRegistroBancos, agruparPorCheque } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 
 // Exportar Libro Bancos (2026-09-16) — mismo formato que
 // ImprimirLibroBancosClient.tsx (título de rango en barra azul, encabezado
@@ -39,9 +39,12 @@ export async function GET(req: NextRequest) {
     getRegistroBancos(),
     db.select().from(configuracion).limit(1),
   ]);
-  const delMes = movimientos.filter(m => m.fecha.slice(0, 7) === mes);
+  // saldoAnterior se calcula sobre los movimientos SIN agrupar (ver el mismo
+  // comentario en imprimir/[mes]/page.tsx) — la agrupación por cheque solo
+  // aplica a lo que se exporta del mes.
   const anteriores = movimientos.filter(m => m.fecha.slice(0, 7) < mes);
   const saldoAnterior = anteriores.length > 0 ? anteriores[anteriores.length - 1].saldo : (config?.monto_fondo_rotativo ?? 0);
+  const delMes = (await agruparPorCheque(movimientos)).filter(m => m.fecha.slice(0, 7) === mes);
   const totalCredito = delMes.reduce((s, m) => s + m.ingresos, 0);
   const totalDebito = delMes.reduce((s, m) => s + m.egresos, 0);
   const saldoFinal = delMes.length > 0 ? delMes[delMes.length - 1].saldo : saldoAnterior;
