@@ -3030,6 +3030,48 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   debajo, 2 por pago); Libro Bancos (pantalla, impresión del mes, y Excel
   exportado) mostró una sola fila "77777" con "Proveedor Prueba Cheque
   Agrupado" y **Q3,750.00** — la suma exacta de los 3 — limpiado después.
+- **Descripción de Fondo Rotativo/Bancos, Libro Bancos y Libro Conciliación
+  ahora dice literalmente qué se está pagando, con los valores reales del
+  pago (2026-09-20, pedido explícito del cliente con el formato exacto):
+  compras → "Pago de Factura No. {no_factura} y Serie: {serie_factura}";
+  viáticos → "Pago de Formulario No. {numero_formulario}".** Antes, para
+  compras, la descripción priorizaba `concepto_voucher` (el campo de texto
+  libre "Concepto" que se llena opcionalmente en Fondo Rotativo/Bancos →
+  "Completar cheque y Voucher") y solo caía a `"A-04 {num}/{anio}"` si
+  quedaba vacío — el pedido del cliente es que la Descripción siempre
+  refleje la factura real que se está pagando, así que se reemplazó por
+  completo (ya no cae a `concepto_voucher`, que sigue existiendo y se usa
+  igual en el Voucher impreso — solo dejó de alimentar esta columna). Para
+  viáticos era `"Viático V-L {num}"`. Hecho en **dos** lugares que arman
+  este mismo texto por separado — `getLibroBancosCompleto` (alimenta Libro
+  Conciliación vía `getLibroConciliacion`, y el cálculo de saldo antes/
+  después del Voucher individual de compras) y `getRegistroBancos`/
+  `MovimientoBancoTotal` (alimenta Fondo Rotativo/Bancos y Libro Bancos,
+  ver el punto de arriba) — ambas funciones construyen su propia lista de
+  eventos de forma independiente, no comparten una sola fuente de
+  `descripcion`. `no_factura`/`serie_factura` son `NOT NULL` en
+  `fondo_rotativo_pagos` (siempre vienen de la factura original de la
+  compra, sin importar qué `tipo_documento_pago` se haya elegido después en
+  el Voucher), así que el formato nuevo nunca queda con un "—" para
+  compras. Verificado en vivo con un pago de compra y un pago de viático de
+  prueba desechables (consolidación + `fondo_rotativo_pagos` con
+  no_factura "654321"/serie "C99"; colaborador + solicitud Aprobado +
+  `viatico_pagos` con Formulario "444555"), ambos con cheque asignado: las
+  3 pantallas (Fondo Rotativo/Bancos, Libro Bancos, Libro Conciliación)
+  mostraron "Pago de Factura No. 654321 y Serie: C99" y "Pago de
+  Formulario No. 444555" — limpiado después.
+- **El botón "Pago de Viáticos" del launcher (la tarjeta de módulo, para
+  roles que no son colaborador) seguía marcado "Próximamente"
+  (`available: false` en `MODULES`, `launcher/page.tsx`) pese a que el
+  módulo `viaticos/` lleva meses completo y en uso real en producción**
+  (Registro de Comisión, Aprobar/Rechazar, Entrega de Formulario, Libros) —
+  quedó así desde antes de que el módulo se construyera y nadie lo había
+  vuelto a tocar. Pedido explícito del cliente 2026-09-20 ("habilita el
+  botón del módulo de viáticos"). Fix de una línea: `available: true`. (No
+  confundir con la tarjeta separada "Solicitar Viáticos" de
+  `MODULES_COLABORADOR`, esa ya estaba activa desde la Fase B de Viáticos.)
+  Verificado en vivo: la tarjeta ya no muestra el badge "Próximamente" y su
+  botón dice "Ingresar" en vez de "Ver detalle".
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

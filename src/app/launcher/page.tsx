@@ -62,7 +62,7 @@ const MODULES = [
     ring: "ring-blue-200",
     textColor: "text-blue-600",
     bgLight: "bg-blue-50",
-    available: false,
+    available: true,
     permiso: "mod_viaticos" as Modulo | null,
   },
   {
