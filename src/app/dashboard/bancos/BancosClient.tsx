@@ -29,6 +29,18 @@ const STATUS_COLOR: Record<MovimientoBancoTotal["status"], string> = {
 // mismo par (origen, origenId) que espera actualizarEstadoBancos.
 const claveMov = (m: MovimientoBancoTotal) => `${m.origen}:${m.origenId}`;
 
+// Ruta del Voucher según de dónde viene el cheque — compras y viáticos
+// tienen cada uno su propia ruta (ambas agrupan por numero_cheque del lado
+// del servidor, así que cualquier origenId del grupo llega al mismo
+// Voucher combinado); Vale de Caja Chica ya tenía la suya. Depósitos/
+// Reintegros no son un documento de cheque, no llevan Voucher.
+function voucherHref(origen: MovimientoBancoTotal["origen"], origenId: number): string | null {
+  if (origen === "compra") return `/dashboard/bancos/${origenId}/imprimir`;
+  if (origen === "viatico") return `/dashboard/bancos/viatico/${origenId}/imprimir`;
+  if (origen === "vale_cheque") return `/dashboard/voucher/${origenId}/imprimir`;
+  return null;
+}
+
 // Agrupado por cheque, solo para esta pantalla (2026-09-20, pedido del
 // cliente: "que agrupe por cheque y que sea abatible... así es más fácil
 // de visualizar cuando ya hay muchos cheques hechos") — a diferencia de
@@ -361,7 +373,15 @@ function FilaMovimiento({ m, seleccionado, onToggleSeleccion }: {
         <input type="checkbox" className="rounded border-gray-300" checked={seleccionado} onChange={onToggleSeleccion} />
       </td>
       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{m.mes || "—"}</td>
-      <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{m.numeroCheque ?? "—"}</td>
+      <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">
+        {m.numeroCheque ?? "—"}
+        {voucherHref(m.origen, m.origenId) && (
+          <Link href={voucherHref(m.origen, m.origenId)!} onClick={e => e.stopPropagation()} title="Imprimir Voucher"
+            className="ml-2 inline-flex align-middle text-gray-400 hover:text-brand-600">
+            <Printer className="w-3.5 h-3.5" />
+          </Link>
+        )}
+      </td>
       <td className="px-4 py-3 whitespace-nowrap">
         <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${TIPO_DOC_COLOR[m.tipoDocumento]}`}>{m.tipoDocumento}</span>
       </td>
@@ -433,7 +453,15 @@ function FilaGrupoCheque({ numeroCheque, miembros, expandido, onToggleExpandido,
         <input type="checkbox" className="rounded border-gray-300" checked={todosSeleccionados} onChange={onToggleSeleccionGrupo} />
       </td>
       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{ultimo.mes || "—"}</td>
-      <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{numeroCheque}</td>
+      <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">
+        {numeroCheque}
+        {voucherHref(ultimo.origen, ultimo.origenId) && (
+          <Link href={voucherHref(ultimo.origen, ultimo.origenId)!} onClick={e => e.stopPropagation()} title="Imprimir Voucher"
+            className="ml-2 inline-flex align-middle text-gray-400 hover:text-brand-600">
+            <Printer className="w-3.5 h-3.5" />
+          </Link>
+        )}
+      </td>
       <td className="px-4 py-3 whitespace-nowrap">
         {tipoUnico ? (
           <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${TIPO_DOC_COLOR[tipoUnico]}`}>{tipoUnico}</span>

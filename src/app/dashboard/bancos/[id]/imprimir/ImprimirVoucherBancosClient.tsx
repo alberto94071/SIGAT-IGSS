@@ -16,6 +16,14 @@ type Pago = {
   tipo_documento_pago: string | null;
   no_factura: string; serie_factura: string;
   nit_beneficiario: string | null;
+  // "compra" (default) | "viatico" — de dónde viene este pago. Decide si
+  // "Según Documento(s)" — Número se imprime cuando el tipo es
+  // "Formulario": para una compra ese tipo no tiene un número propio
+  // capturado (queda en blanco, pedido explícito del cliente 2026-09-16);
+  // para un viático "Formulario" SIEMPRE es el V-L real y sí tiene número
+  // (no_factura acá trae el/los numero_formulario, ver page.tsx de
+  // dashboard/bancos/viatico/[id]/imprimir).
+  origen?: "compra" | "viatico";
 };
 
 interface Props {
@@ -213,7 +221,7 @@ export default function ImprimirVoucherBancosClient({
         {campo("numero_documento_header", "Número", { style: { fontSize: "6.5pt", fontWeight: "bold", textDecoration: "underline" } })}
         {campo("serie_documento_header", "Serie", { style: { fontSize: "6.5pt", fontWeight: "bold", textDecoration: "underline" } })}
         {campo("tipo_documento", p.tipo_documento_pago ?? "", { style: { fontSize: "7.5pt" } })}
-        {campo("numero_documento", p.tipo_documento_pago?.includes("Factura") ? p.no_factura : "", { style: { fontSize: "7.5pt" } })}
+        {campo("numero_documento", p.tipo_documento_pago?.includes("Factura") || p.origen === "viatico" ? p.no_factura : "", { style: { fontSize: "7.5pt" } })}
         {campo("serie_documento", p.tipo_documento_pago?.includes("Factura") ? p.serie_factura : "", { style: { fontSize: "7.5pt" } })}
 
         {campo("saldo_anterior", saldoAnterior != null ? `Saldo anterior: ${fmtQ(saldoAnterior)}` : "", { style: { fontSize: "7.5pt", color: "#444" } })}
