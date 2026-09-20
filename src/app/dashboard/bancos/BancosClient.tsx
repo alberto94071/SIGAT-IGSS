@@ -29,6 +29,21 @@ const STATUS_COLOR: Record<MovimientoBancoTotal["status"], string> = {
 // mismo par (origen, origenId) que espera actualizarEstadoBancos.
 const claveMov = (m: MovimientoBancoTotal) => `${m.origen}:${m.origenId}`;
 
+// Agrupado por cheque, solo para esta pantalla (2026-09-20, pedido del
+// cliente: "que agrupe por cheque y que sea abatible... así es más fácil
+// de visualizar cuando ya hay muchos cheques hechos") — a diferencia de
+// Libro Bancos (agruparPorCheque en el servidor, que sí colapsa las filas
+// de una vez), acá la agrupación es puramente de presentación: cada pago
+// individual sigue siendo su propia fila (origen/origenId) para que
+// actualizarEstadoBancos pueda seguir marcando Pagado/Anulado/En
+// Circulación pago por pago si hace falta — solo se envuelve en un
+// resumen expandible cuando hay más de uno bajo el mismo número de
+// cheque. Un cheque de un solo pago se sigue viendo como fila simple, sin
+// acordeón de más.
+type FilaRegistro =
+  | { tipo: "simple"; mov: MovimientoBancoTotal; orden: number }
+  | { tipo: "grupo"; numeroCheque: string; miembros: MovimientoBancoTotal[]; orden: number };
+
 interface Props { pagos: PagoFondoRotativo[]; movimientos: MovimientoBancoTotal[]; }
 
 export default function BancosClient({ pagos: init, movimientos: movInit }: Props) {
@@ -36,6 +51,7 @@ export default function BancosClient({ pagos: init, movimientos: movInit }: Prop
   const [movimientos, setMovimientos] = useState(movInit);
   const [modalFor, setModalFor] = useState<PagoFondoRotativo | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [chequesExpandidos, setChequesExpandidos] = useState<Set<string>>(new Set());
   const [procesando, setProcesando] = useState<number | null>(null);
   const [rowError, setRowError] = useState<Record<number, string>>({});
   const [query, setQuery] = useState("");
@@ -60,10 +76,57 @@ export default function BancosClient({ pagos: init, movimientos: movInit }: Prop
   ), [movimientos, q]);
   const saldoActual = movimientos.length > 0 ? movimientos[movimientos.length - 1].saldo : null;
 
+  // Agrupa por número de cheque (solo egresos — depósitos/reintegros nunca
+  // se agrupan, ya son un solo evento cada uno) — un cheque con un solo
+  // pago sigue como fila simple, sin acordeón. `orden` conserva la
+  // posición del ÚLTIMO miembro dentro de movimientosFiltrados para que la
+  // fila resumen quede en su lugar cronológico real (mismo criterio que
+  // agruparPorCheque, del lado del servidor, para Libro Bancos).
+  const filas = useMemo<FilaRegistro[]>(() => {
+    const porCheque = new Map<string, MovimientoBancoTotal[]>();
+    const resultado: FilaRegistro[] = [];
+    movimientosFiltrados.forEach((m, i) => {
+      if (m.numeroCheque && m.egresos > 0) {
+        const arr = porCheque.get(m.numeroCheque) ?? [];
+        arr.push(m);
+        porCheque.set(m.numeroCheque, arr);
+      } else {
+        resultado.push({ tipo: "simple", mov: m, orden: i });
+      }
+    });
+    for (const [numeroCheque, miembros] of porCheque) {
+      if (miembros.length === 1) {
+        resultado.push({ tipo: "simple", mov: miembros[0], orden: movimientosFiltrados.indexOf(miembros[0]) });
+      } else {
+        const orden = Math.max(...miembros.map(m => movimientosFiltrados.indexOf(m)));
+        resultado.push({ tipo: "grupo", numeroCheque, miembros, orden });
+      }
+    }
+    return resultado.sort((a, b) => a.orden - b.orden);
+  }, [movimientosFiltrados]);
+
   function toggleSeleccion(clave: string) {
     setSeleccionados(prev => {
       const next = new Set(prev);
       if (next.has(clave)) next.delete(clave); else next.add(clave);
+      return next;
+    });
+  }
+
+  function toggleSeleccionGrupo(miembros: MovimientoBancoTotal[]) {
+    const claves = miembros.map(claveMov);
+    const todos = claves.every(c => seleccionados.has(c));
+    setSeleccionados(prev => {
+      const next = new Set(prev);
+      claves.forEach(c => todos ? next.delete(c) : next.add(c));
+      return next;
+    });
+  }
+
+  function toggleExpandidoCheque(numeroCheque: string) {
+    setChequesExpandidos(prev => {
+      const next = new Set(prev);
+      if (next.has(numeroCheque)) next.delete(numeroCheque); else next.add(numeroCheque);
       return next;
     });
   }
@@ -144,6 +207,7 @@ export default function BancosClient({ pagos: init, movimientos: movInit }: Prop
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
+                <th className="px-4 py-3 w-8"></th>
                 <th className="px-4 py-3 w-8">
                   <input type="checkbox" className="rounded border-gray-300"
                     checked={movimientosFiltrados.length > 0 && movimientosFiltrados.every(m => seleccionados.has(claveMov(m)))}
@@ -164,33 +228,13 @@ export default function BancosClient({ pagos: init, movimientos: movInit }: Prop
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {movimientosFiltrados.map(m => {
-                const clave = claveMov(m);
-                return (
-                  <tr key={m.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <input type="checkbox" className="rounded border-gray-300"
-                        checked={seleccionados.has(clave)} onChange={() => toggleSeleccion(clave)} />
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{m.mes || "—"}</td>
-                    <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{m.numeroCheque ?? "—"}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${TIPO_DOC_COLOR[m.tipoDocumento]}`}>{m.tipoDocumento}</span>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_COLOR[m.status]}`}>{m.status}</span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{m.fecha || "—"}</td>
-                    <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{m.nitBeneficiario ?? "—"}</td>
-                    <td className="px-4 py-3 text-gray-900">{m.beneficiario ?? "—"}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{m.descripcion}</td>
-                    <td className="px-4 py-3 text-right font-mono text-red-700 whitespace-nowrap">{m.egresos > 0 ? Q(m.egresos) : "—"}</td>
-                    <td className="px-4 py-3 text-right font-mono text-green-700 whitespace-nowrap">{m.ingresos > 0 ? Q(m.ingresos) : "—"}</td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-gray-900 whitespace-nowrap">{Q(m.saldo)}</td>
-                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{m.totalEnLetras}</td>
-                  </tr>
-                );
-              })}
+              {filas.map(fila => fila.tipo === "simple"
+                ? <FilaMovimiento key={fila.mov.id} m={fila.mov}
+                    seleccionado={seleccionados.has(claveMov(fila.mov))} onToggleSeleccion={() => toggleSeleccion(claveMov(fila.mov))} />
+                : <FilaGrupoCheque key={`chq-${fila.numeroCheque}`} numeroCheque={fila.numeroCheque} miembros={fila.miembros}
+                    expandido={chequesExpandidos.has(fila.numeroCheque)} onToggleExpandido={() => toggleExpandidoCheque(fila.numeroCheque)}
+                    seleccionados={seleccionados} onToggleSeleccionGrupo={() => toggleSeleccionGrupo(fila.miembros)} />
+              )}
             </tbody>
           </table>
           {movimientosFiltrados.length === 0 && (
@@ -301,6 +345,118 @@ export default function BancosClient({ pagos: init, movimientos: movInit }: Prop
         />
       )}
     </div>
+  );
+}
+
+// Fila plana de siempre (movimiento suelto, o cheque de un solo pago) —
+// lleva una primera celda vacía para alinearse con la columna del chevron
+// que sí usan las filas de grupo (FilaGrupoCheque, abajo).
+function FilaMovimiento({ m, seleccionado, onToggleSeleccion }: {
+  m: MovimientoBancoTotal; seleccionado: boolean; onToggleSeleccion: () => void;
+}) {
+  return (
+    <tr className="hover:bg-gray-50">
+      <td className="px-4 py-3"></td>
+      <td className="px-4 py-3">
+        <input type="checkbox" className="rounded border-gray-300" checked={seleccionado} onChange={onToggleSeleccion} />
+      </td>
+      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{m.mes || "—"}</td>
+      <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{m.numeroCheque ?? "—"}</td>
+      <td className="px-4 py-3 whitespace-nowrap">
+        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${TIPO_DOC_COLOR[m.tipoDocumento]}`}>{m.tipoDocumento}</span>
+      </td>
+      <td className="px-4 py-3 whitespace-nowrap">
+        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_COLOR[m.status]}`}>{m.status}</span>
+      </td>
+      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{m.fecha || "—"}</td>
+      <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{m.nitBeneficiario ?? "—"}</td>
+      <td className="px-4 py-3 text-gray-900">{m.beneficiario ?? "—"}</td>
+      <td className="px-4 py-3 text-xs text-gray-500">{m.descripcion}</td>
+      <td className="px-4 py-3 text-right font-mono text-red-700 whitespace-nowrap">{m.egresos > 0 ? Q(m.egresos) : "—"}</td>
+      <td className="px-4 py-3 text-right font-mono text-green-700 whitespace-nowrap">{m.ingresos > 0 ? Q(m.ingresos) : "—"}</td>
+      <td className="px-4 py-3 text-right font-mono font-bold text-gray-900 whitespace-nowrap">{Q(m.saldo)}</td>
+      <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{m.totalEnLetras}</td>
+    </tr>
+  );
+}
+
+// Fila resumen de un cheque que cubre varios pagos, con el detalle
+// abatible (pedido del cliente 2026-09-20) — la selección/checkbox de la
+// fila resumen actúa sobre TODOS los miembros a la vez (un cheque físico
+// se cobra o se anula como un solo evento), pero cada miembro sigue
+// existiendo como su propia fila del lado del servidor
+// (registro_bancos_estado por origen/origenId) — no se pierde la
+// granularidad, solo se colapsa visualmente.
+function FilaGrupoCheque({ numeroCheque, miembros, expandido, onToggleExpandido, seleccionados, onToggleSeleccionGrupo }: {
+  numeroCheque: string; miembros: MovimientoBancoTotal[];
+  expandido: boolean; onToggleExpandido: () => void;
+  seleccionados: Set<string>; onToggleSeleccionGrupo: () => void;
+}) {
+  const ultimo = miembros[miembros.length - 1];
+  const egresoTotal = miembros.reduce((s, m) => s + m.egresos, 0);
+  const beneficiarios = [...new Set(miembros.map(m => m.beneficiario).filter((x): x is string => !!x))];
+  const nits = [...new Set(miembros.map(m => m.nitBeneficiario).filter((x): x is string => !!x))];
+  const tiposDoc = [...new Set(miembros.map(m => m.tipoDocumento))];
+  const estados = [...new Set(miembros.map(m => m.status))];
+  const tipoUnico = tiposDoc.length === 1 ? tiposDoc[0] : null;
+  const estadoUnico = estados.length === 1 ? estados[0] : null;
+  const todosSeleccionados = miembros.every(m => seleccionados.has(claveMov(m)));
+
+  return (
+    <ExpandableRow colSpan={14} expanded={expandido} onToggle={onToggleExpandido}
+      rowClassName="hover:bg-gray-50 cursor-pointer transition-colors"
+      detail={
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-gray-500">
+              <th className="text-left py-1 pr-3">Descripción</th>
+              <th className="text-left py-1 pr-3">Fecha</th>
+              <th className="text-left py-1 pr-3">Status</th>
+              <th className="text-right py-1">Egresos</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {miembros.map(m => (
+              <tr key={claveMov(m)}>
+                <td className="py-1.5 pr-3 text-gray-700">{m.descripcion}</td>
+                <td className="py-1.5 pr-3 text-gray-500 whitespace-nowrap">{m.fecha || "—"}</td>
+                <td className="py-1.5 pr-3 whitespace-nowrap">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_COLOR[m.status]}`}>{m.status}</span>
+                </td>
+                <td className="py-1.5 text-right font-mono text-red-700 whitespace-nowrap">{Q(m.egresos)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      }>
+      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+        <input type="checkbox" className="rounded border-gray-300" checked={todosSeleccionados} onChange={onToggleSeleccionGrupo} />
+      </td>
+      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{ultimo.mes || "—"}</td>
+      <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{numeroCheque}</td>
+      <td className="px-4 py-3 whitespace-nowrap">
+        {tipoUnico ? (
+          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${TIPO_DOC_COLOR[tipoUnico]}`}>{tipoUnico}</span>
+        ) : (
+          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700" title={tiposDoc.join(", ")}>Mixto</span>
+        )}
+      </td>
+      <td className="px-4 py-3 whitespace-nowrap">
+        {estadoUnico ? (
+          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_COLOR[estadoUnico]}`}>{estadoUnico}</span>
+        ) : (
+          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700" title={estados.join(", ")}>Mixto</span>
+        )}
+      </td>
+      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{ultimo.fecha || "—"}</td>
+      <td className="px-4 py-3 font-mono text-gray-700 whitespace-nowrap">{nits.join(" / ") || "—"}</td>
+      <td className="px-4 py-3 text-gray-900">{beneficiarios.join(" / ") || "—"}</td>
+      <td className="px-4 py-3 text-xs text-gray-500">{miembros.length} pagos con este cheque</td>
+      <td className="px-4 py-3 text-right font-mono font-bold text-red-700 whitespace-nowrap">{Q(egresoTotal)}</td>
+      <td className="px-4 py-3 text-right font-mono text-green-700 whitespace-nowrap">—</td>
+      <td className="px-4 py-3 text-right font-mono font-bold text-gray-900 whitespace-nowrap">{Q(ultimo.saldo)}</td>
+      <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{montoEnLetras(egresoTotal)}</td>
+    </ExpandableRow>
   );
 }
 

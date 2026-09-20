@@ -3109,6 +3109,45 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   A2/Q400): imprimir desde CUALQUIERA de los 2 ids produjo el mismo
   Voucher con ambas descripciones, "111222, 333444" y "A1, A2" en Según
   Documento(s), y **Q1,000.00** de monto total — limpiado después.
+- **Fondo Rotativo/Bancos (Registro de Bancos, `BancosClient.tsx`) ahora
+  agrupa por cheque con detalle abatible — mismo pedido del cliente
+  2026-09-20 que el Voucher combinado de arriba, pero acá para la tabla
+  principal en vez de la impresión ("que agrupe por cheque y que sea
+  abatible, entregando todo lo que está pagando ese cheque, así es más
+  fácil de visualizar cuando ya hay muchos cheques hechos").** Antes cada
+  pago con el mismo `numeroCheque` era su propia fila plana — con muchos
+  pagos por cheque la tabla se veía repetida. Ahora, a diferencia de
+  `agruparPorCheque` (servidor, usado por Libro Bancos, que sí colapsa las
+  filas de una vez): esta agrupación es **puramente de presentación,
+  client-side, con `useMemo`** — un cheque con un solo pago sigue como
+  fila simple sin acordeón (no agrega ruido); un cheque con varios pagos se
+  muestra como una fila resumen (egresos = suma, beneficiario/NIT unidos
+  con " / " si difieren, Tipo Doc./Status con badge "Mixto" si los
+  miembros no coinciden) usando `ExpandableRow` (mismo componente ya usado
+  en "Pendientes de completar voucher", debajo) — al expandir, una
+  tabla interna de solo lectura lista cada pago individual con su propia
+  descripción/fecha/status/egreso. **Cada pago sigue siendo su propia fila
+  del lado del servidor** (`registro_bancos_estado` por `origen`+
+  `origenId`, sin cambios ahí) — la fila resumen NO colapsa el dato real,
+  solo la vista; el checkbox de la fila resumen selecciona TODOS los
+  miembros del grupo a la vez (agregándolos/quitándolos del mismo `Set`
+  de selección que ya usan las filas sueltas), así que "Marcar Pagado/
+  Anulado/En Circulación/Volver a Operado" aplica sobre el cheque completo
+  en una sola acción — coincide con la realidad física (un cheque se cobra
+  o se anula como un solo evento, aunque cubra varias facturas). El header
+  ganó una columna extra (chevron) para que las filas simples y las de
+  grupo queden alineadas — las simples llevan una celda vacía en esa
+  posición. Verificado en vivo con 3 pagos de prueba desechables (3
+  consolidaciones + 3 `fondo_rotativo_pagos`: 2 compartiendo cheque "88881"
+  Q300+Q200, 1 con cheque propio "88882" Q150): la tabla mostró el cheque
+  88882 como fila simple con su descripción directa, y el 88881 como una
+  sola fila resumen ("2 pagos con este cheque", Q500.00) sin mostrar las
+  descripciones individuales hasta expandir; al expandir aparecieron ambas
+  ("Pago de Factura No. 555111 y Serie: B1" / "...555222.../B2"); marcar el
+  grupo completo como "Pagado" con un solo clic actualizó
+  `registro_bancos_estado` para AMBOS `origen_id` (41 y 42) a "Pagado",
+  sin tocar el pago 43 (cheque distinto) — confirmado por consulta directa
+  a la base — limpiado después.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
