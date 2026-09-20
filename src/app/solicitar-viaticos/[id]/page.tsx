@@ -11,6 +11,6 @@ export default async function DetalleViaticoPage({ params }: { params: Promise<{
   if (!solicitud) notFound();
   if (!["Habilitado", "Enviado", "Aprobado", "Rechazado", "Anulado", "Extraviado"].includes(solicitud.estado)) notFound();
 
-  const [firmantes, precios] = await Promise.all([getFirmantesCatalogo(), getPreciosServicios()]);
+  const [firmantes, precios] = await Promise.all([getFirmantesCatalogo(), getPreciosServicios(solicitud.persona_grupo)]);
   return <DetalleViaticoClient solicitud={solicitud} firmantes={firmantes} precios={precios} />;
 }

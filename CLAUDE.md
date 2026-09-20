@@ -2888,6 +2888,57 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   dato real. **Mismo criterio que Informe/Justificación** — si el cliente
   pide mover este mismo campo a otro documento nuevo de Viáticos en el
   futuro, es `fecha_limite`, no una fecha del viaje.
+- **Los precios de servicio de Viáticos (desayuno/almuerzo/cena/hospedaje)
+  dejaron de ser fijos e iguales para todos — dependen del grupo del
+  empleado (2026-09-20), a partir de una tabla y un artículo reglamentario
+  reales que mandó el cliente por WhatsApp.** Antes `configuracion.
+  viatico_precio_desayuno/almuerzo/cena/hospedaje` (Q45/60/45/150) eran un
+  monto fijo por servicio, igual para cualquier colaborador — el cliente
+  reportó "no a todos se les pagan los mismos viáticos... depende del grupo
+  al que pertenezcan". La tabla real que mandó da una **cuota diaria por
+  grupo** (grupos 1 y 2: Q600; grupo 3: Q500; grupo 4: Q400; grupo 5: Q300)
+  y un artículo de reparto ("Fracción de día") que divide esa cuota en
+  desayuno 15%/almuerzo 20%/cena 15%/hospedaje 50% — **coincidencia
+  confirmada**: el reparto del grupo 5 (Q300 × esos %) da exactamente
+  Q45/60/45/150, los mismos precios fijos que ya traía el sistema — el
+  valor viejo no estaba mal, solo le faltaba variar por grupo.
+  - **Schema**: `configuracion` ganó `viatico_cuota_grupo_1_2`/`_3`/`_4`/
+    `_5` (doublePrecision, defaults 600/500/400/300, editables desde
+    Administración → Configuración → Viáticos). Las 4 columnas
+    `viatico_precio_*` viejas quedaron huérfanas (mismo criterio que
+    `firmante_usuario_id` — el classifier bloquea `DROP COLUMN`).
+  - **`src/lib/viatico-precios.ts`** (nuevo, módulo plano sin
+    `"use client"`/`"use server"`, importable desde Server Components y
+    Server Actions por igual): `cuotaDiariaPorGrupo(grupo, cfg)` mapea
+    `usuarios.grupo`/`viatico_solicitudes.persona_grupo` ("1".."5", texto
+    libre) a la cuota configurada — sin grupo cargado cae al grupo 5 (Q300),
+    mismo valor que ya traía el default viejo, para no dejar un viático en
+    Q0 si algún colaborador legado no tiene grupo asignado todavía.
+    `preciosPorGrupo(grupo, cfg)` aplica el reparto 15/20/15/50% fijo
+    (constante en código, viene de un artículo reglamentario, no se pidió
+    hacerlo configurable).
+  - **4 call sites actualizados**, todos ya tenían o podían obtener
+    `persona_grupo` de la solicitud sin queries extra:
+    `viaticos/registro-comision/actions.ts` (`aprobarSolicitud`, calcula el
+    total real que va a `viatico_pagos`), `solicitar-viaticos/actions.ts`
+    (`getPreciosServicios`, ahora recibe `grupo` como parámetro — el
+    llamador en `solicitar-viaticos/[id]/page.tsx` le pasa
+    `solicitud.persona_grupo`, que ya traía `getSolicitud`), y los dos
+    `page.tsx` de impresión del V-L (encargado y colaborador).
+  - **No hizo falta tocar ningún componente cliente** — `DetalleViaticoClient.tsx`
+    (colaborador) y `ImprimirVLClient.tsx` ya recibían un objeto `precios:
+    {desayuno,almuerzo,cena,hospedaje}` como prop y solo multiplican por
+    cantidad; el cambio es enteramente de qué VALORES trae ese objeto, no
+    de su forma.
+  - Verificado en vivo con dos colaboradores de prueba desechables (grupo
+    "1" y grupo "5", cada uno con una solicitud `Habilitado`): el
+    formulario "Nuevo registro de comisión" mostró "Desayuno (Q90) /
+    Almuerzo (Q120) / Cena (Q90) / Hospedaje (Q300)" para grupo 1 y
+    "Desayuno (Q45) / Almuerzo (Q60) / Cena (Q45) / Hospedaje (Q150)" para
+    grupo 5 — coincide exacto con la tabla real y el default viejo
+    respectivamente. La sección nueva en Configuración → Viáticos mostró
+    los 4 valores reales de producción (600/500/400/300) — limpiado
+    después (colaboradores y solicitudes de prueba borrados).
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

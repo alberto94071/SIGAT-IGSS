@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { requireTabAccessAction } from "@/lib/modulo-access";
 import { sumarDiasHabiles } from "@/lib/dias-habiles";
 import { fechaHoraGuatemala } from "@/lib/date-utils";
+import { preciosPorGrupo } from "@/lib/viatico-precios";
 
 const TAB = "tab_viaticos_comision" as const;
 
@@ -200,7 +201,7 @@ export async function aprobarSolicitud(id: number, datos: DatosAprobar): Promise
 
   const [sol] = await db.select({
     estado: viaticoSolicitudes.estado, numero_formulario: viaticoSolicitudes.numero_formulario,
-    persona_nombre: viaticoSolicitudes.persona_nombre,
+    persona_nombre: viaticoSolicitudes.persona_nombre, persona_grupo: viaticoSolicitudes.persona_grupo,
   }).from(viaticoSolicitudes).where(eq(viaticoSolicitudes.id, id)).limit(1);
   if (!sol) return { error: "No se encontró la solicitud" };
   if (sol.estado !== "Enviado") return { error: "Esta solicitud no está pendiente de revisión" };
@@ -210,18 +211,21 @@ export async function aprobarSolicitud(id: number, datos: DatosAprobar): Promise
 
   // Total del V-L (campo 15), mismo cálculo que ImprimirVLClient.tsx — se
   // recalcula acá (server-side) para guardar el snapshot que alimenta Fondo
-  // Rotativo/Pagos (ver viatico-pagos-actions.ts, Fase F 2026-09-08).
-  const [config] = await db.select({
-    desayuno: configuracion.viatico_precio_desayuno, almuerzo: configuracion.viatico_precio_almuerzo,
-    cena: configuracion.viatico_precio_cena, hospedaje: configuracion.viatico_precio_hospedaje,
+  // Rotativo/Pagos (ver viatico-pagos-actions.ts, Fase F 2026-09-08). El
+  // precio de cada servicio depende del grupo del empleado (2026-09-20, ver
+  // viatico-precios.ts) — no es fijo para todos.
+  const [cfg] = await db.select({
+    viatico_cuota_grupo_1_2: configuracion.viatico_cuota_grupo_1_2, viatico_cuota_grupo_3: configuracion.viatico_cuota_grupo_3,
+    viatico_cuota_grupo_4: configuracion.viatico_cuota_grupo_4, viatico_cuota_grupo_5: configuracion.viatico_cuota_grupo_5,
   }).from(configuracion).limit(1);
+  const precios = preciosPorGrupo(sol.persona_grupo, cfg ?? { viatico_cuota_grupo_1_2: 600, viatico_cuota_grupo_3: 500, viatico_cuota_grupo_4: 400, viatico_cuota_grupo_5: 300 });
   const serviciosComisiones = await db.select({
     cantidad_desayuno: viaticoComisiones.cantidad_desayuno, cantidad_almuerzo: viaticoComisiones.cantidad_almuerzo,
     cantidad_cena: viaticoComisiones.cantidad_cena, cantidad_hospedaje: viaticoComisiones.cantidad_hospedaje,
   }).from(viaticoComisiones).where(eq(viaticoComisiones.solicitud_id, id));
   const sumaGastos = serviciosComisiones.reduce((sum, c) =>
-    sum + c.cantidad_desayuno * (config?.desayuno ?? 45) + c.cantidad_almuerzo * (config?.almuerzo ?? 60)
-        + c.cantidad_cena * (config?.cena ?? 45) + c.cantidad_hospedaje * (config?.hospedaje ?? 150), 0);
+    sum + c.cantidad_desayuno * precios.desayuno + c.cantidad_almuerzo * precios.almuerzo
+        + c.cantidad_cena * precios.cena + c.cantidad_hospedaje * precios.hospedaje, 0);
   const total11 = sumaGastos + otrosGastos;
   const totalVl = total11 - (datos.reintegro ?? 0) + (datos.complemento ?? 0);
 

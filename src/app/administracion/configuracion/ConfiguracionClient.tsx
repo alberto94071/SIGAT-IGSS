@@ -15,6 +15,8 @@ type Config = {
   banco_nombre?: string; cuenta_numero?: string; cuenta_nombre?: string;
   siaf_compras_numero_inicial?: number; siaf_compras_numero_inicial_anio?: number;
   viatico_exigir_fecha_limite?: boolean;
+  viatico_cuota_grupo_1_2?: number; viatico_cuota_grupo_3?: number;
+  viatico_cuota_grupo_4?: number; viatico_cuota_grupo_5?: number;
 };
 type Firmante = {
   id: number; nombre: string; cargo: string; unidad: string | null;
@@ -219,6 +221,19 @@ export default function ConfiguracionClient({ config: init, firmantes: initFirma
             </span>
           </span>
         </label>
+        <div>
+          <p className="text-sm text-gray-700 font-medium">Cuota diaria de viático por grupo (Q)</p>
+          <p className="text-xs text-gray-400 mt-0.5 mb-2">
+            No todos cobran el mismo viático — depende del grupo del empleado (Administración → Colaboradores). El precio
+            de cada servicio (desayuno/almuerzo/cena/hospedaje) sale de repartir esta cuota diaria en 15%/20%/15%/50%.
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Grupos 1 y 2" k="viatico_cuota_grupo_1_2" type="number" />
+            <Field label="Grupo 3" k="viatico_cuota_grupo_3" type="number" />
+            <Field label="Grupo 4" k="viatico_cuota_grupo_4" type="number" />
+            <Field label="Grupo 5" k="viatico_cuota_grupo_5" type="number" />
+          </div>
+        </div>
       </section>
 
       {/* Firmantes — solo superadmin */}
