@@ -22,13 +22,20 @@ type EnTramite = {
 };
 type Comision = {
   id: number; orden: number; lugar: string | null; departamento: string | null;
-  descripcion_comision: string | null; dias_calculados: number | null;
+  tipo_comision: string | null; descripcion_comision: string | null; dias_calculados: number | null;
   nombramiento_numero: string | null; fecha_nombramiento: string | null;
+  fecha_salida_unidad: string | null; hora_salida_unidad: string | null;
+  fecha_llegada_lugar: string | null; hora_llegada_lugar: string | null;
+  fecha_salida_lugar: string | null; hora_salida_lugar: string | null;
+  fecha_entrada_unidad: string | null; hora_entrada_unidad: string | null;
+  firmante_nombre: string | null; firmante_cargo: string | null;
   cantidad_desayuno: number; cantidad_almuerzo: number; cantidad_cena: number; cantidad_hospedaje: number;
 };
 type GastoDb = { fecha: string | null; descripcion: string | null; valor: number };
+type PreciosServicios = { desayuno: number; almuerzo: number; cena: number; hospedaje: number };
 type SolicitudCompleta = {
   id: number; numero_formulario: string | null; persona_nombre: string | null; comisiones: Comision[]; gastos: GastoDb[];
+  precios: PreciosServicios;
 };
 
 export default function RegistroComisionClient({ pendientes: init, enviadas, enTramite, canEdit }: {
@@ -341,6 +348,17 @@ function HabilitarModal({ solicitud: p, onClose, onHabilitada }: {
 
 const Q = (n: number) => `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2 })}`;
 
+function fechaCortaMostrar(iso: string | null): string {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
+  return `${d}/${m}/${y}`;
+}
+function fechaHoraMostrar(fecha: string | null, hora: string | null): string {
+  if (!fecha) return "—";
+  return `${fechaCortaMostrar(fecha)}${hora ? ` ${hora}` : ""}`;
+}
+
 type GastoRow = { fecha: string; descripcion: string; valor: string };
 const gastoVacio = (): GastoRow => ({ fecha: fechaGuatemala(), descripcion: "", valor: "" });
 
@@ -409,17 +427,34 @@ function RevisarModal({ solicitudId, onClose, onResuelta }: {
 
             <div className="space-y-2">
               {sol.comisiones.map(c => {
-                const costo = c.cantidad_desayuno * 45 + c.cantidad_almuerzo * 60 + c.cantidad_cena * 45 + c.cantidad_hospedaje * 150;
+                const p = sol.precios;
+                const costo = c.cantidad_desayuno * p.desayuno + c.cantidad_almuerzo * p.almuerzo
+                  + c.cantidad_cena * p.cena + c.cantidad_hospedaje * p.hospedaje;
                 return (
-                  <div key={c.id} className="bg-gray-50 rounded-lg p-3 text-sm">
-                    <p className="font-medium text-gray-900">Comisión {c.orden}: {c.descripcion_comision}</p>
-                    <p className="text-gray-500">{c.lugar}, {c.departamento} — {c.dias_calculados} día(s) — Nombramiento {c.nombramiento_numero} ({c.fecha_nombramiento})</p>
-                    <p className="text-gray-600 text-xs mt-1">
+                  <div key={c.id} className="bg-gray-50 rounded-lg p-3 text-sm space-y-1.5">
+                    <p className="font-medium text-gray-900">
+                      Comisión {c.orden}{c.tipo_comision ? `: ${c.tipo_comision}` : ""}
+                    </p>
+                    {c.descripcion_comision && <p className="text-gray-700 whitespace-pre-wrap">{c.descripcion_comision}</p>}
+                    <p className="text-gray-500">
+                      {c.lugar}, {c.departamento} — {c.dias_calculados} día(s) — Nombramiento {c.nombramiento_numero} ({fechaCortaMostrar(c.fecha_nombramiento)})
+                    </p>
+                    <p className="text-gray-500">
+                      Firmó el nombramiento: <span className="text-gray-900 font-medium">{c.firmante_nombre ?? "—"}</span>
+                      {c.firmante_cargo ? `, ${c.firmante_cargo}` : ""}
+                    </p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-gray-600 bg-white rounded-lg p-2 border border-gray-100">
+                      <p>Salida de la unidad: <span className="font-medium text-gray-900">{fechaHoraMostrar(c.fecha_salida_unidad, c.hora_salida_unidad)}</span></p>
+                      <p>Llegada al lugar: <span className="font-medium text-gray-900">{fechaHoraMostrar(c.fecha_llegada_lugar, c.hora_llegada_lugar)}</span></p>
+                      <p>Salida del lugar: <span className="font-medium text-gray-900">{fechaHoraMostrar(c.fecha_salida_lugar, c.hora_salida_lugar)}</span></p>
+                      <p>Entrada a la unidad: <span className="font-medium text-gray-900">{fechaHoraMostrar(c.fecha_entrada_unidad, c.hora_entrada_unidad)}</span></p>
+                    </div>
+                    <p className="text-gray-600 text-xs">
                       {c.cantidad_desayuno > 0 && `${c.cantidad_desayuno} desayuno(s) `}
                       {c.cantidad_almuerzo > 0 && `${c.cantidad_almuerzo} almuerzo(s) `}
                       {c.cantidad_cena > 0 && `${c.cantidad_cena} cena(s) `}
                       {c.cantidad_hospedaje > 0 && `${c.cantidad_hospedaje} hospedaje(s) `}
-                      — subtotal aprox. {Q(costo)}
+                      — subtotal {Q(costo)}
                     </p>
                   </div>
                 );
