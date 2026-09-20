@@ -34,6 +34,10 @@ export async function guardarConfiguracion(data: any) {
           siaf_compras_numero_inicial:      Number(data.siaf_compras_numero_inicial) || 0,
           siaf_compras_numero_inicial_anio: Number(data.siaf_compras_numero_inicial_anio) || 0,
           viatico_exigir_fecha_limite:      Boolean(data.viatico_exigir_fecha_limite),
+          viatico_cuota_grupo_1_2: Number(data.viatico_cuota_grupo_1_2) || 0,
+          viatico_cuota_grupo_3:   Number(data.viatico_cuota_grupo_3) || 0,
+          viatico_cuota_grupo_4:   Number(data.viatico_cuota_grupo_4) || 0,
+          viatico_cuota_grupo_5:   Number(data.viatico_cuota_grupo_5) || 0,
           updated_at:           fechaHoraGuatemala(),
         })
         .where(eq(configuracion.id, existing.id));

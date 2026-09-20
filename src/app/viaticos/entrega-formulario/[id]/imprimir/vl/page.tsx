@@ -5,6 +5,7 @@ import { configuracion, catalogoFirmantes } from "@/lib/schema";
 import { eq, asc } from "drizzle-orm";
 import { getSolicitudParaImprimir } from "../../../../registro-comision/actions";
 import { getPosicionesImpresion } from "@/lib/impresion-posiciones-actions";
+import { preciosPorGrupo } from "@/lib/viatico-precios";
 import ImprimirVLClient from "./ImprimirVLClient";
 
 export default async function ImprimirVLPage({ params }: { params: Promise<{ id: string }> }) {
@@ -27,10 +28,10 @@ export default async function ImprimirVLPage({ params }: { params: Promise<{ id:
       entidadRecibio={config?.entidad_recibio_viatico ?? ""}
       municipio={config?.municipio ?? ""}
       partidaPresupuestaria={config?.viatico_partida_presupuestaria ?? ""}
-      precios={{
-        desayuno: config?.viatico_precio_desayuno ?? 45, almuerzo: config?.viatico_precio_almuerzo ?? 60,
-        cena: config?.viatico_precio_cena ?? 45, hospedaje: config?.viatico_precio_hospedaje ?? 150,
-      }}
+      precios={preciosPorGrupo(solicitud.persona_grupo, {
+        viatico_cuota_grupo_1_2: config?.viatico_cuota_grupo_1_2 ?? 600, viatico_cuota_grupo_3: config?.viatico_cuota_grupo_3 ?? 500,
+        viatico_cuota_grupo_4: config?.viatico_cuota_grupo_4 ?? 400, viatico_cuota_grupo_5: config?.viatico_cuota_grupo_5 ?? 300,
+      })}
       firmantes={firmantes as any}
       posicionesGuardadas={posicionesGuardadas}
     />

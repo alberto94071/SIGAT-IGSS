@@ -4,6 +4,7 @@ import { viaticoSolicitudes, viaticoComisiones, viaticoGastos, configuracion, ca
 import { auth } from "@/lib/auth";
 import { and, eq, sql } from "drizzle-orm";
 import { fechaGuatemala } from "@/lib/date-utils";
+import { preciosPorGrupo } from "@/lib/viatico-precios";
 
 async function getMeColaborador() {
   const session = await auth();
@@ -101,12 +102,15 @@ export async function getFirmantesCatalogo() {
     .from(catalogoFirmantes).where(eq(catalogoFirmantes.activo, true)).orderBy(catalogoFirmantes.nombre);
 }
 
-export async function getPreciosServicios() {
+// El precio de cada servicio depende del grupo del empleado (2026-09-20,
+// ver viatico-precios.ts) — antes era fijo para todos. `grupo` es
+// `solicitud.persona_grupo`, que el llamador ya tiene (snapshot al habilitar).
+export async function getPreciosServicios(grupo: string | null) {
   const [cfg] = await db.select({
-    desayuno: configuracion.viatico_precio_desayuno, almuerzo: configuracion.viatico_precio_almuerzo,
-    cena: configuracion.viatico_precio_cena, hospedaje: configuracion.viatico_precio_hospedaje,
+    viatico_cuota_grupo_1_2: configuracion.viatico_cuota_grupo_1_2, viatico_cuota_grupo_3: configuracion.viatico_cuota_grupo_3,
+    viatico_cuota_grupo_4: configuracion.viatico_cuota_grupo_4, viatico_cuota_grupo_5: configuracion.viatico_cuota_grupo_5,
   }).from(configuracion).limit(1);
-  return cfg ?? { desayuno: 45, almuerzo: 60, cena: 45, hospedaje: 150 };
+  return preciosPorGrupo(grupo, cfg ?? { viatico_cuota_grupo_1_2: 600, viatico_cuota_grupo_3: 500, viatico_cuota_grupo_4: 400, viatico_cuota_grupo_5: 300 });
 }
 
 export type DatosComision = {

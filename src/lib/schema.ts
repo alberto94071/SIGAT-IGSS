@@ -64,13 +64,25 @@ export const configuracion = pgTable("configuracion", {
   // porque configuracion no se trunca.
   siaf_compras_numero_inicial:      integer("siaf_compras_numero_inicial").notNull().default(0),
   siaf_compras_numero_inicial_anio: integer("siaf_compras_numero_inicial_anio").notNull().default(0),
-  // Precios fijos por servicio de Viáticos (Q) — el cliente pidió precio fijo
-  // en vez de calcular automáticamente qué comidas corresponden por horario;
-  // el colaborador arma su propia solicitud de servicios a estos precios.
+  // Precios fijos por servicio de Viáticos (Q) — reemplazados 2026-09-20 por
+  // la cuota diaria por grupo de abajo (el cliente reportó que no todos
+  // cobran lo mismo, depende del grupo del empleado). Columnas huérfanas,
+  // ya no las usa el código (mismo criterio que firmante_usuario_id/
+  // firmante_cargo_manual arriba — el classifier bloquea DROP COLUMN).
   viatico_precio_desayuno:  doublePrecision("viatico_precio_desayuno").notNull().default(45),
   viatico_precio_almuerzo:  doublePrecision("viatico_precio_almuerzo").notNull().default(60),
   viatico_precio_cena:      doublePrecision("viatico_precio_cena").notNull().default(45),
   viatico_precio_hospedaje: doublePrecision("viatico_precio_hospedaje").notNull().default(150),
+  // Cuota diaria de viático por grupo del empleado (Q) — grupos 1 y 2
+  // comparten cuota. El precio de cada servicio (desayuno/almuerzo/cena/
+  // hospedaje) se calcula como un porcentaje fijo de esta cuota (15/20/15/50%,
+  // ver preciosPorGrupo en viatico-precios.ts) en vez de un monto fijo por
+  // servicio igual para todos — pedido del cliente 2026-09-20, con la tabla
+  // real de cuotas y el artículo de reparto por porcentaje que mandó.
+  viatico_cuota_grupo_1_2: doublePrecision("viatico_cuota_grupo_1_2").notNull().default(600),
+  viatico_cuota_grupo_3:   doublePrecision("viatico_cuota_grupo_3").notNull().default(500),
+  viatico_cuota_grupo_4:   doublePrecision("viatico_cuota_grupo_4").notNull().default(400),
+  viatico_cuota_grupo_5:   doublePrecision("viatico_cuota_grupo_5").notNull().default(300),
   // Partida presupuestaria fija para el V-L (Formulario de Liquidación) —
   // por ahora un solo valor para toda la unidad, no varía por empleado.
   viatico_partida_presupuestaria: text("viatico_partida_presupuestaria").notNull()
