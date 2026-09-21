@@ -3194,6 +3194,48 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   "Según Documento(s)" con Formulario/118001, 117964, beneficiario y NIT
   reales, y Saldo anterior Q20,000.00 → Saldo nuevo Q19,420.00 (coincide
   exacto con el saldo real de Bancos) — sin tocar ningún dato real.
+- **Rechazar un viático ahora devuelve la solicitud directamente al
+  colaborador en estado editable, en un solo paso (2026-09-20/21) —
+  antes quedaba en "Rechazado" (de solo lectura) y hacía falta un segundo
+  clic manual del encargado en "Revertir" (Entrega de Formulario) para que
+  el colaborador pudiera corregirla.** Pedido explícito del cliente: "cuando
+  rechazo un viático, lo tiene que devolver a la persona que le envío para
+  que lo pueda editar... ahorita no deja modificar". `rechazarSolicitud`
+  (`viaticos/registro-comision/actions.ts`) ahora pone `estado:
+  "Habilitado"` directamente (no `"Rechazado"`) — así el colaborador puede
+  usar `agregarComision`/`eliminarComision` de inmediato (gate por
+  `estado === "Habilitado"`, `solicitar-viaticos/actions.ts`) sin que el
+  encargado tenga que intervenir dos veces. `motivo_rechazo`/
+  `rechazado_por`/`rechazado_en` se mantienen (a diferencia de
+  `revertirRechazo`, que los limpia) para que el colaborador vea por qué se
+  lo devolvieron — `DetalleViaticoClient.tsx` (`solicitar-viaticos/[id]/`)
+  muestra un aviso rojo con el motivo mientras `estado === "Habilitado" &&
+  motivo_rechazo` sea cierto; `enviarViatico` (`solicitar-viaticos/
+  actions.ts`) limpia los 3 campos al reenviar (Habilitado → Enviado), así
+  que el aviso desaparece solo una vez corregido y reenviado, y vuelve a
+  aparecer si se rechaza de nuevo. **`revertirRechazo`/el botón "Revertir"
+  de Entrega de Formulario no se tocaron** — quedan como mecanismo de
+  respaldo para cualquier fila legada que ya estuviera en "Rechazado" (no
+  deberían crearse más desde ahora), no hace falta usarlos en el flujo
+  normal. Wording: el cliente pidió explícitamente registro formal ("usted"),
+  no voseo — el aviso dice "corrija lo necesario abajo y vuelva a
+  enviarlo", no "corregí"/"volvé" (el resto de la UI del colaborador sigue
+  en voseo informal, ya establecido antes de este cambio — este aviso
+  puntual es la única excepción formal, por pedido explícito). **Un caso
+  real de producción quedó atascado en "Rechazado" desde antes de este fix**
+  (id 39, Formulario 118010, "Hay dos comisiones con la misma fecha") — se
+  corrigió a mano con un `UPDATE estado = 'Habilitado'` (sin tocar
+  `motivo_rechazo`, para que conserve el aviso) para no dejarlo bloqueado
+  hasta que el colaborador vuelva a entrar. Verificado en vivo de punta a
+  punta con un colaborador y una solicitud de prueba desechables: el
+  encargado rechazó desde Registro de Comisión (con el hint nuevo "se le
+  devuelve al colaborador para que corrija y vuelva a enviarlo" bajo el
+  textarea de motivo) → la solicitud quedó `Habilitado` con
+  `motivo_rechazo` poblado (confirmado por consulta directa) → el
+  colaborador vio el aviso rojo con el motivo y pudo borrar/agregar
+  comisiones y reenviar → tras reenviar, `estado = "Enviado"` y
+  `motivo_rechazo = null` (confirmado por consulta directa) — limpiado
+  después.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

@@ -369,6 +369,20 @@ export async function revertirRechazo(id: number): Promise<{ ok: true } | { erro
   return { ok: true };
 }
 
+// Rechazar devuelve la solicitud directamente a "Habilitado" (no a
+// "Rechazado") — pedido explícito del cliente 2026-09-20: "cuando rechazo
+// un viático, lo tiene que devolver a la persona que le envío para que lo
+// pueda editar... ahorita no deja modificar". Antes quedaba en "Rechazado"
+// (de solo lectura para el colaborador) hasta que el encargado diera clic
+// aparte en "Revertir" (`revertirRechazo`, Entrega de Formulario) — dos
+// pasos manuales para algo que debería ser automático. Ahora Rechazar YA
+// hace lo que antes hacía Revertir, en un solo paso: el colaborador puede
+// borrar/corregir comisiones (agregarComision/eliminarComision, gate por
+// estado === "Habilitado") y reenviar de inmediato, sin que el encargado
+// tenga que intervenir dos veces. motivo_rechazo/rechazado_por/
+// rechazado_en se mantienen (no se limpian, a diferencia de
+// revertirRechazo) para que el colaborador vea por qué se lo devolvieron —
+// enviarViatico los limpia al reenviar.
 export async function rechazarSolicitud(id: number, motivo: string): Promise<{ ok: true } | { error: string }> {
   const check = await requireTabAccessAction("mod_viaticos", TAB);
   if ("error" in check) return check;
@@ -380,7 +394,7 @@ export async function rechazarSolicitud(id: number, motivo: string): Promise<{ o
   if (sol.estado !== "Enviado") return { error: "Esta solicitud no está pendiente de revisión" };
 
   await db.update(viaticoSolicitudes).set({
-    estado: "Rechazado",
+    estado: "Habilitado",
     rechazado_por: check.uid,
     rechazado_en: fechaHoraGuatemala(),
     motivo_rechazo: motivo.trim(),
