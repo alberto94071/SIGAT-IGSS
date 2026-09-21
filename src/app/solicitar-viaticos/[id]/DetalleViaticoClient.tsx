@@ -115,6 +115,13 @@ export default function DetalleViaticoClient({ solicitud: init, firmantes, preci
         </div>
       )}
 
+      {solicitud.estado === "Habilitado" && solicitud.motivo_rechazo && (
+        <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+          <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          El encargado devolvió este viático para corregirlo: {solicitud.motivo_rechazo} — corrija lo necesario abajo y vuelva a enviarlo.
+        </div>
+      )}
+
       {solicitud.estado === "Enviado" && (
         <div className="flex items-start gap-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
           <Clock className="w-4 h-4 shrink-0 mt-0.5" />

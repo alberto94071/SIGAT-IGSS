@@ -497,6 +497,9 @@ function RevisarModal({ solicitudId, onClose, onResuelta }: {
               <div>
                 <label className="label">Motivo del rechazo</label>
                 <textarea className="input" rows={3} value={motivo} onChange={e => setMotivo(e.target.value)} />
+                <p className="text-xs text-gray-400 mt-1">
+                  Se le devuelve al colaborador para que corrija y vuelva a enviarlo — no hace falta que vuelva a pedir el viático desde cero.
+                </p>
               </div>
             )}
 

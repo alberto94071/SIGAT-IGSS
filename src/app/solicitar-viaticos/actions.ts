@@ -266,7 +266,12 @@ export async function enviarViatico(solicitudId: number): Promise<{ ok: true } |
     .where(eq(viaticoComisiones.solicitud_id, solicitudId));
   if (total === 0) return { error: "Registrá al menos una comisión antes de enviar" };
 
-  await db.update(viaticoSolicitudes).set({ estado: "Enviado" }).where(eq(viaticoSolicitudes.id, solicitudId));
+  // Limpia el motivo de un rechazo anterior (si lo hubo) — ya se corrigió y
+  // se está reenviando, no tiene sentido seguir mostrando el aviso viejo.
+  await db.update(viaticoSolicitudes).set({
+    estado: "Enviado",
+    rechazado_por: null, rechazado_en: null, motivo_rechazo: null,
+  }).where(eq(viaticoSolicitudes.id, solicitudId));
   return { ok: true };
 }
 
