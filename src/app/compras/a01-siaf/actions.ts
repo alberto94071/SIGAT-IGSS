@@ -135,36 +135,40 @@ export async function crearSolicitud(data: {
     // Calcula cantidad_antes server-side (snapshot al momento de guardar)
     // Procesa en orden para manejar el caso de que el mismo insumo+subproducto
     // aparezca más de una vez en la misma solicitud.
-    const runningTotals = new Map<string, number>();
+    //
+    // Se hace por catalogo_id, NO por codigo_igss+subproducto en texto —
+    // bug real detectado 2026-09-24 (SIAF 22/2026, "Estetoscopio", Disponible
+    // salía en -4 sin motivo real): el snapshot de codigo_igss que guarda
+    // este ítem es el que tenía SU insumo al momento de crearse, pero si
+    // después alguien edita el código real de ese insumo en el catálogo
+    // (`editarInsumoCompras`) o el ítem se creó antes del 2026-08-24 (cuando
+    // el codigo_igss viejo a veces era en realidad un codigo_ppr corrupto —
+    // ver CLAUDE.md), ese texto deja de coincidir con el codigo_igss ACTUAL
+    // de su propia fila en catalogo_compras. Buscar por texto entonces no
+    // encontraba la fila del catálogo (`autorizado` caía a 0 aunque el PAC
+    // sí tuviera cantidad autorizada) — catalogo_id es el identificador
+    // real y estable, siempre presente (`validarItemsEnPac` ya lo exige).
+    const runningTotals = new Map<number, number>();
     const itemValues = [];
 
     for (const item of data.items) {
-      const key = `${item.codigo_igss}::${item.subproducto}`;
-
-      let autorizado = 0;
-      if (item.codigo_igss != null) {
-        const [cat] = await db
-          .select({ cantidad: catalogoCompras.cantidad })
-          .from(catalogoCompras)
-          .where(and(
-            eq(catalogoCompras.codigo_igss, item.codigo_igss),
-            eq(catalogoCompras.subproducto, item.subproducto),
-          ))
-          .limit(1);
-        autorizado = cat?.cantidad ?? 0;
-      }
+      const [cat] = await db
+        .select({ cantidad: catalogoCompras.cantidad })
+        .from(catalogoCompras)
+        .where(eq(catalogoCompras.id, item.catalogo_id))
+        .limit(1);
+      const autorizado = cat?.cantidad ?? 0;
 
       const res = await db.execute(
         sql`SELECT COALESCE(SUM(cantidad_solicitada), 0) AS total
             FROM siaf_compras_items
-            WHERE codigo_igss = ${item.codigo_igss}
-            AND subproducto = ${item.subproducto}`
+            WHERE catalogo_id = ${item.catalogo_id}`
       );
       const dbTotal    = Number((res.rows[0] as any).total) || 0;
-      const batchTotal = runningTotals.get(key) ?? 0;
+      const batchTotal = runningTotals.get(item.catalogo_id) ?? 0;
       const cantidad_antes = autorizado - dbTotal - batchTotal;
 
-      runningTotals.set(key, batchTotal + item.cantidad_solicitada);
+      runningTotals.set(item.catalogo_id, batchTotal + item.cantidad_solicitada);
 
       itemValues.push({
         solicitud_id:        solicitud.id,
@@ -502,36 +506,31 @@ export async function editarSolicitud(id: number, data: {
       observaciones: data.observaciones ?? null,
     }).where(eq(siafCompras.id, id));
 
-    // Reinsertar ítems con cantidad_antes recalculada
-    const runningTotals = new Map<string, number>();
+    // Reinsertar ítems con cantidad_antes recalculada — por catalogo_id, no
+    // por codigo_igss+subproducto en texto (mismo fix que crearSolicitud,
+    // ver el comentario de arriba). Los ítems de esta misma solicitud ya se
+    // borraron arriba, así que dbTotal no se resta a sí mismo.
+    const runningTotals = new Map<number, number>();
     const itemValues = [];
 
     for (const item of data.items) {
-      const key = `${item.codigo_igss}::${item.subproducto}`;
-
-      let autorizado = 0;
-      if (item.codigo_igss != null) {
-        const [cat] = await db
-          .select({ cantidad: catalogoCompras.cantidad })
-          .from(catalogoCompras)
-          .where(and(
-            eq(catalogoCompras.codigo_igss, item.codigo_igss),
-            eq(catalogoCompras.subproducto, item.subproducto),
-          )).limit(1);
-        autorizado = cat?.cantidad ?? 0;
-      }
+      const [cat] = await db
+        .select({ cantidad: catalogoCompras.cantidad })
+        .from(catalogoCompras)
+        .where(eq(catalogoCompras.id, item.catalogo_id))
+        .limit(1);
+      const autorizado = cat?.cantidad ?? 0;
 
       const res = await db.execute(
         sql`SELECT COALESCE(SUM(cantidad_solicitada), 0) AS total
             FROM siaf_compras_items
-            WHERE codigo_igss = ${item.codigo_igss}
-            AND subproducto = ${item.subproducto}`
+            WHERE catalogo_id = ${item.catalogo_id}`
       );
       const dbTotal    = Number((res.rows[0] as any).total) || 0;
-      const batchTotal = runningTotals.get(key) ?? 0;
+      const batchTotal = runningTotals.get(item.catalogo_id) ?? 0;
       const cantidad_antes = autorizado - dbTotal - batchTotal;
 
-      runningTotals.set(key, batchTotal + item.cantidad_solicitada);
+      runningTotals.set(item.catalogo_id, batchTotal + item.cantidad_solicitada);
 
       itemValues.push({
         solicitud_id:        id,
