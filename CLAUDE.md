@@ -3236,6 +3236,55 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   comisiones y reenviar → tras reenviar, `estado = "Enviado"` y
   `motivo_rechazo = null` (confirmado por consulta directa) — limpiado
   después.
+- **A-01 SIAF: "Disponible" del detalle expandido de una solicitud podía
+  salir negativo sin que hubiera un déficit real en el PAC — bug encontrado
+  2026-09-24 con un caso real (SIAF 22/2026, "Estetoscopio", mostraba
+  Antes: 0 / Solicitado: 4 / Disponible: -4).** `crearSolicitud`/
+  `editarSolicitud` (`a01-siaf/actions.ts`) calculaban el snapshot
+  `cantidad_antes` buscando la fila del PAC (`catalogo_compras`) por
+  **texto** `codigo_igss + subproducto`, no por `catalogo_id` (que el ítem
+  siempre trae, ya validado por `validarItemsEnPac`). El `codigo_igss`
+  guardado en `siaf_compras_items` es un snapshot de cuando se creó el
+  ítem — si el `codigo_igss` REAL de esa fila del catálogo cambia después
+  (`editarInsumoCompras`, o el ítem es de antes del 2026-08-24, cuando el
+  `codigo_igss` viejo a veces era en realidad un `codigo_ppr` corrupto —
+  ver el punto de la reimportación de Base de Datos Central, arriba), la
+  búsqueda por texto ya no encuentra la fila del catálogo y `autorizado`
+  cae a 0 aunque el PAC sí tenga cantidad real autorizada — confirmado con
+  el caso real: `catalogo_compras` id 4791 tiene `codigo_igss = "S/C"` y
+  `cantidad = 4` HOY, pero el ítem de la SIAF 22/2026 (creado 2026-08-05,
+  antes de la reimportación) guardó `codigo_igss = "159928 - 187256"` (el
+  código-rango corrupto de esa fecha) — la búsqueda por texto nunca
+  coincidía, así que `autorizado` quedaba en 0 en vez de 4, y con
+  `cantidad_solicitada = 4` el resultado salía "Disponible: -4" pese a que
+  el PAC realmente alcanzaba justo para esos 4 (debía dar 0, no -4). Esto
+  no afectó el rechazo real de esa solicitud (motivo real: "corrección en
+  justificación", nada que ver con el PAC) — pero sí puede volver a pasar
+  con cualquier ítem futuro si se edita el código de un insumo en el
+  catálogo después de que ya se generó una SIAF con él. Fix: ambas
+  funciones ahora buscan `autorizado` (por `catalogo_id`) y el total ya
+  reservado por otras SIAF (`dbTotal`, también por `catalogo_id` en vez de
+  `codigo_igss+subproducto` en texto) — `catalogo_id` es el identificador
+  real y estable, inmune tanto a este drift como al clásico problema de
+  "S/C no es un código compartido real" (ver arriba) porque ya identifica
+  la fila exacta del PAC, sin necesidad de agregar `nombre` a la clave.
+  **Se hizo un backfill puntual del único ítem real confirmado con este
+  síntoma** (`siaf_compras_items.id = 507`, la SIAF 22/2026 ya Rechazada):
+  `cantidad_antes` se corrigió de 0 a 4 (el valor que la fórmula arreglada
+  sí produce, verificado por consulta directa — es el único ítem que
+  alguna vez usó ese `catalogo_id`, así que no hay nada más que restarle).
+  Se investigaron otros 7 ítems con el mismo síntoma superficial (su
+  `codigo_igss` guardado tampoco coincide con el `codigo_igss` actual de su
+  propia fila de catálogo) pero **no se tocaron**: a diferencia del caso
+  507, sus `cantidad_antes` guardados ya son números positivos razonables
+  coincidiendo con `cantidad_solicitada` — indican que la búsqueda por
+  texto SÍ funcionó en el momento en que se calcularon (el catálogo debió
+  tener ese mismo código de texto entonces, y cambió a "S/C" después), así
+  que no hay evidencia de que estén mal — 6 de esos 7 siguen en "Borrador"
+  y se autocorregirán solos la próxima vez que alguien los edite (el fix
+  ya aplica ahí). Verificado en vivo, de solo lectura salvo el backfill
+  puntual de arriba: correlativo 22/2026 pasó de mostrar "Disponible: -4"
+  (rojo) a "Antes: 4 / Solicitado: 4 / Disponible: 0" (verde).
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
