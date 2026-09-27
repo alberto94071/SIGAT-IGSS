@@ -430,9 +430,27 @@ function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | null; onC
   // detalle (capacidad, material, etc.) que el cliente necesita ver en el
   // A-01 SIAF impreso (reportado 2026-08-24: solo salía "Destructora de
   // papel", sin el resto de la ficha).
+  //
+  // Pedido del cliente 2026-09-27: para insumos SIN código real, además de
+  // nombre + características, concatenar también presentación y unidad de
+  // medida — sin esto, el A-01 SIAF impreso no decía nada de la presentación
+  // puntual del insumo (caso real: "Wipe" se imprimía sin "Bola"/"3 Libra",
+  // el cliente tuvo que escribirlo a mano en el papel ya impreso). Para
+  // insumos CON código real no se toca nada — el cliente fue explícito en
+  // que ahí se deja tal cual (esos ya tienen su propia "Descripción IGSS" en
+  // Base de Datos Central, y presentación/unidad de medida se resuelven
+  // aparte, al elegir el PPR en Órdenes/SIAF-04 — ver renglon-utils.ts).
+  function descripcionDeInsumoCentral(r: InsumoCentralAgrupado): string {
+    if (r.codigoReal) {
+      return r.descripcion_igss || (r.caracteristicas ? `${r.nombre}; ${r.caracteristicas}` : r.nombre);
+    }
+    const partes = [r.caracteristicas, r.presentacion, r.unidad_medida].filter(Boolean).join(" ");
+    return partes ? `${r.nombre}; ${partes}` : r.nombre;
+  }
+
   function elegirInsumo(r: InsumoCentralAgrupado) {
     setNombre(r.nombre);
-    setDescripcionIgss(r.descripcion_igss || (r.caracteristicas ? `${r.nombre}; ${r.caracteristicas}` : r.nombre));
+    setDescripcionIgss(descripcionDeInsumoCentral(r));
     setCodigoIgss(r.codigo);
     setRenglon(r.renglon != null ? String(r.renglon) : "");
     setBuscando(false); setQuery(""); setResultados([]);
@@ -500,7 +518,7 @@ function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | null; onC
                     {resultados.map(r => (
                       <button key={`${r.codigo}::${r.nombre}`} type="button" onClick={() => elegirInsumo(r)}
                         className="w-full text-left px-3 py-2 hover:bg-brand-50 transition-colors">
-                        <p className="text-sm text-gray-900">{r.descripcion_igss || r.nombre}</p>
+                        <p className="text-sm text-gray-900">{descripcionDeInsumoCentral(r)}</p>
                         <p className="text-xs text-gray-400 font-mono">{r.codigoReal ? `Código ${r.codigo}` : "Sin código real (S/C)"}{r.renglon != null ? ` · Renglón ${r.renglon}` : ""}</p>
                       </button>
                     ))}

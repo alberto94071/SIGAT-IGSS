@@ -23,6 +23,7 @@ async function checkAuthEdit() {
 export type InsumoCentralAgrupado = {
   codigo: string; codigoReal: boolean; nombre: string; descripcion_igss: string | null;
   caracteristicas: string | null; renglon: number | null;
+  presentacion: string | null; unidad_medida: string | null;
 };
 
 // Busca en la Base de Datos Central, agrupado por código base (sin distinguir
@@ -61,10 +62,12 @@ export async function buscarInsumosCentral(q: string): Promise<InsumoCentralAgru
     const rows = await db.execute<{
       codigo_igss: string | null; nombre: string; descripcion_igss: string | null;
       caracteristicas: string | null; renglon: number | null;
+      presentacion: string | null; unidad_medida: string | null;
     }>(sql`
       SELECT * FROM (
         SELECT DISTINCT ON (COALESCE(codigo_igss, lower(nombre)))
           codigo_igss, nombre, descripcion_igss, caracteristicas, renglon,
+          presentacion, unidad_medida,
           CASE
             WHEN codigo_igss = ${termino} OR codigo_ppr = ${termino} THEN 0
             WHEN nombre ILIKE ${prefijo} THEN 1
@@ -85,6 +88,7 @@ export async function buscarInsumosCentral(q: string): Promise<InsumoCentralAgru
       codigoReal: r.codigo_igss != null,
       nombre: r.nombre, descripcion_igss: r.descripcion_igss,
       caracteristicas: r.caracteristicas, renglon: r.renglon,
+      presentacion: r.presentacion, unidad_medida: r.unidad_medida,
     }));
   } catch {
     return [];
