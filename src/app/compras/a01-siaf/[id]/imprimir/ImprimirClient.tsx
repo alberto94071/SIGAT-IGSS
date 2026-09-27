@@ -14,6 +14,14 @@ type Config = {
 };
 type Firmante = { id: number; nombre: string; cargo: string };
 
+// "2026-06-23" → "23/06/2026" — pedido del cliente 2026-09-27 (día, mes, año
+// primero) — mismo patrón ya usado en DAB-60/Vale/Voucher/etc.
+function fechaCorta(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
+}
+
 interface Props {
   solicitud: Solicitud; items: Item[]; config: Config;
   todosFirmantes: Firmante[]; firmantesSeleccionados: Firmante[];
@@ -361,7 +369,7 @@ export default function ImprimirClient({
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "7px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                     <span style={{ fontWeight: "bold", fontFamily: FONT, fontSize: "11pt", color: C }}>Fecha de Registro</span>
-                    <span style={{ fontFamily: FONT, fontSize: "11pt", color: C }}>{solicitud.fecha}</span>
+                    <span style={{ fontFamily: FONT, fontSize: "11pt", color: C }}>{fechaCorta(solicitud.fecha)}</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                     <span style={{ fontWeight: "bold", fontFamily: FONT, fontSize: "11pt", color: C }}>Correlativo No.</span>

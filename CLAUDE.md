@@ -3328,6 +3328,23 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   la descripción real de Base de Datos Central sin ningún cambio
   (`descripcion_igss` tal cual, sin presentación/unidad agregada) —
   confirmando que el caso con código real quedó intacto.
+- **A-01 SIAF impreso: "Fecha de Registro" pasó de ISO crudo a
+  dd/mm/aaaa (2026-09-27)** — pedido del cliente, visible en la misma
+  tanda de capturas del punto anterior ("la fecha del siaf, tiene q ir
+  primero día, mes y año") pero pedido explícitamente aparte, después.
+  `ImprimirClient.tsx` (`compras/a01-siaf/[id]/imprimir/`) imprimía
+  `solicitud.fecha` (la columna `text` `"YYYY-MM-DD"`, o el override que
+  manda el modal "Imprimir A-01 SIAF" vía query param `fecha`, ver el
+  punto de 2026-09-08 sobre "la fecha que sale impresa") tal cual, sin
+  formatear. Fix: `fechaCorta` (mismo patrón exacto ya usado en DAB-60/
+  Vale/Voucher/DPD-23/etc. — partir el ISO por guion y armar
+  `dd/MM/yyyy`), aplicado solo a esa única línea impresa — no toca
+  `siaf_compras.fecha` guardado (que sigue en ISO, es el que usa el
+  correlativo por año) ni "Fecha de impresión" al pie del documento (ya
+  usaba `toLocaleDateString("es-GT")`, que ya sale dd/mm/aaaa por defecto
+  en esa configuración regional). Verificado en vivo, de solo lectura,
+  contra el correlativo real 273/2026 (el mismo "Wipe" del punto
+  anterior): "Fecha de Registro" pasó de "2026-09-25" a "25/09/2026".
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
