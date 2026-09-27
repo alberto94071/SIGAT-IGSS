@@ -3285,6 +3285,49 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   ya aplica ahí). Verificado en vivo, de solo lectura salvo el backfill
   puntual de arriba: correlativo 22/2026 pasó de mostrar "Disponible: -4"
   (rojo) a "Antes: 4 / Solicitado: 4 / Disponible: 0" (verde).
+- **Al agregar un insumo SIN código IGSS real al Catálogo (PAC), la
+  "Descripción IGSS" ahora concatena 4 campos de Base de Datos Central, no
+  2 (2026-09-27) — pedido explícito del cliente con capturas: "tiene que ir
+  concatenado esos cuatro items: Descripción, características, presentación
+  y unidad de medida".** Caso real que lo disparó: "Wipe" (catálogo id
+  4954) se imprimía en el A-01 SIAF como "Wipe; Color: Blanco; Tipo: Bola;"
+  sin presentación/unidad de medida — el cliente tuvo que escribir a mano
+  "Bola 3 libra" sobre el papel ya impreso (correlativo 273/2026). **La
+  condición es estrictamente por `codigoReal` — con código IGSS real no se
+  toca absolutamente nada** (el cliente fue explícito: "si sí tienen código
+  IGSS entonces no se cambia nada, todo se deja tal cuál"), porque esos ya
+  traen su propia "Descripción IGSS" real de Base de Datos Central (aunque
+  sea genérica, ver el punto de arriba sobre el 91% de códigos que no
+  distinguen presentación — ese problema es aparte, se resuelve en
+  Órdenes/SIAF-04 al elegir el PPR, no acá). `descripcionDeInsumoCentral(r)`
+  (nueva, `CatalogoComprasClient.tsx`, reemplaza la lógica inline que tenía
+  `elegirInsumo` y se reutiliza también en la preview del `<select>` de
+  búsqueda para que ambos siempre coincidan) — con código real:
+  `descripcion_igss || nombre; caracteristicas` (sin cambios); sin código
+  real: `nombre; caracteristicas presentacion unidad_medida` (los 3 unidos
+  con espacio, filtrando los que vengan `null`). `buscarInsumosCentral`
+  (`compras/catalogo/actions.ts`) y `InsumoCentralAgrupado` ganaron
+  `presentacion`/`unidad_medida` en la consulta y el tipo — ya existían en
+  `base_datos_central`, solo faltaba traerlos. **No se tocó la fecha del
+  A-01 SIAF** ("primero día, mes y año") que aparecía en la misma tanda de
+  capturas del cliente — el usuario acotó el pedido explícitamente a solo
+  esta concatenación ("No hay que modificar nada" más allá de eso); queda
+  pendiente si se pide por separado. **Se hizo un backfill puntual del caso
+  real reportado**: `catalogo_compras.descripcion_igss` (id 4954, "Wipe") se
+  corrigió a `"Wipe; Color: Blanco; Tipo: Bola; Bola 3 Libra"` — la
+  presentación exacta ("3 Libra") la confirmó el cliente mismo a mano sobre
+  el papel; sin ese dato habría sido ambiguo, porque "Wipe" con esas mismas
+  características tiene 4 presentaciones distintas en Base de Datos Central
+  (3/1/5/0.5 Libra, todas con el mismo `codigo_igss = null`) — ningún otro
+  insumo sin código real se tocó, solo se corrige forward para las próximas
+  veces que se agregue uno. Verificado en vivo: seleccionar "Wipe" desde
+  Base de Datos Central en el modal "Agregar/Editar insumo" mostró la
+  preview y la "Descripción IGSS" ya concatenada ("Wipe; Color: Multicolor;
+  Tipo: Bola; Bolsa 1 Libra" para otra presentación de prueba, sin guardar);
+  seleccionar un insumo real CON código ("Cefalotina", código 11303) mostró
+  la descripción real de Base de Datos Central sin ningún cambio
+  (`descripcion_igss` tal cual, sin presentación/unidad agregada) —
+  confirmando que el caso con código real quedó intacto.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
