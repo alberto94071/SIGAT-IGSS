@@ -3461,6 +3461,32 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   a Base de Datos Central que esa fila (id 204903, `codigo_ppr = "81632 -
   96466"`) es la única con esa combinación exacta de nombre+características
   +presentación+unidad.
+- **`buscarInsumosCentral` (Catálogo → "Agregar insumo") calculaba
+  `codigoReal` con `codigo_igss != null` — pero 14 filas reales de Base de
+  Datos Central (servicios/construcción capturados a mano, ej. "Dispensador
+  de cuchillas", "Compra de Licencias de Microsoft Office Profesional",
+  varios ítems de habilitación del Consultorio de Tacaná) guardan el
+  placeholder `"S/C"` literal en `codigo_igss` en vez de dejarlo `NULL`
+  (a diferencia del resto de la tabla, reimportada 2026-08-23 sin ese
+  placeholder — ver el punto de arriba de la reimportación). `!= null`
+  las contaba como "tiene código real", así que `descripcionDeInsumoCentral`
+  (`CatalogoComprasClient.tsx`) tomaba la rama de código real
+  (`descripcion_igss || nombre; caracteristicas`) en vez de la de 4 campos
+  — y como `descripcion_igss` de estas filas es idéntico a `nombre`, el
+  campo "Descripción IGSS" quedaba con solo el nombre corto, sin
+  características/presentación/unidad de medida (reportado por el cliente
+  2026-09-28 con "Dispensador de cuchillas": "no me jala las características
+  presentación y unidad de medida"). Fix de una línea en `catalogo/
+  actions.ts`: `codigoReal: r.codigo_igss != null && r.codigo_igss !==
+  SIN_CODIGO`. **No hizo falta backfill** — "Dispensador de cuchillas" nunca
+  se llegó a guardar (el cliente lo reportó antes de darle "Guardar insumo")
+  y los otros 13 insumos con este mismo defecto de dato ya estaban en el
+  catálogo con su descripción completa (capturados en otro momento, no
+  afectados por este bug puntual). Verificado en vivo contra producción
+  real (Playwright, sin guardar nada): elegir "Dispensador de cuchillas"
+  desde Base de Datos Central llenó "Descripción IGSS" con "Dispensador de
+  cuchillas; para navaja retráctil para corte de tabla yeso Caja 10
+  Unidad(es)" — antes solo mostraba "Dispensador de cuchillas".
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
