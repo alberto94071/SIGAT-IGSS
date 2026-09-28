@@ -3487,6 +3487,21 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   desde Base de Datos Central llenó "Descripción IGSS" con "Dispensador de
   cuchillas; para navaja retráctil para corte de tabla yeso Caja 10
   Unidad(es)" — antes solo mostraba "Dispensador de cuchillas".
+- **Seguimiento el mismo día: escribir "S/C" a mano en el formulario de
+  Base de Datos → Insumos ("Agregar/Editar insumo") reproducía este mismo
+  bug para un insumo NUEVO, no solo para las 14 filas legadas de arriba** —
+  el cliente preguntó "y si vuelvo a agregar uno a mano, no me dará ese
+  error?" tras el fix anterior. El formulario ya avisa "Se deja vacío si
+  no tiene" bajo el campo Código IGSS, pero nada impedía escribir "S/C"
+  literal ahí (un usuario podría pensarlo razonable, ya que es justo lo que
+  el sistema muestra en el Catálogo para insumos sin código real). Fix en
+  `BaseDatosClient.tsx` (`handleGuardar`): si el código IGSS escrito, sin
+  espacios y en mayúsculas, es exactamente `"S/C"`, se guarda como `NULL`
+  en vez del texto literal — mismo criterio preventivo que ya evita este
+  problema en otros formularios del sistema. Verificado en vivo contra
+  producción real con un insumo de prueba desechable ("Insumo de prueba
+  desechable XYZ123", código IGSS escrito "S/C"): quedó guardado con
+  `codigo_igss = NULL`, no `"S/C"` — borrado después.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

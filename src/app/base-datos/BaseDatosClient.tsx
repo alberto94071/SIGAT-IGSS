@@ -169,8 +169,14 @@ export default function BaseDatosClient({
   async function handleGuardar() {
     if (!form.nombre.trim()) return setError("El nombre es obligatorio");
     setLoading(true);
+    const codigoIgssTrim = form.codigo_igss.trim();
     const data = {
-      codigo_igss:     form.codigo_igss.trim() || null,
+      // "S/C" (o variantes de mayúsculas) escrito a mano acá se guarda como
+      // NULL, no como texto literal — es el mismo placeholder que usa el
+      // resto del sistema para "sin código real", y guardarlo literal aquí
+      // reproduce el bug de "Descripción IGSS" que solo trae el nombre
+      // corto al agregar el insumo al Catálogo (ver CLAUDE.md, 2026-09-28).
+      codigo_igss:     (codigoIgssTrim && codigoIgssTrim.toUpperCase() !== "S/C") ? codigoIgssTrim : null,
       descripcion_igss: form.descripcion_igss.trim() || null,
       codigo_ppr:      form.codigo_ppr.trim() || null,
       nombre:          form.nombre.trim(),
