@@ -889,6 +889,9 @@ export default function SiafClient({
                           }}
                           className="w-full text-left px-4 py-2.5 hover:bg-brand-50 border-b border-gray-50 last:border-0">
                           <p className="text-sm font-medium text-gray-900">{c.nombre}</p>
+                          {c.descripcion_igss && c.descripcion_igss.trim() !== c.nombre.trim() && (
+                            <p className="text-xs text-gray-500">{c.descripcion_igss}</p>
+                          )}
                           <p className="text-xs text-gray-400">IGSS: {c.codigo_igss ?? "—"} · PPR: {c.codigo_ppr ?? "—"}</p>
                         </button>
                       ))}

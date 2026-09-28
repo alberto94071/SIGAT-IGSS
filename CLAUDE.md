@@ -3408,6 +3408,27 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   113 (12 insumos) — Cantidad total: 15 · Monto total: Q51,376.00" —
   coincide con la suma manual de los 12 montos — de solo lectura, sin
   tocar ningún dato.
+- **A-01 SIAF: el buscador de "Agregar insumo a la solicitud" (`SiafClient.tsx`,
+  `insumoSugg`) solo mostraba el `nombre` de cada coincidencia — insumos
+  genéricos sin código real que comparten el mismo `nombre` (ej. dos filas de
+  "Pintura" reales en producción, id 4949 "Pintura" y 5169 "Pintura,", cada
+  una con su propia presentación/color) salían indistinguibles en el
+  dropdown (2026-09-28, pedido explícito del cliente con captura: "aparecen
+  varias opciones con el mismo nombre ejemplo la pintura, sería mejor q
+  mostrará el nombre y características para elegir el correcto").** Fix de
+  una línea en el botón de cada opción: si `c.descripcion_igss` existe y
+  difiere del `nombre`, se imprime como segunda línea gris — ya no hace
+  falta ningún dato nuevo, `descripcion_igss` ya trae nombre+características
+  (ver el punto de arriba de la concatenación de 4 campos, 2026-09-27) para
+  cualquier insumo agregado al catálogo después de ese fix. **No se tocó el
+  segundo nivel (`subprodEntries`, el checklist de subproductos que aparece
+  debajo tras elegir uno)** — el reporte era específicamente sobre el primer
+  nivel de búsqueda, donde entran en juego productos genuinamente distintos
+  que comparten nombre. Verificado en vivo contra producción real
+  (Playwright, sin tocar datos): buscar "pintura" mostró "Pintura" con
+  "Pintura; Color: Varios; Tipo: Látex satinada; Cubeta 5 Galón" debajo, y
+  "Pintura," con su propia descripción distinta — antes ambas se veían
+  como una línea idéntica "Pintura".
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
