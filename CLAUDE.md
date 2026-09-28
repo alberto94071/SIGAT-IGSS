@@ -3345,6 +3345,55 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   en esa configuración regional). Verificado en vivo, de solo lectura,
   contra el correlativo real 273/2026 (el mismo "Wipe" del punto
   anterior): "Fecha de Registro" pasó de "2026-09-25" a "25/09/2026".
+- **Seguimiento (2026-09-28) del caso "Wipe" de los dos puntos de arriba: la
+  descripción sin presentación de un insumo sin código real NO se actualiza
+  sola en los SIAF que ya lo tenían agregado — es un snapshot congelado,
+  igual que el resto de "Descripción IGSS" en este sistema.** El cliente
+  reportó que el SIAF 273/2026 seguía sin mostrar "Bola 3 Libra" pese al fix
+  del punto anterior. Investigado: `catalogo_compras.descripcion_igss` del
+  Wipe SÍ tenía la concatenación completa, pero alguien había vuelto a usar
+  "Cambiar" en el Catálogo y eligió por error una presentación distinta
+  ("1 Libra" en vez de "3 Libra" — Wipe tiene 4 presentaciones casi
+  idénticas en Base de Datos Central, fácil de confundir sin fijarse bien)
+  — y el renglón del SIAF 273/2026 (`siaf_compras_items`, todavía
+  "Borrador") tenía su PROPIA copia congelada de la descripción, tomada en
+  el momento de agregarlo al SIAF (`openEdit`/`agregarItemModal` en
+  `SiafClient.tsx` prefilla desde el snapshot del ítem, no desde el
+  Catálogo en vivo) — así que ni corrigiendo el Catálogo alcanzaba para ese
+  SIAF puntual sin volver a quitar y re-agregar el renglón. Se corrigió a
+  mano por SQL directo ambos valores (luego el cliente confirmó que "1
+  Libra" era el correcto — el cambio de presentación en el Catálogo lo
+  había hecho alguien de su equipo aposta — así que se revirtió de vuelta a
+  "1 Libra" en los dos lugares). **Aclarado con el cliente**: el fix de
+  concatenación (arriba) **sí aplica automáticamente a cualquier SIAF nuevo
+  de ahora en adelante**, con la salvedad de que la corrección **no es
+  retroactiva** — un insumo sin código real que ya estaba en el Catálogo
+  antes de este cambio se queda con su descripción vieja (sin presentación)
+  hasta que alguien lo edite con "Cambiar" y lo vuelva a elegir de Base de
+  Datos Central; recién ahí, cualquier SIAF nuevo que lo use hereda la
+  descripción ya completa. Hay 177 insumos sin código real en el Catálogo
+  hoy — no se intentó una migración masiva porque, como con el Wipe, varios
+  tienen presentaciones casi idénticas en Base de Datos Central y no hay
+  forma segura de adivinar automáticamente cuál corresponde a cada uno sin
+  revisar caso por caso.
+- **Catálogo de Compras (PAC) ganó un filtro por renglón (2026-09-28)** —
+  pedido explícito del cliente: "poder ver qué renglones ya agregué, y saber
+  a cuáles les tengo que agregar presupuesto". `CatalogoComprasClient.tsx`:
+  `renglonesDisponibles` (nuevo `useMemo`) cuenta cuántos insumos tiene cada
+  renglón ya presente en el catálogo (más un conteo aparte de "Sin
+  renglón") y arma un `<select>` junto al buscador — "Todos los renglones"
+  por defecto, cada renglón real como opción con su conteo (ej. "Renglón
+  232 (1)"), ordenados numéricamente. Elegir uno filtra la tabla igual que
+  el buscador de texto (`filtered` ahora combina ambos filtros). El
+  `<select>` mismo ya sirve como respuesta a "qué renglones ya agregué" sin
+  necesidad de filtrar nada — el cliente puede abrirlo y ver de un vistazo
+  toda la lista con sus conteos, y por descarte saber cuáles renglones del
+  presupuesto todavía no tienen ningún insumo cargado. Verificado en vivo
+  contra producción real (1,779 insumos): el `<select>` mostró los
+  renglones reales ordenados (111, 112, 113...) con sus conteos correctos;
+  elegir "Renglón 232 (1)" filtró la tabla a exactamente el insumo "Wipe",
+  con el header actualizando a "1 de 1,779 insumos" — de solo lectura, sin
+  tocar ningún dato.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

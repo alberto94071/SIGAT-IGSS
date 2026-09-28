@@ -1,7 +1,7 @@
 "use client";
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Search, Plus, X, Loader2, ChevronLeft, ChevronRight, ChevronDown, Download, Edit2, Trash2, CheckCircle2, HelpCircle, AlertTriangle, XCircle } from "lucide-react";
+import { BookOpen, Search, Plus, X, Loader2, ChevronLeft, ChevronRight, ChevronDown, Download, Edit2, Trash2, CheckCircle2, HelpCircle, AlertTriangle, XCircle, ListFilter } from "lucide-react";
 import { crearInsumoCompras, editarInsumoCompras, eliminarInsumoCompras, buscarInsumosCentral, type InsumoCentralAgrupado } from "./actions";
 import { importarPac2026 } from "./importar-action";
 import { COLUMNAS_PAC } from "./pac-columnas";
@@ -36,6 +36,7 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
   const router = useRouter();
   const [insumos, setInsumos] = useState(init);
   const [query, setQuery] = useState("");
+  const [renglonFiltro, setRenglonFiltro] = useState<number | "sin" | null>(null);
   const [pageSize, setPageSize] = useState<number>(25);
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState(false);
@@ -72,18 +73,39 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
     router.refresh();
   }
 
+  // Renglones que ya tienen al menos un insumo en el catálogo — para que el
+  // usuario vea de un vistazo cuáles ya agregó (y por descarte, a cuáles les
+  // falta agregar presupuesto todavía). Ordenados numéricamente, con la
+  // cantidad de insumos de cada uno.
+  const renglonesDisponibles = useMemo(() => {
+    const conteo = new Map<number, number>();
+    let sinRenglon = 0;
+    for (const i of insumos) {
+      if (i.renglon == null) { sinRenglon++; continue; }
+      conteo.set(i.renglon, (conteo.get(i.renglon) ?? 0) + 1);
+    }
+    return {
+      renglones: [...conteo.entries()].sort((a, b) => a[0] - b[0]),
+      sinRenglon,
+    };
+  }, [insumos]);
+
   const filtered = useMemo(() => {
-    if (!query.trim()) return insumos;
+    let base = insumos;
+    if (renglonFiltro === "sin") base = base.filter(i => i.renglon == null);
+    else if (renglonFiltro != null) base = base.filter(i => i.renglon === renglonFiltro);
+
+    if (!query.trim()) return base;
     const q = query.toLowerCase();
-    return insumos.filter(i =>
+    return base.filter(i =>
       i.nombre.toLowerCase().includes(q) ||
       (i.codigo_igss ?? "").toLowerCase().includes(q) ||
       i.subproducto.toLowerCase().includes(q) ||
       String(i.renglon ?? "").includes(q)
     );
-  }, [insumos, query]);
+  }, [insumos, query, renglonFiltro]);
 
-  useEffect(() => { setPage(1); }, [query, pageSize]);
+  useEffect(() => { setPage(1); }, [query, pageSize, renglonFiltro]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageClamped = Math.min(page, totalPages);
@@ -130,6 +152,27 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
               value={query}
               onChange={e => setQuery(e.target.value)}
             />
+          </div>
+          <div className="relative">
+            <ListFilter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <select
+              className={`input pl-9 pr-7 appearance-none ${renglonFiltro != null ? "border-brand-300 text-brand-700 font-medium" : ""}`}
+              value={renglonFiltro ?? ""}
+              onChange={e => {
+                const v = e.target.value;
+                setRenglonFiltro(v === "" ? null : v === "sin" ? "sin" : Number(v));
+              }}
+              title="Filtrar por renglón — para ver cuáles ya agregaste al catálogo"
+            >
+              <option value="">Todos los renglones</option>
+              {renglonesDisponibles.renglones.map(([renglon, cant]) => (
+                <option key={renglon} value={renglon}>Renglón {renglon} ({cant})</option>
+              ))}
+              {renglonesDisponibles.sinRenglon > 0 && (
+                <option value="sin">Sin renglón ({renglonesDisponibles.sinRenglon})</option>
+              )}
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
           </div>
           <button type="button" onClick={() => setMostrarInstructivo(true)}
             className="btn-secondary shrink-0 text-gray-600" title="Cómo debe estar armado el archivo del PAC">
