@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { siafCompras, siafComprasItems, catalogoCompras, catalogoFirmantes, usuarios } from "@/lib/schema";
 import { desc, asc, eq } from "drizzle-orm";
 import { requireTabAccess } from "@/lib/modulo-access";
+import { codigoPprLookupMap, codigoPprSinCodigoLookupMap, normalizaNombre, SIN_CODIGO } from "@/lib/adjudicacion/renglon-utils";
 import SiafClient from "./SiafClient";
 
 interface Props { searchParams: Promise<{ ver?: string }> }
@@ -29,6 +30,31 @@ export default async function A01SiafPage({ searchParams }: Props) {
     items: itemsList.filter(i => i.solicitud_id === s.id),
   }));
 
+  // PPR "sugerido" (provisional) para ítems que todavía no pasaron por
+  // Consolidación (codigo_ppr real sigue null) — mismo resolutor que ya usa
+  // la impresión del A-01 SIAF (codigoPprLookupMap/codigoPprSinCodigoLookupMap),
+  // solo para mostrarlo en la lista de solicitudes como pista, no como el
+  // PPR asignado de verdad (ese solo existe después de Consolidación).
+  const itemsSinPprAsignado = itemsList.filter(i => i.codigo_ppr == null);
+  const codigosReales = [...new Set(
+    itemsSinPprAsignado.map(i => i.codigo_igss).filter((c): c is string => c != null && c !== SIN_CODIGO)
+  )];
+  const [pprRealMap, pprSinCodigoMap] = await Promise.all([
+    codigoPprLookupMap(codigosReales),
+    codigoPprSinCodigoLookupMap(
+      itemsSinPprAsignado
+        .filter(i => i.codigo_igss == null || i.codigo_igss === SIN_CODIGO)
+        .map(i => ({ nombre: i.nombre, descripcion_igss: i.descripcion_igss }))
+    ),
+  ]);
+  const pprSugerido: Record<number, string> = {};
+  for (const i of itemsSinPprAsignado) {
+    const v = i.codigo_igss && i.codigo_igss !== SIN_CODIGO
+      ? pprRealMap.get(`${i.codigo_igss}::${normalizaNombre(i.nombre)}`)
+      : pprSinCodigoMap.get(`${i.nombre.trim()}::${(i.descripcion_igss ?? "").trim()}`);
+    if (v) pprSugerido[i.id] = v;
+  }
+
   return (
     <SiafClient
       solicitudes={solicitudes as any}
@@ -37,6 +63,7 @@ export default async function A01SiafPage({ searchParams }: Props) {
       firmantes={firmantesList as any}
       verInicial={ver ? Number(ver) : null}
       currentUserName={session.user.name ?? undefined}
+      pprSugerido={pprSugerido}
     />
   );
 }

@@ -261,16 +261,17 @@ export async function codigoPprSinCodigoLookupMap(
   if (nombresUnicos.length === 0) return new Map();
   const rows = await db.select({
     nombre: baseDatosCentral.nombre, codigo_ppr: baseDatosCentral.codigo_ppr, caracteristicas: baseDatosCentral.caracteristicas,
+    presentacion: baseDatosCentral.presentacion, unidad_medida: baseDatosCentral.unidad_medida,
   }).from(baseDatosCentral).where(
     and(isNull(baseDatosCentral.codigo_igss), or(...nombresUnicos.map(n => ilike(baseDatosCentral.nombre, n))))
   );
 
-  const porNombre = new Map<string, { codigo_ppr: string; caracteristicas: string | null }[]>();
+  const porNombre = new Map<string, { codigo_ppr: string; caracteristicas: string | null; presentacion: string | null; unidad_medida: string | null }[]>();
   for (const r of rows) {
     if (!r.codigo_ppr) continue;
     const key = r.nombre.trim().toLowerCase();
     if (!porNombre.has(key)) porNombre.set(key, []);
-    porNombre.get(key)!.push({ codigo_ppr: r.codigo_ppr, caracteristicas: r.caracteristicas });
+    porNombre.get(key)!.push({ codigo_ppr: r.codigo_ppr, caracteristicas: r.caracteristicas, presentacion: r.presentacion, unidad_medida: r.unidad_medida });
   }
 
   const map = new Map<string, string>();
@@ -278,9 +279,23 @@ export async function codigoPprSinCodigoLookupMap(
   for (const item of items) {
     const candidatos = porNombre.get(item.nombre.trim().toLowerCase()) ?? [];
     const descripcionCompleta = (item.descripcion_igss ?? "").trim();
+    // Dos formatos posibles de descripcion_igss según cuándo se agregó el
+    // insumo: "{nombre}; {caracteristicas}" (formato viejo) o
+    // "{nombre}; {caracteristicas} {presentacion} {unidad_medida}" (formato
+    // de 4 campos desde 2026-09-27, ver descripcionDeInsumoCentral en
+    // CatalogoComprasClient.tsx) — probar ambos evita que insumos sin código
+    // real con varias presentaciones que comparten características (ej.
+    // "Pintura" Cubeta 5 Galón vs. Envase 1 Galón, misma característica
+    // "Color: Varios; Tipo: Látex satinada;") se queden sin resolver aunque
+    // la descripción completa SÍ identifique una sola fila sin ambigüedad.
     const elegido = candidatos.length === 1
       ? candidatos[0]
-      : candidatos.find(c => `${item.nombre.trim()}; ${c.caracteristicas ?? ""}`.trim() === descripcionCompleta);
+      : candidatos.find(c => {
+          const formatoViejo = `${item.nombre.trim()}; ${c.caracteristicas ?? ""}`.trim();
+          const partes = [c.caracteristicas, c.presentacion, c.unidad_medida].filter(Boolean).join(" ");
+          const formatoNuevo = partes ? `${item.nombre.trim()}; ${partes}` : item.nombre.trim();
+          return formatoViejo === descripcionCompleta || formatoNuevo === descripcionCompleta;
+        });
     if (elegido) map.set(`${item.nombre.trim()}::${descripcionCompleta}`, elegido.codigo_ppr);
     else sinResolver.push(item);
   }
