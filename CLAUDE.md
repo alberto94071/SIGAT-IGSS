@@ -3393,6 +3393,20 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   renglones reales ordenados (111, 112, 113...) con sus conteos correctos;
   elegir "Renglón 232 (1)" filtró la tabla a exactamente el insumo "Wipe",
   con el header actualizando a "1 de 1,779 insumos" — de solo lectura, sin
+  tocar ningún dato. **Extendido el mismo día**: con un renglón elegido
+  (no con la búsqueda de texto sola), aparece una barra debajo de la tabla
+  con la suma de Cantidad y Monto de TODOS los insumos filtrados (no solo
+  los de la página visible) — pedido explícito del cliente: "que hasta
+  abajo me muestre el total de las sumatorias de los valores que tengo
+  para los insumos del [renglón], para saber cuánto ya usé en ese
+  renglón". `totalesFiltro` (nuevo `useMemo`, gateado por
+  `renglonFiltro != null`) suma sobre `filtered` completo, no sobre
+  `paginated` — si no, la suma cambiaría según el tamaño de página
+  elegido en vez de reflejar siempre el total real del renglón.
+  Verificado en vivo contra producción real, renglón 113 (12 insumos
+  reales de telefonía/enlace dedicado): la barra mostró "Total renglón
+  113 (12 insumos) — Cantidad total: 15 · Monto total: Q51,376.00" —
+  coincide con la suma manual de los 12 montos — de solo lectura, sin
   tocar ningún dato.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
