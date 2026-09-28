@@ -59,11 +59,12 @@ type Firmante = { id: number; nombre: string; cargo: string };
 
 interface Props {
   solicitudes: Solicitud[]; catalogo: CatEntry[]; canEdit: boolean; firmantes?: Firmante[];
-  currentUserName?: string; verInicial?: number | null;
+  currentUserName?: string; verInicial?: number | null; pprSugerido?: Record<number, string>;
 }
 
 export default function SiafClient({
   solicitudes: initSol, catalogo, canEdit, firmantes = [], currentUserName, verInicial,
+  pprSugerido = {},
 }: Props) {
   const router = useRouter();
   const [solicitudes,  setSolicitudes]  = useState(initSol);
@@ -530,7 +531,13 @@ export default function SiafClient({
                                       return (
                                         <tr key={item.id}>
                                           <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{item.codigo_igss ?? "—"}</td>
-                                          <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{item.codigo_ppr ?? "—"}</td>
+                                          <td className="px-3 py-2 font-mono whitespace-nowrap">
+                                            {item.codigo_ppr ?? (
+                                              pprSugerido[item.id]
+                                                ? <span className="italic text-gray-400" title="PPR sugerido — se confirma al pasar por Consolidación">{pprSugerido[item.id]} (sugerido)</span>
+                                                : <span className="text-gray-600">—</span>
+                                            )}
+                                          </td>
                                           <td className="px-3 py-2 font-medium text-gray-900">{item.nombre}</td>
                                           <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{item.subproducto}</td>
                                           <td className="px-3 py-2 tabular-nums text-gray-600 whitespace-nowrap">{renglon ?? "—"}</td>

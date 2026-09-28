@@ -3429,6 +3429,38 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   "Pintura; Color: Varios; Tipo: Látex satinada; Cubeta 5 Galón" debajo, y
   "Pintura," con su propia descripción distinta — antes ambas se veían
   como una línea idéntica "Pintura".
+- **A-01 SIAF: la lista de solicitudes ganó una columna "PPR (sugerido)"
+  provisional para ítems que aún no pasaron por Consolidación (2026-09-28)**
+  — seguimiento del punto anterior: el cliente preguntó por qué la columna
+  "PPR" del detalle expandido de una solicitud (Código IGSS/PPR/Insumo/...)
+  mostraba "—" para "Pintura" y, tras explicarle que el PPR real solo se
+  asigna en Consolidación, propuso mostrarlo "solo como leyenda,
+  provisional". Fix: `page.tsx` calcula, para cada ítem con `codigo_ppr`
+  real todavía `null`, un PPR **sugerido** con el mismo resolutor que ya usa
+  la impresión (`codigoPprLookupMap`/`codigoPprSinCodigoLookupMap`,
+  `renglon-utils.ts`) y lo manda a `SiafClient.tsx` como
+  `pprSugerido: Record<itemId, string>` — la tabla lo imprime en gris
+  itálico con "(sugerido)" en vez del guion, sin tocar `item.codigo_ppr`
+  real (que solo se llena en Consolidación, sin cambios). **De paso se
+  corrigió un bug real en `codigoPprSinCodigoLookupMap`**: su rama de match
+  exacto solo comparaba contra el formato VIEJO de 2 campos
+  (`"{nombre}; {caracteristicas}"`), pero desde el fix de concatenación de
+  4 campos (2026-09-27) los insumos sin código real agregados al Catálogo
+  guardan `"{nombre}; {caracteristicas} {presentacion} {unidad_medida}"` —
+  el formato viejo nunca calzaba con el nuevo, así que insumos con varias
+  presentaciones que comparten las mismas `caracteristicas` (ej. "Pintura"
+  Cubeta 5 Galón vs. Envase 1 Galón, ambas "Color: Varios; Tipo: Látex
+  satinada;") se quedaban sin resolver aunque la descripción completa SÍ
+  identificara una sola fila sin ambigüedad — ni en esta columna nueva ni
+  en la leyenda "Código PpR:" que ya imprime el A-01 SIAF. Ahora se prueban
+  los dos formatos. Verificado en vivo contra producción real (Playwright,
+  sin tocar datos): la SIAF 268/2026 ("Pintura", Cubeta 5 Galón) pasó de
+  mostrar "—" a "81632 - 96466 (sugerido)" en la lista, y el A-01 SIAF
+  impreso de esa misma solicitud pasó de no mostrar ninguna leyenda de PPR
+  a imprimir "Código PpR: 81632 - 96466" — confirmado por consulta directa
+  a Base de Datos Central que esa fila (id 204903, `codigo_ppr = "81632 -
+  96466"`) es la única con esa combinación exacta de nombre+características
+  +presentación+unidad.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
