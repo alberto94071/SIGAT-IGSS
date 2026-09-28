@@ -107,6 +107,19 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
 
   useEffect(() => { setPage(1); }, [query, pageSize, renglonFiltro]);
 
+  // Suma de Cantidad/Monto de TODOS los insumos filtrados (no solo la
+  // página visible) — para que, al filtrar por un renglón, se vea de una
+  // vez cuánto se lleva usado del presupuesto de ese renglón, sin tener
+  // que sumar a mano insumo por insumo.
+  const totalesFiltro = useMemo(() => {
+    if (renglonFiltro == null) return null;
+    return {
+      count: filtered.length,
+      cantidad: filtered.reduce((s, i) => s + (i.cantidad ?? 0), 0),
+      monto: filtered.reduce((s, i) => s + (i.monto ?? 0), 0),
+    };
+  }, [filtered, renglonFiltro]);
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageClamped = Math.min(page, totalPages);
   const paginated = useMemo(() => {
@@ -248,6 +261,19 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
             </div>
           )}
         </div>
+
+        {totalesFiltro && (
+          <div className="px-4 py-2.5 border-t border-gray-100 bg-brand-50 flex items-center justify-between flex-wrap gap-2 text-sm">
+            <span className="font-medium text-brand-700">
+              Total {renglonFiltro === "sin" ? "sin renglón" : `renglón ${renglonFiltro}`}
+              {" "}({totalesFiltro.count} insumo{totalesFiltro.count === 1 ? "" : "s"})
+            </span>
+            <div className="flex items-center gap-4 text-brand-700 tabular-nums">
+              <span>Cantidad total: <strong>{totalesFiltro.cantidad.toLocaleString("es-GT")}</strong></span>
+              <span>Monto total: <strong>{Q(totalesFiltro.monto)}</strong></span>
+            </div>
+          </div>
+        )}
 
         {/* Paginación */}
         {filtered.length > 0 && (
