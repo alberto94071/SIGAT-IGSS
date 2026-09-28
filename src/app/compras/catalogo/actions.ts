@@ -85,7 +85,14 @@ export async function buscarInsumosCentral(q: string): Promise<InsumoCentralAgru
 
     return rows.rows.map(r => ({
       codigo: r.codigo_igss ?? SIN_CODIGO,
-      codigoReal: r.codigo_igss != null,
+      // 14 filas reales de Base de Datos Central (servicios/construcción
+      // capturados a mano, no parte de la reimportación masiva) guardan el
+      // placeholder "S/C" literal en codigo_igss en vez de dejarlo NULL —
+      // `!= null` las contaba como "código real" y saltaba la concatenación
+      // de 4 campos (2026-09-27), mostrando solo el nombre corto en
+      // "Descripción IGSS" (reportado por el cliente 2026-09-28 con
+      // "Dispensador de cuchillas").
+      codigoReal: r.codigo_igss != null && r.codigo_igss !== SIN_CODIGO,
       nombre: r.nombre, descripcion_igss: r.descripcion_igss,
       caracteristicas: r.caracteristicas, renglon: r.renglon,
       presentacion: r.presentacion, unidad_medida: r.unidad_medida,
