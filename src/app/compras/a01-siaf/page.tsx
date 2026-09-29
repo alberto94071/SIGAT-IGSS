@@ -35,6 +35,15 @@ export default async function A01SiafPage({ searchParams }: Props) {
   // la impresión del A-01 SIAF (codigoPprLookupMap/codigoPprSinCodigoLookupMap),
   // solo para mostrarlo en la lista de solicitudes como pista, no como el
   // PPR asignado de verdad (ese solo existe después de Consolidación).
+  // `incluirRespaldoLegado: false` — el respaldo legado de
+  // codigoPprSinCodigoLookupMap hace una consulta por ítem sin resolver
+  // (escaneo completo de Base de Datos Central cada vez, sin índice
+  // usable); corriéndolo para TODOS los ítems sin PPR de TODAS las
+  // solicitudes en cada carga de esta lista (hasta ~123 en producción)
+  // volvió la pantalla notablemente lenta (reportado por el cliente
+  // 2026-09-29) — acá solo se usa el match exacto (barato, una sola
+  // consulta), y el resolutor completo se deja para la impresión de un
+  // solo documento (`imprimir/page.tsx`), donde el N es chico.
   const itemsSinPprAsignado = itemsList.filter(i => i.codigo_ppr == null);
   const codigosReales = [...new Set(
     itemsSinPprAsignado.map(i => i.codigo_igss).filter((c): c is string => c != null && c !== SIN_CODIGO)
@@ -44,7 +53,8 @@ export default async function A01SiafPage({ searchParams }: Props) {
     codigoPprSinCodigoLookupMap(
       itemsSinPprAsignado
         .filter(i => i.codigo_igss == null || i.codigo_igss === SIN_CODIGO)
-        .map(i => ({ nombre: i.nombre, descripcion_igss: i.descripcion_igss }))
+        .map(i => ({ nombre: i.nombre, descripcion_igss: i.descripcion_igss })),
+      false,
     ),
   ]);
   const pprSugerido: Record<number, string> = {};

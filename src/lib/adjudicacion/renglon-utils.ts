@@ -255,15 +255,41 @@ export async function codigoPprLookupMap(codigos?: string[]): Promise<Map<string
 // al agregar el insumo, así que los insumos agregados por ese camino
 // siempre matchean.
 export async function codigoPprSinCodigoLookupMap(
-  items: { nombre: string; descripcion_igss: string | null }[]
+  items: { nombre: string; descripcion_igss: string | null }[],
+  // El respaldo legado de abajo (`sinResolver`) hace UNA CONSULTA POR ÍTEM
+  // sin resolver, cada una un escaneo completo de Base de Datos Central sin
+  // índice usable (ILIKE con patrón armado desde la propia columna) — barato
+  // para imprimir un solo documento (pocos ítems), pero carísimo si se llama
+  // con TODOS los ítems sin PPR de TODAS las solicitudes de la lista (hasta
+  // ~123 en producción, cada uno escaneando ~177k filas) — eso volvió lenta
+  // la pantalla de Solicitudes A-01 SIAF al agregarle el PPR "sugerido"
+  // (2026-09-28), reportado por el cliente 2026-09-29 ("cuesta que
+  // responda... parece lento el sistema"). `false` desde la lista (rápido,
+  // acotado a una sola consulta por los nombres únicos) — el resolutor
+  // completo se queda para la impresión de un documento puntual.
+  incluirRespaldoLegado = true,
 ): Promise<Map<string, string>> {
-  const nombresUnicos = [...new Set(items.map(i => i.nombre.trim()).filter(n => n.length > 0))];
+  const nombresUnicos = [...new Set(items.map(i => i.nombre.trim().toLowerCase()).filter(n => n.length > 0))];
   if (nombresUnicos.length === 0) return new Map();
+  // Base de Datos Central no tiene índice en `nombre` — un OR de N ILIKE
+  // (uno por nombre único) evalúa las N comparaciones por fila en cada una
+  // de las ~208k filas (con ~117 nombres únicos, esto tardaba >2s solo esta
+  // consulta). `lower(nombre) IN (...)` es una comparación de igualdad de
+  // texto por fila, mucho más barata que el motor de patrones de ILIKE —
+  // mismo resultado (todos los nombres acá son coincidencia exacta, sin
+  // comodines, así que ILIKE nunca aportaba nada sobre una igualdad
+  // insensible a mayúsculas), ~300-400ms en el mismo caso real (verificado
+  // 2026-09-29, ver el comentario de `incluirRespaldoLegado` arriba).
+  // `= ANY(${array})` se probó primero pero el driver de Neon/Drizzle
+  // interpola el array como una tupla de parámetros sueltos
+  // (`ANY(($1,$2,...))`), que Postgres rechaza ("op ANY/ALL (array)
+  // requires array on right side") — `inArray` sobre una expresión cruda
+  // sí genera el `IN (...)` correcto.
   const rows = await db.select({
     nombre: baseDatosCentral.nombre, codigo_ppr: baseDatosCentral.codigo_ppr, caracteristicas: baseDatosCentral.caracteristicas,
     presentacion: baseDatosCentral.presentacion, unidad_medida: baseDatosCentral.unidad_medida,
   }).from(baseDatosCentral).where(
-    and(isNull(baseDatosCentral.codigo_igss), or(...nombresUnicos.map(n => ilike(baseDatosCentral.nombre, n))))
+    and(isNull(baseDatosCentral.codigo_igss), inArray(sql`lower(${baseDatosCentral.nombre})`, nombresUnicos))
   );
 
   const porNombre = new Map<string, { codigo_ppr: string; caracteristicas: string | null; presentacion: string | null; unidad_medida: string | null }[]>();
@@ -321,6 +347,8 @@ export async function codigoPprSinCodigoLookupMap(
   // `caracteristicas` MÁS LARGA (la más específica gana) — y solo si es
   // estrictamente más larga que cualquier otro candidato, para seguir sin
   // adivinar cuando hay empate.
+  if (!incluirRespaldoLegado) return map;
+
   for (const item of sinResolver) {
     const descripcionKey = (item.descripcion_igss ?? "").trim();
     const textoBusqueda = (item.descripcion_igss || item.nombre).trim();
