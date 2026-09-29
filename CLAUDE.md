@@ -3502,6 +3502,40 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   producción real con un insumo de prueba desechable ("Insumo de prueba
   desechable XYZ123", código IGSS escrito "S/C"): quedó guardado con
   `codigo_igss = NULL`, no `"S/C"` — borrado después.
+- **La columna "PPR (sugerido)" de la lista de solicitudes A-01 SIAF
+  (agregada el mismo día que el punto de arriba, `codigoPprSinCodigoLookupMap`)
+  volvió lenta toda la pantalla — reportado por el cliente 2026-09-29
+  ("cuesta que responda... parece lento el sistema"), corregido el mismo
+  día.** El respaldo legado de esa función (`sinResolver`) hace **una
+  consulta por ítem sin resolver**, cada una un escaneo completo de Base de
+  Datos Central (~208k filas) sin índice usable (`ILIKE` con patrón armado
+  desde la propia columna) — barato para imprimir un solo documento (pocos
+  ítems), pero se volvió carísimo en cuanto empezó a correr sobre TODOS los
+  ítems sin PPR de TODAS las solicitudes en cada carga de la lista (hasta
+  ~123 en producción). Fix de dos partes en
+  `codigoPprSinCodigoLookupMap` (`renglon-utils.ts`): (1) nuevo parámetro
+  `incluirRespaldoLegado = true` — la lista de solicitudes
+  (`compras/a01-siaf/page.tsx`) ahora llama con `false` (se queda solo con
+  el match exacto, rápido) y la impresión de un documento puntual
+  (`imprimir/page.tsx`) sigue con el default `true` (resolutor completo,
+  N chico); (2) la propia primera consulta (el match exacto) también se
+  reescribió — un `OR` de ~117 `ILIKE` (uno por nombre único, sin comodines,
+  solo para insensibilidad a mayúsculas) contra una tabla sin índice tardaba
+  >2s por sí sola; `lower(nombre) IN (...)` (comparación de igualdad, no de
+  patrones) bajó eso a ~300-400ms. **Trampa de Drizzle encontrada en el
+  camino**: `sql\`= ANY(${array})\`` NO liga el array como un array nativo
+  de Postgres — lo interpola como una tupla de parámetros sueltos
+  (`ANY(($1,$2,...))`), que Postgres rechaza en runtime ("op ANY/ALL
+  (array) requires array on right side") — esto no lo atrapa
+  `tsc --noEmit` (compila bien), solo se ve recargando la página de verdad.
+  `inArray(sql\`lower(${columna})\`, array)` sí genera el `IN (...)`
+  correcto. Verificado en vivo: la carga en caliente de
+  `/compras/a01-siaf` bajó de (sin medir exacto, pero con errores 500 de
+  por medio durante el desarrollo del fix) a 1.1-1.7s consistentes, en
+  línea con el resto de páginas del sistema — sin cambiar la columna
+  "PPR (sugerido)" en sí (sigue mostrando lo mismo al expandir una
+  solicitud, solo que ya no escanea la tabla completa ítem por ítem para
+  llegar ahí).
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
