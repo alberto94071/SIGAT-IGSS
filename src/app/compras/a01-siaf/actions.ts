@@ -28,28 +28,47 @@ async function validarItemsEnPac(items: { catalogo_id: number }[]): Promise<stri
 
 type ItemPacExcedido = { nombre: string; disponible: number; requerido: number };
 
-// Cantidad todavía disponible en el PAC para un insumo (código IGSS +
-// subproducto + nombre) del año dado: la cantidad autorizada en el
-// catálogo, menos lo que ya está pedido en otros SIAF del mismo año que no
-// estén Rechazados (Borrador o Aprobado — un Borrador también aparta
-// cantidad, para que dos solicitudes en trámite a la vez no se pisen entre
-// sí). Excluye la propia solicitud que se está aprobando, para no restarse
-// a sí misma dos veces.
+// Cantidad todavía disponible en el PAC para un ítem del año dado: la
+// cantidad autorizada en su fila del catálogo (`catalogo_id`), menos lo que
+// ya está pedido en otros SIAF del mismo año que no estén Rechazados
+// (Borrador o Aprobado — un Borrador también aparta cantidad, para que dos
+// solicitudes en trámite a la vez no se pisen entre sí). Excluye la propia
+// solicitud que se está aprobando, para no restarse a sí misma dos veces.
 //
-// El nombre es parte de la clave a propósito — mismo patrón "S/C" de
-// siempre (ver CLAUDE.md): puede haber varias filas del PAC con el mismo
-// codigo_igss+subproducto pero que en realidad son insumos distintos (ej.
-// "Arrendamiento... Septiembre" / "...Octubre" / "...Noviembre", todas con
-// codigo_igss "SC-990510" y subproducto "001-001-0001", cada una con su
-// propia cantidad autorizada). Sin el nombre en la clave, usar la cuota de
-// una contaminaba la disponibilidad de las otras.
+// Se agrupa por `catalogo_id`, NO por codigo_igss+subproducto+nombre en
+// texto — bug real reportado por el cliente 2026-09-30: agregó 3
+// presentaciones distintas de "Cable" (mismo subproducto, mismo
+// codigo_igss "S/C", mismo nombre — solo el codigo_ppr y el catalogo_id
+// cambian, ver "Catálogo de Compras: un mismo insumo+subproducto..." en
+// CLAUDE.md), cada una con cantidad autorizada 200 — al aprobar, pedir 200
+// de cada una (600 en total, en 3 SIAF distintos) se comparaba contra la
+// cantidad autorizada de UNA sola fila (200, la primera que encontraba
+// `.limit(1)`), así que salía "Disponible: -400" sin que hubiera ningún
+// déficit real. Mismo patrón de fix ya aplicado en crearSolicitud/
+// editarSolicitud el 2026-09-24 para `cantidad_antes` — esta función nunca
+// se actualizó cuando se agregó el multi-presentación del catálogo
+// (2026-09-30), quedó como el último punto con el bug viejo.
+// Ítems legados sin `catalogo_id` (de antes de que ese campo existiera)
+// siguen agrupándose por el texto viejo, como respaldo — el nombre es
+// parte de esa clave a propósito, mismo patrón "S/C" de siempre: puede
+// haber varias filas del PAC con el mismo codigo_igss+subproducto pero que
+// en realidad son insumos distintos (ej. "Arrendamiento... Septiembre" /
+// "...Octubre" / "...Noviembre", todas con codigo_igss "SC-990510" y
+// subproducto "001-001-0001", cada una con su propia cantidad autorizada).
 async function verificarPacDisponible(
-  items: { codigo_igss: string | null; subproducto: string; nombre: string; cantidad_solicitada: number }[],
+  items: { catalogo_id: number | null; codigo_igss: string | null; subproducto: string; nombre: string; cantidad_solicitada: number }[],
   anio: number, solicitudIdActual: number,
 ): Promise<ItemPacExcedido[]> {
+  const porCatalogoId = new Map<number, { nombre: string; monto: number }>();
   const porClave = new Map<string, { codigo_igss: string; subproducto: string; nombre: string; monto: number }>();
   for (const item of items) {
-    if (!item.codigo_igss) continue; // sin código IGSS no hay con qué cruzar la cantidad del PAC
+    if (item.catalogo_id != null) {
+      const existente = porCatalogoId.get(item.catalogo_id);
+      if (existente) existente.monto += item.cantidad_solicitada;
+      else porCatalogoId.set(item.catalogo_id, { nombre: item.nombre, monto: item.cantidad_solicitada });
+      continue;
+    }
+    if (!item.codigo_igss) continue; // sin código IGSS ni catalogo_id no hay con qué cruzar la cantidad del PAC
     const key = `${item.codigo_igss}::${item.subproducto}::${item.nombre}`;
     const existente = porClave.get(key);
     if (existente) existente.monto += item.cantidad_solicitada;
@@ -57,11 +76,30 @@ async function verificarPacDisponible(
   }
 
   const excedidos: ItemPacExcedido[] = [];
+
+  for (const [catalogoId, { nombre, monto }] of porCatalogoId) {
+    const [cat] = await db.select({ cantidad: catalogoCompras.cantidad }).from(catalogoCompras)
+      .where(eq(catalogoCompras.id, catalogoId)).limit(1);
+    // Sin cantidad configurada en el PAC para este insumo no hay límite que
+    // verificar (no es lo mismo que "cero disponible") — se deja pasar.
+    if (cat?.cantidad == null) continue;
+    const autorizado = cat.cantidad;
+
+    const res = await db.execute(sql`
+      SELECT COALESCE(SUM(sci.cantidad_solicitada), 0) AS total
+      FROM siaf_compras_items sci
+      JOIN siaf_compras sc ON sc.id = sci.solicitud_id
+      WHERE sci.catalogo_id = ${catalogoId}
+        AND sc.anio = ${anio} AND sc.estado != 'Rechazado' AND sc.id != ${solicitudIdActual}
+    `);
+    const yaReservado = Number((res.rows[0] as any).total) || 0;
+    const disponible = autorizado - yaReservado;
+    if (monto > disponible + 0.01) excedidos.push({ nombre, disponible, requerido: monto });
+  }
+
   for (const { codigo_igss, subproducto, nombre, monto } of porClave.values()) {
     const [cat] = await db.select({ cantidad: catalogoCompras.cantidad }).from(catalogoCompras)
       .where(and(eq(catalogoCompras.codigo_igss, codigo_igss), eq(catalogoCompras.subproducto, subproducto), eq(catalogoCompras.nombre, nombre))).limit(1);
-    // Sin cantidad configurada en el PAC para este insumo no hay límite que
-    // verificar (no es lo mismo que "cero disponible") — se deja pasar.
     if (cat?.cantidad == null) continue;
     const autorizado = cat.cantidad;
 
@@ -76,6 +114,7 @@ async function verificarPacDisponible(
     const disponible = autorizado - yaReservado;
     if (monto > disponible + 0.01) excedidos.push({ nombre, disponible, requerido: monto });
   }
+
   return excedidos;
 }
 
