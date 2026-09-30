@@ -977,6 +977,11 @@ export default function SiafClient({
                             />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-gray-900 font-mono">{c.subproducto}</p>
+                              {c.codigo_ppr && (
+                                <p className="text-xs text-gray-500 truncate">
+                                  PPR {c.codigo_ppr}{c.descripcion_igss ? ` — ${c.descripcion_igss}` : ""}
+                                </p>
+                              )}
                               <p className={`text-xs ${disponible <= 0 ? "text-red-600" : "text-green-700"}`}>
                                 Disponible: <strong>{disponible.toLocaleString("es-GT")}</strong> {c.unidad_medida ?? "u."}
                               </p>
