@@ -260,8 +260,16 @@ export default function SiafClient({
       const entry = catalogo.find(c => c.id === catId);
       if (!entry) return;
       newItems.push({
+        // codigo_ppr del ítem SIEMPRE arranca null acá, aunque el catálogo ya
+        // tenga uno (2026-09-30, catalogo_compras.codigo_ppr) — ese campo es
+        // solo para distinguir renglones del PAC por presentación, un
+        // concepto distinto del codigo_ppr de siaf_compras_items, que tiene
+        // su propio ciclo de vida (arranca null, solo lo llena Consolidación
+        // vía guardarPprSeleccion, con un formato de clave compuesta
+        // distinto — ver renglon-utils.ts). Propagar el del catálogo acá
+        // rompería esa impresión/resolución de PPR más adelante.
         key: Date.now() + catId, catalogo_id: entry.id,
-        codigo_igss: entry.codigo_igss, codigo_ppr: entry.codigo_ppr,
+        codigo_igss: entry.codigo_igss, codigo_ppr: null,
         nombre: entry.nombre, descripcion_igss: entry.descripcion_igss, subproducto: entry.subproducto,
         unidad_medida: unidadManual.trim() || entry.unidad_medida, cantidad_solicitada: qty,
       });

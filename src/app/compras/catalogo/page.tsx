@@ -15,6 +15,7 @@ export default async function CatalogoComprasPage() {
       descripcion_igss:        catalogoCompras.descripcion_igss,
       renglon:                 catalogoCompras.renglon,
       subproducto:             catalogoCompras.subproducto,
+      codigo_ppr:              catalogoCompras.codigo_ppr,
       cantidad:                catalogoCompras.cantidad,
       precio_estimado:         catalogoCompras.precio_estimado,
       monto:                   catalogoCompras.monto,

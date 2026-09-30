@@ -385,6 +385,22 @@ export const catalogoCompras = pgTable("catalogo_compras", {
   descripcion_igss:        text("descripcion_igss"),
   renglon:                 integer("renglon"),
   subproducto:             text("subproducto").notNull(),
+  // PPR/presentación elegida en Base de Datos Central para ESTA fila del PAC
+  // (2026-09-30, pedido explícito del cliente: un mismo insumo+subproducto
+  // puede necesitar renglones de presupuesto separados por presentación, cada
+  // uno con su propia cantidad/precio — ej. "Cemento flexible" en Cubeta
+  // 22.7kg vs. Saco 22kg del mismo subproducto). `""` (no NULL) es el
+  // sentinel de "sin distinguir presentación" — a propósito, no NULL: en
+  // Postgres dos filas con NULL en una columna de índice único NUNCA
+  // colisionan entre sí, así que si se dejara nullable, agregar el mismo
+  // insumo+subproducto sin elegir PPR dos veces habría reabierto el mismo
+  // bug de "no detecta duplicados" que se corrigió el mismo día (ver
+  // "Trampas" más abajo) — con el sentinel "", el índice único sí las
+  // detecta como duplicado. Existió antes con este mismo nombre (columnas
+  // legadas del import original, ver `api/migrate-catalog/route.ts`) y se
+  // eliminó sin usarse en ningún lado — esta vez sí queda conectada al
+  // formulario y al índice único.
+  codigo_ppr:              text("codigo_ppr").notNull().default(""),
   cantidad:                doublePrecision("cantidad"),
   precio_estimado:         doublePrecision("precio_estimado"),
   monto:                   doublePrecision("monto"),
@@ -399,7 +415,9 @@ export const catalogoCompras = pgTable("catalogo_compras", {
   // presupuesto-disponible.ts) sigue funcionando porque cruza por esta misma
   // terna (ver renglon-utils.ts / a01-siaf/actions.ts). Postgres no choca por
   // NULL (varios insumos sin código real pueden compartir subproducto).
-  codigoSubproductoUnico: uniqueIndex("catalogo_compras_codigo_subproducto_idx").on(table.codigo_igss, table.subproducto, table.nombre),
+  // codigo_ppr se agregó al final de la clave (2026-09-30) para permitir
+  // varias presentaciones del mismo insumo+subproducto como filas distintas.
+  codigoSubproductoUnico: uniqueIndex("catalogo_compras_codigo_subproducto_idx").on(table.codigo_igss, table.subproducto, table.nombre, table.codigo_ppr),
 }));
 
 // ─── Catálogo de subproductos (controlado por superadmin) ────────────────────

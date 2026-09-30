@@ -2,7 +2,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { BookOpen, Search, Plus, X, Loader2, ChevronLeft, ChevronRight, ChevronDown, Download, Edit2, Trash2, CheckCircle2, HelpCircle, AlertTriangle, XCircle, ListFilter } from "lucide-react";
-import { crearInsumoCompras, editarInsumoCompras, eliminarInsumoCompras, buscarInsumosCentral, type InsumoCentralAgrupado } from "./actions";
+import { crearInsumoCompras, editarInsumoCompras, eliminarInsumoCompras, buscarInsumosCentral, getPresentacionesInsumo, type InsumoCentralAgrupado } from "./actions";
+import type { PprOpcion } from "@/lib/adjudicacion/renglon-utils";
 import { importarPac2026 } from "./importar-action";
 import { COLUMNAS_PAC } from "./pac-columnas";
 
@@ -13,6 +14,7 @@ type Insumo = {
   descripcion_igss: string | null;
   renglon: number | null;
   subproducto: string;
+  codigo_ppr: string;
   cantidad: number | null;
   precio_estimado: number | null;
   monto: number | null;
@@ -22,7 +24,7 @@ const Q = (n: number) =>
   `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const HEADERS = [
-  "Renglón", "Código IGSS",
+  "Renglón", "Código IGSS", "PPR",
   "Nombre Genérico, Forma, Concentración y Presentación",
   "Sub-Producto", "Cantidad",
   "Precio Estimado", "Monto", "Acciones"
@@ -100,6 +102,7 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
     return base.filter(i =>
       i.nombre.toLowerCase().includes(q) ||
       (i.codigo_igss ?? "").toLowerCase().includes(q) ||
+      i.codigo_ppr.toLowerCase().includes(q) ||
       i.subproducto.toLowerCase().includes(q) ||
       String(i.renglon ?? "").includes(q)
     );
@@ -219,6 +222,7 @@ export default function CatalogoComprasClient({ insumos: init }: Props) {
                 <tr key={i.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-3 py-2 tabular-nums text-gray-600 whitespace-nowrap text-center">{i.renglon ?? "—"}</td>
                   <td className="px-4 py-3 font-mono text-xs font-semibold text-green-600 whitespace-nowrap">{i.codigo_igss ?? "—"}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap">{i.codigo_ppr || "—"}</td>
                   <td className="px-3 py-2 text-gray-900 min-w-[280px] max-w-[380px]">
                     <p className="line-clamp-2">{i.nombre}</p>
                   </td>
@@ -465,6 +469,15 @@ function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | null; onC
   const [cantidad, setCantidad] = useState(insumo?.cantidad?.toString() || "");
   const [codigoIgss, setCodigoIgss] = useState(insumo?.codigo_igss || "");
   const [renglon, setRenglon] = useState(insumo?.renglon?.toString() || "");
+  // "" = sin distinguir presentación (el sentinel que también usa el índice
+  // único del catálogo, ver schema.ts) — solo se llena si el insumo tiene
+  // más de una presentación en Base de Datos Central y el usuario elige una
+  // puntual (pedido explícito del cliente 2026-09-30: poder tener el mismo
+  // insumo+subproducto como renglones de PAC separados por presentación).
+  const [codigoPpr, setCodigoPpr] = useState(insumo?.codigo_ppr || "");
+  const [insumoBase, setInsumoBase] = useState<InsumoCentralAgrupado | null>(null);
+  const [presentaciones, setPresentaciones] = useState<PprOpcion[]>([]);
+  const [cargandoPresentaciones, setCargandoPresentaciones] = useState(false);
   const [avanzado, setAvanzado] = useState(false);
   const [precioEstimado, setPrecioEstimado] = useState(insumo?.precio_estimado?.toString() || "");
   const [saving, setSaving] = useState(false);
@@ -517,12 +530,56 @@ function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | null; onC
     return partes ? `${r.nombre}; ${partes}` : r.nombre;
   }
 
+  // Misma fórmula que descripcionDeInsumoCentral, pero para UNA presentación
+  // puntual (PprOpcion) en vez del "mejor representante" agrupado — se usa
+  // al elegir una presentación específica en el selector de abajo, para que
+  // la Descripción IGSS refleje esa presentación puntual (ej. "Cemento
+  // flexible; Consistencia: Polvo; Tipo: Multiusos; Cubeta 22.7 Kilogramos"
+  // en vez del genérico "Cemento flexible; Consistencia: Polvo; Tipo:
+  // Multiusos" sin presentación/unidad).
+  function descripcionDePpr(op: PprOpcion, codigoReal: boolean): string {
+    if (codigoReal) {
+      return op.descripcion_igss || (op.caracteristicas ? `${op.nombre}; ${op.caracteristicas}` : op.nombre);
+    }
+    const partes = [op.caracteristicas, op.presentacion, op.unidad_medida].filter(Boolean).join(" ");
+    return partes ? `${op.nombre}; ${partes}` : op.nombre;
+  }
+
   function elegirInsumo(r: InsumoCentralAgrupado) {
     setNombre(r.nombre);
     setDescripcionIgss(descripcionDeInsumoCentral(r));
     setCodigoIgss(r.codigo);
     setRenglon(r.renglon != null ? String(r.renglon) : "");
+    setInsumoBase(r);
+    setCodigoPpr("");
     setBuscando(false); setQuery(""); setResultados([]);
+  }
+
+  // Trae todas las presentaciones/PPR del insumo ya elegido (nuevo, o el que
+  // ya traía el insumo al editar) — si hay más de una, el selector de abajo
+  // aparece para poder distinguirlas; con 0 o 1 no hay ambigüedad, el
+  // selector se queda oculto y codigo_ppr se guarda vacío ("sin distinguir").
+  useEffect(() => {
+    if (buscando || !codigoIgss.trim()) { setPresentaciones([]); return; }
+    let vivo = true;
+    setCargandoPresentaciones(true);
+    getPresentacionesInsumo(codigoIgss.trim(), nombre, renglon ? parseInt(renglon, 10) : null).then(opciones => {
+      if (!vivo) return;
+      setCargandoPresentaciones(false);
+      setPresentaciones(opciones.length > 1 ? opciones : []);
+    });
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buscando, codigoIgss]);
+
+  function elegirPresentacion(codigoPprElegido: string) {
+    setCodigoPpr(codigoPprElegido);
+    if (!codigoPprElegido) {
+      if (insumoBase) setDescripcionIgss(descripcionDeInsumoCentral(insumoBase));
+      return;
+    }
+    const op = presentaciones.find(p => (p.codigo_ppr ?? "") === codigoPprElegido);
+    if (op) setDescripcionIgss(descripcionDePpr(op, insumoBase?.codigoReal ?? !!op.codigo_igss));
   }
 
   async function handleGuardar() {
@@ -541,6 +598,7 @@ function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | null; onC
       codigo_igss: codigoIgss.trim() || null,
       renglon: renglon ? parseInt(renglon, 10) : null,
       precio_estimado: precioEstimado ? parseFloat(precioEstimado) : null,
+      codigo_ppr: codigoPpr,
     };
 
     const res = insumo
@@ -603,12 +661,36 @@ function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | null; onC
                   <p className="text-sm text-gray-900 flex items-center gap-1.5">
                     <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" /> {nombre}
                   </p>
-                  <p className="text-xs text-gray-400 font-mono">Código {codigoIgss}{renglon ? ` · Renglón ${renglon}` : ""}</p>
+                  <p className="text-xs text-gray-400 font-mono">
+                    Código {codigoIgss}{renglon ? ` · Renglón ${renglon}` : ""}{codigoPpr ? ` · PPR ${codigoPpr}` : ""}
+                  </p>
                 </div>
                 <button type="button" onClick={() => setBuscando(true)} className="text-xs font-medium text-brand-600 hover:text-brand-700 shrink-0">Cambiar</button>
               </div>
             )}
           </div>
+
+          {!buscando && (cargandoPresentaciones || presentaciones.length > 0) && (
+            <div>
+              <label className="label">Presentación / PPR de este renglón de PAC</label>
+              {cargandoPresentaciones ? (
+                <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+              ) : (
+                <select className="input" value={codigoPpr} onChange={e => elegirPresentacion(e.target.value)}>
+                  <option value="">Sin distinguir presentación (un solo renglón para todas)</option>
+                  {presentaciones.map(op => (
+                    <option key={op.id} value={op.codigo_ppr ?? ""}>
+                      {`PPR ${op.codigo_ppr} — ${op.nombre}${op.caracteristicas ? ` (${op.caracteristicas})` : ""} · ${op.presentacion ?? "—"} · ${op.unidad_medida ?? "—"}`}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <p className="text-xs text-gray-400 mt-1">
+                Este insumo tiene {presentaciones.length || "varias"} presentaciones en Base de Datos Central. Elegí una si necesitás un renglón de PAC con cantidad y precio propios para esa presentación puntual — podés agregar el mismo insumo y subproducto varias veces, una por cada presentación.
+              </p>
+            </div>
+          )}
+
           <div>
             <label className="label">Descripción IGSS (para el A-01 SIAF)</label>
             <textarea className="input text-sm" rows={2} value={descripcionIgss}

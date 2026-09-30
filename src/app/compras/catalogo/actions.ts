@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { catalogoCompras, baseDatosCentral } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { SIN_CODIGO } from "@/lib/adjudicacion/renglon-utils";
+import { SIN_CODIGO, getPprsPorItems, clavePprDeItem, type PprOpcion } from "@/lib/adjudicacion/renglon-utils";
 
 async function checkAuth() {
   const s = await auth();
@@ -102,6 +102,20 @@ export async function buscarInsumosCentral(q: string): Promise<InsumoCentralAgru
   }
 }
 
+// Todas las presentaciones/PPR que tiene un insumo en Base de Datos Central —
+// reutiliza el mismo resolutor que ya usan Órdenes/SIAF-04 para su selector
+// de PPR (getPprsPorItems, renglon-utils.ts), envuelto para un solo insumo
+// puntual. Se llama al elegir un insumo en "Agregar insumo al catálogo": si
+// devuelve más de una opción, el modal pide elegir cuál presentación (para
+// poder guardar renglones de PAC separados por presentación, pedido
+// explícito del cliente 2026-09-30 — ver el comentario de codigo_ppr en
+// schema.ts); si devuelve 0 o 1, no hay ambigüedad que resolver.
+export async function getPresentacionesInsumo(codigo_igss: string, nombre: string, renglon: number | null): Promise<PprOpcion[]> {
+  const item = { codigo_igss, nombre, renglon };
+  const map = await getPprsPorItems([item]);
+  return map[clavePprDeItem(item)] ?? [];
+}
+
 type InsumoComprasInput = {
   nombre: string;
   subproducto: string;
@@ -110,6 +124,10 @@ type InsumoComprasInput = {
   descripcion_igss?: string | null;
   renglon?: number | null;
   precio_estimado?: number | null;
+  // "" (no undefined/null) = "sin distinguir presentación", el sentinel que
+  // usa el índice único de catalogo_compras (ver schema.ts) — normalizado acá
+  // por si el cliente llegara a mandar null/undefined.
+  codigo_ppr?: string | null;
 };
 
 function toValues(data: InsumoComprasInput) {
@@ -121,6 +139,7 @@ function toValues(data: InsumoComprasInput) {
     codigo_igss:      data.codigo_igss || null,
     descripcion_igss: data.descripcion_igss || null,
     renglon:          data.renglon ?? null,
+    codigo_ppr:       data.codigo_ppr?.trim() || "",
     precio_estimado:  data.precio_estimado ?? null,
     monto:            precio != null ? precio * data.cantidad : null,
   };
@@ -162,6 +181,16 @@ function esCodigoSubproductoDuplicado(e: unknown): boolean {
   return code === UNIQUE_VIOLATION;
 }
 
+// El índice único ahora incluye codigo_ppr (ver schema.ts, 2026-09-30) — si
+// se eligió una presentación puntual, el mensaje la menciona para que el
+// usuario entienda que el choque es por esa combinación exacta, no por el
+// insumo en general (con otra presentación distinta sí se puede agregar).
+function mensajeDuplicado(data: InsumoComprasInput): string {
+  const ppr = data.codigo_ppr?.trim();
+  const presentacion = ppr ? ` y presentación (PPR ${ppr})` : "";
+  return `Ya existe un insumo en el catálogo con el código "${data.codigo_igss}", el subproducto "${data.subproducto.trim()}"${presentacion}.`;
+}
+
 export async function crearInsumoCompras(data: InsumoComprasInput): Promise<
   { insumo: typeof catalogoCompras.$inferSelect } | { error: string }
 > {
@@ -181,7 +210,7 @@ export async function crearInsumoCompras(data: InsumoComprasInput): Promise<
     return { insumo: row };
   } catch (e) {
     if (esCodigoSubproductoDuplicado(e)) {
-      return { error: `Ya existe un insumo en el catálogo con el código "${data.codigo_igss}" y el subproducto "${data.subproducto.trim()}".` };
+      return { error: mensajeDuplicado(data) };
     }
     return { error: "Error al crear el insumo" };
   }
@@ -212,7 +241,7 @@ export async function editarInsumoCompras(id: number, data: InsumoComprasInput):
     return { ok: true };
   } catch (e) {
     if (esCodigoSubproductoDuplicado(e)) {
-      return { error: `Ya existe otro insumo en el catálogo con el código "${data.codigo_igss}" y el subproducto "${data.subproducto.trim()}".` };
+      return { error: mensajeDuplicado(data) };
     }
     return { error: "Error al editar" };
   }
