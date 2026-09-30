@@ -250,7 +250,17 @@ export function InsumoModal({ insumo, onClose, onCreado }: { insumo: Insumo | nu
     getPresentacionesInsumo(codigoIgss.trim(), nombre, renglon ? parseInt(renglon, 10) : null).then(opciones => {
       if (!vivo) return;
       setCargandoPresentaciones(false);
-      setPresentaciones(opciones.length > 1 ? opciones : []);
+      // Solo las presentaciones con codigo_ppr real se pueden distinguir y
+      // guardar como un renglón de PAC aparte — sin PPR, dos filas de Base
+      // de Datos Central son indistinguibles entre sí (mismas
+      // características/presentación/unidad, comprobado en vivo con "Broca
+      // para concreto") y las dos terminarían guardando el mismo sentinel
+      // "" (sin distinguir) de todas formas, así que no tiene sentido
+      // listarlas como opciones separadas — antes, además, esto imprimía
+      // literal "PPR null" en la etiqueta (reportado por el cliente
+      // 2026-09-30 con una captura).
+      const conPpr = opciones.filter(op => op.codigo_ppr != null);
+      setPresentaciones(conPpr.length > 1 ? conPpr : []);
     });
     return () => { vivo = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
