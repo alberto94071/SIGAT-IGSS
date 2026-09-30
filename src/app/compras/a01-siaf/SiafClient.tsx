@@ -109,6 +109,11 @@ export default function SiafClient({
   const [showItemDrop,      setShowItemDrop]      = useState(false);
   const [selCodigo,         setSelCodigo]         = useState<string | null>(null);
   const [selNombre,         setSelNombre]         = useState<string | null>(null);
+  // Presentación/PPR elegida en el desplegable de arriba (2026-09-30) — el
+  // checklist de subproductos de abajo se filtra por esto, así que solo
+  // sirve para elegir a QUÉ SUBPRODUCTO se le asigna cantidad, no para
+  // volver a distinguir presentación ahí también.
+  const [selCodigoPpr,      setSelCodigoPpr]      = useState<string | null>(null);
   const [subprodSelections, setSubprodSelections] = useState<Map<number, string>>(new Map());
   // Base de Datos Central (fuente normal de unidad_medida) está vacía en
   // producción — sin este campo manual, todo insumo nuevo queda con
@@ -176,24 +181,31 @@ export default function SiafClient({
   const insumoSugg = useMemo(() => {
     if (!itemSearch || itemSearch.length < 1) return [];
     const q = itemSearch.toLowerCase();
-    // Se agrupa por código + nombre, no solo por código: varios insumos sin
-    // código real comparten el mismo placeholder (ej. "S/C") y no deben
-    // mezclarse entre sí.
+    // Se agrupa por código + nombre + PPR, no solo por código + nombre: dos
+    // renglones de PAC del mismo insumo pueden ser presentaciones/PPR
+    // distintos (2026-09-30, catalogo_compras.codigo_ppr) — el pedido del
+    // cliente es que cada presentación aparezca como su propia opción acá,
+    // para elegir la presentación de una vez en este paso (el checklist de
+    // abajo ya no vuelve a distinguir presentación, solo subproducto). Los
+    // insumos sin código real siguen sin mezclarse entre sí porque
+    // comparten el mismo `nombre` en la clave.
     const seen = new Set<string>();
     const res: CatEntry[] = [];
     for (const c of catalogo) {
       const ok = c.nombre.toLowerCase().includes(q) ||
         String(c.codigo_igss ?? "").includes(itemSearch) ||
         (c.codigo_ppr ?? "").toLowerCase().includes(q);
-      const key = `${c.codigo_igss}::${c.nombre}`;
+      const key = `${c.codigo_igss}::${c.nombre}::${c.codigo_ppr}`;
       if (ok && !seen.has(key)) { seen.add(key); res.push(c); }
     }
     return res.slice(0, 8);
   }, [itemSearch, catalogo]);
 
   const subprodEntries = useMemo(() =>
-    selCodigo == null ? [] : catalogo.filter(c => c.codigo_igss === selCodigo && c.nombre === selNombre),
-    [selCodigo, selNombre, catalogo]
+    selCodigo == null ? [] : catalogo.filter(c =>
+      c.codigo_igss === selCodigo && c.nombre === selNombre && c.codigo_ppr === selCodigoPpr
+    ),
+    [selCodigo, selNombre, selCodigoPpr, catalogo]
   );
 
   // Al llegar desde una notificación (?ver=id) — expande la solicitud y, si fue
@@ -217,7 +229,7 @@ export default function SiafClient({
     setModal(true); setModalItems([]); setModalError("");
     setNewFecha(fechaGuatemala());
     setNewJustificacion("");
-    setItemSearch(""); setSelCodigo(null); setSelNombre(null); setSubprodSelections(new Map()); setUnidadManual("");
+    setItemSearch(""); setSelCodigo(null); setSelNombre(null); setSelCodigoPpr(null); setSubprodSelections(new Map()); setUnidadManual("");
     setCorrLoading(true);
     const n = await getNextSiafNumeroCompras();
     setNextNumero(n); setCorrLoading(false);
@@ -231,7 +243,7 @@ export default function SiafClient({
     setModalError("");
     setNewFecha(sol.fecha);
     setNewJustificacion(sol.observaciones ?? "");
-    setItemSearch(""); setSelCodigo(null); setSelNombre(null); setSubprodSelections(new Map()); setUnidadManual("");
+    setItemSearch(""); setSelCodigo(null); setSelNombre(null); setSelCodigoPpr(null); setSubprodSelections(new Map()); setUnidadManual("");
     const prefilled: ModalItem[] = sol.items
       .filter(i => i.catalogo_id != null)
       .map(i => ({
@@ -276,7 +288,7 @@ export default function SiafClient({
     });
     if (newItems.length === 0) return;
     setModalItems(p => [...p, ...newItems]);
-    setItemSearch(""); setSelCodigo(null); setSelNombre(null); setSubprodSelections(new Map()); setUnidadManual("");
+    setItemSearch(""); setSelCodigo(null); setSelNombre(null); setSelCodigoPpr(null); setSubprodSelections(new Map()); setUnidadManual("");
   }
 
   async function handleGuardar() {
@@ -881,6 +893,7 @@ export default function SiafClient({
                         setItemSearch(e.target.value);
                         setSelCodigo(null);
                         setSelNombre(null);
+                        setSelCodigoPpr(null);
                         setSubprodSelections(new Map());
                         setUnidadManual("");
                         setShowItemDrop(true);
@@ -897,6 +910,7 @@ export default function SiafClient({
                           onMouseDown={() => {
                             setSelCodigo(c.codigo_igss);
                             setSelNombre(c.nombre);
+                            setSelCodigoPpr(c.codigo_ppr);
                             setItemSearch(c.nombre);
                             setSubprodSelections(new Map());
                             setUnidadManual(c.unidad_medida ?? "");
@@ -907,7 +921,9 @@ export default function SiafClient({
                           {c.descripcion_igss && c.descripcion_igss.trim() !== c.nombre.trim() && (
                             <p className="text-xs text-gray-500">{c.descripcion_igss}</p>
                           )}
-                          <p className="text-xs text-gray-400">IGSS: {c.codigo_igss ?? "—"} · PPR: {c.codigo_ppr ?? "—"}</p>
+                          <p className="text-xs text-gray-400">
+                            IGSS: {c.codigo_igss ?? "—"} · {c.codigo_ppr ? `PPR ${c.codigo_ppr}` : "Sin distinguir presentación"}
+                          </p>
                         </button>
                       ))}
                     </div>
@@ -961,11 +977,6 @@ export default function SiafClient({
                             />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-gray-900 font-mono">{c.subproducto}</p>
-                              {c.codigo_ppr && (
-                                <p className="text-xs text-gray-500 truncate">
-                                  PPR {c.codigo_ppr}{c.descripcion_igss ? ` — ${c.descripcion_igss}` : ""}
-                                </p>
-                              )}
                               <p className={`text-xs ${disponible <= 0 ? "text-red-600" : "text-green-700"}`}>
                                 Disponible: <strong>{disponible.toLocaleString("es-GT")}</strong> {c.unidad_medida ?? "u."}
                               </p>
