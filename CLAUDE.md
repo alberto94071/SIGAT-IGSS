@@ -3762,6 +3762,65 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   por consulta directa que `siaf_compras_items.catalogo_id = 5249` (la fila
   exacta elegida) y `codigo_ppr` quedó `NULL` — solicitud de prueba borrada
   después, sin tocar las 2 filas reales del catálogo.
+- **Catálogo: el buscador principal de la lista ya buscaba por PPR desde
+  2026-09-30 (mismo commit que agregó `codigo_ppr` al catálogo), pero el
+  placeholder no lo decía — el cliente pidió la feature sin saber que ya
+  existía.** `CatalogoComprasClient.tsx` (`filtered`) ya incluía
+  `i.codigo_ppr.toLowerCase().includes(q)` en el filtro — verificado en vivo
+  contra la fila real id 5249 (PPR "114812 - 174465") que buscar por el PPR
+  completo o parcial ("174465", "114812") ya devolvía exactamente esa fila.
+  Fix de una palabra: el placeholder pasó de "Buscar por nombre, código
+  IGSS, subproducto…" a "Buscar por nombre, código IGSS, PPR, subproducto…"
+  para que se note que la opción existe.
+- **Catálogo y A-01 SIAF eran, con margen, los 2 client components más
+  pesados de Compras (744 y 1077 líneas, 2-4× los demás) — el cliente
+  reportó "lag" notorio al cambiar a esas dos pestañas específicas
+  (2026-09-30), confirmado midiendo bytes de JS transferidos por
+  navegación (Playwright): ambas rutas cargaban claramente más JS y
+  tardaban más que Consolidación/Órdenes/Archivo.** Más de la mitad de
+  cada archivo eran los modales (Agregar/editar insumo + Instructivo +
+  Resultado de importar en Catálogo; el item builder completo de
+  "Generar/Editar solicitud A-01 SIAF" en SIAF) — ninguno hace falta en la
+  carga inicial de la pantalla, solo tras una acción del usuario. Fix:
+  ambos modales se movieron a archivos aparte
+  (`compras/catalogo/CatalogoModals.tsx`,
+  `compras/a01-siaf/GenerarSiafModal.tsx`) cargados con
+  `next/dynamic(..., { ssr: false })` desde el componente principal — el
+  chunk de cada modal ahora solo se pide cuando el usuario realmente abre
+  uno, confirmado en vivo con un listener de `page.on("response")` (0
+  peticiones al chunk del modal al cargar la pantalla, 1 justo al hacer
+  clic en "Agregar insumo"/"Generar A-01 SIAF"). **El de A-01 SIAF fue el
+  más delicado** — el item builder (`insumoSugg`/`subprodEntries`,
+  `agregarItemModal`, `handleGuardar`, y ~15 `useState` del formulario)
+  estaba fuertemente acoplado al resto del componente por closures; se
+  extrajo entero a `GenerarSiafModal.tsx` como un componente propio que
+  recibe `editingSol: Solicitud | null` (reemplaza los 3 estados viejos
+  `editMode`/`editingSolId`/`editCorrLabel` del padre — `null` = crear
+  nueva), `catalogo`/`solicitudes` como props, y `onCreated`/`onUpdated`
+  como callbacks — el padre (`SiafClient.tsx`) quedó solo con `modal`
+  (visible sí/no) y `editingSol`. Los 4 tipos compartidos (`Solicitud`,
+  `SolicitudItem`, `CatEntry`, `ModalItem`) se exportaron desde
+  `SiafClient.tsx` para que el modal los importe por tipo, sin duplicar
+  definiciones. **Se conservaron intactos, sin tocar nada de su lógica
+  interna**, los cambios del mismo día en el item builder (dedup del
+  desplegable por `codigo_igss::nombre::codigo_ppr`, `selCodigoPpr`, el
+  checklist filtrado por presentación) — la extracción fue un mover de
+  código, no una reescritura. Verificado en vivo de punta a punta contra
+  las mismas 2 filas reales del cliente (`catalogo_compras` id 5200/5249,
+  "Cemento flexible"): crear una solicitud de prueba eligiendo la
+  presentación con PPR real dio el mismo resultado que antes de la
+  extracción (`catalogo_id = 5249`, `codigo_ppr` del ítem en `NULL`,
+  confirmado por consulta directa); editar esa misma solicitud de prueba
+  (botón lápiz) prellenó justificación e insumo correctamente y guardó el
+  cambio — solicitud de prueba borrada después. Para Catálogo, abrir
+  "Agregar insumo" y buscar "Cemento flexible" mostró el resultado con su
+  descripción completa y el selector "Presentación / PPR de este renglón
+  de PAC" funcionando igual que antes (cerrado sin guardar, sin tocar
+  datos). **Pendiente, no se tocó esta ronda**: si en el futuro alguna
+  otra pestaña de Compras (Consolidación, Órdenes) crece lo suficiente
+  como para notarse el mismo "lag", el patrón a seguir es el mismo —
+  identificar el modal/bloque más grande que no hace falta en la carga
+  inicial y moverlo a `next/dynamic(..., { ssr: false })`.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
