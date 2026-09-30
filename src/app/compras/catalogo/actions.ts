@@ -140,13 +140,26 @@ async function validarCodigoCentral(codigo: string): Promise<string | null> {
 }
 
 // Código de Postgres para "viola una restricción única" — catalogo_compras
-// tiene un índice único en (codigo_igss, subproducto) (ver schema.ts). Sin
-// esto, intentar agregar el mismo código+subproducto dos veces se veía como
-// un "Error al crear el insumo" genérico, sin decir por qué.
+// tiene un índice único en (codigo_igss, subproducto, nombre) (ver
+// schema.ts). Sin esto, intentar agregar el mismo insumo dos veces se veía
+// como un "Error al crear el insumo" genérico, sin decir por qué.
 const UNIQUE_VIOLATION = "23505";
 
+// db.insert()/db.update() (drizzle-orm/neon-serverless) NUNCA lanzan el
+// error crudo de Postgres — lo envuelven en un `DrizzleQueryError` cuyo
+// `.code` es `undefined`; el código real vive en `.cause.code` (verificado
+// en vivo 2026-09-30 con un insert duplicado real: `Object.keys(e)` da
+// `['query','params','cause']`, `e.constructor.name` es
+// `"DrizzleQueryError"`). Este chequeo llevaba desde que se escribió
+// comprobando solo `e.code` (siempre `undefined` con este driver), así que
+// la rama de duplicado NUNCA se activaba — cualquier inserción duplicada
+// (o cualquier otro error de la base) caía siempre al mensaje genérico de
+// abajo, sin decir cuál era el problema real. Reportado por el cliente
+// 2026-09-30 al intentar agregar un insumo que ya existía en el catálogo.
 function esCodigoSubproductoDuplicado(e: unknown): boolean {
-  return typeof e === "object" && e !== null && "code" in e && (e as { code?: string }).code === UNIQUE_VIOLATION;
+  if (typeof e !== "object" || e === null) return false;
+  const code = (e as { code?: unknown }).code ?? (e as { cause?: { code?: unknown } }).cause?.code;
+  return code === UNIQUE_VIOLATION;
 }
 
 export async function crearInsumoCompras(data: InsumoComprasInput): Promise<

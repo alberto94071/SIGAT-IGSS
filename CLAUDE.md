@@ -3536,6 +3536,50 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   "PPR (sugerido)" en sí (sigue mostrando lo mismo al expandir una
   solicitud, solo que ya no escanea la tabla completa ítem por ítem para
   llegar ahí).
+- **Catálogo de Compras: "Error al crear el insumo" al agregar un insumo que
+  ya existía — el mensaje específico de duplicado nunca se mostraba, desde
+  que se escribió (bug latente, no una regresión reciente), corregido
+  2026-09-30.** `crearInsumoCompras`/`editarInsumoCompras`
+  (`compras/catalogo/actions.ts`) intentan distinguir "violaste el índice
+  único (codigo_igss, subproducto, nombre)" de cualquier otro error, para
+  mostrar un mensaje claro ("Ya existe un insumo en el catálogo con el
+  código...") en vez del genérico — pero `esCodigoSubproductoDuplicado`
+  chequeaba `"code" in e` sobre la excepción tal cual la atrapa el
+  `catch`. **`db.insert()`/`db.update()` con este driver
+  (`drizzle-orm/neon-serverless`) nunca lanzan el error crudo de
+  Postgres — lo envuelven en un `DrizzleQueryError` cuyo `.code` es
+  siempre `undefined`; el código real vive en `.cause.code`** (mismo
+  patrón exacto que la trampa de `sql\`= ANY(${array})\`` documentada
+  arriba, encontrada en la misma investigación de esta sesión) —
+  verificado en vivo forzando un insert duplicado real con
+  `db.insert(catalogoCompras)`: `Object.keys(e)` da
+  `['query','params','cause']`, `e.constructor.name` es
+  `"DrizzleQueryError"`, y `e.code` es `undefined` mientras
+  `e.cause.code` sí es `"23505"`. Como el chequeo solo miraba `e.code`,
+  la rama del mensaje específico NUNCA se activó desde que se escribió —
+  cualquier inserción duplicada (o cualquier otro error de la base) caía
+  siempre al genérico "Error al crear el insumo"/"Error al editar", sin
+  decir por qué. Fix: `esCodigoSubproductoDuplicado` ahora revisa
+  `e.code ?? e.cause?.code`. **Caso real del cliente confirmado por
+  consulta directa**: ya existía `catalogo_compras` id 5200 ("Cemento
+  flexible", código "S/C", subproducto "001-001-0001") — el cliente
+  intentaba agregar exactamente ese mismo insumo+subproducto otra vez
+  (captura de pantalla 2026-09-30), un duplicado genuino que el sistema
+  debía haber explicado claramente en vez de solo decir "Error al crear
+  el insumo". **Los "Failed to load resource: net::ERR_NETWORK_CHANGED"
+  visibles en la consola de esa misma captura son ruido aparte, del WiFi
+  del cliente cambiando de red a mitad de un prefetch de Next.js de otras
+  rutas (`/compras/a01-siaf/.../imprimir`) — no tienen relación con este
+  bug**, confirmado porque el prefetch fallido apunta a rutas de A-01
+  SIAF, no a la acción de crear insumo del Catálogo. Verificado en vivo,
+  extremo a extremo, con datos desechables (Playwright real contra
+  `/compras/catalogo`, sin tocar el insumo real del cliente): agregar
+  "Cemento flexible" con un subproducto de prueba nuevo tuvo éxito;
+  agregar exactamente el mismo insumo+subproducto una segunda vez mostró
+  "Ya existe un insumo en el catálogo con el código..." (antes de este
+  fix habría mostrado el genérico) — el segundo intento nunca llegó a
+  escribir una fila duplicada, confirmado por consulta directa a la base
+  — limpiado después.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
