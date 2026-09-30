@@ -3723,6 +3723,45 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     no una adivinanza), y `siaf_compras_items.codigo_ppr` quedó `NULL`
     (confirmado por consulta directa, Consolidación intacta) — la
     solicitud de prueba se borró después.
+- **Seguimiento el mismo día: la elección de presentación/PPR se movió al
+  desplegable de búsqueda del insumo, no al checklist de subproductos —
+  feedback directo del cliente sobre el punto de arriba** ("Está bien, pero
+  que aparezcan los diferentes ppr o presentaciones en el menú desplegable
+  y dejemos la parte de abajo para elegir a qué subproducto se le va a
+  asignar"). La primera versión (arriba) dedupaba el desplegable por
+  `codigo_igss::nombre` (una sola fila representante por insumo, ignorando
+  PPR) y mezclaba todas las presentaciones+subproductos de ese insumo en el
+  checklist de abajo, con una línea "PPR ... — descripción" ahí para
+  distinguirlas — dos niveles de selección mal repartidos según el cliente.
+  Fix en `SiafClient.tsx`: `insumoSugg` ahora dedupa por
+  `codigo_igss::nombre::codigo_ppr` (una fila por presentación real, no por
+  insumo) — cada opción del desplegable ya muestra su propia
+  `descripcion_igss` y "PPR {codigo_ppr}" (o "Sin distinguir presentación"
+  si el sentinel `""`), así que las presentaciones salen naturalmente
+  distinguibles sin cambiar esa parte del render. Nuevo estado
+  `selCodigoPpr` (junto a `selCodigo`/`selNombre`, reseteado en los mismos
+  4 puntos: `openModal`, `openEdit`, el `onChange` del buscador, y
+  `agregarItemModal` tras agregar) se fija al elegir una opción del
+  desplegable; `subprodEntries` ahora filtra también por
+  `codigo_ppr === selCodigoPpr`, así que el checklist de abajo solo muestra
+  los subproductos de LA presentación ya elegida — se quitó la línea
+  "PPR ... — descripción" de cada fila del checklist (quedaba redundante,
+  todas las filas visibles ahí comparten ya el mismo PPR). **Mismos límites
+  de siempre, sin tocar**: `agregarItemModal` sigue forzando
+  `codigo_ppr: null` en el ítem nuevo (no propaga el PPR del catálogo a
+  `siaf_compras_items.codigo_ppr`) — Consolidación sigue siendo la única
+  dueña de ese campo. Verificado en vivo contra las mismas 2 filas reales
+  del cliente (`catalogo_compras` id 5200 "sin distinguir" / id 5249 "PPR
+  114812 - 174465 · Saco 22.7 Kilogramos", ambas subproducto
+  "001-001-0001"): buscar "Cemento flexible" mostró 2 opciones separadas en
+  el desplegable ("IGSS: S/C · Sin distinguir presentación" / "IGSS: S/C ·
+  PPR 114812 - 174465"), cada una con su propia descripción completa;
+  elegir la del PPR real dejó el checklist de abajo con **una sola fila**
+  ("001-001-0001", sin texto de PPR) en vez de las 2 que mostraba antes —
+  se creó una solicitud A-01 SIAF de prueba con esa selección y se confirmó
+  por consulta directa que `siaf_compras_items.catalogo_id = 5249` (la fila
+  exacta elegida) y `codigo_ppr` quedó `NULL` — solicitud de prueba borrada
+  después, sin tocar las 2 filas reales del catálogo.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
