@@ -3871,6 +3871,44 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     "ya reservado" para CUALQUIERA de las 2 filas (sumaba ambas); la nueva
     (por `catalogo_id`) da 100 para cada una, exactamente lo suyo — todo
     el dato de prueba se borró después.
+- **Seguimiento el mismo día: el selector "Presentación / PPR de este
+  renglón de PAC" (Catálogo → "Agregar insumo") imprimía literal "PPR
+  null" cuando una presentación de Base de Datos Central no tiene
+  `codigo_ppr` asignado — reportado por el cliente con una captura real
+  ("Broca para concreto", código S/C, renglón 298).** No todas las filas de
+  Base de Datos Central tienen `codigo_ppr` poblado (el 100% único que
+  documenta la reimportación de arriba aplica a las ~207,821 filas de ESE
+  import — filas agregadas o editadas después pueden quedar sin PPR). El
+  `<option>` armaba el texto con `PPR ${op.codigo_ppr}` sin chequear null, y
+  encima el `value={op.codigo_ppr ?? ""}` hacía que dos presentaciones sin
+  PPR (o cualquiera sin PPR y la opción "Sin distinguir presentación")
+  colisionaran en el mismo valor `""` — elegir cualquiera de las dos
+  terminaba guardando exactamente lo mismo que no elegir nada. Confirmado
+  con el caso real: "Broca para concreto" tiene 2 filas en Base de Datos
+  Central con el mismo nombre/características/presentación/unidad, ambas
+  `codigo_ppr = NULL` — genuinamente indistinguibles entre sí, no hay dato
+  real que las diferencie. Fix en `CatalogoModals.tsx`: el resultado de
+  `getPresentacionesInsumo` se filtra a solo las presentaciones con
+  `codigo_ppr != null` antes de decidir si mostrar el selector (`.length >
+  1`) — una presentación sin PPR real no se puede distinguir ni guardar
+  como un renglón de PAC aparte (colapsaría al mismo sentinel `""` de
+  "sin distinguir" de todas formas), así que no tiene sentido listarla como
+  opción separada; el texto "PPR null" desaparece solo, porque ya no hay
+  ningún `<option>` sin PPR real que renderizar. **No se tocó
+  `getPprsPorItems`/`clavePprDeItem` (`renglon-utils.ts`)** — esa función
+  es compartida con Órdenes/SIAF-04 (`codigoDeOpcion`), que SÍ necesita las
+  filas sin PPR (las distingue por `id` de Base de Datos Central con el
+  prefijo `S/C-{id}`, un esquema de clave compuesta totalmente distinto al
+  de este selector, que guarda `codigo_ppr` tal cual en
+  `catalogo_compras.codigo_ppr` — mezclar los dos esquemas habría hecho que
+  la leyenda "Código PpR:" del A-01 SIAF (que lee ese campo directo, ver el
+  punto de arriba "la generación del A-01 SIAF... usa el PPR exacto
+  elegido en el Catálogo") imprimiera literal "S/C-123" en vez de un PPR
+  real o nada). Verificado en vivo con Playwright contra producción real:
+  "Broca para concreto" ya no muestra el selector (va directo a "Sin
+  distinguir presentación", sin colisión ni texto "null"); "Cemento
+  flexible" (8 presentaciones reales con PPR) sigue mostrando las 8
+  opciones completas sin cambios — sin guardar nada, sin tocar datos.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
