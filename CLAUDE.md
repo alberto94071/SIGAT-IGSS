@@ -3580,6 +3580,90 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   fix habría mostrado el genérico) — el segundo intento nunca llegó a
   escribir una fila duplicada, confirmado por consulta directa a la base
   — limpiado después.
+- **Catálogo de Compras: un mismo insumo+subproducto ahora puede tener
+  varios renglones de PAC, uno por presentación/PPR (2026-09-30), pedido
+  explícito del cliente tras el fix de duplicados de arriba** ("qué pasa si
+  el insumo tiene diferentes presentaciones... necesito tener el mismo
+  insumo con el mismo subproducto pero es de diferente presentación y
+  ppr"). `catalogo_compras` ganó `codigo_ppr` (`text NOT NULL DEFAULT ''`)
+  y el índice único pasó a `(codigo_igss, subproducto, nombre, codigo_ppr)`.
+  **`""` es el sentinel de "sin distinguir presentación", a propósito NO
+  `NULL`**: en Postgres dos filas con `NULL` en una columna de índice único
+  nunca chocan entre sí — si se hubiera dejado nullable, agregar el mismo
+  insumo+subproducto sin elegir PPR dos veces habría reabierto el mismo bug
+  de "no detecta duplicados" corregido el mismo día (arriba). Los 1,815
+  insumos ya existentes se migraron con `codigo_ppr = ''`, así que el
+  comportamiento de antes (una sola fila por insumo+subproducto) sigue
+  intacto salvo que ahora el usuario puede, deliberadamente, agregar el
+  mismo insumo otra vez si elige una presentación distinta.
+  - **Historia real de esta columna**: `catalogo_compras` YA había tenido
+    `codigo_ppr` (junto con `caracteristicas`/`presentacion`/`unidad_medida`
+    y varias columnas más de un import viejo) — un script de limpieza
+    (`api/migrate-catalog/route.ts`, de mucho antes en el proyecto) las
+    eliminó por no usarse. `SiafClient.tsx` (`CatEntry.codigo_ppr`, el hint
+    "IGSS: ... · PPR: ..." del buscador de insumos de A-01 SIAF) se quedó
+    con el campo en su tipo TypeScript pero SIN dato real detrás desde
+    entonces (`catalogoList as any` ocultaba la falta de la columna) —
+    ahora esa pantalla activa sola, sin tocarla, y muestra PPRs reales.
+  - **`getPresentacionesInsumo`** (`compras/catalogo/actions.ts`) envuelve
+    `getPprsPorItems`/`clavePprDeItem` (`renglon-utils.ts` — el mismo
+    resolutor que ya usan Órdenes/SIAF-04 para su selector de PPR) para un
+    solo insumo. El modal "Agregar insumo al catálogo"
+    (`CatalogoComprasClient.tsx`) lo llama al elegir un insumo (o al abrir
+    para editar uno existente) — si devuelve más de una opción, aparece un
+    `<select>` "Presentación / PPR de este renglón de PAC" (default "Sin
+    distinguir presentación", el sentinel `""`); con 0 o 1 opción el
+    selector no aparece, sin fricción para el caso común. Elegir una
+    presentación puntual también reconstruye "Descripción IGSS" con la
+    ficha de ESA fila exacta de Base de Datos Central (nombre +
+    características + presentación + unidad de medida), no la del "mejor
+    representante" genérico que ya usaba `descripcionDeInsumoCentral`.
+  - **Trampa real evitada, encontrada leyendo el código antes de activar la
+    columna**: `SiafClient.tsx` (`agregarItemModal`) YA tenía una línea
+    latente `codigo_ppr: entry.codigo_ppr` al crear un ítem nuevo de A-01
+    SIAF desde el catálogo — inofensiva mientras el campo fuente siempre
+    fue `undefined`, pero en cuanto `catalogo_compras.codigo_ppr` empezara a
+    tener valores reales, esa línea habría empezado a escribir un PPR
+    **antes de Consolidación** en `siaf_compras_items.codigo_ppr` — un
+    campo con un ciclo de vida completamente distinto (arranca `NULL`,
+    solo lo llena `guardarPprSeleccion` en Consolidación, con un formato de
+    clave compuesta distinto al PPR puro del catálogo — ver
+    `pprPuroParaImprimir` más arriba), rompiendo la impresión/resolución de
+    PPR de cualquier SIAF nuevo. Se forzó `codigo_ppr: null` explícito ahí
+    — el hint informativo "PPR: ..." del buscador de insumos (línea
+    aparte, solo lectura) se dejó igual, es seguro. **Si en el futuro se
+    agrega cualquier otro campo nuevo a `catalogo_compras` que ya tenga un
+    tipo TypeScript "fantasma" esperándolo en algún lado (como pasó acá con
+    `codigo_ppr`), revisar primero TODOS los usos de ese campo antes de
+    llenarlo de datos reales — puede haber wiring latente escrito para una
+    versión anterior del schema.**
+  - **No se tocó** el bulk-import de Excel (`importarPac2026`,
+    `pac-columnas.ts`) — sigue sin columna de PPR en el Excel reconocido;
+    las filas importadas en lote quedan con `codigo_ppr = ""` (sin
+    distinguir) por el default de la columna, sin romper nada. Tampoco se
+    tocó Órdenes/SIAF-04 (su propio selector de PPR ya existía y sigue
+    operando sobre Base de Datos Central directo, no sobre este campo
+    nuevo del catálogo) ni el flujo de creación de A-01 SIAF más allá de
+    la línea de arriba.
+  - Verificado en vivo de punta a punta con datos desechables sobre
+    producción real ("Cemento flexible", que tiene 8 presentaciones reales
+    en Base de Datos Central — Cubeta 6kg, Caja 21kg, etc.): el selector
+    apareció con las 9 opciones (8 + "sin distinguir"); elegir "Cubeta 6
+    Kilogramos" y guardar con un subproducto de prueba creó una fila con
+    `codigo_ppr = "114812 - 133654"` y la Descripción IGSS ya con "Cubeta 6
+    Kilogramos" incluido; agregar el MISMO insumo+subproducto con una
+    presentación DISTINTA ("Caja 21 Kilogramos") tuvo éxito (2 filas
+    coexistiendo); repetir la MISMA presentación una segunda vez fue
+    bloqueado con el mensaje específico mencionando el PPR; el camino
+    "sin distinguir" (sin tocar el selector) se probó aparte y sigue
+    bloqueando duplicados exactos como antes (regresión del fix del punto
+    de arriba, confirmada sana). Para la trampa de `SiafClient.tsx`: se
+    agregó de punta a punta una solicitud A-01 SIAF real usando el catalog
+    id con PPR "114812 - 133654" y se confirmó por consulta directa que
+    `siaf_compras_items.codigo_ppr` quedó `NULL`, no el valor del catálogo.
+    Todos los datos de prueba (2 filas de catálogo + 1 solicitud A-01 SIAF)
+    se borraron después, sin tocar el insumo real del cliente (id 5200,
+    `codigo_ppr` migrado a `''`).
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
