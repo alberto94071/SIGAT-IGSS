@@ -57,11 +57,20 @@ export default async function A01SiafPage({ searchParams }: Props) {
       false,
     ),
   ]);
+  // Si el ítem se agregó eligiendo una presentación puntual en el Catálogo
+  // (catalogo_compras.codigo_ppr, 2026-09-30), ese PPR es exacto — no una
+  // adivinanza por nombre — así que tiene prioridad sobre los dos mapas de
+  // arriba. `catalogoList` ya está en memoria (broad select de arriba), no
+  // hace falta una consulta nueva.
+  const catalogoPprMap = new Map(
+    catalogoList.filter(c => c.codigo_ppr).map(c => [c.id, c.codigo_ppr])
+  );
   const pprSugerido: Record<number, string> = {};
   for (const i of itemsSinPprAsignado) {
-    const v = i.codigo_igss && i.codigo_igss !== SIN_CODIGO
+    const desdeCatalogo = i.catalogo_id != null ? catalogoPprMap.get(i.catalogo_id) : undefined;
+    const v = desdeCatalogo ?? (i.codigo_igss && i.codigo_igss !== SIN_CODIGO
       ? pprRealMap.get(`${i.codigo_igss}::${normalizaNombre(i.nombre)}`)
-      : pprSinCodigoMap.get(`${i.nombre.trim()}::${(i.descripcion_igss ?? "").trim()}`);
+      : pprSinCodigoMap.get(`${i.nombre.trim()}::${(i.descripcion_igss ?? "").trim()}`));
     if (v) pprSugerido[i.id] = v;
   }
 
