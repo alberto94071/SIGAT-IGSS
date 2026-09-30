@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { siafCompras, siafComprasItems, catalogoFirmantes, configuracion } from "@/lib/schema";
+import { siafCompras, siafComprasItems, catalogoFirmantes, configuracion, catalogoCompras } from "@/lib/schema";
 import { eq, asc, inArray } from "drizzle-orm";
 import { renglonLookupMap, codigoPprLookupMap, codigoPprSinCodigoLookupMap, pprPuroParaImprimir, normalizaNombre, SIN_CODIGO } from "@/lib/adjudicacion/renglon-utils";
 import ImprimirClient from "./ImprimirClient";
@@ -56,8 +56,23 @@ export default async function ImprimirPage({ params, searchParams }: Props) {
   // S/C-199441" en vez del PPR real ("55406 - 65408") — reportado por el
   // cliente 2026-09-17 con dos casos reales (SIAF 20/2026 y 75/2026).
   const pprPuroMap = await pprPuroParaImprimir(items.map(i => i.codigo_ppr));
+  // Si el ítem se agregó eligiendo una presentación puntual en el Catálogo
+  // (catalogo_compras.codigo_ppr, 2026-09-30, vía `catalogo_id`), ese PPR es
+  // exacto — no una adivinanza por nombre — así que tiene prioridad sobre
+  // los resolutores de respaldo de abajo (aunque sigue por debajo de
+  // `i.codigo_ppr` real, que gana si el SIAF ya pasó por Consolidación).
+  // Lookup acotado a los catalogo_id que realmente aparecen en este SIAF,
+  // no toda la tabla.
+  const catalogoIds = [...new Set(items.map(i => i.catalogo_id).filter((x): x is number => x != null))];
+  const catalogoRows = catalogoIds.length > 0
+    ? await db.select({ id: catalogoCompras.id, codigo_ppr: catalogoCompras.codigo_ppr })
+        .from(catalogoCompras).where(inArray(catalogoCompras.id, catalogoIds))
+    : [];
+  const catalogoPprMap = new Map(catalogoRows.filter(r => r.codigo_ppr).map(r => [r.id, r.codigo_ppr]));
   const itemsConPpr = items.map(i => {
     if (i.codigo_ppr) return { ...i, codigo_ppr: pprPuroMap.get(i.codigo_ppr) ?? i.codigo_ppr };
+    const desdeCatalogo = i.catalogo_id != null ? catalogoPprMap.get(i.catalogo_id) : undefined;
+    if (desdeCatalogo) return { ...i, codigo_ppr: desdeCatalogo };
     if (i.codigo_igss && i.codigo_igss !== SIN_CODIGO) {
       return { ...i, codigo_ppr: pprMap.get(`${i.codigo_igss}::${normalizaNombre(i.nombre)}`) ?? pprMap.get(i.codigo_igss) ?? null };
     }

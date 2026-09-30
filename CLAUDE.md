@@ -3664,6 +3664,65 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     Todos los datos de prueba (2 filas de catálogo + 1 solicitud A-01 SIAF)
     se borraron después, sin tocar el insumo real del cliente (id 5200,
     `codigo_ppr` migrado a `''`).
+- **Seguimiento el mismo día: la generación del A-01 SIAF (checklist +
+  leyenda impresa) ahora usa el PPR exacto elegido en el Catálogo, sin
+  esperar a Consolidación — pedido explícito del cliente, acotado
+  deliberadamente a "solamente la generación de SIAF 01", nada de
+  Consolidación/Órdenes/SIAF-04.** El checklist de subproductos ("Generar
+  solicitud A-01 SIAF" → elegir insumo → marcar subproductos) solo
+  mostraba el texto del subproducto — con el punto de arriba (varios
+  renglones de PAC por presentación) ahora puede haber dos filas con el
+  MISMO subproducto y distinto PPR, indistinguibles a simple vista. Fix:
+  `SiafClient.tsx` (`subprodEntries.map`) agrega una línea "PPR
+  {codigo_ppr} — {descripcion_igss}" bajo el subproducto cuando la fila
+  del catálogo tiene un PPR real (no el sentinel `""`).
+  - **La leyenda "Código PpR:" (lista y documento impreso) ahora prioriza
+    el PPR exacto de `catalogo_compras` (vía `siaf_compras_items.
+    catalogo_id`, ya existía como FK) sobre los resolutores que adivinan
+    por nombre** (`codigoPprLookupMap`/`codigoPprSinCodigoLookupMap`) —
+    esos dos solo entran cuando la fila del catálogo elegida tiene el
+    sentinel `""` ("sin distinguir presentación"), preservando el
+    comportamiento de siempre para insumos donde no se eligió una
+    presentación puntual. Aplicado en los mismos dos lugares que ya
+    calculaban esto: `a01-siaf/page.tsx` (columna "PPR (sugerido)" de la
+    lista — usa `catalogoList`, ya en memoria, sin consulta nueva) y
+    `a01-siaf/[id]/imprimir/page.tsx` (leyenda del documento — trae solo
+    los `catalogo_compras` de los `catalogo_id` que aparecen en ese SIAF
+    puntual, acotado). **`i.codigo_ppr` real (post-Consolidación) sigue
+    ganando por encima de esto** — la prioridad es: 1) Consolidación real,
+    2) PPR exacto del catálogo, 3) adivinanza por nombre.
+  - **A propósito, `siaf_compras_items.codigo_ppr` sigue sin tocarse en
+    ningún punto de este flujo** — la resolución es una consulta EN VIVO
+    al catálogo por `catalogo_id`, no un snapshot al crear el ítem (a
+    diferencia de `nombre`/`descripcion_igss`/`subproducto`, que sí se
+    snapshotean). Decisión consciente, documentada acá para la próxima
+    sesión: snapshotear el PPR exacto habría requerido una columna nueva
+    en `siaf_compras_items` (no se puede reusar `codigo_ppr`, que guarda
+    la clave compuesta de Consolidación en un formato distinto — ver el
+    comentario de `pprPuroParaImprimir` más arriba) — se prefirió la
+    consulta en vivo por ser más simple y quedarse estrictamente dentro
+    del pedido del cliente. **Riesgo aceptado, bajo en la práctica**: si
+    alguien edita una fila del catálogo que ya se usó en un SIAF (con
+    "Cambiar", eligiendo una presentación distinta), la leyenda de ese SIAF
+    cambiaría al reimprimir — a diferencia del resto del sistema, donde
+    "Descripción IGSS" del catálogo es un snapshot que nunca cambia
+    retroactivamente (ver el punto de "Wipe", 2026-09-28) — improbable en
+    la práctica porque cada fila del catálogo ahora representa una
+    presentación específica (el flujo normal para otra presentación es
+    agregar una fila NUEVA, no editar la existente), pero si llega a pasar
+    algún día, la solución es la columna nueva descrita arriba.
+  - Verificado en vivo con la fila real que el cliente ya había agregado
+    (`catalogo_compras` id 5249, "Cemento flexible" · Saco 22.7 Kilogramos
+    · PPR "114812 - 174465", subproducto "001-001-0001") — no un dato de
+    prueba, así que no se tocó/borró: el checklist mostró "PPR 114812 -
+    174465 — Cemento flexible; Consistencia: Polvo; Tipo: Multiusos; Saco
+    22.7 Kilogramos" en esa fila, distinguible de la otra fila del mismo
+    subproducto (id 5200, "sin distinguir"); se creó una solicitud A-01
+    SIAF real de prueba eligiendo esa fila — la lista y el documento
+    impreso mostraron "Código PpR: 114812 - 174465" (el mismo PPR exacto,
+    no una adivinanza), y `siaf_compras_items.codigo_ppr` quedó `NULL`
+    (confirmado por consulta directa, Consolidación intacta) — la
+    solicitud de prueba se borró después.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
