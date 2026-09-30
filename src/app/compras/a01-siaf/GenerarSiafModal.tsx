@@ -289,13 +289,30 @@ export default function GenerarSiafModal({ editingSol, catalogo, solicitudes, on
                     const selQty    = subprodSelections.get(c.id) ?? "";
                     const isChecked = subprodSelections.has(c.id);
                     const autorizado = c.cantidad ?? 0;
+                    // Por catalogo_id, NO por codigo_igss+subproducto+nombre en
+                    // texto — bug real reportado por el cliente 2026-09-30: con
+                    // varias presentaciones del mismo insumo+subproducto (ver
+                    // multi-presentación del catálogo), esa clave de texto es
+                    // IDÉNTICA entre presentaciones distintas, así que lo ya
+                    // pedido de una presentación se restaba también del
+                    // "Disponible" de las demás — pedir 200 de 3 presentaciones
+                    // (600 en total) se comparaba contra la cantidad autorizada
+                    // de una sola fila del catálogo. Mismo fix que
+                    // verificarPacDisponible (`a01-siaf/actions.ts`) — ítems
+                    // legados sin catalogo_id (de antes de que ese campo
+                    // existiera) siguen matcheando por el texto viejo, como
+                    // respaldo.
+                    const mismoInsumo = (i: { catalogo_id: number | null; codigo_igss: string | null; subproducto: string; nombre: string }) =>
+                      i.catalogo_id != null
+                        ? i.catalogo_id === c.id
+                        : i.codigo_igss === c.codigo_igss && i.subproducto === c.subproducto && i.nombre === c.nombre;
                     const enDB = solicitudes
                       .filter(s => s.estado !== "Rechazado" && (!editMode || s.id !== editingSolId))
                       .flatMap(s => s.items)
-                      .filter(i => i.codigo_igss === c.codigo_igss && i.subproducto === c.subproducto && i.nombre === c.nombre)
+                      .filter(mismoInsumo)
                       .reduce((sum, i) => sum + i.cantidad_solicitada, 0);
                     const enModal = modalItems
-                      .filter(i => i.codigo_igss === c.codigo_igss && i.subproducto === c.subproducto && i.nombre === c.nombre)
+                      .filter(mismoInsumo)
                       .reduce((sum, i) => sum + i.cantidad_solicitada, 0);
                     const disponible = autorizado - enDB - enModal;
                     return (

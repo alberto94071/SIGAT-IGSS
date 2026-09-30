@@ -3821,6 +3821,56 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   como para notarse el mismo "lag", el patrón a seguir es el mismo —
   identificar el modal/bloque más grande que no hace falta en la carga
   inicial y moverlo a `next/dynamic(..., { ssr: false })`.
+- **Multi-presentación del catálogo (2026-09-30): "Disponible" del PAC
+  quedaba contaminado entre presentaciones del mismo insumo+subproducto —
+  bug real reportado por el cliente el mismo día que la feature ("agregué
+  3 diferentes de cable... no agregó 200 por subproducto sino que a todos
+  los diferentes subproductos les unió la cantidad autorizada... tuve que
+  cambiarle la cantidad autorizada a 600").** El cliente había agregado 3
+  presentaciones de "Cable" al Catálogo (mismo `codigo_igss`/subproducto/
+  nombre, distinto `codigo_ppr`, 200 autorizado cada una — ver el punto de
+  arriba sobre multi-presentación). Dos puntos quedaron sin actualizar
+  cuando se agregó esa feature — ambos seguían agrupando por
+  `codigo_igss+subproducto+nombre` en texto (el criterio de ANTES de que
+  varias filas del catálogo pudieran compartir esa misma terna), no por
+  `catalogo_id` (el identificador real de cada presentación, ya usado
+  correctamente por `crearSolicitud`/`editarSolicitud` para `cantidad_antes`
+  desde el fix del 2026-09-24):
+  - **`verificarPacDisponible`** (`a01-siaf/actions.ts`, corre al
+    **aprobar** un A-01 SIAF) — pedir 200 de cada una de las 3
+    presentaciones (600 en 3 SIAF distintos) se comparaba contra la
+    cantidad autorizada de **una sola fila** del catálogo (`.limit(1)`
+    sobre la terna de texto, que ahora hace match con las 3 filas por
+    igual), dando "Disponible: -400" sin que hubiera déficit real. Fix:
+    se agrupa por `catalogo_id` cuando el ítem lo trae (siempre, para
+    ítems nuevos) — queda un segundo paso por la terna de texto vieja
+    como respaldo, solo para ítems legados sin `catalogo_id`.
+  - **El checklist de subproductos del modal "Generar/Editar A-01 SIAF"**
+    (`GenerarSiafModal.tsx`, `enDB`/`enModal`) — mismo problema, pero en
+    la vista previa ANTES de guardar: el input de cantidad tiene
+    `max={disponible}`, así que con el cálculo contaminado el campo ni
+    siquiera dejaba escribir 200 en la segunda/tercera presentación — de
+    ahí que el cliente tuviera que inflar la cantidad autorizada del
+    catálogo a 400/600 solo para poder escribir 200 en la UI. Mismo fix,
+    mismo criterio de respaldo para ítems legados sin `catalogo_id`.
+  - **Se repuso a mano la cantidad autorizada real de las 2 filas de
+    "Cable" que el cliente había inflado** (`catalogo_compras` id 5256 y
+    5257, de vuelta a 200 — el 400/600 era el parche manual, no el valor
+    real que quería) — sus 3 solicitudes reales (A-01 SIAF 395/396/397 de
+    2026, las 3 en "Borrador", 200 cada una) no se tocaron. Verificado en
+    vivo que, con el fix ya aplicado y las cantidades repuestas, editar
+    cada una de las 3 solicitudes reales y volver a seleccionar su propia
+    presentación de "Cable" en el desplegable muestra "Disponible: 0 u."
+    en las 3 (200 autorizado − 200 ya pedido por sí misma, sin contaminar
+    ni ser contaminada por las otras 2) — antes del fix habría dado
+    negativo por la suma cruzada. El punto de `verificarPacDisponible` se
+    verificó aparte con 2 filas de catálogo + 2 solicitudes 100%
+    desechables (mismo patrón, pero sin pasar por la aprobación real para
+    no tocar presupuesto real — se replicó la consulta SQL exacta que
+    ejecuta la función arreglada): la consulta vieja (por texto) daba 200
+    "ya reservado" para CUALQUIERA de las 2 filas (sumaba ambas); la nueva
+    (por `catalogo_id`) da 100 para cada una, exactamente lo suyo — todo
+    el dato de prueba se borró después.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
