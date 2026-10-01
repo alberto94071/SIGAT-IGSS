@@ -3909,6 +3909,65 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   distinguir presentación", sin colisión ni texto "null"); "Cemento
   flexible" (8 presentaciones reales con PPR) sigue mostrando las 8
   opciones completas sin cambios — sin guardar nada, sin tocar datos.
+- **Base de Datos Central tiene 10 filas (de 207,839) con un `";"` colado al
+  final de `nombre`, un error de captura puntual — descubierto 2026-10-01
+  por el cliente, que no encontraba el PPR real "2190 - 29024" de "Folder"
+  en el selector de presentaciones del Catálogo.** La fila real existía
+  (`id` 188262, `codigo_ppr = "2190 - 29024"`) pero su `nombre` guardado era
+  `"Folder;"`, no `"Folder"` como sus 6 filas hermanas — el resolutor de
+  presentaciones (`getPprsPorItems`, `renglon-utils.ts`) matchea por nombre
+  exacto (case-insensitive, vía `ILIKE` sin comodines + comparación de
+  igualdad), así que esa única fila quedaba invisible para cualquier insumo
+  "Folder" del Catálogo. Confirmado que no es un patrón sistémico (solo 10
+  filas en toda la tabla) y que las 10 tienen docenas o cientos de "filas
+  hermanas" con el nombre limpio y el mismo renglón — un typo de importación
+  aislado, no productos genuinamente distintos. Fix de datos, no de código:
+  `UPDATE base_datos_central SET nombre = left(nombre, -1) WHERE nombre LIKE
+  '%;'` sobre las 10 filas (Switch, Bolsa para basura, Conexión tee,
+  Computadora de escritorio, Escalera, Planta generadora de electricidad,
+  Manguera de abasto, Sifón, Reducidor bushing, Folder) — verificado en vivo
+  que el PPR "2190 - 29024" ya aparece en el selector de "Folder" (112
+  opciones en vez de 111).
+- **Cotizaciones Anuales (`contrato-cotizaciones/cotizaciones`) ganó el mismo
+  buscador por PPR que ya tiene el Catálogo (2026-10-01), pedido explícito
+  del cliente: "aquí también me debe dejar agregar insumos a la cotización
+  buscándolos por el ppr y presentación también".** `buscarInsumoCatalogo`
+  (`cotizaciones-actions.ts`) ahora también matchea `codigo_ppr` y
+  `descripcion_igss` de `catalogo_compras` (antes solo `nombre`/
+  `codigo_igss`), y el dropdown de "Agregar insumo" (`CotizacionesClient.tsx`,
+  `LineasCotizacionAnual`) muestra el PPR y la descripción completa de cada
+  opción, igual que ya hace el buscador de A-01 SIAF. **Caso real encontrado
+  en la misma ronda que casi queda sin cubrir — "Lámpara Ganso" (catálogo
+  `nombre = "Lámpara-"`)**: un insumo con una SOLA presentación en Base de
+  Datos Central nunca llega a guardar su propio `codigo_ppr` en el catálogo
+  (el selector "Presentación / PPR" se oculta cuando no hay ambigüedad que
+  resolver — con 0 o 1 opción, queda en `""` "sin distinguir" para siempre),
+  así que buscar por su único PPR real (el cliente probó "38155 - 42163" sin
+  éxito) nunca habría encontrado nada por la vía de matchear
+  `catalogo_compras.codigo_ppr` directo. Fix: `buscarInsumoCatalogo` agrega
+  un segundo paso de respaldo — si la búsqueda directa no llena el límite de
+  8 resultados, resuelve el término tecleado contra `base_datos_central.
+  codigo_ppr` (sin acotar por nombre, mismo criterio de "tabla grande sin
+  filtro" documentado arriba, pero una sola consulta puntual por búsqueda,
+  no un loop por ítem — medido en vivo ~150-300ms, aceptable) y busca ese(s)
+  nombre(s) real(es) en el Catálogo como segundo intento. De paso se
+  reemplazó el parseo por regex de `insumoQuery` (`.replace(/^.*—\s*/, "")`,
+  frágil si el nombre real trae un guion largo) por un estado dedicado
+  (`nombreSeleccionado`) que guarda el `nombre` exacto de la fila elegida,
+  sin re-parsear texto de pantalla. **No se tocó el modelo de identidad de
+  `cotizaciones_anuales_items`** (sigue siendo `codigo_igss + nombre`, sin
+  columna de PPR propia) — si dos presentaciones del catálogo llegan a
+  compartir el mismo `nombre` exacto (posible desde la multi-presentación
+  del Catálogo, 2026-09-30, aunque no se dio ningún caso real todavía), la
+  desambiguación por nombre en `agregarLineaCotizacionAnual` podría
+  resolver a la fila equivocada en silencio — riesgo aceptado por ahora,
+  pendiente si se reporta un caso real. Verificado en vivo con Playwright
+  contra producción real: buscar "38155" en "Agregar insumo" de la
+  cotización real "LÁMPARA GANSO" (Jormar, S.A.) mostró "Lámpara-" con su
+  descripción completa (antes no mostraba nada); elegirlo y guardar un
+  precio de prueba (Q1,250.50) lo agregó correctamente a la cotización real
+  sin error — borrado después (`DELETE FROM cotizaciones_anuales_items`)
+  para no dejar un precio falso en una cotización real del cliente.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

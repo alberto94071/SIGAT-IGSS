@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/lib/db";
-import { cotizacionesServicio, cotizacionesAnuales, cotizacionesAnualesItems, catalogoCompras } from "@/lib/schema";
+import { cotizacionesServicio, cotizacionesAnuales, cotizacionesAnualesItems, catalogoCompras, baseDatosCentral } from "@/lib/schema";
 import { and, eq, sql, ilike, or, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import type { CotizacionAnual, TipoCotizacionAnual } from "./types";
@@ -247,19 +247,56 @@ export async function eliminarLineaCotizacionAnual(id: number): Promise<{ ok: tr
 
 // Búsqueda de insumos del catálogo de Compras, para armar las líneas de precio
 // de una cotización anual (mismo código_igss que usan las solicitudes A-01 SIAF).
+// También busca por codigo_ppr y descripcion_igss (2026-10-01, pedido explícito
+// del cliente) — desde que el Catálogo admite varios renglones de PAC por
+// presentación (ver "Multi-presentación del catálogo" en CLAUDE.md), un mismo
+// insumo+subproducto puede tener varias filas que solo se distinguen por su
+// PPR/presentación, y antes de este fix no había forma de buscar por eso acá.
 export async function buscarInsumoCatalogo(q: string) {
   const session = await auth();
   if (!session) return [];
-  if (!q || q.trim().length < 2) return [];
-  return db.select({
-    codigo_igss:   catalogoCompras.codigo_igss,
-    nombre:        catalogoCompras.nombre,
-  }).from(catalogoCompras).where(
+  const term = q.trim();
+  if (term.length < 2) return [];
+  const like = `%${term}%`;
+
+  const columnas = {
+    codigo_igss:      catalogoCompras.codigo_igss,
+    nombre:           catalogoCompras.nombre,
+    codigo_ppr:       catalogoCompras.codigo_ppr,
+    descripcion_igss: catalogoCompras.descripcion_igss,
+  };
+
+  const directos = await db.select(columnas).from(catalogoCompras).where(
     or(
-      ilike(catalogoCompras.nombre, `%${q}%`),
-      sql`${catalogoCompras.codigo_igss} ILIKE ${'%' + q + '%'}`,
+      ilike(catalogoCompras.nombre, like),
+      sql`${catalogoCompras.codigo_igss} ILIKE ${like}`,
+      sql`${catalogoCompras.codigo_ppr} ILIKE ${like}`,
+      sql`${catalogoCompras.descripcion_igss} ILIKE ${like}`,
     )
   ).limit(8);
+  if (directos.length >= 8) return directos;
+
+  // Respaldo: insumos del Catálogo con una sola presentación en Base de Datos
+  // Central nunca llegan a guardar su propio codigo_ppr (el selector de
+  // presentación se oculta cuando no hay ambigüedad — ver "Presentación /
+  // PPR de este renglón de PAC" en CatalogoModals.tsx), así que buscar por
+  // ESE PPR puntual no los encuentra por la vía de arriba. Se resuelve el PPR
+  // contra Base de Datos Central (su nombre real) y se busca ese nombre en el
+  // Catálogo como respaldo — caso real: "Lámpara Ganso" (catalogo_compras
+  // guarda "Lámpara-", codigo_ppr "" porque es su única presentación; el PPR
+  // real "38155 - 42163" nunca quedó en el catálogo), reportado por el
+  // cliente 2026-10-01.
+  const porPpr = await db.select({ nombre: baseDatosCentral.nombre })
+    .from(baseDatosCentral).where(sql`${baseDatosCentral.codigo_ppr} ILIKE ${like}`).limit(20);
+  if (porPpr.length === 0) return directos;
+
+  const nombresBdc = [...new Set(porPpr.map(r => r.nombre))];
+  const porNombre = await db.select(columnas).from(catalogoCompras)
+    .where(inArray(catalogoCompras.nombre, nombresBdc)).limit(8);
+
+  const yaIncluidos = new Set(directos.map(d => `${d.codigo_igss}::${d.nombre}::${d.codigo_ppr}`));
+  const combinados = [...directos, ...porNombre.filter(p => !yaIncluidos.has(`${p.codigo_igss}::${p.nombre}::${p.codigo_ppr}`))];
+  return combinados.slice(0, 8);
 }
 
 // Búsqueda de una cotización anual por número exacto (para el flujo de

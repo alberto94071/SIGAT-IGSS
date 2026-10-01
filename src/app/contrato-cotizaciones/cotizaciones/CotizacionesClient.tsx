@@ -531,9 +531,13 @@ export function LineasCotizacionAnual({ cotizacion, canEdit, onChange }: {
   const [precio, setPrecio] = useState("");
   const [exento, setExento] = useState(false);
   const [insumoQuery, setInsumoQuery] = useState("");
-  const [insumoResults, setInsumoResults] = useState<{ codigo_igss: string | null; nombre: string }[]>([]);
+  const [insumoResults, setInsumoResults] = useState<{ codigo_igss: string | null; nombre: string; codigo_ppr: string; descripcion_igss: string | null }[]>([]);
   const [insumoLoading, setInsumoLoading] = useState(false);
   const [insumoOpen, setInsumoOpen] = useState(false);
+  // El nombre exacto del insumo elegido viaja aparte de insumoQuery (que ahora
+  // puede incluir el PPR en su texto) — antes se re-parseaba con una regex
+  // sobre insumoQuery, frágil si el nombre real trae un guion largo "—".
+  const [nombreSeleccionado, setNombreSeleccionado] = useState<string | null>(null);
 
   const [uploading, setUploading] = useState(false);
   const [resumen, setResumen] = useState<{ agregadas: number; errores: string[] } | null>(null);
@@ -556,7 +560,7 @@ export function LineasCotizacionAnual({ cotizacion, canEdit, onChange }: {
     // El nombre exacto elegido en el buscador viaja al servidor — codigo_igss
     // solo no basta para identificar el insumo cuando es "S/C" (varios
     // insumos distintos comparten ese mismo código, ej. Agua/Energía por mes).
-    const nombreElegido = insumoQuery.replace(/^.*—\s*/, "").trim() || undefined;
+    const nombreElegido = nombreSeleccionado ?? undefined;
     const res = await agregarLineaCotizacionAnual(cotizacion.id, {
       codigo_igss: codigo.trim(), nombre: nombreElegido, precio_unitario: precioNum, exento_iva: exento,
     });
@@ -567,7 +571,7 @@ export function LineasCotizacionAnual({ cotizacion, canEdit, onChange }: {
       codigo_igss: codigo.trim(), nombre: nombreElegido ?? null,
       precio_unitario: precioNum, exento_iva: exento,
     }]);
-    setCodigo(""); setPrecio(""); setExento(false); setInsumoQuery(""); setAddingLine(false);
+    setCodigo(""); setPrecio(""); setExento(false); setInsumoQuery(""); setNombreSeleccionado(null); setAddingLine(false);
   }
 
   async function handleEliminarLinea(id: number) {
@@ -713,7 +717,7 @@ export function LineasCotizacionAnual({ cotizacion, canEdit, onChange }: {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
               <input
                 className="input pl-8 text-sm"
-                placeholder="Buscar insumo por nombre o código IGSS…"
+                placeholder="Buscar insumo por nombre, código IGSS o PPR…"
                 value={insumoQuery}
                 onChange={e => buscarInsumo(e.target.value)}
                 onFocus={() => setInsumoOpen(true)}
@@ -727,10 +731,21 @@ export function LineasCotizacionAnual({ cotizacion, canEdit, onChange }: {
                 )}
                 {insumoResults.map((r, i) => (
                   <button key={i} type="button"
-                    onMouseDown={() => { setCodigo(r.codigo_igss ?? ""); setInsumoQuery(`${r.codigo_igss ?? ""} — ${r.nombre}`); setInsumoOpen(false); }}
+                    onMouseDown={() => {
+                      setCodigo(r.codigo_igss ?? "");
+                      setNombreSeleccionado(r.nombre);
+                      const etiqueta = r.codigo_ppr ? `PPR ${r.codigo_ppr} — ${r.nombre}` : `${r.codigo_igss ?? ""} — ${r.nombre}`;
+                      setInsumoQuery(etiqueta);
+                      setInsumoOpen(false);
+                    }}
                     className="w-full text-left px-3 py-2 hover:bg-brand-50 border-b border-gray-50 last:border-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{r.nombre}</p>
-                    <p className="text-xs text-gray-400 font-mono">{r.codigo_igss ?? "sin código"}</p>
+                    <p className="text-xs text-gray-400 font-mono truncate">
+                      {r.codigo_igss ?? "sin código"}{r.codigo_ppr ? ` · PPR ${r.codigo_ppr}` : ""}
+                    </p>
+                    {r.descripcion_igss && r.descripcion_igss !== r.nombre && (
+                      <p className="text-xs text-gray-400 truncate">{r.descripcion_igss}</p>
+                    )}
                   </button>
                 ))}
               </div>
@@ -748,7 +763,7 @@ export function LineasCotizacionAnual({ cotizacion, canEdit, onChange }: {
           </div>
           {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
           <div className="flex justify-end gap-2">
-            <button onClick={() => { setAddingLine(false); setError(""); }} className="btn-secondary text-xs">Cancelar</button>
+            <button onClick={() => { setAddingLine(false); setError(""); setInsumoQuery(""); setNombreSeleccionado(null); }} className="btn-secondary text-xs">Cancelar</button>
             <button onClick={handleAgregar} disabled={saving} className="btn-primary text-xs disabled:opacity-50">
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Layers className="w-3.5 h-3.5" />} Guardar precio
             </button>
