@@ -95,6 +95,7 @@ mergeado), actualizá este archivo antes de dar el trabajo por cerrado:
 | `developer/` | Herramientas de superadmin (backup/reset) |
 | `solicitar-insumos/` | Autoservicio de insumos para el rol "colaborador": Catálogo (con "Agregar a solicitud") y Mis Solicitudes (carrito/borrador + historial) |
 | `solicitar-viaticos/` | Autoservicio de viáticos para el rol "colaborador": pedir viático, Registro de Comisión (hasta 5), impresión V-A/V-C/V-L + editor de Informe/Justificación una vez Aprobado |
+| `reportes/` | Reportes de control por módulo — tabla en pantalla (búsqueda/filtro/paginación) + Excel + Imprimir/PDF. Nav agrupado por módulo del sistema (ver "Reportes" más abajo). Primer reporte: Compras → A-01 SIAF (todos los insumos, todos los años) |
 
 ## Permisos por pestaña (`src/lib/permisos.ts`)
 
@@ -3968,6 +3969,87 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   precio de prueba (Q1,250.50) lo agregó correctamente a la cotización real
   sin error — borrado después (`DELETE FROM cotizaciones_anuales_items`)
   para no dejar un precio falso en una cotización real del cliente.
+- **Módulo nuevo "Reportes" (2026-10-01) — pedido explícito del cliente,
+  urgente: "un reporte de todos los siafs que se han generado desde el
+  principio... para poder saber y controlar... todos los SIAF que ya he
+  hecho".** Arranca como marco genérico (pensado para ir agregando reportes
+  por módulo, uno a la vez, como el cliente mismo lo planteó) con un primer
+  reporte real: Compras → A-01 SIAF.
+  - **Nav agrupado por módulo del sistema, no por pestañas propias de
+    Reportes** (pedido explícito: "en la barra de tareas me van a salir
+    todos los módulos que existen y al darle click... me va a desplegar
+    hacia abajo las pestañas de ese módulo"). `Sidebar.tsx` ganó un modo
+    alternativo (`navGroups`, junto al `navItems` plano de siempre que usa
+    el resto del sistema) — cada grupo es colapsable, un grupo sin reportes
+    se muestra deshabilitado con "Sin reportes todavía" en vez de ocultarse
+    (para que se vea la lista completa de módulos desde el día uno, aunque
+    casi todos estén vacíos todavía). `DashboardShell.tsx` pasa `navGroups`
+    a `Sidebar` igual que ya pasaba `navItems` — ningún otro módulo se tocó,
+    siguen usando el modo plano de siempre. `src/app/reportes/reportes-
+    config.ts` es la fuente de verdad de qué reportes existen por grupo —
+    agregar uno nuevo es 3 pasos: `tab_reportes_*` en `permisos.ts` (+
+    `TABS_DEFAULT_ABIERTAS`), una entrada acá, y la carpeta
+    `reportes/<grupo>/<reporte>/`.
+  - **Permiso `mod_reportes`** (default `true` para los 4 roles, mismo
+    criterio que el resto de módulos) + un `tab_reportes_*` por reporte
+    (`tab_reportes_compras_a01siaf`, el primero) — mismo patrón de
+    `requireModuloAccess`/`requireTabAccess` que cualquier otro módulo, sin
+    mecanismo nuevo.
+  - **Reporte Compras → A-01 SIAF** (`src/lib/reportes/compras-actions.ts`,
+    `getReporteA01SiafCompleto`): una fila por ítem de CADA A-01 SIAF
+    jamás creado (todos los estados — Borrador/Aprobado/Rechazado/
+    Consolidado —, todos los años, sin filtrar nada por diseño: el reporte
+    existe justamente para poder auditar visualmente qué falta). Columnas:
+    No. SIAF/Año, Fecha, Estado, Insumo, Subproducto, Renglón, PPR o
+    Código, Cantidad, Características PPR, Presentación (+ Unidad de
+    Medida solo en el Excel). El PPR/Renglón/Características/Presentación
+    se resuelven con el MISMO resolutor de prioridad que ya usa
+    `compras/a01-siaf/page.tsx` para la leyenda "Código PpR:" (1)
+    Consolidación real vía `pprPuroParaImprimir`, 2) PPR exacto elegido en
+    el Catálogo vía `catalogo_id`, 3) adivinanza por nombre contra Base de
+    Datos Central) — no se inventó un criterio aparte. **A propósito con
+    `incluirRespaldoLegado=false`** en `codigoPprSinCodigoLookupMap` —
+    con ~486 ítems históricos de golpe, el respaldo legado (una consulta
+    por ítem sin resolver) habría reproducido el mismo problema de lentitud
+    ya corregido el 2026-09-29 en la lista de A-01 SIAF (ver arriba) — y
+    una sola consulta `inArray` a Base de Datos Central por todos los PPR
+    ya resueltos (nunca sin filtro, "Trampas del entorno" de arriba).
+  - **Tabla en pantalla** (`ReporteA01SiafClient.tsx`): mismo patrón visual
+    que `CatalogoComprasClient.tsx` (buscador + filtros por año/estado +
+    paginación 25/50/100) — sin tocar ese archivo, solo copiado el patrón.
+  - **Exportar Excel** (`/api/reportes/compras/a01-siaf`, Route Handler —
+    mismo motivo que los reportes de Almacén/Caja Chica, una Server Action
+    no puede fijar `Content-Disposition`): `exceljs` puro, mismo patrón de
+    encabezado azul oscuro congelado (`estilizarEncabezado`) que ya usan
+    esos otros reportes. Exporta siempre el dataset completo (no el
+    subconjunto filtrado en pantalla) — decisión deliberada por simplicidad
+    de esta primera ronda, se puede agregar parámetros de filtro después si
+    se pide.
+  - **"PDF" es la misma convención ya establecida en todo el sistema para
+    cualquier documento imprimible: una vista `/imprimir` con `PrintPages`
+    (landscape, tamaño Carta) que el usuario manda a "Guardar como PDF"
+    desde el diálogo de impresión del navegador** — no se introdujo
+    ninguna librería de generación de PDF binario (no hay ninguna en este
+    proyecto; el patrón de impresión del navegador ya cubre Libro Bancos/
+    Libro Caja Chica/etc. sin problema). `ImprimirReporteA01SiafClient.tsx`
+    sigue el mismo patrón exacto de `ImprimirLibroBancosClient.tsx`
+    (encabezado repetido vía `headerSections`, una fila = una mini-`<table>`
+    con el mismo `<colgroup>` que el encabezado, para que las columnas
+    alineen entre hojas).
+  - Verificado en vivo de punta a punta contra producción real (sin tocar
+    ningún dato, todo de solo lectura): el reporte mostró 472 solicitudes
+    A-01 SIAF reales / 486 insumos; buscar "agua" filtró a 34 filas;
+    expandir "Compras" en el sidebar mostró el único reporte cargado, los
+    demás módulos aparecieron todos listados con "Sin reportes todavía";
+    "Imprimir / PDF" generó 48 hojas landscape con encabezado repetido
+    correctamente alineado; "Exportar Excel" descargó un `.xlsx` de 487
+    filas (486 + encabezado) × 11 columnas, verificado con `openpyxl` sin
+    errores de apertura.
+  - **Pendiente, el cliente los va a ir pidiendo uno por uno**: el resto de
+    reportes por módulo (Presupuesto, Almacén, Fondo Rotativo, Caja Chica,
+    Pasajes, Viáticos, Contrato y Cotizaciones, Base de Datos) — las
+    entradas de `reportes-config.ts` ya existen con `reportes: []`, listas
+    para recibir su primera entrada cuando se pida cada una.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

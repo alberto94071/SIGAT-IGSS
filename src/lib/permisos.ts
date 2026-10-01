@@ -22,6 +22,8 @@ export interface Permisos {
   mod_contrato_cotizaciones: boolean;
   mod_base_datos:            boolean;
   mod_fondo_rotativo:        boolean;
+  // Reportes — tabla/exportación por módulo (ver src/app/reportes/).
+  mod_reportes:              boolean;
   // Administración — usuarios, accesos y configuración general. Solo el superadmin la trae por defecto
   mod_administracion:        boolean;
   // Hoja de Ruta — rastreo de pedidos, standalone. Solo el superadmin la trae por
@@ -105,19 +107,24 @@ export interface Permisos {
   // superadmin — no es delegable por permiso, ver administracion/layout.tsx)
   tab_admin_usuarios:           boolean;
   tab_admin_configuracion:      boolean;
+
+  // Reportes — una pestaña por reporte, agrupadas por el módulo que
+  // describen (no por el módulo "Reportes" en sí, que no tiene pestañas
+  // propias). Primer reporte: Compras → A-01 SIAF.
+  tab_reportes_compras_a01siaf: boolean;
 }
 
 export type Modulo =
   | "mod_compras" | "mod_presupuesto" | "mod_junta_adjudicadora" | "mod_almacen"
   | "mod_caja_chica" | "mod_viaticos" | "mod_pasajes"
   | "mod_contrato_cotizaciones" | "mod_base_datos" | "mod_fondo_rotativo"
-  | "mod_administracion" | "mod_hoja_de_ruta";
+  | "mod_administracion" | "mod_hoja_de_ruta" | "mod_reportes";
 
 const MODULOS_DEFAULT = {
   mod_compras: true, mod_presupuesto: true, mod_junta_adjudicadora: true,
   mod_almacen: true, mod_caja_chica: true,
   mod_viaticos: true, mod_pasajes: true, mod_contrato_cotizaciones: true,
-  mod_base_datos: true, mod_fondo_rotativo: true,
+  mod_base_datos: true, mod_fondo_rotativo: true, mod_reportes: true,
 };
 
 // Todas las pestañas "de ver/usar" (no las de Autorizar) por defecto van en
@@ -149,6 +156,8 @@ const TABS_DEFAULT_ABIERTAS = {
   tab_basedatos_insumos: true, tab_basedatos_tarifario: true, tab_basedatos_proveedores: true, tab_basedatos_afiliados: true,
 
   tab_admin_usuarios: true, tab_admin_configuracion: true,
+
+  tab_reportes_compras_a01siaf: true,
 };
 
 // Las 2 pestañas de "Autorizar" (aprobar/rechazar) quedan cerradas por

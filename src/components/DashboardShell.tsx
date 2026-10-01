@@ -7,7 +7,9 @@ import { type Rol } from "@/lib/permisos";
 const COLLAPSE_KEY = "cip-sidebar-collapsed";
 
 interface Props {
-  navItems: readonly { href: string; label: string; icon: string }[];
+  navItems?: readonly { href: string; label: string; icon: string }[];
+  // Ver Sidebar.tsx — modo agrupado alternativo a navItems, usado por Reportes.
+  navGroups?: readonly { id: string; label: string; icon: string; items: readonly { href: string; label: string; icon: string }[] }[];
   user: { name: string; rol: Rol; email: string };
   userName: string;
   rolLabel: string;
@@ -17,7 +19,7 @@ interface Props {
 }
 
 export default function DashboardShell({
-  navItems, user, userName, rolLabel, rolColor, moduleLabel, children,
+  navItems, navGroups, user, userName, rolLabel, rolColor, moduleLabel, children,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -55,7 +57,7 @@ export default function DashboardShell({
           ${open ? "translate-x-0" : "-translate-x-full"}
           ${collapsed ? "md:w-0" : "md:w-60"}`}
       >
-        <Sidebar navItems={navItems} user={user} moduleLabel={moduleLabel} onClose={() => setOpen(false)} />
+        <Sidebar navItems={navItems} navGroups={navGroups} user={user} moduleLabel={moduleLabel} onClose={() => setOpen(false)} />
       </div>
 
       {/* Área principal */}
