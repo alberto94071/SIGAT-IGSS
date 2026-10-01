@@ -247,17 +247,26 @@ export async function eliminarLineaCotizacionAnual(id: number): Promise<{ ok: tr
 
 // Búsqueda de insumos del catálogo de Compras, para armar las líneas de precio
 // de una cotización anual (mismo código_igss que usan las solicitudes A-01 SIAF).
+// También busca por codigo_ppr y descripcion_igss (2026-10-01, pedido explícito
+// del cliente) — desde que el Catálogo admite varios renglones de PAC por
+// presentación (ver "Multi-presentación del catálogo" en CLAUDE.md), un mismo
+// insumo+subproducto puede tener varias filas que solo se distinguen por su
+// PPR/presentación, y antes de este fix no había forma de buscar por eso acá.
 export async function buscarInsumoCatalogo(q: string) {
   const session = await auth();
   if (!session) return [];
   if (!q || q.trim().length < 2) return [];
   return db.select({
-    codigo_igss:   catalogoCompras.codigo_igss,
-    nombre:        catalogoCompras.nombre,
+    codigo_igss:      catalogoCompras.codigo_igss,
+    nombre:           catalogoCompras.nombre,
+    codigo_ppr:       catalogoCompras.codigo_ppr,
+    descripcion_igss: catalogoCompras.descripcion_igss,
   }).from(catalogoCompras).where(
     or(
       ilike(catalogoCompras.nombre, `%${q}%`),
       sql`${catalogoCompras.codigo_igss} ILIKE ${'%' + q + '%'}`,
+      sql`${catalogoCompras.codigo_ppr} ILIKE ${'%' + q + '%'}`,
+      sql`${catalogoCompras.descripcion_igss} ILIKE ${'%' + q + '%'}`,
     )
   ).limit(8);
 }
