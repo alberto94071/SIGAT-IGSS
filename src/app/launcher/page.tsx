@@ -4,7 +4,7 @@ import Link from "next/link";
 import {
   RotateCcw, MapPin, Bus, ArrowRight, Construction,
   ShoppingCart, Database, Calculator, Wallet,
-  Archive, Gavel, FileSignature, UserCog, Route, Package
+  Archive, Gavel, FileSignature, UserCog, Route, Package, BarChart3
 } from "lucide-react";
 import { type Modulo, type Rol } from "@/lib/permisos";
 import { getPermisosFrescos } from "@/lib/modulo-access";
@@ -168,6 +168,19 @@ const MODULES = [
     bgLight: "bg-teal-50",
     available: true,
     permiso: "mod_hoja_de_ruta" as Modulo | null,
+  },
+  {
+    id: "reportes",
+    title: "Reportes",
+    description: "Tablas y exportaciones (Excel/PDF) de control por módulo — empieza con Compras.",
+    href: "/reportes",
+    icon: BarChart3,
+    color: "bg-slate-600",
+    ring: "ring-slate-200",
+    textColor: "text-slate-600",
+    bgLight: "bg-slate-50",
+    available: true,
+    permiso: "mod_reportes" as Modulo | null,
   },
 ];
 
