@@ -4071,6 +4071,49 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   insumo mostró un solo grupo ("Folder") ya expandido con la fila SIAF
   119/2026 (Aprobado) visible de una vez; buscar "106" (un Borrador) en
   "Por solicitud" siguió funcionando sin cambios — sin tocar ningún dato.
+- **Seguimiento el mismo día: el fix de arriba no alcanzaba — el cliente
+  seguía sin poder encontrar un SIAF por correlativo ni en "Por solicitud"
+  (la pestaña default, donde en realidad estaba buscando) ni en Archivo.**
+  Dos causas distintas, ambas reales:
+  - **"Por solicitud" (`SiafClient.tsx`, `filteredSolicitudes`) seguía
+    restringido a `ACCIONABLES` incluso con una búsqueda activa** — el fix
+    anterior solo tocó "Historial insumo"; el cliente nunca cambia de
+    pestaña, así que desde su perspectiva "el buscador" seguía sin
+    encontrar nada. Fix: con una búsqueda no vacía, ya no se filtra por
+    `ACCIONABLES` primero — se busca sobre TODAS las solicitudes, y la fila
+    de una que ya no es accionable (Aprobado/Consolidado/...) se renderiza
+    de solo lectura (mismo badge de estado que ya usa Historial, sin
+    botones Aprobar/Rechazar/Editar/Eliminar — el servidor los habría
+    rechazado igual, pero ofrecerlos en la UI para un estado que ya avanzó
+    no tiene sentido). Sin búsqueda, la lista sigue mostrando solo
+    accionables como siempre (el "351 pendiente(s) de acción" de arriba no
+    se tocó). También se agregó el mismo auto-expand de Historial acá:
+    buscar y dejar un solo resultado lo expande solo.
+  - **Compras → Archivo tenía un bug real, no solo de alcance — el buscador
+    de esa pestaña SOLO filtraba lo que ya estaba cargado en el cliente**
+    (`cargarArchivoCompras`, paginado de a 50 por `desc(id)`), nunca
+    consultaba el servidor. Con 473 SIAF reales, un correlativo bajo podía
+    quedar 7-8 páginas atrás — escribirlo no mostraba nada hasta darle
+    "Cargar más" suficientes veces (el propio texto de ayuda bajo el
+    buscador ya lo admitía: "la búsqueda solo alcanza lo ya cargado"). Fix:
+    `buscarArchivoCompras(query)` (`archivo/actions.ts`, nueva) consulta
+    TODA la tabla `siaf_compras` (~500 filas, no es de las tablas grandes
+    documentadas arriba — barato escanearla completa) en vez de depender
+    de lo paginado; `ArchivoClient.tsx` la llama con debounce de 300ms en
+    cuanto hay texto, reemplazando el filtro en memoria — limitada a 100
+    resultados (con aviso si se trunca). La carga/paginado original
+    (`cargarArchivoCompras`) se queda igual para la vista sin búsqueda — se
+    extrajo `enriquecerSolicitudesArchivo` (items/renglón/usuarios/destino)
+    como helper compartido entre ambas, para no duplicar esos 4 joins.
+  Verificado en vivo contra producción real (Playwright, sin tocar datos):
+  "Por solicitud" con "119/2026" mostró la fila Aprobado auto-expandida,
+  con solo el ícono de Imprimir en Acc. (sin Editar/Eliminar) y el badge
+  "Aprobado" en vez de botones; buscar "106" (Borrador) siguió funcionando
+  con sus botones normales. Archivo con "119/2026" mostró exactamente esa
+  fila (antes mostraba el listado paginado sin filtrar); limpiar la
+  búsqueda volvió a las 50 filas originales; "Cargar más" tras limpiar
+  siguió sumando de a 50 sin romperse (100 filas tras un clic) — sin
+  errores de consola en ningún punto.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
