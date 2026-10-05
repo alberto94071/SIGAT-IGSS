@@ -128,10 +128,21 @@ export default function SiafClient({
     }>();
 
     for (const sol of solicitudes) {
+      // El correlativo/fecha/estado se comparan a nivel de SOLICITUD, no de
+      // ítem — si no, buscar "119" nunca matcheaba la SIAF 119/2026 cuando
+      // ya no es Borrador/Rechazado (ej. Aprobado), porque esta vista es la
+      // ÚNICA que incluye todos los estados — "Por solicitud" sí busca por
+      // correlativo pero solo entre las accionables (ver ACCIONABLES arriba).
+      // Reportado por el cliente 2026-10-05: el buscador nunca encontraba un
+      // SIAF ya aprobado, solo apareció scrolleando historial a mano.
+      const matchSolicitud = !q ||
+        `${sol.numero}/${sol.anio}`.includes(q) ||
+        sol.fecha.includes(q) ||
+        sol.estado.toLowerCase().includes(q);
       for (const item of sol.items) {
-        if (q && !item.nombre.toLowerCase().includes(q) &&
+        if (q && !matchSolicitud && !item.nombre.toLowerCase().includes(q) &&
             !(item.codigo_ppr ?? "").toLowerCase().includes(q) &&
-            !String(item.codigo_igss ?? "").includes(query)) continue;
+            !String(item.codigo_igss ?? "").toLowerCase().includes(q)) continue;
         const key = item.catalogo_id ? String(item.catalogo_id) : `${item.codigo_igss}::${item.subproducto}::${item.nombre}`;
         if (!groups.has(key)) {
           groups.set(key, { key, codigo_igss: item.codigo_igss, nombre: item.nombre,
@@ -150,6 +161,16 @@ export default function SiafClient({
         disponible: autorizado - total_sol, entries: sorted };
     });
   }, [solicitudes, catalogo, query]);
+
+  // Buscar un correlativo puntual (ej. "119/2026") en Historial solo acota a
+  // UN grupo de insumo colapsado — sin esto, "encontrarlo" seguía significando
+  // un clic extra para expandirlo. Se auto-expande solo cuando la búsqueda deja
+  // exactamente un grupo, para no pisar un expand manual con varios resultados.
+  useEffect(() => {
+    if (viewMode !== "historial" || !query.trim()) return;
+    if (historialData.length === 1) setExpandedId(historialData[0].key);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, viewMode, historialData.length]);
 
   const renglonPorItem = useMemo(() => {
     const map = new Map<string, number | null>();
@@ -270,7 +291,7 @@ export default function SiafClient({
         <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input className="input pl-9"
-            placeholder={viewMode === "solicitudes" ? "Buscar por correlativo, insumo…" : "Buscar insumo o código PPR…"}
+            placeholder={viewMode === "solicitudes" ? "Buscar por correlativo, insumo…" : "Buscar por correlativo, insumo o código PPR…"}
             value={query} onChange={e => setQuery(e.target.value)} />
         </div>
         <div className="flex rounded-xl border border-gray-200 overflow-hidden text-sm">

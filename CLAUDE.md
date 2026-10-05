@@ -4050,6 +4050,27 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
     Pasajes, Viáticos, Contrato y Cotizaciones, Base de Datos) — las
     entradas de `reportes-config.ts` ya existen con `reportes: []`, listas
     para recibir su primera entrada cuando se pida cada una.
+- **A-01 SIAF: el buscador de "Historial insumo" nunca buscaba por
+  correlativo/fecha/estado, solo por insumo/PPR/código IGSS — reportado por
+  el cliente 2026-10-05 con un caso real: "quise localizar el SIAF
+  119/2026... al escribirlo en el buscador nunca me lo mostró, y al
+  buscarlo uno por uno... haciendo scrolldown, sí existe".** SIAF 119/2026
+  está `Aprobado` — la pestaña "Por solicitud" SÍ busca por correlativo,
+  pero solo entre `ACCIONABLES` (Borrador/Rechazado, lo demás "ya salió de
+  ahí" por diseño); "Historial insumo" es la ÚNICA vista que incluye TODOS
+  los estados, pero su filtro (`historialData` en `SiafClient.tsx`) solo
+  comparaba `item.nombre`/`codigo_ppr`/`codigo_igss` — nunca
+  `sol.numero`/`anio`/`fecha`/`estado` — así que no había NINGUNA forma de
+  encontrar un SIAF ya aprobado escribiendo su número; solo scrolleando a
+  ciegas por los grupos de insumo, exactamente lo que hizo el cliente. Fix:
+  el filtro ahora también matchea por `"{numero}/{anio}"`, `fecha` y
+  `estado` a nivel de la solicitud completa (no solo del ítem) — y, cuando
+  la búsqueda deja un solo grupo de insumo, se auto-expande (antes había
+  que buscar y además hacer clic para expandirlo). Verificado en vivo
+  contra producción real (Playwright): buscar "119/2026" en Historial
+  insumo mostró un solo grupo ("Folder") ya expandido con la fila SIAF
+  119/2026 (Aprobado) visible de una vez; buscar "106" (un Borrador) en
+  "Por solicitud" siguió funcionando sin cambios — sin tocar ningún dato.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
