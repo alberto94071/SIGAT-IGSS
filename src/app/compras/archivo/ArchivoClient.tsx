@@ -1,8 +1,8 @@
 "use client";
-import { Fragment, useState, useMemo } from "react";
+import { Fragment, useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, Search, Printer, X, ChevronDown, ChevronRight, XCircle, Loader2 } from "lucide-react";
-import { cargarArchivoCompras, type SolicitudArchivoCompras } from "./actions";
+import { cargarArchivoCompras, buscarArchivoCompras, type SolicitudArchivoCompras } from "./actions";
 
 type Solicitud = SolicitudArchivoCompras;
 type Firmante = { id: number; nombre: string; cargo: string };
@@ -36,6 +36,29 @@ export default function ArchivoClient({ solicitudes: solicitudesIniciales, hasMo
   const [selFirmante1, setSelFirmante1] = useState<Firmante | null>(null);
   const [selFirmante2, setSelFirmante2] = useState<Firmante | null>(null);
 
+  // La búsqueda antes solo filtraba lo que ya estaba cargado en el cliente
+  // (paginado de a 50) — con cientos de SIAF reales, uno viejo podía quedar
+  // varias páginas atrás y el buscador nunca lo encontraba (reportado por
+  // el cliente 2026-10-05: "tengo que buscarlo hasta encontrarlo"). Ahora,
+  // en cuanto hay texto, se consulta `buscarArchivoCompras` (toda la tabla,
+  // no solo lo paginado) en vez de filtrar `solicitudes` en memoria.
+  const [buscando, setBuscando] = useState(false);
+  const [resultadosBusqueda, setResultadosBusqueda] = useState<Solicitud[] | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const q = query.trim();
+    if (!q) { setResultadosBusqueda(null); setBuscando(false); return; }
+    setBuscando(true);
+    debounceRef.current = setTimeout(async () => {
+      const res = await buscarArchivoCompras(q);
+      setResultadosBusqueda(res);
+      setBuscando(false);
+    }, 300);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query]);
+
   async function cargarMas() {
     setCargandoMas(true);
     try {
@@ -47,13 +70,7 @@ export default function ArchivoClient({ solicitudes: solicitudesIniciales, hasMo
     }
   }
 
-  const q = query.toLowerCase().trim();
-  const filtered = useMemo(() => !q ? solicitudes : solicitudes.filter(s =>
-    `${s.numero}/${s.anio}`.includes(q) ||
-    s.fecha.includes(q) ||
-    s.estado.toLowerCase().includes(q) ||
-    s.items.some(i => i.nombre.toLowerCase().includes(q))
-  ), [solicitudes, q]);
+  const filtered = resultadosBusqueda ?? solicitudes;
 
   function openPrint(s: Solicitud) {
     setPrintSol(s); setSelFirmante1(null); setSelFirmante2(null);
@@ -79,13 +96,15 @@ export default function ArchivoClient({ solicitudes: solicitudesIniciales, hasMo
 
       <div>
         <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          {buscando
+            ? <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
+            : <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />}
           <input className="input pl-9" placeholder="Buscar por correlativo, fecha, insumo…"
             value={query} onChange={e => setQuery(e.target.value)} />
         </div>
-        {hasMore && (
+        {resultadosBusqueda != null && resultadosBusqueda.length === 100 && (
           <p className="text-xs text-gray-400 mt-1">
-            La búsqueda solo alcanza lo ya cargado — usa &quot;Cargar más&quot; para traer solicitudes anteriores.
+            Mostrando los 100 resultados más recientes que coinciden — afiná la búsqueda si no está acá.
           </p>
         )}
       </div>
@@ -202,11 +221,14 @@ export default function ArchivoClient({ solicitudes: solicitudesIniciales, hasMo
           {filtered.length === 0 && (
             <div className="text-center py-16 text-gray-400">
               <Archive className="w-8 h-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">{solicitudes.length === 0 ? "Aún no se ha generado ningún SIAF." : "Sin resultados para esa búsqueda."}</p>
+              <p className="text-sm">
+                {resultadosBusqueda != null ? "Sin resultados para esa búsqueda."
+                  : solicitudes.length === 0 ? "Aún no se ha generado ningún SIAF." : "Sin resultados."}
+              </p>
             </div>
           )}
         </div>
-        {hasMore && (
+        {hasMore && resultadosBusqueda == null && (
           <div className="flex justify-center py-4 border-t border-gray-100">
             <button onClick={cargarMas} disabled={cargandoMas}
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50">

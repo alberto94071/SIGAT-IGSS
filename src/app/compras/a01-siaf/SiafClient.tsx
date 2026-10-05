@@ -108,10 +108,18 @@ export default function SiafClient({
   // ─── Computed ──────────────────────────────────────────────────────────────
 
   const filteredSolicitudes = useMemo(() => {
-    const accionables = solicitudes.filter(s => ACCIONABLES.includes(s.estado));
-    if (!query.trim()) return accionables;
+    if (!query.trim()) return solicitudes.filter(s => ACCIONABLES.includes(s.estado));
+    // Con búsqueda activa, ya no se restringe a ACCIONABLES — reportado por
+    // el cliente 2026-10-05 (seguimiento del fix de Historial insumo): esta
+    // pestaña es la que se ve primero al entrar, y sigue siendo donde la
+    // mayoría escribe el correlativo sin pensar en cambiar de pestaña —
+    // "sigue sin mostrármelo... tengo que buscarlo hasta encontrarlo". Un
+    // SIAF ya Aprobado/Consolidado/etc. ahora sí aparece al buscarlo por
+    // número, aunque ya no sea accionable (la fila se renderiza de solo
+    // lectura, ver el badge de estado más abajo en vez de los botones
+    // Aprobar/Rechazar).
     const q = query.toLowerCase();
-    return accionables.filter(s =>
+    return solicitudes.filter(s =>
       `${s.numero}/${s.anio}`.includes(q) ||
       s.fecha.includes(q) ||
       s.estado.toLowerCase().includes(q) ||
@@ -171,6 +179,14 @@ export default function SiafClient({
     if (historialData.length === 1) setExpandedId(historialData[0].key);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, viewMode, historialData.length]);
+
+  // Mismo criterio en "Por solicitud": si la búsqueda deja una sola
+  // solicitud (ej. buscar un correlativo exacto), se expande sola.
+  useEffect(() => {
+    if (viewMode !== "solicitudes" || !query.trim()) return;
+    if (filteredSolicitudes.length === 1) setExpandedId(String(filteredSolicitudes[0].id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, viewMode, filteredSolicitudes.length]);
 
   const renglonPorItem = useMemo(() => {
     const map = new Map<string, number | null>();
@@ -344,7 +360,16 @@ export default function SiafClient({
                         </td>
                         <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            {s.estado === "Rechazado" ? (
+                            {!ACCIONABLES.includes(s.estado) ? (
+                              // Ya salió de esta bandeja (Aprobado/Consolidado/...) — solo
+                              // aparece acá porque matcheó la búsqueda (ver filteredSolicitudes).
+                              // De solo lectura, mismo badge que ya usa Historial insumo —
+                              // ofrecer Aprobar/Rechazar sobre un estado que ya avanzó no
+                              // tiene sentido y el servidor lo rechazaría de todas formas.
+                              <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${ESTADO_STYLE[s.estado] ?? "bg-gray-100 text-gray-600"}`}>
+                                {s.estado}
+                              </span>
+                            ) : s.estado === "Rechazado" ? (
                               <>
                                 <button onClick={() => openMotivo(s)}
                                   className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
@@ -381,16 +406,20 @@ export default function SiafClient({
                                 title="Imprimir A-01 SIAF">
                                 <Printer className="w-3.5 h-3.5" />
                               </button>
-                              <button onClick={() => openEdit(s)}
-                                className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
-                                title="Editar solicitud">
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button onClick={() => handleEliminar(s.id)}
-                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Eliminar solicitud">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {ACCIONABLES.includes(s.estado) && (
+                                <>
+                                  <button onClick={() => openEdit(s)}
+                                    className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                                    title="Editar solicitud">
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button onClick={() => handleEliminar(s.id)}
+                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Eliminar solicitud">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         )}
