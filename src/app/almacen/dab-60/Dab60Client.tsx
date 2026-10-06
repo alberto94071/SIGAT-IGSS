@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Archive, X, Loader2, Send, CheckCircle, Pencil, Printer, Wallet, Undo2, RotateCcw } from "lucide-react";
 import { generarDab60, aprobarDab60, generarDab60FondoRotativo, type Dab60Data, type Dab60DataFr } from "@/lib/adjudicacion/dab60-actions";
+import { regresarOrdenASiaf } from "@/lib/adjudicacion/compromiso-actions";
 import { regresarAAdjudicacion } from "@/lib/adjudicacion/siaf04-actions";
 import { devolverPagoASiaf04, type PagoFondoRotativo } from "@/lib/adjudicacion/fondo-rotativo-pagos-actions";
 import RenglonBadges from "@/components/RenglonBadges";
@@ -53,6 +54,24 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
   const [expandedFr, setExpandedFr] = useState<number | null>(null);
   const [devolviendoFr, setDevolviendoFr] = useState<number | null>(null);
   const [rowErrorFr, setRowErrorFr] = useState<Record<number, string>>({});
+  const [devolviendoSiaf, setDevolviendoSiaf] = useState<number | null>(null);
+  const [rowErrorSiaf, setRowErrorSiaf] = useState<Record<number, string>>({});
+
+  // Devuelve una orden Normal (todavía sin DAB-60, o con DAB-60 generado/ya
+  // aprobado-ingresado) hasta el A-01 SIAF original en Borrador — ver
+  // regresarOrdenASiaf en compromiso-actions.ts para el detalle completo de
+  // qué deshace. Vive en las dos bandejas de esta pantalla (Pendiente DAB-60
+  // y Pendientes de aprobación), cada una pasando su propia lista de
+  // "quitar" al terminar.
+  async function handleDevolverASiaf(o: Orden, quitarDe: "ordenes" | "pendientes") {
+    if (!confirm(`¿Devolver OC-${String(o.numero).padStart(3, "0")} hasta el A-01 SIAF original? Se anula esta orden, se deshace todo el presupuesto reservado (Pre-Compromiso/Compromiso), se borra la Adjudicación/Acta, y el o los SIAF que la originaron vuelven a "Borrador" para poder corregirlos — la consolidación se elimina. Si el DAB-60 ya se había aprobado, también se quita el ingreso a Almacén. Esta acción no se puede deshacer.`)) return;
+    setDevolviendoSiaf(o.id); setRowErrorSiaf(prev => ({ ...prev, [o.id]: "" }));
+    const res = await regresarOrdenASiaf(o.id);
+    setDevolviendoSiaf(null);
+    if ("error" in res) { setRowErrorSiaf(prev => ({ ...prev, [o.id]: res.error })); return; }
+    if (quitarDe === "ordenes") setOrdenes(p => p.filter(x => x.id !== o.id));
+    else setPendientesAprobacion(p => p.filter(x => x.id !== o.id));
+  }
 
   // Devolución "liviana": solo deshace lo que armó generarSiaf04 (factura,
   // PPR/presentación elegida) y regresa a Fondo Rotativo/SIAF-04 para volver
@@ -134,10 +153,18 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
                     {o.total != null ? Q(o.total) : "—"}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => setDabFor(o)}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors ml-auto">
-                      <Archive className="w-3 h-3" /> Generar DAB-60
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button onClick={() => handleDevolverASiaf(o, "ordenes")} disabled={devolviendoSiaf === o.id}
+                        title="Devolver al A-01 SIAF original"
+                        className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">
+                        {devolviendoSiaf === o.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                      </button>
+                      <button onClick={() => setDabFor(o)}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors">
+                        <Archive className="w-3 h-3" /> Generar DAB-60
+                      </button>
+                    </div>
+                    {rowErrorSiaf[o.id] && <p className="text-red-600 text-xs mt-1 max-w-[220px] text-right ml-auto">{rowErrorSiaf[o.id]}</p>}
                   </td>
                 </ExpandableRow>
               ))}
@@ -205,6 +232,11 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
+                        <button onClick={() => handleDevolverASiaf(o, "pendientes")} disabled={devolviendoSiaf === o.id || a?.cargando}
+                          title="Devolver al A-01 SIAF original"
+                          className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-50">
+                          {devolviendoSiaf === o.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                        </button>
                         <Link href={`/almacen/dab-60/${o.id}/imprimir`}
                           title="Imprimir"
                           className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100">
@@ -221,6 +253,7 @@ export default function Dab60Client({ ordenes: init, pendientesAprobacion: initP
                         </button>
                       </div>
                       {a?.error && <p className="text-red-600 text-xs mt-1 max-w-[220px] text-right ml-auto">{a.error}</p>}
+                      {rowErrorSiaf[o.id] && <p className="text-red-600 text-xs mt-1 max-w-[220px] text-right ml-auto">{rowErrorSiaf[o.id]}</p>}
                     </td>
                   </ExpandableRow>
                 );
