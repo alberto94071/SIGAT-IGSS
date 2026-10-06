@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/lib/db";
-import { ordenesCompra, consolidaciones, actasAdjudicacion, oferentes, cotizacionesServicio } from "@/lib/schema";
+import { ordenesCompra, consolidaciones, actasAdjudicacion, oferentes, cotizacionesServicio, siafCompras } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { requireModuloAccessAction } from "@/lib/modulo-access";
@@ -574,5 +574,132 @@ export async function regresarOrdenAAdjudicacion(ordenId: number, motivo?: strin
     return { ok: true };
   } catch {
     return { error: "Error al devolver la orden a Compras/Adjudicación" };
+  }
+}
+
+/**
+ * Un paso más atrás que regresarOrdenAAdjudicacion — para cuando el error no
+ * está en cómo se adjudicó, sino en la solicitud A-01 SIAF original (insumo,
+ * cantidad, código equivocados). Mismos estados elegibles
+ * (ESTADOS_REGRESABLES) y el mismo deshacer de presupuesto/Acta/oferentes/
+ * cotización reservada que su hermana, pero además: (1) si el DAB-60 ya se
+ * generó, deshace también el ingreso a Almacén con revertirIngresoAlmacen —
+ * bloqueado con LoteYaDespachadoEnTransaccion si ya se despachó parte del
+ * lote por un DAB-75, igual que regresarADab60; y (2) en vez de dejar la
+ * consolidación en "Pendiente adjudicación" para volver a adjudicar, va un
+ * paso más atrás: el o los A-01 SIAF que la armaron vuelven a "Borrador"
+ * (editables de nuevo, mismo efecto que anularConsolidacion en actions.ts) y
+ * la consolidación se borra por completo. La orden queda "Anulada" (con
+ * dab60_anulado si corresponde) para que su historial siga visible en
+ * Almacén/Archivo — nada se borra de forma que no se pueda auditar después,
+ * salvo la consolidación en sí (que de todas formas se vuelve a crear desde
+ * cero al re-consolidar el SIAF corregido). Solo quien tenga acceso a
+ * mod_presupuesto, mismo criterio que sus hermanas. Pensado para exponerse
+ * desde Almacén/DAB-60 (Normal) — pedido explícito del cliente 2026-10-06:
+ * "desde dab-60 no hay un botón que me permita devolverlo a compras".
+ */
+export async function regresarOrdenASiaf(ordenId: number, motivo?: string): Promise<{ ok: true } | { error: string }> {
+  try {
+    const check = await requireModuloAccessAction("mod_presupuesto");
+    if ("error" in check) return check;
+
+    const [orden] = await db.select({
+      estado: ordenesCompra.estado,
+      consolidacion_id: ordenesCompra.consolidacion_id,
+      exento_iva: ordenesCompra.exento_iva,
+      estado_devengado: ordenesCompra.estado_devengado,
+      dab60_generado_en: ordenesCompra.dab60_generado_en,
+      historial_devoluciones: ordenesCompra.historial_devoluciones,
+    }).from(ordenesCompra).where(eq(ordenesCompra.id, ordenId)).limit(1);
+    if (!orden) return { error: "No se encontró la orden" };
+    if (!ESTADOS_REGRESABLES.includes(orden.estado)) {
+      return { error: "Esta orden no se puede devolver al A-01 SIAF desde su estado actual" };
+    }
+    if (orden.estado === "Completada" && orden.estado_devengado === "Pagado") {
+      return { error: "Ya se marcó como Pagado — el desembolso ya ocurrió, no se puede devolver" };
+    }
+
+    const yaDevengado = orden.estado === "Completada";
+    const renglones = await gruposRenglonDeConsolidacion(orden.consolidacion_id);
+
+    const notaOrden = `${fechaHoraGuatemala()}: Devuelta desde ${orden.estado} hasta el A-01 SIAF (Borrador)${motivo?.trim() ? ` — ${motivo.trim()}` : ""}`;
+    const historialOrden = orden.historial_devoluciones ? `${orden.historial_devoluciones}\n${notaOrden}` : notaOrden;
+
+    await db.transaction(async (tx) => {
+      for (const r of renglones) {
+        if (yaDevengado) {
+          // Mismo criterio neto-de-IVA que regresarACompromiso/regresarOrdenAAdjudicacion.
+          const montoDevengado = orden.exento_iva ? r.total : netoDeIva(r.total);
+          await tx.update(presupuestoRenglones).set({
+            pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${montoDevengado}`,
+            devengado: sql`COALESCE(${presupuestoRenglones.devengado}, 0) - ${montoDevengado}`,
+          }).where(and(
+            eq(presupuestoRenglones.renglon, r.renglon as number),
+            eq(presupuestoRenglones.subproducto, r.subproducto),
+            eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+          ));
+        } else {
+          const montoNeto = orden.exento_iva ? r.total : netoDeIva(r.total);
+          await tx.update(presupuestoRenglones).set({
+            pre_compromiso: sql`COALESCE(${presupuestoRenglones.pre_compromiso}, 0) + ${montoNeto}`,
+            compromiso: sql`COALESCE(${presupuestoRenglones.compromiso}, 0) - ${montoNeto}`,
+            saldo_disponible: sql`COALESCE(${presupuestoRenglones.saldo_disponible}, 0) + ${montoNeto}`,
+          }).where(and(
+            eq(presupuestoRenglones.renglon, r.renglon as number),
+            eq(presupuestoRenglones.subproducto, r.subproducto),
+            eq(presupuestoRenglones.ejercicio_fiscal, 2026),
+          ));
+        }
+      }
+
+      await tx.delete(programacionCompromisos).where(eq(programacionCompromisos.orden_id, ordenId));
+
+      // Si el ingreso a Almacén ya se había registrado (DAB-60 aprobado),
+      // deshacerlo también — antes de anular la orden, para que
+      // revertirIngresoAlmacen todavía encuentre su orden_compra_id tal cual
+      // (no afecta el resultado, pero sigue el mismo orden que regresarADab60
+      // por claridad).
+      if (orden.dab60_generado_en) {
+        await revertirIngresoAlmacen(tx, { ordenCompraId: ordenId });
+      }
+
+      await tx.update(ordenesCompra).set({
+        estado: "Anulada",
+        dab60_anulado: orden.dab60_generado_en != null,
+        no_devengado: null,
+        fecha_envio_daf: null,
+        estado_devengado: null,
+        fecha_pago: null,
+        historial_devoluciones: historialOrden,
+      }).where(eq(ordenesCompra.id, ordenId));
+
+      // Mismo orden ya probado en regresarOrdenAAdjudicacion: soltar
+      // oferente_ganador_id antes de borrar oferentes (si no, la FK
+      // consolidaciones_oferente_ganador_id_oferentes_id_fk revienta).
+      await tx.update(consolidaciones).set({ oferente_ganador_id: null }).where(eq(consolidaciones.id, orden.consolidacion_id));
+      await tx.delete(actasAdjudicacion).where(eq(actasAdjudicacion.consolidacion_id, orden.consolidacion_id));
+      await tx.delete(oferentes).where(eq(oferentes.consolidacion_id, orden.consolidacion_id));
+      await tx.update(cotizacionesServicio)
+        .set({ usado: false, usado_en_consolidacion_id: null })
+        .where(eq(cotizacionesServicio.usado_en_consolidacion_id, orden.consolidacion_id));
+
+      // A diferencia de regresarOrdenAAdjudicacion (que deja la consolidación
+      // en "Pendiente adjudicación" para re-adjudicar sin tocar el SIAF), acá
+      // se va un paso más atrás: el/los SIAF que armaron esta consolidación
+      // vuelven a "Borrador" (editables de nuevo) y la consolidación
+      // desaparece — mismo efecto que anularConsolidacion (actions.ts),
+      // unificado acá en la misma transacción que todo lo demás.
+      await tx.update(siafCompras)
+        .set({ estado: "Borrador", consolidacion_id: null })
+        .where(eq(siafCompras.consolidacion_id, orden.consolidacion_id));
+      await tx.delete(consolidaciones).where(eq(consolidaciones.id, orden.consolidacion_id));
+    });
+
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof LoteYaDespachadoEnTransaccion) {
+      return { error: `No se puede devolver: ya se despachó parte de "${e.nombre}" desde Almacén (DAB-75). Ajustá el stock a mano antes de corregir el A-01 SIAF.` };
+    }
+    return { error: "Error al devolver la orden al A-01 SIAF" };
   }
 }

@@ -4114,6 +4114,72 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   búsqueda volvió a las 50 filas originales; "Cargar más" tras limpiar
   siguió sumando de a 50 sin romperse (100 filas tras un clic) — sin
   errores de consola en ningún punto.
+- **"Devolver al A-01 SIAF original" — nuevo botón en Almacén/DAB-60 Normal
+  (2026-10-06), pedido explícito del cliente: "desde dab-60 no hay un botón
+  que me permita regresarlo a compras... y que reste lo que tenga que
+  restar... para borrar el rastro completo de que ya llegó hasta dab-60".**
+  Hasta ahora, el tramo Normal (Órdenes, no Fondo Rotativo) solo tenía
+  devoluciones hasta Compromiso (`regresarACompromiso`) o hasta
+  Adjudicación (`regresarOrdenAAdjudicacion`, deja la consolidación en
+  "Pendiente adjudicación") — ninguna llegaba hasta el A-01 SIAF en sí, y
+  ninguna de las dos estaba expuesta como botón en la pantalla de Almacén/
+  DAB-60 (sí lo estaban, para Fondo Rotativo, las de "Fondo Rotativo
+  pendientes de ingresar a Almacén" — ver el punto de 2026-09-10 arriba).
+  Nueva `regresarOrdenASiaf(ordenId, motivo?)` (`compromiso-actions.ts`,
+  junto a sus dos hermanas, mismo gate `mod_presupuesto` y mismos
+  `ESTADOS_REGRESABLES`): un paso más atrás que
+  `regresarOrdenAAdjudicacion` — además de deshacer presupuesto/Acta/
+  oferentes/cotización reservada (idéntico a su hermana), si el DAB-60 ya
+  se había generado también deshace el ingreso a Almacén con
+  `revertirIngresoAlmacen` (bloquea con `LoteYaDespachadoEnTransaccion` si
+  ya se despachó parte del lote por un DAB-75 — mismo guard que
+  `regresarADab60`), y en vez de dejar la consolidación en "Pendiente
+  adjudicación", el/los SIAF que la armaron vuelven a `"Borrador"`
+  (editables de nuevo) y la consolidación se **borra** por completo —
+  mismo efecto que `anularConsolidacion` (`actions.ts`), unificado acá en
+  una sola transacción con todo lo demás. La orden queda `"Anulada"` (con
+  `dab60_anulado` si corresponde) para que el historial siga visible en
+  Almacén/Archivo — nada desaparece sin dejar rastro auditable salvo la
+  consolidación en sí (que de todas formas se vuelve a crear desde cero al
+  re-consolidar el SIAF ya corregido). Botón nuevo (ícono `Undo2`, mismo
+  patrón `confirm()` + estado de carga/error por fila que ya usan las
+  devoluciones de Fondo Rotativo en esta misma pantalla) en **las dos
+  bandejas Normal** de `Dab60Client.tsx` — "Pendiente DAB-60" (antes de
+  generar el DAB-60) y "Pendientes de aprobación de DAB-60" (DAB-60 ya
+  generado, pudiendo o no estar ya aprobado) — no se tocó la sección de
+  Fondo Rotativo de esta misma pantalla (ya tenía su propio par de botones
+  Liviana/Completa desde 2026-09-10) ni `DevengadoClient.tsx` (donde viven
+  `regresarACompromiso`/`regresarADab60`/`regresarOrdenAAdjudicacion` para
+  estados posteriores — "En Devengado"/"Completada" — no se pidió
+  extenderlo ahí esta ronda, aunque `regresarOrdenASiaf` ya los soporta en
+  `ESTADOS_REGRESABLES` si se pide después). **Trampa evitada, confirmada
+  contra producción real antes de escribir la función**:
+  `ordenes_compra.consolidacion_id` NO tiene FK hacia `consolidaciones.id`
+  en la base real (confirmado con `pg_constraint`), así que borrar la
+  consolidación mientras la orden (ya "Anulada") sigue apuntando a ese id
+  no revienta — a diferencia de `oferentes`/`actas_adjudicacion`, que sí
+  tienen `ON DELETE CASCADE` hacia `consolidaciones`, por lo que hace falta
+  soltar `oferente_ganador_id` ANTES de borrar/dejar que se borren esas
+  filas (mismo orden ya probado en `regresarOrdenAAdjudicacion`, reusado
+  acá tal cual). Verificado en vivo con dos órdenes de prueba 100%
+  desechables sembradas por SQL directo sobre un renglón/subproducto real
+  (268, "Basurero triple") sin tocar presupuesto real (se restauró el
+  baseline exacto después, incluyendo volver `saldo_disponible` a `NULL`
+  tal como estaba): (1) una en "DAB-60 Pendiente Aprobación" (simulando
+  "ya estaba ahí" — datos de recibo ya capturados) → tras el botón, la
+  orden quedó "Anulada"/`dab60_anulado=true`, el SIAF volvió a "Borrador"
+  con `consolidacion_id=null`, la consolidación desapareció, y
+  `presupuesto_renglones` volvió exacto a los valores de antes de simular
+  el Compromiso aprobado (`pre_compromiso`/`compromiso`/`saldo_disponible`
+  — sin desvío de punto flotante visible); (2) una en "Pendiente DAB-60"
+  (sin datos de DAB-60 capturados todavía) → mismo resultado correcto,
+  `dab60_anulado=false` esta vez (nunca se generó DAB-60) y el presupuesto
+  también volvió exacto al mismo baseline — confirmando que el `if
+  (orden.dab60_generado_en)` salta limpio `revertirIngresoAlmacen` sin
+  reventar cuando no hay nada que deshacer. Ambas pruebas sin errores de
+  consola — datos de prueba borrados por completo después (no solo
+  "Anulados", eliminados de la base, porque nunca representaron una
+  solicitud real).
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 
