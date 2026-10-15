@@ -4266,6 +4266,31 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   muestra la ficha completa en 2 líneas en vez del texto cortado con guión
   colgante.
 
+- **Catálogo de Compras (PAC): dos filas del mismo insumo (mismo renglón,
+  PPR y presentación, solo repartido en distinto subproducto) pueden
+  mostrar un "NOMBRE..." distinto en la tabla — no es un bug, es que esa
+  columna muestra `nombre` (el nombre corto, el que alimenta Órdenes/
+  SIAF-04/DAB-60), no `descripcion_igss` (la ficha completa, solo para el
+  A-01 SIAF) — ver el punto de arriba "El Catálogo (PAC) guarda dos
+  descripciones distintas".** Encontrado 2026-10-15 con un caso real
+  ("Jeringa", código 6160, renglón 295, PPR "39571 - 43913", repartido
+  600/600 entre los subproductos 001-004-0001 y 001-019-0001): la fila
+  vieja (id 4637, de 2026-08-15, de antes de que se separaran las dos
+  descripciones) había quedado con el `nombre` = la ficha completa entera
+  ("JERINGA DESCARTABLE 3 ml. CON ACOPLE LUER LOCK..."), mientras que la
+  fila nueva (agregada ese mismo día vía "Agregar insumo" con autocompletar
+  de Base de Datos Central) sí guardó el `nombre` corto ("Jeringa") como
+  corresponde — ambas con el mismo `descripcion_igss` completo, confirmando
+  que son genuinamente el mismo insumo. Backfill puntual: se corrigió el
+  `nombre` de la fila vieja a "Jeringa" para que coincida con su hermana
+  (verificado que no colisiona con el índice único `codigo_igss+subproducto+
+  nombre+codigo_ppr`, al ser subproductos distintos). **No hay forma
+  automática de detectar el resto de filas legadas con este mismo defecto**
+  (de antes del 2026-08-22, cuando se separaron las dos descripciones) —
+  si aparece otro caso similar, mismo diagnóstico: comparar `descripcion_igss`
+  entre las filas sospechosas (si coincide, son el mismo insumo) y corregir
+  el `nombre` de la fila vieja a mano.
+
 ## Cómo se prueba un cambio antes de darlo por terminado
 
 1. `npx tsc --noEmit` sin errores.
