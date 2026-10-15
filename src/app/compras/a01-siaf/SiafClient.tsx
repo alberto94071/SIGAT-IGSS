@@ -130,7 +130,7 @@ export default function SiafClient({
   const historialData = useMemo(() => {
     const q = query.toLowerCase().trim();
     const groups = new Map<string, {
-      key: string; codigo_igss: string | null; nombre: string;
+      key: string; codigo_igss: string | null; nombre: string; descripcion_igss: string | null;
       subproducto: string; unidad_medida: string | null;
       entries: { sol: Solicitud; item: SolicitudItem }[];
     }>();
@@ -153,7 +153,7 @@ export default function SiafClient({
             !String(item.codigo_igss ?? "").toLowerCase().includes(q)) continue;
         const key = item.catalogo_id ? String(item.catalogo_id) : `${item.codigo_igss}::${item.subproducto}::${item.nombre}`;
         if (!groups.has(key)) {
-          groups.set(key, { key, codigo_igss: item.codigo_igss, nombre: item.nombre,
+          groups.set(key, { key, codigo_igss: item.codigo_igss, nombre: item.nombre, descripcion_igss: item.descripcion_igss,
             subproducto: item.subproducto, unidad_medida: item.unidad_medida, entries: [] });
         }
         groups.get(key)!.entries.push({ sol, item });
@@ -464,7 +464,14 @@ export default function SiafClient({
                                                 : <span className="text-gray-600">—</span>
                                             )}
                                           </td>
-                                          <td className="px-3 py-2 font-medium text-gray-900">{item.nombre}</td>
+                                          {/* "nombre" puede venir recortado a mitad de palabra (snapshot corto
+                                              de cuando se capturó en Base de Datos Central) — descripcion_igss
+                                              trae la ficha completa y ya es lo que imprime el A-01 SIAF (ver
+                                              FilaItemContenido en ImprimirClient.tsx); mismo criterio acá para
+                                              no mostrar una descripción incompleta en pantalla (reportado por
+                                              el cliente 2026-10-15 con la SIAF 231/2026, rechazada por error
+                                              pensando que "faltaba descripción"). */}
+                                          <td className="px-3 py-2 font-medium text-gray-900">{item.descripcion_igss || item.nombre}</td>
                                           <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{item.subproducto}</td>
                                           <td className="px-3 py-2 tabular-nums text-gray-600 whitespace-nowrap">{renglon ?? "—"}</td>
                                           <td className="px-3 py-2 text-right tabular-nums text-gray-500">
@@ -527,7 +534,7 @@ export default function SiafClient({
                         </td>
                         <td className="px-4 py-3 font-mono text-xs text-gray-600 whitespace-nowrap">{g.codigo_igss ?? "—"}</td>
                         <td className="px-4 py-3">
-                          <p className="font-medium text-gray-900">{g.nombre}</p>
+                          <p className="font-medium text-gray-900">{g.descripcion_igss || g.nombre}</p>
                           <p className="text-xs text-gray-400">{g.entries.length} solicitud(es)</p>
                         </td>
                         <td className="px-4 py-3 font-mono text-xs text-gray-600 whitespace-nowrap">{g.subproducto}</td>
@@ -546,7 +553,7 @@ export default function SiafClient({
                         <tr className="bg-brand-50/40">
                           <td colSpan={8} className="px-6 py-4">
                             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                              Historial — {g.nombre} / {g.subproducto}
+                              Historial — {g.descripcion_igss || g.nombre} / {g.subproducto}
                             </p>
                             <div className="overflow-x-auto rounded-xl border border-gray-200">
                               <table className="w-full text-xs">

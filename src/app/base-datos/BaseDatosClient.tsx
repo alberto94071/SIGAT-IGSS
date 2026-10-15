@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo, useEffect, useTransition } from "react";
+import { useState, useMemo, useEffect, useRef, useTransition } from "react";
 import { Plus, Search, Pencil, Trash2, X, Package } from "lucide-react";
 import { crearInsumo, editarInsumo, eliminarInsumo } from "./actions";
 import { useRouter, usePathname } from "next/navigation";
@@ -94,7 +94,19 @@ export default function BaseDatosClient({
     setLista(registros);
   }, [registros]);
 
+  // Recuerda el último `q` que NOSOTROS mandamos a la URL (vía router.push).
+  // Evita que una navegación propia que resuelve tarde (consulta ~500-900ms
+  // contra las ~208k filas de Base de Datos Central, sin índice en las
+  // columnas buscadas) pise lo que el usuario ya escribió de más mientras
+  // esa navegación seguía en vuelo — ver CLAUDE.md, "input lag que borra
+  // caracteres". Si el usuario escribe rápido, puede haber varias
+  // navegaciones encadenadas; cuando la más vieja resuelve y ya no coincide
+  // con lo último que pedimos, se ignora en vez de sincronizar el input.
+  const lastPushedQueryRef = useRef(initQ);
+
   useEffect(() => {
+    if (initQ === lastPushedQueryRef.current) return;
+    lastPushedQueryRef.current = initQ;
     setQuery(initQ);
   }, [initQ]);
 
@@ -110,7 +122,8 @@ export default function BaseDatosClient({
       if (query.trim()) params.set("q", query.trim());
       if (filtroRenglon) params.set("renglon", filtroRenglon);
       params.set("page", "1");
-      
+
+      lastPushedQueryRef.current = query.trim();
       startTransition(() => {
         router.push(`${pathname}?${params.toString()}`);
       });
@@ -125,7 +138,8 @@ export default function BaseDatosClient({
     if (query.trim()) params.set("q", query.trim());
     if (val) params.set("renglon", val);
     params.set("page", "1");
-    
+
+    lastPushedQueryRef.current = query.trim();
     startTransition(() => {
       router.push(`${pathname}?${params.toString()}`);
     });
@@ -136,7 +150,8 @@ export default function BaseDatosClient({
     if (query.trim()) params.set("q", query.trim());
     if (filtroRenglon) params.set("renglon", filtroRenglon);
     params.set("page", String(p));
-    
+
+    lastPushedQueryRef.current = query.trim();
     startTransition(() => {
       router.push(`${pathname}?${params.toString()}`);
     });

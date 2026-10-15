@@ -4180,6 +4180,91 @@ distintas visibles/ocultas (confirmado por el cliente 2026-08-22). Piezas:
   consola — datos de prueba borrados por completo después (no solo
   "Anulados", eliminados de la base, porque nunca representaron una
   solicitud real).
+- **Base de Datos Central: escribir rápido en el buscador "borraba" los
+  últimos caracteres — era una carrera entre navegaciones, no lag de
+  verdad (2026-10-15).** `BaseDatosClient.tsx` hace una búsqueda server-side
+  debounced (400ms) vía `router.push(?q=...)` contra una tabla de ~208k
+  filas sin índice en las columnas que se buscan (`ILIKE` sobre 6 columnas
+  de texto) — cada navegación tarda ~500-900ms solo en la base (confirmado
+  con `EXPLAIN ANALYZE`: ~480ms el `COUNT(*)` + ~500ms las filas, sin
+  índice más allá de la PK). Si el usuario seguía escribiendo mientras esa
+  navegación todavía estaba en vuelo, un `useEffect(() => setQuery(initQ),
+  [initQ])` sincronizaba ciegamente el input con el `initQ` de la respuesta
+  en cuanto llegaba — aunque ya fuera vieja/parcial respecto a lo que el
+  usuario ya había tecleado de más, pisando el valor real del input con el
+  de la navegación más vieja (el síntoma exacto que describió el cliente:
+  "se queda lagueado y de repente me borra los últimos caracteres... como
+  que retrocediera"). Reproducido y confirmado con Playwright (escribir
+  "agua", esperar justo el debounce sin esperar a que la navegación
+  resuelva, seguir escribiendo " purificada" — el input terminaba
+  revirtiendo a "agua" solo). Fix: `lastPushedQueryRef` recuerda el último
+  `q` que la propia pantalla mandó a la URL; el efecto de sincronización
+  solo aplica `setQuery(initQ)` cuando `initQ` ya NO coincide con ese
+  último valor propio — es decir, cuando el cambio vino de afuera (botón
+  Atrás/Adelante del navegador, o un link externo), no de una navegación
+  nuestra que resolvió tarde. Verificado que el botón Atrás del navegador
+  sigue sincronizando el input correctamente después del fix (no se rompió
+  ese caso legítimo). Mismo patrón a vigilar en cualquier otro buscador que
+  combine debounce + `router.push` + una sincronización `useEffect` desde
+  un prop del servidor — el riesgo crece con la lentitud de la consulta
+  (acá, por la falta de índice en una tabla de 208k filas) y con qué tan
+  rápido tipea quien usa el sistema.
+- **A-01 SIAF: el mismo insumo repartido en varios subproductos se imprimía
+  dos (o más) veces en vez de una sola vez con la cantidad sumada
+  (2026-10-15), pedido explícito del cliente.** Si al generar la solicitud
+  se agregan, por ejemplo, 100 unidades para el subproducto
+  "001-004-0001" y 200 para "001-019-0001" del MISMO insumo,
+  `siaf_compras_items` guarda —correctamente— dos filas (una por
+  subproducto), pero el A-01 SIAF impreso (`ImprimirClient.tsx`) las
+  mostraba como dos renglones separados en la tabla principal. El cliente
+  pidió que el insumo salga una sola vez con el total (300 en el ejemplo)
+  arriba, dejando intacto el desglose por subproducto que ya existe más
+  abajo, en el resumen "Código de Subproducto / Cantidad por Subproducto"
+  (ese resumen ya sumaba bien por subproducto sin importar el insumo —
+  no se tocó). Fix: `agruparItemsPorInsumo` (nueva, misma identidad que el
+  resto del sistema usa para insumos — `codigo_igss::nombre`, nunca solo
+  `codigo_igss`, por la regla de "S/C no es un código compartido real" de
+  arriba) consolida los ítems ANTES de medir alturas/paginar — el resumen
+  de subproductos del pie sigue leyendo los `items` SIN agrupar, así que su
+  desglose no cambia. Si la fila fusionada tiene descripciones con
+  variaciones menores entre subproductos (ej. con/sin espacios alrededor de
+  "+" por cómo se tipeó cada vez), se queda con la más larga. El tag de
+  subproducto junto a la descripción (solo se imprime para insumos de
+  renglón 182, `mostrarSubproducto`) se sigue mostrando igual que antes
+  cuando NO hubo fusión real (un solo subproducto) — se omite solo cuando sí
+  se fusionaron 2+ subproductos en una fila, porque ya no hay un único
+  subproducto que mostrar ahí (el desglose real sigue en el resumen de
+  abajo). Verificado en vivo, de solo lectura, contra 2 casos reales
+  encontrados en producción con exactamente este patrón: SIAF 231/2026
+  ("Hierro aminoquelado + ácido fólico", 200+100=300) y SIAF 212/2026
+  ("Metronidazol", 100+400=500) — ambos pasaron de 2 filas a 1 fila con el
+  total correcto, resumen de subproductos sin cambios. También se confirmó
+  que un SIAF de renglón 182 sin fusión (139/2026) y uno con 2 insumos
+  DISTINTOS (265/2026, antes de elegir el ejemplo real de arriba) siguen
+  imprimiéndose exactamente igual que antes (sin regresión).
+- **A-01 SIAF: la columna "Insumo" (lista de solicitudes y su detalle
+  expandido) y el listado de ítems ya agregados en el modal "Generar/Editar"
+  mostraban `nombre`, un snapshot que puede venir recortado a mitad de
+  palabra — no `descripcion_igss`, que trae la ficha completa (2026-10-15).**
+  Encontrado investigando el reporte del cliente de que "no me sale completa
+  la descripción del código igss en el siaf" con el caso real SIAF
+  231/2026: la impresión (`ImprimirClient.tsx`) YA mostraba la descripción
+  completa correctamente (prioriza `descripcion_igss || nombre`, confirmado
+  con PDF real sin ningún corte) — el problema real estaba en pantalla:
+  `nombre` de ese ítem literalmente terminaba en un guión colgante ("...100
+  ml -") mientras `descripcion_igss` seguía hasta el final ("...100 ml - 150
+  ml Frasco"). Esto no es cosmético — fue la causa real de un rechazo real:
+  la encargada rechazó esa SIAF con el motivo "Falta descripcion" al ver el
+  texto cortado en la tabla "Insumos en la solicitud", pensando que
+  realmente faltaba información. Fix: `SiafClient.tsx` (columna "Insumo" de
+  "Por solicitud", y los dos lugares de "Historial insumo" que arman el
+  nombre del grupo) y `GenerarSiafModal.tsx` (lista "Insumos en esta
+  solicitud") ahora muestran `descripcion_igss || nombre`, igual que ya
+  hacía la impresión — y el modal además perdió el `truncate` de una sola
+  línea que cortaba con elipsis cualquier descripción larga antes de
+  guardar. Verificado en vivo contra el SIAF 231/2026 real: la tabla ahora
+  muestra la ficha completa en 2 líneas en vez del texto cortado con guión
+  colgante.
 
 ## Cómo se prueba un cambio antes de darlo por terminado
 

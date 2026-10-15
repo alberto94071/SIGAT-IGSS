@@ -1,11 +1,17 @@
 "use client";
-import { useState, useRef, useLayoutEffect } from "react";
+import { useState, useRef, useLayoutEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Printer, ChevronDown, X, ArrowLeft } from "lucide-react";
 
 type Item = {
   id: number; nombre: string; descripcion_igss: string | null; codigo_igss: string | null; codigo_ppr: string | null;
   subproducto: string; unidad_medida: string | null; cantidad_solicitada: number;
+  // Solo presente en un ítem ya agrupado por agruparItemsPorInsumo (abajo) —
+  // cuántos subproductos distintos se sumaron en esta fila. 1 = no hubo
+  // fusión real (comportamiento idéntico al de antes); >1 = la fila
+  // representa varios subproductos, así que ya no tiene sentido mostrar
+  // un solo subproducto junto a la descripción (mostrarSubproducto).
+  subproductosCount?: number;
 };
 type Solicitud = { id: number; numero: number; anio: number; fecha: string; estado: string };
 type Config = {
@@ -71,6 +77,39 @@ function codigoFontSize(texto: string): string {
 function codigoParaImprimir(texto: string): string {
   const esRangoNumerico = /^\d+\s*-\s*\d+\s*$/.test(texto);
   return esRangoNumerico ? "SC" : texto;
+}
+
+// Consolida en una sola fila los ítems que son el MISMO insumo repartido
+// entre varios subproductos (ej. 100 para 001-004-0001 + 200 para
+// 001-019-0001 del mismo insumo) — pedido explícito del cliente 2026-10-15:
+// el insumo debe imprimirse una sola vez con la cantidad TOTAL sumada; el
+// desglose por subproducto sigue intacto más abajo, en el resumen
+// "Código de Subproducto / Cantidad por Subproducto" (que se sigue
+// calculando sobre los ítems SIN agrupar, ver resumenSubproductos). Misma
+// identidad que el resto del sistema usa para insumos ("S/C" y los códigos
+// de servicio no son un código compartido real — hay que agregar `nombre`
+// a la clave, nunca agrupar solo por codigo_igss).
+function agruparItemsPorInsumo(items: Item[]): Item[] {
+  const orden: string[] = [];
+  const grupos = new Map<string, Item & { _descLen: number }>();
+  for (const item of items) {
+    const key = `${item.codigo_igss ?? ""}::${item.nombre}`;
+    const existente = grupos.get(key);
+    if (!existente) {
+      orden.push(key);
+      grupos.set(key, { ...item, subproductosCount: 1, _descLen: (item.descripcion_igss ?? "").length });
+      continue;
+    }
+    existente.cantidad_solicitada += item.cantidad_solicitada;
+    existente.subproductosCount = (existente.subproductosCount ?? 1) + 1;
+    if (!existente.codigo_ppr && item.codigo_ppr) existente.codigo_ppr = item.codigo_ppr;
+    // Si las filas agrupadas traen descripciones ligeramente distintas
+    // (ej. con/sin espacios alrededor de "+"), se queda con la más larga —
+    // la más completa — en vez de la primera que haya llegado.
+    const len = (item.descripcion_igss ?? "").length;
+    if (len > existente._descLen) { existente.descripcion_igss = item.descripcion_igss; existente._descLen = len; }
+  }
+  return orden.map(k => { const { _descLen, ...resto } = grupos.get(k)!; return resto; });
 }
 
 // Alturas del bloque tabla, iguales en todas las hojas (el resumen de
@@ -147,16 +186,22 @@ function paginarItems(items: Item[], filaSlots: number[], capacidad: number): Pa
 // natural) y el render real (altura fija en franjas de ROW_H), para que lo
 // que se mide sea EXACTAMENTE lo que se imprime.
 function FilaItemContenido({ item, mostrarSubproducto }: { item: Item; mostrarSubproducto: boolean }) {
+  // Si esta fila ya representa varios subproductos fusionados (ver
+  // agruparItemsPorInsumo), no hay un solo subproducto que mostrar junto a
+  // la descripción — el desglose real sigue disponible en el resumen de
+  // abajo. Con una sola fila de origen (el caso de siempre) se comporta
+  // exactamente igual que antes.
+  const mostrarTagSubproducto = mostrarSubproducto && (item.subproductosCount ?? 1) === 1;
   return (
     <>
       <div style={{ width: W_COD, textAlign: "center", flexShrink: 0, fontFamily: "monospace", fontSize: codigoFontSize(codigoParaImprimir(String(item.codigo_igss ?? ""))), whiteSpace: "nowrap", overflow: "hidden" }}>
         {codigoParaImprimir(String(item.codigo_igss ?? ""))}
       </div>
-      <div style={{ flex: 1, padding: "3px 8px", display: "flex", justifyContent: mostrarSubproducto ? "space-between" : "flex-start", alignItems: "center" }}>
-        <span style={{ textTransform: "uppercase", fontSize: "8pt", lineHeight: 1.2, width: mostrarSubproducto ? undefined : "100%" }}>
+      <div style={{ flex: 1, padding: "3px 8px", display: "flex", justifyContent: mostrarTagSubproducto ? "space-between" : "flex-start", alignItems: "center" }}>
+        <span style={{ textTransform: "uppercase", fontSize: "8pt", lineHeight: 1.2, width: mostrarTagSubproducto ? undefined : "100%" }}>
           {item.descripcion_igss || item.nombre}
         </span>
-        {mostrarSubproducto && (
+        {mostrarTagSubproducto && (
           <span style={{ fontSize: "7.5pt", color: "#333", whiteSpace: "nowrap", marginLeft: "8px", flexShrink: 0 }}>
             {item.subproducto}
           </span>
@@ -217,15 +262,21 @@ export default function ImprimirClient({
   const [rowSlots, setRowSlots] = useState<number[] | null>(null);
   const medirRefs = useRef<(HTMLDivElement | null)[]>([]);
 
+  // El mismo insumo repartido en varios subproductos se consolida en una
+  // sola fila con la cantidad sumada (ver agruparItemsPorInsumo) — el
+  // resumen de subproductos más abajo (resumenSubproductos) sigue usando
+  // `items` sin agrupar, así que el desglose por subproducto no cambia.
+  const itemsAgrupados = useMemo(() => agruparItemsPorInsumo(items), [items]);
+
   useLayoutEffect(() => {
     if (rowSlots !== null) return;
-    const slots = items.map((_, i) => {
+    const slots = itemsAgrupados.map((_, i) => {
       const h = medirRefs.current[i]?.getBoundingClientRect().height ?? ROW_H;
       return Math.max(1, Math.ceil(h / ROW_H));
     });
     setRowSlots(slots);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]);
+  }, [itemsAgrupados]);
 
   function pickFirmante(idx: 0 | 1, f: Firmante) {
     setFirmantes(p => { const n = [...p]; n[idx] = f; return n; });
@@ -249,7 +300,7 @@ export default function ImprimirClient({
   const rowsArea = H_TABLE - HEADER_H - FOOTER_H;
   const maxRows = Math.floor(rowsArea / ROW_H);
 
-  const pages = rowSlots !== null ? paginarItems(items, rowSlots, maxRows) : [];
+  const pages = rowSlots !== null ? paginarItems(itemsAgrupados, rowSlots, maxRows) : [];
 
   return (
     <>
@@ -315,7 +366,7 @@ export default function ImprimirClient({
         <div aria-hidden style={{ position: "absolute", top: 0, left: 0, visibility: "hidden", height: 0, overflow: "hidden" }}>
           <div className="a4-sheet" style={{ boxShadow: "none", margin: 0 }}>
             <div style={{ border: B, display: "flex", flexDirection: "column" }}>
-              {items.map((item, i) => (
+              {itemsAgrupados.map((item, i) => (
                 <div key={item.id} ref={el => { medirRefs.current[i] = el; }} style={{ display: "flex", alignItems: "center", fontFamily: FONT, color: C }}>
                   <FilaItemContenido item={item} mostrarSubproducto={mostrarSubproducto} />
                 </div>
