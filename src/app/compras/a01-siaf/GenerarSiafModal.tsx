@@ -383,7 +383,13 @@ export default function GenerarSiafModal({ editingSol, catalogo, solicitudes, on
                 {modalItems.map(item => (
                   <div key={item.key} className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0 bg-white">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{item.nombre}</p>
+                      {/* descripcion_igss trae la ficha completa (nombre puede venir
+                          recortado a mitad de palabra, snapshot corto de Base de Datos
+                          Central) — mismo criterio que el A-01 SIAF impreso y la lista
+                          de solicitudes (ver CLAUDE.md, 2026-10-15). Sin "truncate": una
+                          descripción larga se corta justo cuando más hace falta verla
+                          completa antes de guardar la solicitud. */}
+                      <p className="text-sm font-medium text-gray-900">{item.descripcion_igss || item.nombre}</p>
                       <p className="text-xs text-gray-400 font-mono">{item.subproducto}</p>
                     </div>
                     <p className="text-sm font-bold text-brand-700 tabular-nums whitespace-nowrap">
