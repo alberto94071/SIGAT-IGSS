@@ -39,6 +39,13 @@
   .h-move { top: 0; left: -4mm; background: #3b82f6; cursor: grab; }
   .h-size { bottom: -1.5mm; right: -1.5mm; background: #10b981; cursor: nwse-resize; }
   .editando .campo .lbl { display: block; }
+  .campo.sel { outline: 2px solid #f59e0b !important; }
+  #fmt { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 10px; }
+  #fmt select { width: 100%; font: inherit; font-size: 12px; padding: 5px 7px; border: 1px solid #cbd5e1; border-radius: 6px; }
+  .fmt-row { display: flex; gap: 6px; align-items: flex-end; margin-top: 6px; }
+  .tog { font-weight: bold; min-width: 34px; }
+  .tog.i { font-style: italic; font-weight: normal; }
+  .tog.on { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
   .lbl { display: none; position: absolute; top: -3.2mm; left: 0; font-size: 6.5pt; color: #be123c; white-space: nowrap; pointer-events: none; }
 
   @media print {
@@ -47,7 +54,7 @@
     #panel, #fondo, .hide-btn, .handle, .lbl { display: none !important; }
     #print-wrapper { margin: 0; padding: 0; display: block; }
     #hoja { box-shadow: none; }
-    .editando .campo { outline: none; background: none; }
+    .campo, .campo.sel, .editando .campo { outline: none !important; background: none !important; }
   }
 </style>
 </head>
@@ -62,6 +69,23 @@
     <button class="btn" id="nuevo">Nuevo cheque</button>
   </div>
   <div class="hint">Con "Ver posiciones": arrastrá el cuadrito azul para mover un campo y el verde para cambiar su tamaño (la letra se achica sola para caber).</div>
+
+  <h2>Letra de cada campo</h2>
+  <div id="fmt">
+    <label>Campo (o hacé clic sobre un campo en la hoja)</label>
+    <select id="fmtCampo"></select>
+    <div class="fmt-row">
+      <div style="flex:1"><label>Tamaño de letra</label>
+        <select id="fmtSize"><option value="">Automático (se ajusta al cuadro)</option></select></div>
+      <button class="btn tog" id="fmtBold" title="Negrita">N</button>
+      <button class="btn tog i" id="fmtItalic" title="Cursiva">K</button>
+    </div>
+    <div class="acciones">
+      <button class="btn" id="fmtTodos">Aplicar a todos los campos</button>
+      <button class="btn" id="fmtReset">Quitar formato de este campo</button>
+    </div>
+    <div class="hint">Con un tamaño fijo la letra ya no se achica sola: si el texto no cabe, agrandá el cuadro con "Ver posiciones".</div>
+  </div>
 
   <h2>Cheque</h2>
   <div class="row2">
@@ -199,7 +223,7 @@ const DEFAULT = {
   ...DATOS_VACIOS, lugar: "Tacaná, San Marcos",
   banco_datos: "BANRURAL · FRI CONSULTORIO DE TACANA, DEPARTAMENTO DE SAN MARCOS · 3-777-08924-4",
   cuenta_no: "3-777-08924-4", pie_auto: true, ver_fondo: true, off_x: "", off_y: "",
-  pos: {}, ocultos: [],
+  pos: {}, ocultos: [], fmt: {},
 };
 const KEY = "cip-voucher-offline";
 let S;
@@ -259,8 +283,22 @@ function textos() {
 
 const pos = id => ({ ...POS_DEFAULT[id], ...(S.pos[id] || {}) });
 let editando = false;
+let selCampo = "numero_cheque";
 
+// Formato elegido por el usuario: { size: número pt | null, bold: bool | null, italic: bool }
+const BOLD_DEFAULT = id => /font-weight:bold/.test(ESTILO[id] || "");
+const fmtDe = id => ({ size: null, bold: null, italic: false, ...((S.fmt || {})[id] || {}) });
+function estiloCampo(id) {
+  const f = fmtDe(id);
+  let s = (ESTILO[id] || "").replace(/font-weight:bold;?/, "");
+  const bold = f.bold ?? BOLD_DEFAULT(id);
+  s += `;font-weight:${bold ? "bold" : "normal"};font-style:${f.italic ? "italic" : "normal"}`;
+  if (f.size) s += `;font-size:${f.size}pt;overflow:visible`;
+  return s;
+}
 function autoFit(el) {
+  const id = el.closest(".campo")?.dataset.id;
+  if (id && fmtDe(id).size) return; // tamaño fijo elegido por el usuario
   let size = 9; el.style.fontSize = size + "pt";
   while (size > 4 && (el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight)) { size -= 0.25; el.style.fontSize = size + "pt"; }
 }
@@ -274,15 +312,16 @@ function render() {
   capa.innerHTML = Object.keys(POS_DEFAULT).filter(id => !S.ocultos.includes(id) && (t[id] || editando)).map(id => {
     const p = pos(id);
     const texto = t[id] || "";
-    return `<div class="campo" data-id="${id}" style="top:${p.top}mm;left:${p.left}mm;width:${p.width}mm;height:${p.height}mm">
+    return `<div class="campo${id === selCampo ? " sel" : ""}" data-id="${id}" style="top:${p.top}mm;left:${p.left}mm;width:${p.width}mm;height:${p.height}mm">
       <span class="lbl">${esc(LABELS[id])}</span>
-      <div class="txt" style="${ESTILO[id] || ""}">${esc(texto)}</div>
+      <div class="txt" style="${estiloCampo(id)}">${esc(texto)}</div>
       <div class="handle h-move" data-act="move"></div><div class="handle h-size" data-act="size"></div>
       <button class="hide-btn" data-hide="${id}" title="No imprimir este campo">×</button></div>`;
   }).join("");
   capa.querySelectorAll(".txt").forEach(autoFit);
   document.getElementById("mostrarOcultos").textContent = `Mostrar campos ocultos (${S.ocultos.length})`;
   document.getElementById("mostrarOcultos").disabled = !S.ocultos.length;
+  pintarFmt();
   // placeholders con el valor automático
   for (const k of Object.keys(auto)) { const el = document.querySelector(`[data-f="${k}"]`); if (el) el.placeholder = auto[k]() || ""; }
 }
@@ -292,7 +331,10 @@ let drag = null;
 document.getElementById("capa").addEventListener("pointerdown", e => {
   const hide = e.target.dataset.hide;
   if (hide) { e.preventDefault(); S.ocultos.push(hide); guardar(); render(); return; }
-  const act = e.target.dataset.act; if (!act || !editando) return;
+  const act = e.target.dataset.act;
+  const clic = e.target.closest(".campo");
+  if (clic && clic.dataset.id !== selCampo) { selCampo = clic.dataset.id; document.querySelectorAll(".campo.sel").forEach(c => c.classList.remove("sel")); clic.classList.add("sel"); pintarFmt(); }
+  if (!act || !editando) return;
   e.preventDefault();
   const campo = e.target.closest(".campo"), id = campo.dataset.id;
   const r = document.getElementById("hoja").getBoundingClientRect();
@@ -309,6 +351,27 @@ document.addEventListener("pointermove", e => {
   autoFit(drag.campo.querySelector(".txt"));
 });
 document.addEventListener("pointerup", () => { if (drag) { drag = null; guardar(); } });
+
+// ── Formato de letra ──
+const fmtCampo = document.getElementById("fmtCampo"), fmtSize = document.getElementById("fmtSize");
+fmtCampo.innerHTML = Object.keys(POS_DEFAULT).map(id => `<option value="${id}">${esc(LABELS[id])}</option>`).join("");
+for (let s = 6; s <= 16; s += 0.5) fmtSize.insertAdjacentHTML("beforeend", `<option value="${s}">${s} pt</option>`);
+function pintarFmt() {
+  const f = fmtDe(selCampo);
+  fmtCampo.value = selCampo; fmtSize.value = f.size ? String(f.size) : "";
+  document.getElementById("fmtBold").classList.toggle("on", f.bold ?? BOLD_DEFAULT(selCampo));
+  document.getElementById("fmtItalic").classList.toggle("on", !!f.italic);
+}
+function setFmt(id, cambios) { S.fmt = S.fmt || {}; S.fmt[id] = { ...fmtDe(id), ...cambios }; }
+fmtCampo.addEventListener("change", () => { selCampo = fmtCampo.value; render(); });
+fmtSize.addEventListener("change", () => { setFmt(selCampo, { size: fmtSize.value ? Number(fmtSize.value) : null }); guardar(); render(); });
+document.getElementById("fmtBold").addEventListener("click", () => { const f = fmtDe(selCampo); setFmt(selCampo, { bold: !(f.bold ?? BOLD_DEFAULT(selCampo)) }); guardar(); render(); });
+document.getElementById("fmtItalic").addEventListener("click", () => { setFmt(selCampo, { italic: !fmtDe(selCampo).italic }); guardar(); render(); });
+document.getElementById("fmtReset").addEventListener("click", () => { if (S.fmt) delete S.fmt[selCampo]; guardar(); render(); });
+document.getElementById("fmtTodos").addEventListener("click", () => {
+  if (!confirm(`¿Aplicar el tamaño, negrita y cursiva de "${LABELS[selCampo]}" a todos los campos?`)) return;
+  const f = fmtDe(selCampo); for (const id of Object.keys(POS_DEFAULT)) S.fmt[id] = { ...f }; guardar(); render();
+});
 
 // ── Imagen de fondo elegida por el usuario ──
 const FONDO_ORIGINAL = document.getElementById("fondo").src;
@@ -354,7 +417,7 @@ document.getElementById("btnPos").addEventListener("click", e => {
   e.target.textContent = editando ? "Terminar posiciones" : "Ver posiciones"; render();
 });
 document.getElementById("restPos").addEventListener("click", () => {
-  if (confirm("¿Volver todos los campos a su posición original?")) { S.pos = {}; guardar(); render(); }
+  if (confirm("¿Volver todos los campos a su posición original? (También quita los formatos de letra)")) { S.pos = {}; S.fmt = {}; guardar(); render(); }
 });
 document.getElementById("mostrarOcultos").addEventListener("click", () => { S.ocultos = []; guardar(); render(); });
 document.getElementById("nuevo").addEventListener("click", () => {
