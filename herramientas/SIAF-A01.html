@@ -38,55 +38,12 @@
     .sheet-page-break { break-before: page; page-break-before: always; }
   }
 
-  /* Franja de demostración: solo en el área de vista previa */
-  #demo-bar {
-    position: fixed; left: 430px; right: 0; bottom: 0; height: 38px;
-    z-index: 20; display: flex; align-items: center; overflow: hidden;
-    background: #172033; color: #fff; border-top: 1px solid #334155;
-    font-size: 12px; white-space: nowrap;
-  }
-  #demo-bar .demo-track {
-    display: inline-flex; align-items: center; gap: 34px;
-    min-width: max-content; padding-left: 12px;
-    animation: demo-marquee 24s linear infinite;
-  }
-  #demo-bar:hover .demo-track { animation-play-state: paused; }
-  #demo-bar a { color: #60a5fa; font-weight: 800; text-decoration: none; }
-  #demo-bar a:hover { text-decoration: underline; }
-  #demo-bar .demo-count { color: #fde68a; font-weight: 700; }
-  @keyframes demo-marquee {
-    from { transform: translateX(-100%); }
-    to { transform: translateX(calc(100vw - 430px)); }
-  }
-  #trial-lock {
-    position: fixed; inset: 0; z-index: 99999; display: none;
-    align-items: center; justify-content: center; padding: 24px;
-    background: rgba(15, 23, 42, .97); color: #fff; text-align: center;
-    font-family: Arial, Helvetica, sans-serif;
-  }
-  #trial-lock .trial-card {
-    max-width: 520px; padding: 32px; border: 1px solid #475569;
-    border-radius: 16px; background: #1e293b; box-shadow: 0 20px 60px rgba(0,0,0,.4);
-  }
-  #trial-lock h2 { margin: 0 0 12px; font-size: 24px; }
-  #trial-lock p { line-height: 1.6; color: #cbd5e1; }
-  #trial-lock a { color: #60a5fa; font-weight: bold; }
-  @media (max-width: 700px) {
-    #demo-bar { left: 0; }
-    #panel { width: 100%; position: relative; }
-    #print-wrapper { margin-left: 0; }
-    @keyframes demo-marquee {
-      from { transform: translateX(-100%); }
-      to { transform: translateX(100vw); }
-    }
-  }
-  @media print {
-    #demo-bar, #trial-lock { display: none !important; }
-  }
-
   .volver-menu { display: inline-block; font-size: 12px; color: #1d4ed8; text-decoration: none; margin-bottom: 8px; }
   .volver-menu:hover { text-decoration: underline; }
 </style>
+<style>html:not(.lic-ok) body > *:not(#cip-lic){visibility:hidden}</style>
+<script src="licencia-config.js"></script>
+<script src="licencia.js" data-izquierda="430" defer></script>
 </head>
 <body>
 
@@ -151,22 +108,6 @@
 </div>
 
 <div id="print-wrapper"></div>
-<div id="demo-bar" aria-label="Aviso de versión gratuita">
-  <div class="demo-track">
-    <span><strong>VERSIÓN GRATUITA</strong></span>
-    <span>Contacta con el desarrollador</span>
-    <span>Visita nuestra página:</span>
-    <a href="https://www.chronos-dev.com" target="_blank" rel="noopener noreferrer">CHRONOS-DEV</a>
-    <span class="demo-count" id="demo-count">Quedan 3 días hábiles de demostración</span>
-  </div>
-</div>
-<div id="trial-lock" role="dialog" aria-modal="true" aria-labelledby="trial-lock-title">
-  <div class="trial-card">
-    <h2 id="trial-lock-title">La demostración gratuita ha finalizado</h2>
-    <p>El período de prueba de tres días hábiles terminó. Para continuar utilizando el sistema, comunícate con el desarrollador.</p>
-    <p><a href="https://www.chronos-dev.com" target="_blank" rel="noopener noreferrer">CHRONOS-DEV</a></p>
-  </div>
-</div>
 <div id="medir" aria-hidden="true" style="position:absolute;top:0;left:0;visibility:hidden;height:0;overflow:hidden"></div>
 
 <script>
@@ -199,67 +140,6 @@ const DEFAULT = {
 let S;
 try { S = Object.assign({}, DEFAULT, JSON.parse(localStorage.getItem("cip-siaf-offline") || "{}")); } catch { S = { ...DEFAULT }; }
 function guardar() { try { localStorage.setItem("cip-siaf-offline", JSON.stringify(S)); } catch {} }
-
-// ── Demostración gratuita de 3 días hábiles ──
-// Se guarda la fecha de inicio en este navegador. Sábados y domingos no cuentan.
-const TRIAL_KEY = "chronos-siaf-trial-start";
-const TRIAL_BUSINESS_DAYS = 3;
-
-function fechaLocalISO(fecha = new Date()) {
-  const y = fecha.getFullYear();
-  const m = String(fecha.getMonth() + 1).padStart(2, "0");
-  const d = String(fecha.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-function sumarDiasISO(iso, cantidad) {
-  const [y, m, d] = iso.split("-").map(Number);
-  const fecha = new Date(y, m - 1, d);
-  fecha.setDate(fecha.getDate() + cantidad);
-  return fechaLocalISO(fecha);
-}
-function diasHabilesTranscurridos(inicioISO, hoyISO) {
-  if (hoyISO <= inicioISO) return 0;
-  let contador = 0;
-  // Cuenta días hábiles completos anteriores a hoy; así el tercer día
-  // se puede utilizar durante toda la jornada y el bloqueo inicia al día siguiente.
-  for (let dia = sumarDiasISO(inicioISO, 1); dia < hoyISO; dia = sumarDiasISO(dia, 1)) {
-    const [y, m, d] = dia.split("-").map(Number);
-    const diaSemana = new Date(y, m - 1, d).getDay();
-    if (diaSemana !== 0 && diaSemana !== 6) contador++;
-  }
-  return contador;
-}
-function revisarDemostracion() {
-  let inicio = "";
-  try {
-    inicio = localStorage.getItem(TRIAL_KEY) || "";
-    if (!inicio) {
-      inicio = fechaLocalISO();
-      localStorage.setItem(TRIAL_KEY, inicio);
-    }
-  } catch {
-    // Si el navegador bloquea el almacenamiento, la prueba solo puede ser temporal.
-    inicio = fechaLocalISO();
-  }
-
-  const transcurridos = diasHabilesTranscurridos(inicio, fechaLocalISO());
-  const restantes = Math.max(0, TRIAL_BUSINESS_DAYS - transcurridos);
-  const contador = document.getElementById("demo-count");
-  if (contador) {
-    contador.textContent = restantes === 1
-      ? "Queda 1 día hábil de demostración"
-      : `Quedan ${restantes} días hábiles de demostración`;
-  }
-
-  const vencida = transcurridos >= TRIAL_BUSINESS_DAYS;
-  const bloqueo = document.getElementById("trial-lock");
-  if (bloqueo) bloqueo.style.display = vencida ? "flex" : "none";
-
-  // Evita interacción con el formulario mientras la demostración esté vencida.
-  document.querySelectorAll("#panel input, #panel textarea, #panel select, #panel button")
-    .forEach(control => { control.disabled = vencida; });
-  return !vencida;
-}
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 const num = n => Number(n || 0).toLocaleString("es-GT");
@@ -491,10 +371,8 @@ document.getElementById("importar").addEventListener("change", async e => {
   e.target.value = "";
 });
 
-revisarDemostracion();
-setInterval(revisarDemostracion, 60 * 1000);
-cargarCampos();
-render();
+// Arranca solo cuando licencia.js confirma una licencia válida
+window.CIP_iniciar = function () { cargarCampos(); render(); };
 </script>
 </body>
 </html>

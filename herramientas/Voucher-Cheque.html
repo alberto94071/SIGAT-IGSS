@@ -59,6 +59,9 @@
     .campo, .campo.sel, .editando .campo { outline: none !important; background: none !important; }
   }
 </style>
+<style>html:not(.lic-ok) body > *:not(#cip-lic){visibility:hidden}</style>
+<script src="licencia-config.js"></script>
+<script src="licencia.js" data-izquierda="400" defer></script>
 </head>
 <body>
 <div id="panel">
@@ -440,9 +443,8 @@ document.getElementById("importar").addEventListener("change", async e => {
   e.target.value = "";
 });
 
-aplicarFondo();
-cargarCampos();
-render();
+// Arranca solo cuando licencia.js confirma una licencia válida
+window.CIP_iniciar = function () { aplicarFondo(); cargarCampos(); render(); };
 </script>
 </body>
 </html>
