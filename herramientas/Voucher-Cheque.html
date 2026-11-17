@@ -24,6 +24,8 @@
   .acciones { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .hint { font-size: 10.5px; color: #64748b; margin-top: 3px; }
   .chk { display: flex !important; align-items: center; gap: 6px; }
+  .volver-menu { display: inline-block; font-size: 12px; color: #1d4ed8; text-decoration: none; margin-bottom: 8px; }
+  .volver-menu:hover { text-decoration: underline; }
 
   #print-wrapper { margin-left: 400px; padding: 30px 20px; display: flex; justify-content: center; }
   #hoja { position: relative; background: #fff; width: 215.9mm; height: 279.4mm; box-shadow: 0 4px 32px rgba(0,0,0,.22); overflow: hidden; }
@@ -60,6 +62,7 @@
 </head>
 <body>
 <div id="panel">
+  <a class="volver-menu" href="index.html">← Volver al menú</a>
   <h1>Voucher / Cheque</h1>
   <p class="sub">Funciona sin internet. Lo que dejés vacío no sale en la hoja ni en el papel. Todo se guarda solo en este navegador.</p>
 
